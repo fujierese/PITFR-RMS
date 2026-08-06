@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1000" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800">
+  <root>
+
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+
+    <!-- TITLE -->
+    <mxCell id="title"
+      value="PITFR – Deployment Flow (FINAL SAFE VERSION)"
+      style="text;html=1;fillColor=#1e3a5f;fontColor=#ffffff;align=center;verticalAlign=middle;fontStyle=1;fontSize=16;"
+      vertex="1" parent="1">
+      <mxGeometry x="40" y="20" width="1100" height="50" as="geometry"/>
+    </mxCell>
+
+    <!-- DEVELOPMENT -->
+    <mxCell id="d1" value="Local Dev"
+      style="rounded=1;fillColor=#1e3a5f;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="60" y="120" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="d2" value="Push Code"
+      style="rounded=1;fillColor=#2e6da4;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="240" y="120" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="d3" value="Code Review"
+      style="rounded=1;fillColor=#2e6da4;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="420" y="120" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="d4" value="CI Pipeline"
+      style="rounded=1;fillColor=#d79b00;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="600" y="120" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="d5" value="Staging Merge"
+      style="rounded=1;fillColor=#5a7a3a;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="780" y="120" width="180" height="80" as="geometry"/>
+    </mxCell>
+
+    <!-- DEV ARROWS -->
+    <mxCell id="e1" edge="1" parent="1" source="d1" target="d2"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="e2" edge="1" parent="1" source="d2" target="d3"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="e3" edge="1" parent="1" source="d3" target="d4"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="e4" edge="1" parent="1" source="d4" target="d5"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- CI FAIL -->
+    <mxCell id="fail" value="Fix"
+      style="edgeStyle=orthogonalEdgeStyle;endArrow=block;dashed=1;strokeColor=#cc0000;"
+      edge="1" parent="1" source="d4" target="d3">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- STAGING -->
+    <mxCell id="s1" value="Deploy Staging"
+      style="rounded=1;fillColor=#2e6da4;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="60" y="260" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="s2" value="Integration Test"
+      style="rounded=1;fillColor=#1e3a5f;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="240" y="260" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="s3" value="UAT"
+      style="rounded=1;fillColor=#1e3a5f;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="420" y="260" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="s4" value="Approval"
+      style="rounded=1;fillColor=#5a7a3a;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="600" y="260" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="s5" value="Main Merge"
+      style="rounded=1;fillColor=#d79b00;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="780" y="260" width="180" height="80" as="geometry"/>
+    </mxCell>
+
+    <!-- STAGING ARROWS -->
+    <mxCell id="se1" edge="1" parent="1" source="s1" target="s2"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="se2" edge="1" parent="1" source="s2" target="s3"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- UAT → APPROVAL (WITH LABEL) -->
+    <mxCell id="se3" edge="1" parent="1" source="s3" target="s4"
+      value="Approved?"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="se4" edge="1" parent="1" source="s4" target="s5"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- ❗ OPTIONAL UAT REJECTION LOOP (NEW) -->
+    <mxCell id="uat_back" edge="1" parent="1" source="s3" target="d1"
+      value="Not Approved → Fix"
+      style="endArrow=block;dashed=1;strokeColor=#cc0000;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- DEV → STAGING -->
+    <mxCell id="c1" edge="1" parent="1" source="d5" target="s1"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- PRODUCTION -->
+    <mxCell id="p1" value="Backup"
+      style="rounded=1;fillColor=#1e3a5f;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="60" y="400" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="p2" value="Deploy"
+      style="rounded=1;fillColor=#2e6da4;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="240" y="400" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="p3" value="Smoke Test"
+      style="rounded=1;fillColor=#d79b00;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="420" y="400" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="p4" value="LIVE"
+      style="rounded=1;fillColor=#5a7a3a;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="600" y="400" width="180" height="80" as="geometry"/>
+    </mxCell>
+
+    <!-- PROD FLOW -->
+    <mxCell id="pe1" edge="1" parent="1" source="p1" target="p2"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="pe2" edge="1" parent="1" source="p2" target="p3"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="pe3" edge="1" parent="1" source="p3" target="p4"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- STAGING → PROD -->
+    <mxCell id="c2" edge="1" parent="1" source="s5" target="p1"
+      style="endArrow=block;strokeWidth=2;">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+  </root>
+</mxGraphModel>
