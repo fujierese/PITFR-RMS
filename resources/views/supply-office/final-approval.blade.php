@@ -75,16 +75,16 @@
                         <div class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                             <div class="flex flex-wrap gap-2">
                                 <a href="{{ route('request.show', $request->id) }}" class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">View Details</a>
-                                <a href="{{ route('supply-office.requests.needs-reschedule') }}?id={{ $request->id }}" class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100">Needs Reschedule</a>
                             </div>
                             <form method="POST" action="{{ route('supply-office.update') }}" class="flex flex-col gap-2 md:flex-row md:items-end">
                                 @csrf
                                 <input type="hidden" name="id" value="{{ $request->id }}">
-                                <textarea name="notes" rows="2" placeholder="Add remarks before approving or rejecting" class="w-full md:w-80 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"></textarea>
                                 <div class="flex flex-col gap-2 sm:flex-row">
                                     <button type="submit" name="action" value="approve" class="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 md:w-auto">Approve</button>
                                     <button type="submit" name="action" value="reject" class="inline-flex w-full items-center justify-center rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 md:w-auto">Reject</button>
+                                    <a href="{{ route('supply-office.requests.needs-reschedule') }}?id={{ $request->id }}" class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100">Needs Reschedule</a>
                                 </div>
+                                <textarea name="notes" rows="1" placeholder="Add remarks before approving or rejecting" class="w-full md:w-80 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"></textarea>
                             </form>
                         </div>
                     </div>

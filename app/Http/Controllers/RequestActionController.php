@@ -70,6 +70,11 @@ class RequestActionController extends Controller
                 return redirect()->back()->with('info', 'Your endorsement has already been recorded.');
             }
 
+            if ($facilityRequest->status === 'approved' || $facilityRequest->status === 'rejected') {
+                DB::rollBack();
+                return redirect()->back()->with('info', 'This request is no longer awaiting custodial verification.');
+            }
+
             if ($user->isCustodianVenue()) {
                 $facilityRequest->venue_status = 'approved';
                 $facilityRequest->addHistory('custodian_endorsed', 'Venue request verified and endorsed by ' . $user->name, $user->id);

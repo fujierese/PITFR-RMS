@@ -887,6 +887,10 @@ class RequestorController extends Controller
                 ->where('user_id', $currentUser->id)
                 ->where('action', 'custodian_endorsed')
                 ->exists();
+
+            if (!$hasEndorsed) {
+                $hasEndorsed = $request->venue_status === 'approved' || $request->equipment_status === 'approved';
+            }
         }
  
         return view('requestor.show', [

@@ -1460,7 +1460,19 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                             if (status) {
                                 var statusColors = getStatusColorInfo(status);
-                                tooltipContent += '<div><strong>Status:</strong> <span style="color: ' + statusColors.bg + '; font-weight: 700;">' + status + '</span></div>';
+                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Status:</strong> <span style="color: ' + statusColors.bg + '; font-weight: 700;">' + status + '</span></div>';
+                            }
+                            if (event.extendedProps && event.extendedProps.requestor) {
+                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Requestor:</strong> ' + event.extendedProps.requestor + '</div>';
+                            }
+                            if (event.extendedProps && event.extendedProps.requestorContact) {
+                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Contact:</strong> ' + event.extendedProps.requestorContact + '</div>';
+                            }
+                            if (event.extendedProps && event.extendedProps.priority) {
+                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Priority:</strong> ' + event.extendedProps.priority + '</div>';
+                            }
+                            if (event.extendedProps && event.extendedProps.isUrgent) {
+                                tooltipContent += '<div><strong>Urgent:</strong> Yes</div>';
                             }
                             tooltipContent += '</div>';
 

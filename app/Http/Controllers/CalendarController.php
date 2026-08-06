@@ -73,15 +73,21 @@ class CalendarController extends Controller
                     'venue' => implode(', ', $req->getVenueNames()),
                     'equipment' => $req->getEquipmentItems(),
                     'requestor' => $req->user ? $req->user->name : 'Unknown',
+                    'requestorContact' => $req->user ? ($req->user->contact_number ?: $req->user->username) : null,
+                    'requestorEmail' => $req->user ? $req->user->username : null,
                     'controlNumber' => $req->control_number,
                     'time' => $req->start_time,
                     'endTime' => $req->end_time,
                     'purpose' => $req->name_of_activity,
                     'department' => $req->department,
                     'participants' => $req->expected_participants,
+                    'priority' => $req->priority ?? 'regular',
+                    'isUrgent' => (bool) ($req->is_emergency ?? false),
+                    'urgentReason' => $req->emergency_justification ?? null,
                     'venueStatus' => $req->venue_status,
                     'equipmentStatus' => $req->equipment_status,
                     'facilityRequestId' => $req->id,
+                    'requestUrl' => route('request.show', $req->id),
                 ]
             ];
         });

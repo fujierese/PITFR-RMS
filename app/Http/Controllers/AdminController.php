@@ -32,7 +32,8 @@ class AdminController extends Controller
         try {
             $fr = FacilityRequest::whereKey($validated['id'])->lockForUpdate()->firstOrFail();
 
-            if ($fr->status === 'approved' && $validated['action'] === 'approve') {
+            $alreadyApproved = $fr->status === 'approved' || ($fr->approved_by_id || $fr->approved_by);
+            if ($alreadyApproved && $validated['action'] === 'approve') {
                 DB::rollBack();
                 return back()->with('info', 'This request has already been approved.');
             }

@@ -201,7 +201,7 @@
         @endif
 
         @if(auth()->check() && auth()->user()->isCustodian())
-            @if(!$hasEndorsed)
+            @if(!$hasEndorsed && $request->status === 'pending')
                 <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
                     <div class="flex flex-col gap-4">
                         <div class="flex items-center justify-between gap-4">

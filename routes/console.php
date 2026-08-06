@@ -1,8 +1,10 @@
 <?php
 
 use App\Console\Commands\BackfillFacilityRequestRelations;
+use App\Console\Commands\SendReservationReminderNotifications;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -11,3 +13,5 @@ Artisan::command('inspire', function () {
 Artisan::command('facility-requests:backfill-relations', function () {
     $this->call(BackfillFacilityRequestRelations::class);
 })->purpose('Backfill request venue and equipment data into relational tables');
+
+Schedule::command(SendReservationReminderNotifications::class)->everyMinute();

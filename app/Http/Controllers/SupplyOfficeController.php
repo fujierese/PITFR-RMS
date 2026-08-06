@@ -128,10 +128,12 @@ class SupplyOfficeController extends Controller
 
         $query = $this->buildRequestListQuery($request)
             ->where('status', 'pending')
-            ->where('venue_status', 'approved')
-            ->where('equipment_status', 'approved');
+            ->where(function (Builder $query): void {
+                $query->where('venue_status', 'approved')
+                    ->where('equipment_status', 'approved');
+            });
 
-        return view('supply-office.final-approval-queue', [
+        return view('supply-office.final-approval', [
             'requests' => $query->paginate(15)->appends($request->query()),
             'searchQuery' => trim((string) $request->get('search', '')),
             'departmentFilter' => trim((string) $request->get('department', '')),
@@ -372,7 +374,8 @@ class SupplyOfficeController extends Controller
         try {
             $fr = FacilityRequest::whereKey($validated['id'])->lockForUpdate()->firstOrFail();
 
-            if ($fr->status === 'approved' && $validated['action'] === 'approve') {
+            $alreadyApproved = $fr->status === 'approved' || ($fr->approved_by_id || $fr->approved_by);
+            if ($alreadyApproved && $validated['action'] === 'approve') {
                 DB::rollBack();
                 return back()->with('info', 'This request has already been approved.');
             }
