@@ -24,13 +24,13 @@ class VenueAndEquipmentSeeder extends Seeder
         ]);
 
         DB::table('equipment')->insert([
-            ['name' => 'Sound System',      'quantity' => 2,   'quantity_available' => 2,   'custodian_id' => 6, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Microphones',       'quantity' => 10,  'quantity_available' => 10,  'custodian_id' => 7, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Canopies',          'quantity' => 5,   'quantity_available' => 5,   'custodian_id' => 7, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Industrial Fans',   'quantity' => 8,   'quantity_available' => 8,   'custodian_id' => 8, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Iwata Cooler Fans', 'quantity' => 4,   'quantity_available' => 4,   'custodian_id' => 9, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Tables',            'quantity' => 30,  'quantity_available' => 30,  'custodian_id' => 7, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Monobloc chairs',   'quantity' => 1000, 'quantity_available' => 1000, 'custodian_id' => 7, 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Sound System',      'quantity' => 2,   'quantity_available' => 2,   'custodian_id' => 6, 'authorized_custodian_ids' => json_encode([]), 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Microphones',       'quantity' => 10,  'quantity_available' => 10,  'custodian_id' => 7, 'authorized_custodian_ids' => json_encode([]), 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Canopies',          'quantity' => 5,   'quantity_available' => 5,   'custodian_id' => 7, 'authorized_custodian_ids' => json_encode([]), 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Industrial Fans',   'quantity' => 8,   'quantity_available' => 8,   'custodian_id' => 8, 'authorized_custodian_ids' => json_encode([9]), 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Iwata Cooler Fans', 'quantity' => 4,   'quantity_available' => 4,   'custodian_id' => 8, 'authorized_custodian_ids' => json_encode([9]), 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Tables',            'quantity' => 30,  'quantity_available' => 30,  'custodian_id' => 7, 'authorized_custodian_ids' => json_encode([]), 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Monobloc chairs',   'quantity' => 1000, 'quantity_available' => 1000, 'custodian_id' => 7, 'authorized_custodian_ids' => json_encode([]), 'created_at' => now(), 'updated_at' => now()],
         ]);
     }
 }

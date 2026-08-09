@@ -306,7 +306,11 @@ class CustodianController extends Controller
         }
 
         if ($type === 'equipment') {
-            $equipmentNames = Equipment::where('custodian_id', $custodianId)->pluck('name');
+            $equipmentNames = Equipment::where(function ($query) use ($custodianId) {
+                $query->where('custodian_id', $custodianId)
+                    ->orWhereJsonContains('authorized_custodian_ids', (string) $custodianId);
+            })->pluck('name');
+
             if ($equipmentNames->isEmpty()) {
                 return collect([]);
             }

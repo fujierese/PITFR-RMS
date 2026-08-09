@@ -75,6 +75,11 @@ class RequestActionController extends Controller
                 return redirect()->back()->with('info', 'This request is no longer awaiting custodial verification.');
             }
 
+            if ($user->isCustodianEquipment() && $facilityRequest->equipment_status === 'approved') {
+                DB::rollBack();
+                return redirect()->back()->with('info', 'This equipment requirement is already satisfied by an authorized custodian.');
+            }
+
             if ($user->isCustodianVenue()) {
                 $facilityRequest->venue_status = 'approved';
                 $facilityRequest->addHistory('custodian_endorsed', 'Venue request verified and endorsed by ' . $user->name, $user->id);
@@ -172,8 +177,15 @@ class RequestActionController extends Controller
                 return redirect()->route('supply-office.index')->with('info', 'This request is already approved.');
             }
 
+            if ($facilityRequest->status !== 'pending'
+                || $facilityRequest->venue_status !== 'approved'
+                || $facilityRequest->equipment_status !== 'approved') {
+                DB::rollBack();
+                return redirect()->back()->withErrors('Cannot finalize approval: required custodial endorsements are incomplete.');
+            }
+
             $facilityRequest->status = 'approved';
-            $facilityRequest->approved_by_id = $user->id;
+            $facilityRequest->approved_by_id = $user->getKey();
             $facilityRequest->approved_by = $user->name;
             $facilityRequest->approved_date = now();
 
@@ -188,7 +200,7 @@ class RequestActionController extends Controller
                 throw new \Exception('Failed to save facility request changes.');
             }
             
-            $facilityRequest->addHistory('final_approved', 'Final approval granted by ' . $user->name, $user->id);
+            $facilityRequest->addHistory('final_approved', 'Final approval granted by ' . $user->name, $user->getKey());
             $this->notifyRequestorForStatusChange($facilityRequest, 'approved', $request->input('notes', ''));
 
             DB::commit();
@@ -217,12 +229,15 @@ class RequestActionController extends Controller
             }
 
             $facilityRequest->status = 'rejected';
+            $facilityRequest->approved_by_id = null;
+            $facilityRequest->approved_by = null;
+            $facilityRequest->approved_date = null;
             
             if (!$facilityRequest->save()) {
                 throw new \Exception('Failed to save decline status.');
             }
             
-            $facilityRequest->addHistory('final_rejected', 'Final decline issued by ' . $user->name, $user->id);
+            $facilityRequest->addHistory('final_rejected', 'Final decline issued by ' . $user->name, $user->getKey());
             $this->notifyRequestorForStatusChange($facilityRequest, 'rejected', $request->input('notes', ''));
 
             DB::commit();

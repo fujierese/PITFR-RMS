@@ -20,6 +20,7 @@ class EquipmentFactory extends Factory
         return [
             'name' => fake()->word(),
             'custodian_id' => 1, // default
+            'authorized_custodian_ids' => [],
             'quantity' => fake()->numberBetween(1, 10),
             'quantity_available' => fake()->numberBetween(1, 10),
         ];

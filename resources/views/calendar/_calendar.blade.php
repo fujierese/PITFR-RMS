@@ -1465,9 +1465,6 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (event.extendedProps && event.extendedProps.requestor) {
                                 tooltipContent += '<div style="margin-bottom: 6px;"><strong>Requestor:</strong> ' + event.extendedProps.requestor + '</div>';
                             }
-                            if (event.extendedProps && event.extendedProps.requestorContact) {
-                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Contact:</strong> ' + event.extendedProps.requestorContact + '</div>';
-                            }
                             if (event.extendedProps && event.extendedProps.priority) {
                                 tooltipContent += '<div style="margin-bottom: 6px;"><strong>Priority:</strong> ' + event.extendedProps.priority + '</div>';
                             }

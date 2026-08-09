@@ -100,19 +100,7 @@ class AdminController extends Controller
 
     public function finalApproval(Request $request)
     {
-        $finalApprovalQueue = FacilityRequest::with('requester')
-            ->where('status', 'pending')
-            ->where(function ($query) {
-                $query->where('venue_status', '!=', 'rejected')
-                    ->orWhere('equipment_status', '!=', 'rejected');
-            })
-            ->orderByDesc('created_at')
-            ->get();
-
-        return view('supply-office.final-approval', [
-            'finalApprovalQueue' => $finalApprovalQueue,
-            'pendingFinalApprovalCount' => $finalApprovalQueue->count(),
-        ]);
+        return app(SupplyOfficeController::class)->finalApprovalRequests($request);
     }
 
     public function users(Request $request)

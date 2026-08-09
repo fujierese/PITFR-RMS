@@ -55,9 +55,147 @@ class CalendarEventPayloadTest extends TestCase
 
         $this->assertNotNull($event);
         $this->assertSame($requestor->name, $event['extendedProps']['requestor']);
-        $this->assertSame($requestor->contact_number, $event['extendedProps']['requestorContact']);
+        $this->assertArrayNotHasKey('requestorContact', $event['extendedProps']);
+        $this->assertArrayNotHasKey('requestorEmail', $event['extendedProps']);
         $this->assertSame('institutional', $event['extendedProps']['priority']);
         $this->assertTrue($event['extendedProps']['isUrgent']);
         $this->assertSame(route('request.show', $request->id), $event['extendedProps']['requestUrl']);
+    }
+
+    public function test_calendar_events_use_reservation_schedule_for_multi_day_range_and_requestor_metadata(): void
+    {
+        $requestor = User::factory()->create([
+            'name' => 'Faculty Requestor',
+            'username' => 'faculty-requestor',
+            'role' => 'requestor',
+            'requestor_type' => 'faculty',
+            'department' => 'College of Information and Computing Sciences',
+            'office_or_organization' => 'PIT Innovation Hub',
+            'contact_number' => '09991234567',
+        ]);
+
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-2026-002',
+            'date_requested' => now()->toDateString(),
+            'department' => 'College of Information and Computing Sciences',
+            'name_of_activity' => 'Faculty Workshop',
+            'expected_participants' => 30,
+            'start_date' => '2026-08-10',
+            'end_date' => '2026-08-12',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'venue' => ['PIT Multi-Purpose Gymnasium', 'CHIC Conference Hall'],
+            'requested_by_id' => $requestor->id,
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
+
+        $request->requestVenues()->createMany([
+            ['name' => 'PIT Multi-Purpose Gymnasium'],
+            ['name' => 'CHIC Conference Hall'],
+        ]);
+
+        ReservationSchedule::create([
+            'facility_request_id' => $request->id,
+            'start_datetime' => '2026-08-10 08:00:00',
+            'end_datetime' => '2026-08-12 17:00:00',
+        ]);
+
+        $response = $this->getJson(route('calendar.events'));
+
+        $response->assertOk();
+
+        $payload = collect($response->json());
+        $event = $payload->firstWhere('id', $request->id);
+
+        $this->assertNotNull($event);
+        $this->assertSame('2026-08-10T08:00:00', $event['start']);
+        $this->assertSame('2026-08-12T17:00:00', $event['end']);
+        $this->assertSame('College of Information and Computing Sciences', $event['extendedProps']['department']);
+        $this->assertSame('PIT Innovation Hub', $event['extendedProps']['organization']);
+        $this->assertSame('PIT Multi-Purpose Gymnasium, CHIC Conference Hall', $event['venue']);
+    }
+
+    public function test_public_calendar_hides_requestor_contact_details(): void
+    {
+        $requestor = User::factory()->create([
+            'name' => 'Private Requestor',
+            'username' => 'private-requestor',
+            'role' => 'requestor',
+            'contact_number' => '09181234567',
+        ]);
+
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-2026-003',
+            'date_requested' => now()->toDateString(),
+            'department' => 'BSIT',
+            'name_of_activity' => 'Private Activity',
+            'expected_participants' => 12,
+            'start_date' => '2026-09-01',
+            'end_date' => '2026-09-01',
+            'start_time' => '10:00',
+            'end_time' => '12:00',
+            'requested_by_id' => $requestor->id,
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
+
+        ReservationSchedule::create([
+            'facility_request_id' => $request->id,
+            'start_datetime' => '2026-09-01 10:00:00',
+            'end_datetime' => '2026-09-01 12:00:00',
+        ]);
+
+        $response = $this->getJson(route('calendar.events'));
+        $response->assertOk();
+
+        $payload = collect($response->json());
+        $event = $payload->firstWhere('id', $request->id);
+
+        $this->assertNotNull($event);
+        $this->assertArrayNotHasKey('requestorContact', $event['extendedProps']);
+        $this->assertArrayNotHasKey('requestorEmail', $event['extendedProps']);
+    }
+
+    public function test_authorized_users_can_view_requestor_contact_on_request_detail(): void
+    {
+        $requestor = User::factory()->create([
+            'name' => 'Visible Requestor',
+            'username' => 'visible-requestor',
+            'role' => 'requestor',
+            'contact_number' => '09999876543',
+        ]);
+
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-2026-004',
+            'date_requested' => now()->toDateString(),
+            'department' => 'BSIT',
+            'name_of_activity' => 'Visible Activity',
+            'expected_participants' => 20,
+            'start_date' => '2026-10-05',
+            'end_date' => '2026-10-05',
+            'start_time' => '08:30',
+            'end_time' => '10:30',
+            'requested_by_id' => $requestor->id,
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
+
+        ReservationSchedule::create([
+            'facility_request_id' => $request->id,
+            'start_datetime' => '2026-10-05 08:30:00',
+            'end_datetime' => '2026-10-05 10:30:00',
+        ]);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)->get(route('request.show', $request));
+
+        $response->assertOk();
+        $response->assertSee('Contact Number');
+        $response->assertSee($requestor->contact_number);
     }
 }

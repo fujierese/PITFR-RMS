@@ -425,6 +425,10 @@
                         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Organization</p>
                         <p class="mt-2 text-sm font-semibold text-slate-900">{{ $request->requester?->office_or_organization ?: '—' }}</p>
                     </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Contact Number</p>
+                        <p class="mt-2 text-sm font-semibold text-slate-900">{{ $request->requester?->contact_number ?: 'Not provided' }}</p>
+                    </div>
                 </div>
             </div>
             <div class="space-y-4 rounded-[24px] border border-slate-200 bg-slate-50 p-5">

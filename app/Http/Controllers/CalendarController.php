@@ -51,6 +51,20 @@ class CalendarController extends Controller
                 $eventEnd = $endDateTime->format('Y-m-d\TH:i:s');
             }
 
+            $venueNames = $req->getVenueNames();
+            $requestor = $req->user ?: $req->requester;
+            $department = trim((string) ($req->department ?: ($requestor?->department ?? '')));
+            $organization = trim((string) ($requestor?->office_or_organization ?? ''));
+            if ($requestor?->requestor_type === 'outsider') {
+                $organization = $organization !== '' ? $organization : 'External Requestor';
+            } elseif ($organization === '') {
+                $organization = null;
+            }
+
+            if ($department === '') {
+                $department = $requestor?->department ?: 'N/A';
+            }
+
             // Determine event color based on role and status
             $eventColor = $this->getEventColor($req, $role);
 
@@ -63,23 +77,22 @@ class CalendarController extends Controller
                 'end_datetime' => \Illuminate\Support\Carbon::parse($eventEnd)->format('Y-m-d H:i:s'),
                 'allDay' => $isAllDay,
                 'status' => $req->status,
-                'venue' => implode(', ', $req->getVenueNames()),
+                'venue' => implode(', ', $venueNames),
                 'backgroundColor' => $eventColor['background'],
                 'borderColor' => $eventColor['border'],
                 'textColor' => $eventColor['text'],
                 'className' => $eventColor['className'],
                 'extendedProps' => [
                     'status' => ucfirst($req->status),
-                    'venue' => implode(', ', $req->getVenueNames()),
+                    'venue' => implode(', ', $venueNames),
                     'equipment' => $req->getEquipmentItems(),
-                    'requestor' => $req->user ? $req->user->name : 'Unknown',
-                    'requestorContact' => $req->user ? ($req->user->contact_number ?: $req->user->username) : null,
-                    'requestorEmail' => $req->user ? $req->user->username : null,
+                    'requestor' => $requestor ? $requestor->name : 'Unknown',
                     'controlNumber' => $req->control_number,
-                    'time' => $req->start_time,
-                    'endTime' => $req->end_time,
+                    'time' => $startDateTime->format('H:i:s'),
+                    'endTime' => $endDateTime->format('H:i:s'),
                     'purpose' => $req->name_of_activity,
-                    'department' => $req->department,
+                    'department' => $department,
+                    'organization' => $organization,
                     'participants' => $req->expected_participants,
                     'priority' => $req->priority ?? 'regular',
                     'isUrgent' => (bool) ($req->is_emergency ?? false),
@@ -91,6 +104,7 @@ class CalendarController extends Controller
                 ]
             ];
         });
+
 
         return response()->json($events);
     }

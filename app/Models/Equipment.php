@@ -7,11 +7,36 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 class Equipment extends Model
 {
     use HasFactory;
-    protected $fillable = ['name', 'custodian_id', 'quantity', 'quantity_available'];
+
+    protected $fillable = ['name', 'custodian_id', 'authorized_custodian_ids', 'quantity', 'quantity_available'];
+
+    protected $casts = [
+        'authorized_custodian_ids' => 'array',
+    ];
 
     public function custodian()
     {
         return $this->belongsTo(User::class, 'custodian_id');
+    }
+
+    public function getAuthorizedCustodianIds(): array
+    {
+        $ids = $this->authorized_custodian_ids ?? [];
+        if (! is_array($ids)) {
+            $ids = [$ids];
+        }
+
+        $normalized = array_values(array_filter(array_map('intval', $ids), fn ($value) => $value > 0));
+        if ($this->custodian_id) {
+            $normalized[] = (int) $this->custodian_id;
+        }
+
+        return array_values(array_unique($normalized));
+    }
+
+    public function isAuthorizedCustodian(int $userId): bool
+    {
+        return in_array($userId, $this->getAuthorizedCustodianIds(), true);
     }
 
     public function requestEquipment()

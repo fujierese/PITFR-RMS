@@ -441,7 +441,7 @@ class SupplyOfficeController extends Controller
         $fr->addHistory($validated['action'] === 'approve' ? 'approved' : 'rejected',
             'Administrator ' . Auth::user()->name . ' completed request as ' . ($validated['action'] === 'approve' ? 'approved' : 'rejected') .
             (($validated['priority'] ?? null) ? ' with priority ' . $validated['priority'] : ''),
-            Auth::user()->id);
+            Auth::user()->getKey());
 
         DB::commit();
 
@@ -588,15 +588,19 @@ class SupplyOfficeController extends Controller
         $statusValue = $action === 'approve' ? 'approved' : 'rejected';
         $updates = [
             'status' => $statusValue,
-            'approved_by' => Auth::user()->name,
-            'approved_by_id' => Auth::id(),
             'notes' => $notes ?? '',
-            'approved_date' => now(),
         ];
 
         if ($action === 'approve') {
+            $updates['approved_by'] = Auth::user()->name;
+            $updates['approved_by_id'] = Auth::user()->getKey();
+            $updates['approved_date'] = now();
             $updates['venue_status'] = 'approved';
             $updates['equipment_status'] = 'approved';
+        } else {
+            $updates['approved_by'] = null;
+            $updates['approved_by_id'] = null;
+            $updates['approved_date'] = null;
         }
 
         if (!empty($priority)) {

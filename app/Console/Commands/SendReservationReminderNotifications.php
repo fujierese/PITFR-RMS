@@ -17,13 +17,16 @@ class SendReservationReminderNotifications extends Command
 
     protected $description = 'Send reservation reminder notifications for approved requests that are upcoming.';
 
+    private const LATE_TOLERANCE_MINUTES = 15;
+
     public function handle(): int
     {
         $now = Carbon::now();
+        $comparisonNow = $now->copy()->startOfMinute();
         $reminders = [
-            'one_day_before' => $now->copy()->addDay(),
-            'two_hours_before' => $now->copy()->addHours(2),
-            'start_time' => $now,
+            'one_day_before' => $comparisonNow->copy()->addDay(),
+            'two_hours_before' => $comparisonNow->copy()->addHours(2),
+            'start_time' => $comparisonNow,
         ];
 
         foreach ($reminders as $reminderType => $targetTime) {
@@ -35,13 +38,13 @@ class SendReservationReminderNotifications extends Command
 
     private function sendRemindersForWindow(string $reminderType, Carbon $targetTime, Carbon $now): void
     {
-        $windowStart = $targetTime->copy()->startOfMinute();
-        $windowEnd = $targetTime->copy()->addMinute()->startOfMinute();
+        $dueSince = $targetTime->copy()->subMinutes(self::LATE_TOLERANCE_MINUTES);
 
         $requests = FacilityRequest::query()
             ->where('status', 'approved')
-            ->whereHas('reservationSchedule', function ($query) use ($windowStart, $windowEnd): void {
-                $query->whereBetween('start_datetime', [$windowStart->toDateTimeString(), $windowEnd->toDateTimeString()]);
+            ->whereHas('reservationSchedule', function ($query) use ($dueSince, $targetTime): void {
+                $query->where('start_datetime', '>=', $dueSince->toDateTimeString())
+                    ->where('start_datetime', '<=', $targetTime->toDateTimeString());
             })
             ->with(['requester', 'reservationSchedule'])
             ->get();
@@ -52,18 +55,22 @@ class SendReservationReminderNotifications extends Command
                 continue;
             }
 
-            if ($this->alreadyNotified($request, $reminderType, $schedule->start_datetime)) {
+            if (!$this->claimReminder($request, $reminderType, $schedule->start_datetime, $now)) {
                 continue;
             }
 
-            $recipients = $this->getRecipients($request);
-            if ($recipients->isEmpty()) {
-                continue;
+            try {
+                $recipients = $this->getRecipients($request);
+                if ($recipients->isEmpty()) {
+                    $this->removeReminderClaim($request, $reminderType, $schedule->start_datetime);
+                    continue;
+                }
+
+                Notification::send($recipients, new ReservationReminderNotification($request, $reminderType, $schedule->start_datetime));
+            } catch (\Throwable $exception) {
+                $this->removeReminderClaim($request, $reminderType, $schedule->start_datetime);
+                throw $exception;
             }
-
-            Notification::send($recipients, new ReservationReminderNotification($request, $reminderType, $schedule->start_datetime));
-
-            $this->markNotified($request, $reminderType, $schedule->start_datetime, $now);
         }
     }
 
@@ -98,24 +105,24 @@ class SendReservationReminderNotifications extends Command
         return $recipients->unique('id')->values();
     }
 
-    private function alreadyNotified(FacilityRequest $request, string $reminderType, Carbon $startTime): bool
+    private function claimReminder(FacilityRequest $request, string $reminderType, Carbon $startTime, Carbon $sentAt): bool
     {
-        return DB::table('reservation_reminder_logs')->where([
-            'facility_request_id' => $request->id,
-            'reminder_type' => $reminderType,
-            'scheduled_for' => $startTime->toDateTimeString(),
-        ])->exists();
-    }
-
-    private function markNotified(FacilityRequest $request, string $reminderType, Carbon $startTime, Carbon $sentAt): void
-    {
-        DB::table('reservation_reminder_logs')->insert([
+        return DB::table('reservation_reminder_logs')->insertOrIgnore([
             'facility_request_id' => $request->id,
             'reminder_type' => $reminderType,
             'scheduled_for' => $startTime->toDateTimeString(),
             'sent_at' => $sentAt->toDateTimeString(),
             'created_at' => $sentAt->toDateTimeString(),
             'updated_at' => $sentAt->toDateTimeString(),
-        ]);
+        ]) === 1;
+    }
+
+    private function removeReminderClaim(FacilityRequest $request, string $reminderType, Carbon $startTime): void
+    {
+        DB::table('reservation_reminder_logs')->where([
+            'facility_request_id' => $request->id,
+            'reminder_type' => $reminderType,
+            'scheduled_for' => $startTime->toDateTimeString(),
+        ])->delete();
     }
 }

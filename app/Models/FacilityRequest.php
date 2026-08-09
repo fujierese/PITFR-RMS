@@ -503,10 +503,10 @@ class FacilityRequest extends Model
         }));
 
         if (!empty($filteredRelationValues)) {
-            return $filteredRelationValues;
+            return array_values(array_unique(array_filter($filteredRelationValues)));
         }
 
-        return array_values(array_filter($relationValues));
+        return array_values(array_unique(array_filter($relationValues)));
     }
 
     private function preferRelationQuantitiesOverLegacy(array $relationQuantities, array $legacyQuantities): array
@@ -744,9 +744,25 @@ class FacilityRequest extends Model
     // ─── HELPER: find equipment by name + custodian (case-insensitive) ────────
     private function findEquipmentForCustodian(string $name, int|string $custodianId): ?\App\Models\Equipment
     {
-        return \App\Models\Equipment::whereRaw('LOWER(name) = ?', [strtolower($name)])
-            ->where('custodian_id', (int) $custodianId)
+        $equipment = \App\Models\Equipment::whereRaw('LOWER(name) = ?', [strtolower($name)])
             ->first();
+
+        if (! $equipment) {
+            return null;
+        }
+
+        return $equipment->isAuthorizedCustodian((int) $custodianId) ? $equipment : null;
+    }
+
+    public function getAuthorizedCustodianIdsForEquipment(string $itemName): array
+    {
+        $equipment = $this->findEquipment($itemName);
+
+        if (! $equipment) {
+            return [];
+        }
+
+        return $equipment->getAuthorizedCustodianIds();
     }
 
     // ─── GET ALL CUSTODIAN IDs ASSIGNED TO EQUIPMENT IN THIS REQUEST ──────────
@@ -759,13 +775,10 @@ class FacilityRequest extends Model
         $custodianIds = [];
 
         foreach (array_keys($quantities) as $itemName) {
-            $eq = $this->findEquipment($itemName);
-            if ($eq && $eq->custodian_id) {
-                $custodianIds[] = $eq->custodian_id;
-            }
+            $custodianIds = array_merge($custodianIds, $this->getAuthorizedCustodianIdsForEquipment($itemName));
         }
 
-        return array_values(array_unique($custodianIds));
+        return array_values(array_unique(array_map('intval', $custodianIds)));
     }
 
     // ─── GET EQUIPMENT ASSIGNED TO A SPECIFIC CUSTODIAN IN THIS REQUEST ───────
@@ -815,18 +828,47 @@ class FacilityRequest extends Model
     // ─── RECOMPUTE GLOBAL EQUIPMENT STATUS BASED ON ALL CUSTODIANS ───────────
     public function recomputeEquipmentStatus(): void
     {
-        $statuses    = array_values($this->equipment_custodian_statuses ?? []);
-        $assignedIds = $this->getAssignedEquipmentCustodianIds();
+        $itemNames = $this->getEquipmentItems();
+        $statuses = $this->equipment_custodian_statuses ?? [];
 
-        if (in_array('rejected', $statuses, true)) {
-            // Any rejection = rejected
+        if (empty($itemNames)) {
+            $this->equipment_status = 'pending';
+            $this->save();
+            return;
+        }
+
+        $itemResults = [];
+
+        foreach ($itemNames as $itemName) {
+            $authorizedIds = $this->getAuthorizedCustodianIdsForEquipment($itemName);
+            if (empty($authorizedIds)) {
+                $itemResults[] = 'approved';
+                continue;
+            }
+
+            $itemStatuses = array_values(array_intersect_key($statuses, array_flip(array_map('intval', $authorizedIds))));
+
+            if ($itemStatuses === []) {
+                $itemResults[] = 'pending';
+                continue;
+            }
+
+            if (in_array('approved', $itemStatuses, true)) {
+                $itemResults[] = 'approved';
+                continue;
+            }
+
+            if (in_array('rejected', $itemStatuses, true)) {
+                $itemResults[] = 'rejected';
+                continue;
+            }
+
+            $itemResults[] = 'pending';
+        }
+
+        if (in_array('rejected', $itemResults, true) && ! in_array('approved', $itemResults, true)) {
             $this->equipment_status = 'rejected';
-        } elseif (
-            !empty($assignedIds) &&
-            count($this->equipment_custodian_statuses ?? []) >= count($assignedIds) &&
-            !in_array('pending', $statuses, true)
-        ) {
-            // All custodians responded with non-pending = approved
+        } elseif (count($itemResults) > 0 && ! in_array('pending', $itemResults, true) && ! in_array('rejected', $itemResults, true)) {
             $this->equipment_status = 'approved';
         } else {
             $this->equipment_status = 'pending';
