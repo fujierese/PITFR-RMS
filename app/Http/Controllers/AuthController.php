@@ -20,13 +20,14 @@ class AuthController extends Controller
 
     public function login(LoginRequest $request)
     {
-        if (!$request->authenticate()) {
+        $credentials = $request->only('username', 'password');
+
+        if (!Auth::guard('web')->attempt($credentials, $request->boolean('remember'))) {
             return back()->withErrors(['username' => 'Invalid username or password.'])->withInput();
         }
 
-        $user = Auth::user();
         $request->session()->regenerate();
-        return $this->redirectByRole($user->role);
+        return $this->redirectByRole(Auth::user()->role);
     }
 
     public function showRegister()

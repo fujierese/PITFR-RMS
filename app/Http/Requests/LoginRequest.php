@@ -21,9 +21,9 @@ class LoginRequest extends FormRequest
 
     public function authenticate(): bool
     {
-        return Auth::attempt([
-            'username' => $this->username,
-            'password' => $this->password,
-        ], $this->boolean('remember'));
+        return Auth::guard('web')->attempt(
+            $this->only('username', 'password'),
+            $this->boolean('remember')
+        );
     }
 }

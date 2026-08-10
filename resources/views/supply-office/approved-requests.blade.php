@@ -1,13 +1,13 @@
 @extends('layouts.app')
-@section('title', 'Approved Requests')
+@section('title', 'Final Approved Activities')
 
 @section('content')
 <div class="space-y-6">
     <div class="rounded-3xl bg-gradient-to-r from-emerald-600 to-teal-500 p-6 text-white shadow-sm">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-                <h1 class="text-2xl font-semibold">Approved Requests</h1>
-                <p class="mt-2 text-sm text-emerald-100">Browse all approved reservations with search, filters, and export options.</p>
+                <h1 class="text-2xl font-semibold">📋 Final Approved Activities</h1>
+                <p class="mt-2 text-sm text-emerald-100">Documentary record of activities with completed final approval. Use for reference and historical tracking.</p>
             </div>
             <a href="{{ route('supply-office.index') }}" class="inline-flex items-center rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20">Back to Dashboard</a>
         </div>
