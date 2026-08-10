@@ -9,15 +9,12 @@
 <body class="bg-white min-h-screen flex flex-col">
 
 {{-- Hero --}}
-<section class="relative overflow-hidden bg-gradient-to-br from-emerald-900 via-emerald-700 to-emerald-500 px-4 py-16 text-center text-white sm:px-6 sm:py-20 lg:py-24">
-    <div class="absolute inset-0 opacity-10">
-        <div class="absolute top-10 left-20 w-72 h-72 bg-white rounded-full"></div>
-        <div class="absolute bottom-10 right-20 w-96 h-96 bg-white rounded-full"></div>
-    </div>
+<section class="relative overflow-hidden bg-cover bg-center px-4 py-16 text-center text-white sm:px-6 sm:py-12 lg:py-7"
+            style="background-image: url('{{ asset('images/GPD-BG.jpg') }}'); background-attachment: fixed;">
     <div class="relative z-10 mx-auto max-w-4xl">
-        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-white/15 backdrop-blur-sm border border-white/30 mb-6 shadow-lg">
-            <img src="{{ asset('images/PIT-LOGO.jpg') }}" alt="PIT Logo"
-                 class="w-16 h-16 rounded-full object-cover border-4 border-white/70">
+        <div class="inline-flex items-center justify-center w-80 h-80 rounded-full">
+            <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo"
+                 class="w-80 h-80 rounded-full object-cover border-4 border-white/50 shadow-lg">
         </div>
         <h1 class="mb-4 text-3xl font-bold leading-tight sm:text-4xl md:text-5xl">
             PIT Facility & Equipment<br>Request System
