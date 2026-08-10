@@ -6,24 +6,25 @@
     <title>PIT – Facility & Equipment Request System</title>
     @vite(['resources/css/app.css'])
 </head>
-<body class="bg-white min-h-screen flex flex-col">
+<body class="bg-emerald-900 min-h-screen flex flex-col">
 
 {{-- Hero --}}
-<section class="relative overflow-hidden bg-cover bg-center px-4 py-16 text-center text-white sm:px-6 sm:py-12 lg:py-7"
-            style="background-image: url('{{ asset('images/GPD-BG.jpg') }}'); background-attachment: fixed;">
+<section class="relative overflow-hidden bg-cover bg-center px-4 py-16 text-center text-white sm:px-6 sm:py-16 lg:py-20"
+            style="background-image: url('{{ asset('images/GPD-BG.jpg') }}');">
+    <div class="absolute inset-0 bg-slate-950/60"></div>
     <div class="relative z-10 mx-auto max-w-4xl">
-        <div class="inline-flex items-center justify-center w-80 h-80 rounded-full">
+        <div class="inline-flex items-center justify-center w-72 h-72 rounded-full mx-auto mb-8 bg-white/10 backdrop-blur-sm border border-white/20 shadow-lg">
             <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo"
-                 class="w-80 h-80 rounded-full object-cover border-4 border-white/50 shadow-lg">
+                 class="w-64 h-64 rounded-full object-cover border-4 border-white/60 shadow-lg">
         </div>
-        <h1 class="mb-4 text-3xl font-bold leading-tight sm:text-4xl md:text-5xl">
+        <h1 class="mb-4 text-3xl font-bold leading-tight text-white drop-shadow-lg sm:text-4xl md:text-5xl">
             PIT Facility & Equipment<br>Request System
         </h1>
-        <p class="text-lg font-semibold text-emerald-100 mb-2">
+        <p class="text-lg font-semibold text-emerald-200 mb-2">
             Palompon Institute of Technology
         </p>
-        <p class="mx-auto mb-8 max-w-2xl text-base text-blue-100 sm:text-lg">
-            Review public facility availability and submit reservation requests for venues and equipment at Palompon Institute of Technology.
+        <p class="mx-auto mb-8 max-w-2xl text-base text-slate-200 sm:text-lg">
+            Preview public facility availability, explore venue schedules, and sign in to submit reservation requests for PIT venues and equipment.
         </p>
         <div class="flex flex-col sm:flex-row justify-center gap-3">
             <a href="{{ route('login') }}"
@@ -31,16 +32,16 @@
                 Login to Request →
             </a>
             <a href="#calendar-section"
-               class="inline-flex items-center justify-center gap-2 border border-white/50 bg-white/10 hover:bg-white/20 text-white font-bold px-8 py-3 rounded-xl transition shadow-lg text-sm backdrop-blur-sm">
+               class="inline-flex items-center justify-center gap-2 border border-white/50 bg-white/15 hover:bg-white/25 text-white font-bold px-8 py-3 rounded-xl transition shadow-lg text-sm backdrop-blur-sm">
                 View Facility Calendar →
             </a>
         </div>
     </div>
 </section>
 
-{{-- Standalone Calendar Section --}}
-<section id="calendar-section" class="mx-auto w-full max-w-none bg-white px-3 py-8 sm:px-6 sm:py-12 lg:max-w-7xl lg:py-16">
-    <div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
+{{-- Availability & Calendar --}}
+<section id="calendar-section" class="mx-auto w-full max-w-none px-3 py-8 sm:px-6 sm:py-12 lg:max-w-7xl lg:py-16">
+    <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-6 lg:p-8">
         @include('calendar._calendar', [
             'hideHeader' => true,
             'showHowToRequest' => false,
@@ -51,13 +52,13 @@
 </section>
 
 {{-- Public Facility Availability Container --}}
-<section class="mx-auto w-full max-w-none bg-white px-3 pb-8 sm:px-6 sm:pb-12 lg:max-w-7xl lg:pb-16">
+<section class="mx-auto w-full max-w-none px-3 pb-8 sm:px-6 sm:pb-12 lg:max-w-7xl lg:pb-16">
     <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-6 lg:p-8">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div class="max-w-2xl">
                 <h2 class="text-2xl font-bold text-slate-900">Public Facility Availability</h2>
                 <p class="mt-2 text-sm sm:text-base text-slate-600">
-                    Check facility availability before submitting a reservation request. The public calendar shows venue schedules and availability for reference without exposing private requestor details.
+                    Use the public calendar to view venue schedules and equipment availability before signing in to request a reservation.
                 </p>
             </div>
             <a href="{{ route('login') }}" class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">
@@ -103,10 +104,11 @@
 
 {{-- Features --}}
 <main class="mx-auto w-full max-w-none flex-1 px-3 py-8 sm:px-6 sm:py-12 lg:max-w-7xl lg:py-16">
-    <h2 class="text-2xl font-bold text-center text-gray-800 mb-3">System Features</h2>
-    <p class="text-center text-gray-400 text-sm mb-10">Everything you need to manage facility and equipment requests</p>
+    <div class="mb-12 rounded-3xl bg-gradient-to-br from-slate-50 to-blue-50 p-4 sm:p-6 lg:mb-16 lg:p-10">
+        <h2 class="text-2xl font-bold text-center text-gray-800 mb-3">System Features</h2>
+        <p class="text-center text-gray-400 text-sm mb-10">Everything you need to manage facility and equipment requests</p>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-20">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-20">
         <div class="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-2xl p-6 text-center hover:shadow-lg transition">
             <div class="bg-green-500 w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-md">
                 <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -181,11 +183,11 @@
     </div>
 
     {{-- CTA --}}
-    <div class="rounded-3xl bg-gradient-to-r from-emerald-700 to-emerald-500 p-6 text-center text-white shadow-xl sm:p-8 lg:p-12">
+    <div class="rounded-3xl bg-gradient-to-r from-emerald-700 to-emerald-600 p-6 text-center text-white shadow-xl sm:p-8 lg:p-12">
         <h2 class="text-3xl font-bold mb-3">Ready to Get Started?</h2>
         <p class="text-emerald-100 mb-8 max-w-md mx-auto">Sign in to submit your facility and equipment requests. Contact the administration office for account access.</p>
         <a href="{{ route('login') }}"
-           class="inline-flex items-center gap-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold px-8 py-3 rounded-xl transition shadow-lg">
+           class="inline-flex items-center gap-2 bg-white text-emerald-700 hover:bg-slate-100 font-bold px-8 py-3 rounded-xl transition shadow-lg">
             Sign In Now →
         </a>
     </div>
