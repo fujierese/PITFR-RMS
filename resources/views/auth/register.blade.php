@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register — PIT Facility Request Portal</title>
-    @vite(['resources/css/app.css'])
+    @if (app()->runningUnitTests())
+        {{-- Skip Vite asset loading in tests when the manifest may not exist. --}}
+    @else
+        @vite(['resources/css/app.css'])
+    @endif
 </head>
 <body class="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-2 text-slate-100 sm:p-4">
 

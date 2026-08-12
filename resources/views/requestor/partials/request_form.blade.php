@@ -15,7 +15,7 @@
         $classificationTone = 'sky';
     }
 @endphp
-<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}">
+<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
     @csrf
 
 <div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]">
@@ -112,12 +112,13 @@
                             </div>
                             <div>
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Date (inclusive)</p>
-                                <input type="date" name="end_date" min="{{ now()->toDateString() }}" value="{{ old('end_date') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white">
+                                <input id="end_date" type="date" name="end_date" required min="{{ now()->toDateString() }}" value="{{ old('end_date') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white">
                                 <p id="overnight-hint" class="mt-2 text-xs text-emerald-600 hidden">Overnight booking detected: end date auto-updated to the next day.</p>
                             </div>
                             <div>
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Expected No. of Participants</p>
                                 <input type="number" name="expected_participants" required min="1" value="{{ old('expected_participants') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white">
+                                <div id="capacity-warning-banner" role="status" aria-live="polite" class="mt-3 hidden rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900"></div>
                             </div>
                         </div>
                         <div class="grid gap-4 md:grid-cols-2 md:gap-5">
@@ -172,9 +173,11 @@
                                        value="{{ old('other_venue') }}"
                                        placeholder="Please specify venue"
                                        class="w-full border-b border-gray-400 focus:outline-none focus:border-emerald-500 text-sm py-1">
+                                @error('other_venue')
+                                    <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
+                                @enderror
                             </div>
                             <div id="venue-conflict-alert-wrap" class="mt-4"></div>
-                            <div id="capacity-warning-banner" class="mt-4 hidden rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-800"></div>
                         </div>
                     </div>
                 </section>

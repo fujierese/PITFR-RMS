@@ -32,7 +32,7 @@
             <p class="mt-2 text-sm text-slate-600">{{ $isNeedsReschedule ? 'Update the scheduling details so the request can re-enter the approval workflow.' : 'Update the request details while the status is still pending.' }}</p>
         </div>
 
-        <form id="request-form" method="POST" action="{{ route('requestor.update', $request->id) }}" class="space-y-4 p-3 sm:space-y-6 sm:p-6" enctype="multipart/form-data" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($user->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-exclude-request-id="{{ $request->id }}" data-is-needs-reschedule="{{ $isNeedsReschedule ? '1' : '0' }}">
+        <form id="request-form" method="POST" action="{{ route('requestor.update', $request->id) }}" class="space-y-4 p-3 sm:space-y-6 sm:p-6" enctype="multipart/form-data" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($user->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-exclude-request-id="{{ $request->id }}" data-is-needs-reschedule="{{ $isNeedsReschedule ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
             @csrf
             @method('PUT')
 
@@ -54,6 +54,11 @@
                     <div>
                         <label class="text-sm font-medium text-slate-700">End Date</label>
                         <input type="date" name="end_date" value="{{ old('end_date', $request->end_date?->format('Y-m-d')) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-slate-700">Expected Participants</label>
+                        <input type="number" name="expected_participants" min="1" value="{{ old('expected_participants', $request->expected_participants) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" required>
+                        <div id="capacity-warning-banner" role="status" aria-live="polite" class="mt-3 hidden rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900"></div>
                     </div>
                     <div>
                         <label class="text-sm font-medium text-slate-700">Start Time</label>
@@ -123,7 +128,7 @@
                                         <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
                                     </label>
                                     <div class="flex flex-col items-start gap-2 sm:items-end sm:text-right">
-                                        <span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">{{ $itemAvailable }} / {{ $itemQty }} available</span>
+                                        <span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">{{ $itemAvailable <= 0 ? 'No units available.' : ($itemAvailable . ' / ' . $itemQty . ' available') }}</span>
                                         @if($selected)
                                             <div class="quantity-input-wrap" id="qty-wrap-{{ $loop->index }}" style="display:block;">
                                                 <input type="number" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $maxAllowed }}" value="{{ $savedQuantity }}" class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-20">

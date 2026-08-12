@@ -147,6 +147,11 @@ class RequestorController extends Controller
             }
         }
 
+        $venueCapacityMap = [];
+        foreach (self::VENUE_OPTIONS as $venueName) {
+            $venueCapacityMap[$venueName] = $this->availabilityService->getVenueCapacity($venueName);
+        }
+
         return view('requestor.index', [
             'user'              => $user,
             'requests'          => $requests,
@@ -163,6 +168,7 @@ class RequestorController extends Controller
             'equipOptions'      => self::EQUIPMENT_OPTIONS,
             'controlNumber'     => FacilityRequest::generateControlNumber(),
             'equipment'         => $equipment,
+            'venueCapacityMap'  => $venueCapacityMap,
         ]);
     }
 
@@ -227,6 +233,11 @@ class RequestorController extends Controller
             $equipmentQuantityLimits[$itemName] = $this->getEditableEquipmentQuantityLimit($facilityRequest, $itemName);
         }
 
+        $venueCapacityMap = [];
+        foreach (self::VENUE_OPTIONS as $venueName) {
+            $venueCapacityMap[$venueName] = $this->availabilityService->getVenueCapacity($venueName);
+        }
+
         return view('requestor.edit', [
             'request' => $facilityRequest,
             'user' => $user,
@@ -235,6 +246,7 @@ class RequestorController extends Controller
             'controlNumber' => $facilityRequest->control_number,
             'equipment' => \App\Models\Equipment::all(),
             'equipmentQuantityLimits' => $equipmentQuantityLimits,
+            'venueCapacityMap' => $venueCapacityMap,
         ]);
     }
 
@@ -259,7 +271,7 @@ class RequestorController extends Controller
 
         $rules = [
             'start_date' => ['required', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i'],
             'venue' => ['required', 'string', Rule::in(array_merge(self::VENUE_OPTIONS, ['Others (specify)']))],
@@ -275,13 +287,8 @@ class RequestorController extends Controller
 
         $validated = $request->validate($rules);
 
-        if (!empty($validated['end_time']) && !empty($validated['start_time'])) {
-            $validated['end_date'] = $validated['end_date'] ?? $validated['start_date'];
-
-            if ($validated['end_time'] <= $validated['start_time'] && $validated['end_date'] === $validated['start_date']) {
-                $validated['end_date'] = \Carbon\Carbon::parse($validated['start_date'])->addDay()->toDateString();
-            }
-        }
+        $scheduleRange = FacilityRequest::normalizeScheduleRange($validated['start_date'], $validated['start_time'], $validated['end_date'] ?? $validated['start_date'], $validated['end_time']);
+        $validated['end_date'] = $scheduleRange['end']?->toDateString() ?? $validated['end_date'] ?? $validated['start_date'];
 
         $selectedEquipment = array_values(array_filter($validated['equipment'] ?? [], fn($item) => !empty($item)));
         $selectedQuantities = $validated['equipment_quantities'] ?? [];
@@ -303,8 +310,8 @@ class RequestorController extends Controller
 
         $validated['equipment_quantities'] = $quantities;
 
-        $startDateTime = Carbon::parse($validated['start_date'] . ' ' . $validated['start_time']);
-        $endDateTime = Carbon::parse(($validated['end_date'] ?? $validated['start_date']) . ' ' . $validated['end_time']);
+        $startDateTime = $scheduleRange['start'];
+        $endDateTime = $scheduleRange['end'];
 
         if ($endDateTime->lte($startDateTime)) {
             return back()->withErrors(['end_date' => 'End date and time must be after the start date and time. For overnight bookings, set the end date to the next day.'])->withInput();
@@ -376,6 +383,36 @@ class RequestorController extends Controller
         $facilityRequest->venue_notes = null;
         $facilityRequest->equipment_notes = null;
         $facilityRequest->save();
+
+        // Notify custodians about the rescheduled request so review workflow restarts
+        $equipmentCustodianIds = [];
+        if (!empty($facilityRequest->equipment)) {
+            $equipmentCustodianIds = \App\Models\Equipment::whereIn('name', $facilityRequest->equipment)
+                ->pluck('custodian_id')
+                ->filter()
+                ->unique()
+                ->toArray();
+        }
+
+        $venueCustodianIds = \App\Models\Venue::whereIn('name', $facilityRequest->venue)
+            ->pluck('custodian_id')
+            ->filter()
+            ->unique()
+            ->toArray();
+
+        $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
+
+        if (!empty($custodianIds)) {
+            $custodians = \App\Models\User::whereIn('id', $custodianIds)->get();
+            try {
+                Notification::send($custodians, new \App\Notifications\NewFacilityRequestNotification($facilityRequest));
+            } catch (\Throwable $e) {
+                Log::warning('Failed to notify custodians for rescheduled facility request.', [
+                    'facility_request_id' => $facilityRequest->id,
+                    'exception' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return redirect()->route('request.show', $facilityRequest->id)->with('success', 'Request updated successfully.');
     }
@@ -548,7 +585,7 @@ class RequestorController extends Controller
             'name_of_activity'      => 'required|string|max:200',
             'expected_participants' => 'required|integer|min:1',
             'start_date'            => 'required|date|after_or_equal:today',
-            'end_date'              => 'nullable|date|after_or_equal:start_date',
+            'end_date'              => 'required|date|after_or_equal:start_date',
             'start_time'            => 'required|date_format:H:i',
             'end_time'              => 'required|date_format:H:i',
             'venue'                 => ['required', 'string', Rule::in(array_merge(self::VENUE_OPTIONS, ['Others (specify)']))],
@@ -610,18 +647,10 @@ class RequestorController extends Controller
         $equipment = array_values(array_filter($request->input('equipment', []),
                         fn($e) => in_array($e, self::EQUIPMENT_OPTIONS)));
  
-        // If the requested end time is earlier than or equal to the start time,
-        // assume the reservation crosses midnight and move the end date to the next day.
-        if (!empty($validated['end_time']) && !empty($validated['start_time'])) {
-            $validated['end_date'] = $validated['end_date'] ?? $validated['start_date'];
-
-            if ($validated['end_time'] <= $validated['start_time'] && $validated['end_date'] === $validated['start_date']) {
-                $validated['end_date'] = \Carbon\Carbon::parse($validated['start_date'])->addDay()->toDateString();
-            }
-        }
-
-        $startDateTime = \Carbon\Carbon::parse($validated['start_date'] . ' ' . $validated['start_time']);
-        $endDateTime = \Carbon\Carbon::parse(($validated['end_date'] ?? $validated['start_date']) . ' ' . $validated['end_time']);
+        $scheduleRange = FacilityRequest::normalizeScheduleRange($validated['start_date'], $validated['start_time'], $validated['end_date'] ?? $validated['start_date'], $validated['end_time']);
+        $validated['end_date'] = $scheduleRange['end']?->toDateString() ?? $validated['end_date'] ?? $validated['start_date'];
+        $startDateTime = $scheduleRange['start'];
+        $endDateTime = $scheduleRange['end'];
 
         if (!empty($validated['is_emergency']) && $validated['is_emergency']) {
             $cutoff = now()->addHours(48);
@@ -979,7 +1008,9 @@ class RequestorController extends Controller
         }
 
         if ($request->filled('end_date') && $request->filled('end_time')) {
-            $requestedEnd = Carbon::parse($request->input('end_date') . ' ' . $request->input('end_time'));
+            $scheduleRange = FacilityRequest::normalizeScheduleRange($request->input('start_date'), $request->input('start_time'), $request->input('end_date'), $request->input('end_time'));
+            $requestedStart = $scheduleRange['start'];
+            $requestedEnd = $scheduleRange['end'];
         } elseif ($requestedStart) {
             $requestedEnd = $requestedStart->copy()->addHour();
         }
@@ -1053,6 +1084,8 @@ class RequestorController extends Controller
                         'activity' => $req->name_of_activity ?: 'Existing reservation',
                         'quantity' => max(1, $quantity),
                         'schedule' => $req->reservationSchedule ? $req->reservationSchedule->start_datetime?->format('F j, Y') : null,
+                        'priority' => $req->priority ?? 'regular',
+                        'control_number' => $req->control_number ?? null,
                     ];
                 })
                 ->values()

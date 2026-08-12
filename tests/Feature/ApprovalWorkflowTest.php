@@ -72,7 +72,7 @@ class ApprovalWorkflowTest extends TestCase
             'requested_by_id' => $requester->id,
             'status' => 'pending',
             'venue_status' => 'approved',
-            'equipment_status' => 'pending',
+            'equipment_status' => 'approved',
             'priority' => 'regular',
         ]);
 

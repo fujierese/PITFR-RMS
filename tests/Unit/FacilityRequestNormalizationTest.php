@@ -108,6 +108,22 @@ class FacilityRequestNormalizationTest extends TestCase
         $this->assertSame([2, 3], $request->fresh()->requestEquipment()->pluck('quantity')->all());
     }
 
+    public function test_normalize_schedule_range_treats_end_time_as_next_day_for_overnight_booking(): void
+    {
+        $range = FacilityRequest::normalizeScheduleRange('2026-08-11', '17:00', '2026-08-11', '00:00');
+
+        $this->assertSame('2026-08-11 17:00:00', $range['start']->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-12 00:00:00', $range['end']->format('Y-m-d H:i:s'));
+    }
+
+    public function test_normalize_schedule_range_keeps_same_day_for_non_overnight_booking(): void
+    {
+        $range = FacilityRequest::normalizeScheduleRange('2026-08-11', '08:00', '2026-08-11', '12:00');
+
+        $this->assertSame('2026-08-11 08:00:00', $range['start']->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-11 12:00:00', $range['end']->format('Y-m-d H:i:s'));
+    }
+
     public function test_overlapping_schedule_uses_full_datetime_range_for_overnight_requests(): void
     {
         $first = FacilityRequest::create([

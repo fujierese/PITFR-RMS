@@ -15,12 +15,12 @@ class VenueAndEquipmentSeeder extends Seeder
 
         
         DB::table('venues')->insert([
-            ['name' => 'Conference Hall & Interaction Center (CHIC)', 'custodian_id' => 4, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Gymnasium',                                   'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Balay Alumni',                                'custodian_id' => 3, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Oval Grounds',                                'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Covered Court',                               'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Volleyball Court',                            'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Conference Hall & Interaction Center (CHIC)', 'capacity' => 200, 'custodian_id' => 4, 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Gymnasium',                                   'capacity' => 500, 'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Balay Alumni',                                'capacity' => 300, 'custodian_id' => 3, 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Oval Grounds',                                'capacity' => 1000, 'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Covered Court',                               'capacity' => 150, 'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Volleyball Court',                            'capacity' => 100, 'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
         DB::table('equipment')->insert([

@@ -122,6 +122,9 @@ if (window.PitfrWebSocket) {
 // Simple toast notification function
 function showToast(message, type = 'info') {
     const toast = document.createElement('div');
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.setAttribute('aria-atomic', 'true');
     toast.className = `fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-white font-medium shadow-lg transform transition-all duration-300 translate-x-full`;
 
     // Set color based on type

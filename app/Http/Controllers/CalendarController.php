@@ -343,23 +343,19 @@ class CalendarController extends Controller
         ]);
 
         $venues = $request->venues;
-        $startDate = \Carbon\Carbon::parse($request->start_date);
-        $endDate = $request->end_date ? \Carbon\Carbon::parse($request->end_date) : $startDate;
         $excludeId = $request->exclude_request_id;
-
-        if ($request->end_time <= $request->start_time && (! $request->end_date || $request->end_date === $request->start_date)) {
-            $endDate = $startDate->copy()->addDay();
-        }
-
-        $requestedStart = \Carbon\Carbon::parse($request->start_date . ' ' . $request->start_time);
-        $requestedEnd = \Carbon\Carbon::parse($endDate->format('Y-m-d') . ' ' . $request->end_time);
+        $startDate = $request->start_date;
+        $endDate = $request->end_date ?? $request->start_date;
+        $scheduleRange = \App\Models\FacilityRequest::normalizeScheduleRange($startDate, $request->start_time, $endDate, $request->end_time);
+        $requestedStart = $scheduleRange['start'];
+        $requestedEnd = $scheduleRange['end'];
 
         $conflicts = [];
 
         // Check each venue for conflicts
         foreach ($venues as $venue) {
             $venueConflicts = FacilityRequest::where(fn ($query) => $query->matchesVenue($venue))
-            ->where(function($query) {
+                ->where(function($query) {
                     $query->where(function($approvedQuery) {
                         $approvedQuery->where('status', 'approved')
                                       ->where('equipment_returned_status', '!=', 'returned');
@@ -370,14 +366,12 @@ class CalendarController extends Controller
                                      ->where('equipment_status', '!=', 'rejected');
                     });
                 })
-                    ->when($excludeId, function($query) use ($excludeId) {
+                ->when($excludeId, function($query) use ($excludeId) {
                     return $query->where('id', '!=', $excludeId);
                 })
                 ->where(function($query) use ($startDate, $endDate) {
-                    $query->where(function($dateQuery) use ($startDate, $endDate) {
-                        $dateQuery->whereBetween('start_date', [$startDate->copy()->subDay(), $endDate->copy()->addDay()])
-                                  ->orWhereBetween('end_date', [$startDate->copy()->subDay(), $endDate->copy()->addDay()]);
-                    });
+                    $query->whereBetween('start_date', [$startDate, $endDate])
+                          ->orWhereBetween('end_date', [$startDate, $endDate]);
                 })
                 ->with('user')
                 ->get()
@@ -394,7 +388,8 @@ class CalendarController extends Controller
                         'requestor' => $conflict->user ? $conflict->user->name : 'Unknown',
                         'status' => $conflict->status,
                         'venue_status' => $conflict->venue_status,
-                        'priority' => $conflict->priority ?? 'regular',
+                           'priority' => $conflict->priority ?? 'regular',
+                           'control_number' => $conflict->control_number ?? null,
                         'start_date' => $conflict->start_date->format('M d, Y'),
                         'end_date' => $conflict->end_date ? $conflict->end_date->format('M d, Y') : null,
                         'time' => $conflict->start_time,

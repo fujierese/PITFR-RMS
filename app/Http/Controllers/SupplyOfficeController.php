@@ -566,7 +566,9 @@ class SupplyOfficeController extends Controller
         try {
             $requester = $conflictingRequest->requester;
             if ($requester) {
-                $overrideMessage = 'A higher-priority reservation has been approved. Your request has been moved to Needs Reschedule. Override reason: ' . trim((string) ($validated['override_reason'] ?? '')) . ' Please reschedule your reservation.';
+                $urgentPriority = ($urgentRequest->priority ?? 'institutional') ? strtoupper($urgentRequest->priority ?? 'INSTITUTIONAL') : 'URGENT';
+                $priorityLabel = $urgentPriority === 'INSTITUTIONAL' ? 'URGENT' : strtoupper($urgentRequest->priority ?? 'REGULAR');
+                $overrideMessage = "Your reservation ({$conflictingRequest->control_number}) has been overridden due to an {$priorityLabel} institutional reservation.\n\nReason:\n" . trim((string) ($validated['override_reason'] ?? '')) . "\n\nPlease edit and reschedule your reservation.";
 
                 DB::afterCommit(function () use ($requester, $conflictingRequest, $overrideMessage): void {
                     $requester->notify(new RequestStatusChanged(

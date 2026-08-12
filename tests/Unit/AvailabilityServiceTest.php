@@ -46,6 +46,26 @@ class AvailabilityServiceTest extends TestCase
         $this->assertStringContainsString('holiday', strtolower($result['message'] ?? ''));
     }
 
+    public function test_get_venue_capacity_returns_database_value(): void
+    {
+        $service = new AvailabilityService();
+
+        $custodian = User::create([
+            'username' => 'custodian-capacity',
+            'password' => 'secret',
+            'name' => 'Custodian Capacity',
+            'role' => 'custodian',
+        ]);
+
+        Venue::create([
+            'name' => 'Gymnasium',
+            'capacity' => 321,
+            'custodian_id' => $custodian->id,
+        ]);
+
+        $this->assertSame(321, $service->getVenueCapacity('Gymnasium'));
+    }
+
     public function test_relational_venue_assignments_block_conflicts(): void
     {
         $service = new AvailabilityService();

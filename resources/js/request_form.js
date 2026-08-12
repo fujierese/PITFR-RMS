@@ -1,8 +1,14 @@
-document.addEventListener('DOMContentLoaded', function () {
+const initializeRequestForm = function () {
     const form = document.getElementById('request-form');
     if (!form) {
         return;
     }
+
+    if (form.dataset.requestFormInitialized === '1') {
+        return;
+    }
+
+    form.dataset.requestFormInitialized = '1';
 
     const config = {
         equipmentAvailabilityUrl: form.dataset.equipmentAvailabilityUrl || '',
@@ -67,6 +73,8 @@ document.addEventListener('DOMContentLoaded', function () {
     };
     const venueRadioInputs = form.querySelectorAll('input[name="venue"]');
     const venueSelect = form.querySelector('select[name="venue"]');
+    const otherVenueWrap = document.getElementById('venue-other-wrap');
+    const otherVenueInput = document.getElementById('venue-other');
     const expectedParticipantsInput = form.querySelector('input[name="expected_participants"]');
     const equipmentCheckboxes = form.querySelectorAll('input[name="equipment[]"]');
     const rows = form.querySelectorAll('.equipment-row');
@@ -74,13 +82,65 @@ document.addEventListener('DOMContentLoaded', function () {
     const conflictAlert = document.createElement('div');
     const conflictAlertWrapper = document.getElementById('venue-conflict-alert-wrap');
 
+    if (capacityWarningBanner) {
+        capacityWarningBanner.setAttribute('role', 'status');
+        capacityWarningBanner.setAttribute('aria-live', 'polite');
+    }
+
     conflictAlert.className = 'mt-4 p-4 rounded-lg border hidden';
     conflictAlert.id = 'conflict-alert';
+    conflictAlert.setAttribute('role', 'alert');
+    conflictAlert.setAttribute('aria-live', 'assertive');
     if (conflictAlertWrapper) {
         conflictAlertWrapper.appendChild(conflictAlert);
     } else {
         form.parentElement?.insertBefore(conflictAlert, form.parentElement.firstChild);
     }
+
+    const showConflictWarning = function (message, tone = 'red') {
+        if (!message || String(message).trim() === '') {
+            hideConflictWarning();
+            return;
+        }
+
+        conflictAlert.className = `mt-4 rounded-2xl border p-4 text-sm ${tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-red-200 bg-red-50 text-red-800'}`;
+        conflictAlert.innerHTML = message;
+        conflictAlert.classList.remove('hidden');
+        conflictAlert.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+
+    const hideConflictWarning = function () {
+        conflictAlert.classList.add('hidden');
+        conflictAlert.innerHTML = '';
+    };
+
+    const showCapacityWarning = function (venueName, capacity, participants) {
+        if (!capacityWarningBanner) {
+            return;
+        }
+
+        const overage = participants - capacity;
+        capacityWarningBanner.className = 'mt-4 rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900';
+        capacityWarningBanner.innerHTML = `
+            <div class="flex items-start gap-3">
+                <span class="mt-0.5 text-xl">⚠️</span>
+                <div>
+                    <div class="font-semibold">Selected venue capacity exceeded.</div>
+                    <div class="text-xs text-red-900/80">The chosen venue (<strong>${escapeHtml(venueName)}</strong>) has a capacity of ${capacity} participant${capacity === 1 ? '' : 's'}.</div>
+                    <div class="text-xs text-red-900/80">You entered ${participants}, which is ${overage} too many for that venue.</div>
+                </div>
+            </div>
+        `;
+        capacityWarningBanner.classList.remove('hidden');
+    };
+
+    const hideCapacityWarning = function () {
+        if (!capacityWarningBanner) {
+            return;
+        }
+        capacityWarningBanner.classList.add('hidden');
+        capacityWarningBanner.innerHTML = '';
+    };
 
     const clearDraftStorage = function () {
         draftStorageKeys.forEach(function (key) {
@@ -130,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function () {
             field.removeAttribute('aria-invalid');
             field.setCustomValidity('');
 
-            const errorElement = form.querySelector(`#${field.name}-error`);
+            const errorElement = document.getElementById(`${field.name}-error`);
             if (errorElement) {
                 errorElement.textContent = '';
                 errorElement.classList.add('hidden');
@@ -215,6 +275,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             updateProposalRequirement();
             toggleEmergencyJustification();
+            updateOtherVenueVisibility();
             updateSelectedItemsSummary();
             updateCapacityWarning();
             syncOvernightEndDate();
@@ -308,53 +369,82 @@ document.addEventListener('DOMContentLoaded', function () {
         summaryEquipment.innerHTML = 'Equipment:<br>' + equipmentLines.join('');
     };
 
+    const updateOtherVenueVisibility = function () {
+        if (!otherVenueWrap || !otherVenueInput) {
+            return;
+        }
+
+        const selectedVenue = form.querySelector('input[name="venue"]:checked')?.value || (venueSelect?.value || '');
+        const isOther = selectedVenue === 'Others (specify)';
+
+        otherVenueWrap.style.display = isOther ? 'block' : 'none';
+
+        if (isOther) {
+            otherVenueInput.disabled = false;
+            otherVenueInput.removeAttribute('disabled');
+            otherVenueInput.setAttribute('required', 'required');
+            otherVenueInput.setAttribute('aria-required', 'true');
+        } else {
+            otherVenueInput.removeAttribute('required');
+            otherVenueInput.setAttribute('aria-required', 'false');
+            otherVenueInput.disabled = true;
+            otherVenueInput.value = '';
+        }
+    };
+
+    const decodeHtmlEntities = function (value) {
+        if (!value || typeof value !== 'string') {
+            return value;
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = value;
+        return textarea.value;
+    };
+
+    const getVenueCapacities = function () {
+        try {
+            const raw = form.getAttribute('data-venue-capacities') || form.dataset.venueCapacities || '';
+            const decoded = decodeHtmlEntities(raw);
+            return decoded ? JSON.parse(decoded) : {};
+        } catch (error) {
+            return {};
+        }
+    };
+
     const updateCapacityWarning = function () {
         if (!capacityWarningBanner || !expectedParticipantsInput) {
             return;
         }
 
         const participantValue = expectedParticipantsInput.value;
-        const participants = Number.parseInt(participantValue, 10);
+        const participants = Number(participantValue);
         const selectedVenue = form.querySelector('input[name="venue"]:checked');
         const selectedVenueValue = selectedVenue ? selectedVenue.value : (venueSelect?.value || null);
 
-        const capacityMap = {
-            'Conference Hall & Interaction Center (CHIC)': 150,
-            'Gymnasium': 500,
-            'Balay Alumni': 200,
-            'Covered Court': 300,
-            'Oval Grounds': 1000,
-            'Volleyball Court': 100,
-        };
-
-        if (!selectedVenueValue || !participantValue || Number.isNaN(participants) || !capacityMap[selectedVenueValue]) {
-            capacityWarningBanner.classList.add('hidden');
-            capacityWarningBanner.textContent = '';
-            capacityWarningBanner.innerHTML = '';
+        if (!selectedVenueValue || !participantValue || Number.isNaN(participants) || selectedVenueValue === 'Others (specify)') {
+            hideCapacityWarning();
             return;
         }
 
-        const capacity = capacityMap[selectedVenueValue];
+        let capacity = null;
+        const capacities = getVenueCapacities();
+        if (Object.prototype.hasOwnProperty.call(capacities, selectedVenueValue)) {
+            capacity = Number.parseInt(capacities[selectedVenueValue], 10);
+        }
+
+        if (capacity === null || Number.isNaN(capacity)) {
+            hideCapacityWarning();
+            return;
+        }
+
         if (participants <= capacity) {
-            capacityWarningBanner.classList.add('hidden');
-            capacityWarningBanner.textContent = '';
-            capacityWarningBanner.innerHTML = '';
+            hideCapacityWarning();
             return;
         }
 
-        const overage = participants - capacity;
-        capacityWarningBanner.className = 'mt-4 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-800';
-        capacityWarningBanner.innerHTML = `
-            <div class="flex items-start gap-2">
-                <span class="mt-0.5 text-lg">⚠️</span>
-                <div>
-                    <div class="font-semibold">Capacity: ${capacity}</div>
-                    <div class="text-xs text-yellow-800/80">Expected Participants: ${participants}</div>
-                    <div class="mt-1 text-xs text-yellow-800/90">${overage} participant${overage === 1 ? '' : 's'} exceed this venue's capacity. You may continue or choose a larger venue.</div>
-                </div>
-            </div>
-        `;
-        capacityWarningBanner.classList.remove('hidden');
+        hideCapacityWarning();
+        showCapacityWarning(selectedVenueValue, capacity, participantValue);
     };
 
     const updateSubmitButtonLabel = function (hasConflict) {
@@ -393,7 +483,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const errorId = `${field.name}-error`;
-        let errorElement = form.querySelector(`#${errorId}`);
+        let errorElement = document.getElementById(errorId);
 
         field.setAttribute('aria-invalid', valid ? 'false' : 'true');
         field.setCustomValidity(valid ? '' : message);
@@ -433,7 +523,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const start = new Date(`${startDate}T${startTime}`);
         const end = new Date(`${endDate}T${endTime}`);
 
-        if (end < start) {
+        if (end <= start) {
             setInputValidationState(endDateInput, false, 'End date/time must be after the start date/time.');
             return false;
         }
@@ -464,14 +554,25 @@ document.addEventListener('DOMContentLoaded', function () {
         rows.forEach(row => {
             const checkbox = row.querySelector('.equipment-checkbox');
             const qtyInput = row.querySelector('.quantity-input-wrap input[type="number"]');
+            const errorMessage = row.querySelector('.quantity-error-message');
             const maxAllowed = parseInt(row.dataset.maxQuantity || row.dataset.available, 10) || 0;
             const qty = parseInt(qtyInput.value, 10) || 0;
 
             if (checkbox.checked && (qty < 1 || qty > maxAllowed)) {
                 qtyInput.classList.add('border-red-500');
+                qtyInput.setCustomValidity('Quantity requested cannot exceed the available stock.');
+                if (errorMessage) {
+                    errorMessage.textContent = 'Please request between 1 and ' + maxAllowed + ' item' + (maxAllowed === 1 ? '' : 's') + '.';
+                    errorMessage.classList.remove('hidden');
+                }
                 valid = false;
             } else {
                 qtyInput.classList.remove('border-red-500');
+                qtyInput.setCustomValidity('');
+                if (errorMessage) {
+                    errorMessage.textContent = '';
+                    errorMessage.classList.add('hidden');
+                }
             }
         });
 
@@ -500,13 +601,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (utilizationCard) {
             if (overlappingRequests.length > 0) {
                 const firstConflict = overlappingRequests[0];
-                const reservedQuantity = Math.max(0, (firstConflict?.quantity || Math.max(0, total - available)));
-                const remainingQuantity = Math.max(0, available);
+                const reservedQuantity = Math.max(0, Number(firstConflict?.quantity ?? (normalizedTotal - normalizedAvailable)));
+                const remainingQuantity = normalizedAvailable;
+                const conflictPriority = (firstConflict?.priority || 'regular').toString().toUpperCase();
+                const priorityTone = conflictPriority === 'URGENT' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700';
                 utilizationCard.className = 'equipment-utilization-card mt-2 w-full rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-left text-[11px] text-slate-600 sm:min-w-[220px]';
                 utilizationCard.innerHTML = `
                     <div class="font-semibold text-slate-800">⚠ Existing Reservation</div>
                     <div class="mt-1 space-y-1">
-                        <div>Activity: ${firstConflict?.activity || 'Existing reservation'}</div>
+                        <div class="flex items-center gap-2"><div>Activity: ${firstConflict?.activity || 'Existing reservation'}</div><div class="ml-2 inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset ${priorityTone}">${escapeHtml(conflictPriority)}</div></div>
                         <div>Reserved Quantity: ${reservedQuantity}</div>
                         <div>Remaining Quantity: ${remainingQuantity}</div>
                     </div>
@@ -569,9 +672,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            row.dataset.available = data.available;
-            row.dataset.total = data.total;
-            updateEquipmentRowVisuals(row, data.available, data.total, data.overlapping_requests || []);
+            // Ensure availability values are always non-negative numbers
+            const avail = Math.max(0, Number(data.available || 0));
+            const tot = Math.max(0, Number(data.total || 0));
+            row.dataset.available = String(avail);
+            row.dataset.total = String(tot);
+            updateEquipmentRowVisuals(row, avail, tot, data.overlapping_requests || []);
         })
         .catch(() => {});
     };
@@ -650,11 +756,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (selectedHasConflict) {
                 const conflictEntries = conflicts[selectedVenueValue] || [];
-                conflictAlert.className = isUrgent
-                    ? 'mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900'
-                    : 'mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-800';
-                conflictAlert.classList.remove('hidden');
-
                 let conflictHtml = isUrgent
                     ? '<div class="font-semibold mb-2">⚠️ Institute Urgent Request</div>'
                     : '<div class="font-semibold mb-2">⚠️ Scheduling conflict detected for this venue:</div>';
@@ -682,7 +783,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 conflictHtml += isUrgent
                     ? '<div class="mt-2 text-xs text-amber-800">Final approval will determine whether the existing reservation must be rescheduled.</div>'
                     : '<div class="mt-2 text-xs text-red-600">Please choose another venue or schedule.</div>';
-                conflictAlert.innerHTML = conflictHtml;
+
+                showConflictWarning(conflictHtml, isUrgent ? 'amber' : 'red');
 
                 if (isUrgent) {
                     updateSubmitButtonLabel(false);
@@ -700,7 +802,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     hasConflictBlocker = true;
                 }
             } else {
-                conflictAlert.classList.add('hidden');
+                hideConflictWarning();
                 updateSubmitButtonLabel(false);
                 if (submitButton) {
                     submitButton.disabled = false;
@@ -721,14 +823,18 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const startDate = new Date(startDateInput.value);
-        const endDateValue = endDateInput.value || startDateInput.value;
-        const currentEndDate = new Date(endDateValue);
+        const startDateValue = startDateInput.value;
+        const endDateValue = endDateInput.value || startDateValue;
+        const startDate = new Date(`${startDateValue}T${startTimeInput.value}`);
+        const endDate = new Date(`${endDateValue}T${endTimeInput.value}`);
         const nextDay = new Date(startDate);
         nextDay.setDate(nextDay.getDate() + 1);
-        const nextDayString = nextDay.toISOString().slice(0, 10);
+        const nextDayString = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`;
+        const isOvernightTime = endTimeInput.value <= startTimeInput.value;
+        const shouldAutoUpdate = isOvernightTime && (!endDateInput.value || endDateInput.value === startDateValue);
+        const isOvernightBooking = isOvernightTime && endDateInput.value === nextDayString;
 
-        if (endTimeInput.value <= startTimeInput.value) {
+        if (shouldAutoUpdate) {
             if (endDateInput.value !== nextDayString) {
                 endDateInput.value = nextDayString;
             }
@@ -736,11 +842,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 overnightHint.textContent = 'Overnight booking detected: end date auto-updated to the next day.';
                 overnightHint.classList.remove('hidden');
             }
-        } else {
-            if (endDateInput.value === nextDayString && currentEndDate <= startDate) {
-                endDateInput.value = startDateInput.value;
+            return;
+        }
+
+        if (isOvernightBooking) {
+            if (overnightHint) {
+                overnightHint.textContent = 'Overnight booking detected: end date auto-updated to the next day.';
+                overnightHint.classList.remove('hidden');
             }
-            overnightHint?.classList.add('hidden');
+            return;
+        }
+
+        if (overnightHint) {
+            overnightHint.classList.add('hidden');
+        }
+
+        if (endDateInput.value === nextDayString && endDate <= startDate) {
+            endDateInput.value = startDateValue;
         }
     };
 
@@ -764,18 +882,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const attachSelectionListeners = function () {
         venueRadioInputs.forEach(radio => {
-            radio.addEventListener('change', function () {
+            const handleVenueSelection = function () {
+                updateOtherVenueVisibility();
                 updateSelectedItemsSummary();
                 updateCapacityWarning();
                 clearTimeout(conflictCheckTimeout);
                 conflictCheckTimeout = setTimeout(checkConflicts, 300);
                 refreshAllEquipmentAvailability();
                 saveDraft();
-            });
+            };
+
+            radio.addEventListener('click', handleVenueSelection);
+            radio.addEventListener('change', handleVenueSelection);
         });
 
         if (venueSelect) {
             venueSelect.addEventListener('change', function () {
+                updateOtherVenueVisibility();
                 updateSelectedItemsSummary();
                 updateCapacityWarning();
                 clearTimeout(conflictCheckTimeout);
@@ -819,38 +942,22 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     updateProposalRequirement();
+    updateOtherVenueVisibility();
     if (emergencyCheckbox) {
         emergencyCheckbox.addEventListener('change', function () {
             updateProposalRequirement();
             toggleEmergencyJustification();
+            updateOtherVenueVisibility();
             saveDraft();
             clearTimeout(conflictCheckTimeout);
             conflictCheckTimeout = setTimeout(checkConflicts, 300);
         });
     }
 
-    form.addEventListener('submit', function (event) {
-        const clickedButton = document.activeElement && document.activeElement.matches('button[type="submit"]') ? document.activeElement : form.querySelector('button[type="submit"]');
-        const isValid = form.checkValidity();
-
-        if (!isValid) {
-            resetSubmitButtonLoading(clickedButton);
-            return;
-        }
-
-        if (clickedButton?.dataset.loading === '1') {
-            event.preventDefault();
-            return;
-        }
-
-        const loadingLabel = clickedButton?.textContent?.toLowerCase().includes('save') ? 'Saving...' : 'Submitting...';
-        clickedButton?.setAttribute('data-loading', '1');
-        setSubmitButtonLoading(clickedButton, loadingLabel);
-    });
-
     createValidationListeners();
     attachSelectionListeners();
     restoreDraft();
+    updateOtherVenueVisibility();
     updateSelectedItemsSummary();
 
     document.getElementById('print-summary-btn')?.addEventListener('click', function () {
@@ -884,6 +991,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             if (isChecked) {
+                qtyInput.value = qty;
                 qtyWrap.style.display = 'block';
             } else {
                 qtyWrap.style.display = 'none';
@@ -970,11 +1078,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     expectedParticipantsInput?.addEventListener('input', function () {
         updateCapacityWarning();
+        saveDraft();
     });
 
     syncOvernightEndDate();
 
     form.addEventListener('submit', function (e) {
+        const clickedButton = document.activeElement && document.activeElement.matches('button[type="submit"]') ? document.activeElement : form.querySelector('button[type="submit"]');
         const requiredOk = validateRequiredFields();
         const dateTimeOk = validateDateTimeRange();
         const qtyOk = validateQuantities();
@@ -986,16 +1096,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 const firstInvalid = form.querySelector(':invalid');
                 firstInvalid?.focus();
             }
-            if (!qtyOk) {
-                alert('Please correct equipment quantities so each requested amount is within the available stock.');
-            }
-            if (hasConflict) {
-                alert('Please resolve scheduling conflicts before submitting your request.');
-            }
             return false;
+        }
+
+        if (clickedButton) {
+            clickedButton.setAttribute('data-loading', '1');
+            const loadingLabel = clickedButton.textContent?.toLowerCase().includes('save') ? 'Saving...' : 'Submitting...';
+            setSubmitButtonLoading(clickedButton, loadingLabel);
         }
 
         clearDraftStorage();
         return true;
     });
-});
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeRequestForm, { once: true });
+} else {
+    initializeRequestForm();
+}

@@ -297,17 +297,9 @@ class FacilityRequest extends Model
             DB::table('reservation_schedules')->where('facility_request_id', $this->getKey())->delete();
         }
 
-        $startDate = $this->start_date;
-        $startTime = $this->start_time;
-        $endDate = $this->end_date ?? $this->start_date;
-        $endTime = $this->end_time ?? $this->start_time;
-
-        $startDatetime = $this->normalizeScheduleValue($startDate, $startTime);
-        $endDatetime = $this->normalizeScheduleValue($endDate, $endTime, $startDatetime);
-
-        if ($startDatetime && $endDatetime && $endDatetime->lte($startDatetime)) {
-            $endDatetime = $startDatetime->copy()->addDay();
-        }
+        $range = self::normalizeScheduleRange($this->start_date, $this->start_time, $this->end_date ?? $this->start_date, $this->end_time ?? $this->start_time);
+        $startDatetime = $range['start'];
+        $endDatetime = $range['end'];
 
         if ($startDatetime && $endDatetime && Schema::hasTable('reservation_schedules')) {
             $this->reservationSchedule()->create([
@@ -363,27 +355,32 @@ class FacilityRequest extends Model
 
     public function getVenueNames(): array
     {
+        // If the relationship is already loaded, trust it first.
+        if ($this->relationLoaded('requestVenues')) {
+            $relationalVenues = $this->resolveVenueRelationNames();
+
+            if (!empty($relationalVenues)) {
+                return $this->preferRelationValuesOverLegacy(
+                    $relationalVenues,
+                    $this->getVenueNamesFromLegacyData()
+                );
+            }
+        }
+
+        // No relational table available → legacy fallback.
         if (!Schema::hasTable('request_venues')) {
             return $this->getVenueNamesFromLegacyData();
         }
 
-        if ($this->relationLoaded('requestVenues')) {
-            $relationalVenues = $this->resolveVenueRelationNames();
-            if (!empty($relationalVenues)) {
-                return $this->preferRelationValuesOverLegacy($relationalVenues, $this->getVenueNamesFromLegacyData());
-            }
-        }
-
-        $this->loadMissing('requestVenues');
         $this->loadMissing('requestVenues.venue');
-        $relationalVenues = $this->resolveVenueRelationNames();
-        if (!empty($relationalVenues)) {
-            return $this->preferRelationValuesOverLegacy($relationalVenues, $this->getVenueNamesFromLegacyData());
-        }
 
-        $relationalVenues = $this->requestVenues()->get()->map(fn (RequestVenue $item) => $item->resolvedName())->filter()->values()->all();
+        $relationalVenues = $this->resolveVenueRelationNames();
+
         if (!empty($relationalVenues)) {
-            return $this->preferRelationValuesOverLegacy($relationalVenues, $this->getVenueNamesFromLegacyData());
+            return $this->preferRelationValuesOverLegacy(
+                $relationalVenues,
+                $this->getVenueNamesFromLegacyData()
+            );
         }
 
         return $this->getVenueNamesFromLegacyData();
@@ -391,27 +388,31 @@ class FacilityRequest extends Model
 
     public function getEquipmentItems(): array
     {
+        // Prefer explicitly loaded relational data first.
+        if ($this->relationLoaded('requestEquipment')) {
+            $relationalEquipment = $this->resolveEquipmentRelationNames();
+
+            if (!empty($relationalEquipment)) {
+                return $this->preferRelationValuesOverLegacy(
+                    $relationalEquipment,
+                    $this->getEquipmentItemsFromLegacyData()
+                );
+            }
+        }
+
         if (!Schema::hasTable('request_equipment')) {
             return $this->getEquipmentItemsFromLegacyData();
         }
 
-        if ($this->relationLoaded('requestEquipment')) {
-            $relationalEquipment = $this->resolveEquipmentRelationNames();
-            if (!empty($relationalEquipment)) {
-                return $this->preferRelationValuesOverLegacy($relationalEquipment, $this->getEquipmentItemsFromLegacyData());
-            }
-        }
-
-        $this->loadMissing('requestEquipment');
         $this->loadMissing('requestEquipment.equipment');
-        $relationalEquipment = $this->resolveEquipmentRelationNames();
-        if (!empty($relationalEquipment)) {
-            return $this->preferRelationValuesOverLegacy($relationalEquipment, $this->getEquipmentItemsFromLegacyData());
-        }
 
-        $relationalEquipment = $this->requestEquipment()->get()->map(fn (RequestEquipment $item) => $item->resolvedName())->filter()->values()->all();
+        $relationalEquipment = $this->resolveEquipmentRelationNames();
+
         if (!empty($relationalEquipment)) {
-            return $this->preferRelationValuesOverLegacy($relationalEquipment, $this->getEquipmentItemsFromLegacyData());
+            return $this->preferRelationValuesOverLegacy(
+                $relationalEquipment,
+                $this->getEquipmentItemsFromLegacyData()
+            );
         }
 
         return $this->getEquipmentItemsFromLegacyData();
@@ -607,7 +608,24 @@ class FacilityRequest extends Model
         $this->syncRelationalItems();
     }
 
-    private function normalizeScheduleValue($dateValue, $timeValue, ?\Carbon\Carbon $fallback = null): ?\Carbon\Carbon
+    public static function normalizeScheduleRange($startDateValue, $startTimeValue, $endDateValue = null, $endTimeValue = null): array
+    {
+        $start = self::normalizeScheduleValue($startDateValue, $startTimeValue);
+        $effectiveEndDate = $endDateValue ?? $startDateValue;
+        $effectiveEndTime = $endTimeValue ?? $startTimeValue ?? '00:00';
+        $end = self::normalizeScheduleValue($effectiveEndDate, $effectiveEndTime, $start);
+
+        if ($start && $end && $end->lte($start)) {
+            $end = $start->copy()->addDay()->setTime(0, 0, 0);
+        }
+
+        return [
+            'start' => $start,
+            'end' => $end,
+        ];
+    }
+
+    protected static function normalizeScheduleValue($dateValue, $timeValue, ?\Carbon\Carbon $fallback = null): ?\Carbon\Carbon
     {
         if (!$dateValue && !$timeValue) {
             return null;
@@ -695,7 +713,7 @@ class FacilityRequest extends Model
     public function getRequestedStartDateTime(): \Carbon\Carbon
     {
         if (!Schema::hasTable('reservation_schedules')) {
-            return $this->normalizeScheduleValue($this->start_date, $this->start_time) ?? \Carbon\Carbon::parse('00:00');
+            return self::normalizeScheduleRange($this->start_date, $this->start_time, $this->end_date ?? $this->start_date, $this->end_time ?? $this->start_time ?? '00:00')['start'] ?? \Carbon\Carbon::parse('00:00');
         }
 
         $this->loadMissing('reservationSchedule');
@@ -705,13 +723,13 @@ class FacilityRequest extends Model
         }
 
         return $this->reservationSchedule?->start_datetime
-            ?? $this->normalizeScheduleValue($this->start_date, $this->start_time) ?? \Carbon\Carbon::parse('00:00');
+            ?? self::normalizeScheduleRange($this->start_date, $this->start_time, $this->end_date ?? $this->start_date, $this->end_time ?? $this->start_time ?? '00:00')['start'] ?? \Carbon\Carbon::parse('00:00');
     }
 
     public function getRequestedEndDateTime(): \Carbon\Carbon
     {
         if (!Schema::hasTable('reservation_schedules')) {
-            return $this->normalizeScheduleValue($this->end_date ?? $this->start_date, $this->end_time ?? $this->start_time ?? '00:00') ?? \Carbon\Carbon::parse('00:00');
+            return self::normalizeScheduleRange($this->start_date, $this->start_time, $this->end_date ?? $this->start_date, $this->end_time ?? $this->start_time ?? '00:00')['end'] ?? \Carbon\Carbon::parse('00:00');
         }
 
         $this->loadMissing('reservationSchedule');
@@ -721,7 +739,7 @@ class FacilityRequest extends Model
         }
 
         return $this->reservationSchedule?->end_datetime
-            ?? $this->normalizeScheduleValue($this->end_date ?? $this->start_date, $this->end_time ?? $this->start_time ?? '00:00') ?? \Carbon\Carbon::parse('00:00');
+            ?? self::normalizeScheduleRange($this->start_date, $this->start_time, $this->end_date ?? $this->start_date, $this->end_time ?? $this->start_time ?? '00:00')['end'] ?? \Carbon\Carbon::parse('00:00');
     }
 
     public function overlapsTimeRange(\Carbon\Carbon $requestedStart, \Carbon\Carbon $requestedEnd): bool

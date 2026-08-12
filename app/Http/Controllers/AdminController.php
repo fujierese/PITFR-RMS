@@ -54,7 +54,7 @@ class AdminController extends Controller
             $updates = [
                 'status'        => $statusValue,  // ← 'approved' or 'rejected'
                 'approved_by'   => Auth::user()->name,
-                'approved_by_id' => Auth::id(),
+                'approved_by_id' => Auth::user()->getKey(),
                 'notes'         => $validated['notes'] ?? '',
                 'approved_date' => now(),
             ];

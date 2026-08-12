@@ -12,6 +12,26 @@ use Illuminate\Support\Collection;
 
 class AvailabilityService
 {
+    public function getVenueCapacity(string $venueName): ?int
+    {
+        $venue = Venue::where('name', $venueName)->first();
+
+        if ($venue && $venue->capacity !== null) {
+            return (int) $venue->capacity;
+        }
+
+        $defaultCapacities = [
+            'Conference Hall & Interaction Center (CHIC)' => 150,
+            'Gymnasium' => 500,
+            'Balay Alumni' => 200,
+            'Covered Court' => 300,
+            'Oval Grounds' => 1000,
+            'Volleyball Court' => 100,
+        ];
+
+        return $defaultCapacities[$venueName] ?? null;
+    }
+
     public function checkEquipmentAvailability(string $itemName, int $quantity, ?Carbon $requestedStart = null, ?Carbon $requestedEnd = null): array
     {
         $equipment = Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])->first();
@@ -38,6 +58,7 @@ class AvailabilityService
     {
         $venue = Venue::where('name', $venueName)->first();
         $venueRecord = $venue ?: null;
+        $capacity = $this->getVenueCapacity($venueName);
 
         if ($venueRecord && $venueRecord->capacity !== null && $venueRecord->capacity <= 0) {
             return ['available' => false, 'message' => 'The selected venue is unavailable.', 'capacity' => $venueRecord->capacity];
@@ -76,7 +97,7 @@ class AvailabilityService
         return [
             'available' => !$conflicts && !$maintenanceConflict && !$isHoliday,
             'message' => $this->buildVenueMessage($conflicts, $maintenanceConflict, $isHoliday),
-            'capacity' => $venueRecord?->capacity,
+            'capacity' => $capacity,
         ];
     }
 

@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PIT – Facility & Equipment Request System</title>
-    @vite(['resources/css/app.css'])
+    @if (app()->runningUnitTests())
+        {{-- Skip Vite asset loading in tests when the manifest may not exist. --}}
+    @else
+        @vite(['resources/css/app.css'])
+    @endif
 </head>
 <body class="bg-emerald-900 min-h-screen flex flex-col">
 
@@ -207,7 +211,11 @@
 <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/themes/light.css">
 
 <!-- App JS -->
-@vite(['resources/js/app.js'])
+@if (app()->runningUnitTests())
+    {{-- Skip Vite JS loading in tests when the manifest may not exist. --}}
+@else
+    @vite(['resources/js/app.js'])
+@endif
 
 <!-- FullCalendar JS -->
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>

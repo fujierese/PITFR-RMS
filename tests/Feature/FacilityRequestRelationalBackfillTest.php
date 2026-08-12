@@ -46,6 +46,7 @@ class FacilityRequestRelationalBackfillTest extends TestCase
         Schema::create('request_venues', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('facility_request_id')->constrained('facility_requests')->cascadeOnDelete();
+            $table->unsignedBigInteger('venue_id')->nullable();
             $table->string('name');
             $table->timestamps();
             $table->softDeletes();
@@ -54,6 +55,7 @@ class FacilityRequestRelationalBackfillTest extends TestCase
         Schema::create('request_equipment', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('facility_request_id')->constrained('facility_requests')->cascadeOnDelete();
+            $table->unsignedBigInteger('equipment_id')->nullable();
             $table->string('name');
             $table->unsignedInteger('quantity')->default(1);
             $table->timestamps();

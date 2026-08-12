@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', 'PIT – Facility Request System')</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @if (app()->runningUnitTests())
+        {{-- Skip Vite asset loading in tests when the manifest may not exist. --}}
+    @else
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @endif
     <meta name="user-id" content="{{ Auth::id() }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <!-- SweetAlert2 CDN -->
@@ -201,35 +205,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const successMessage = <?php echo json_encode(session('success')); ?>;
-    const warningMessage = <?php echo json_encode(session('warning')); ?>;
-
-    if (successMessage) {
-        Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: 'success',
-            title: successMessage,
-            showConfirmButton: false,
-            timer: 3000,
-            timerProgressBar: true,
-            background: '#ecfdf5',
-            color: '#065f46',
-        });
-    }
-
-    if (warningMessage) {
-        Swal.fire({
-            icon: 'warning',
-            title: 'Venue Capacity Warning',
-            text: warningMessage,
-            confirmButtonText: 'Continue',
-            confirmButtonColor: '#f59e0b',
-            background: '#fff7ed',
-            color: '#9a5b00',
-        });
-    }
-
     const setLoadingButtonState = function (button, loadingText) {
         if (!button) {
             return;

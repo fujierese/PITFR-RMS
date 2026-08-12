@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In — PIT Facility Request Portal</title>
-    @vite(['resources/css/app.css'])
+    @if (app()->runningUnitTests())
+        {{-- Skip Vite asset loading in tests when the manifest may not exist. --}}
+    @else
+        @vite(['resources/css/app.css'])
+    @endif
 </head>
 
 <body class="min-h-screen overflow-x-hidden bg-slate-100 text-slate-100 lg:h-screen lg:overflow-hidden">
