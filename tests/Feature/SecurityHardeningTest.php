@@ -68,6 +68,23 @@ class SecurityHardeningTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_request_print_page_contains_two_identical_copies_for_authorized_users(): void
+    {
+        $owner = User::factory()->create(['role' => 'requestor']);
+        $request = $this->facilityRequest($owner, ['Gymnasium'], ['Sound System' => 1], [
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('request.print', $request))
+            ->assertOk()
+            ->assertSee('REQUEST FOR THE USE OF FACILITY/EQUIPMENT')
+            ->assertSee('COPY 1')
+            ->assertSee('COPY 2');
+    }
+
     public function test_duplicate_api_equipment_approval_does_not_reserve_inventory_twice(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);

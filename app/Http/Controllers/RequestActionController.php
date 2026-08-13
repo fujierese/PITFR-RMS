@@ -28,9 +28,17 @@ class RequestActionController extends Controller
         try {
             if ($facilityRequest->equipment_status === 'approved') {
                 foreach ($facilityRequest->getEquipmentQuantities() as $itemName => $qty) {
-                    $equipment = Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])->first();
+                    // Lock the equipment row before modifying inventory and cap to max quantity
+                    $equipment = Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])
+                        ->lockForUpdate()
+                        ->first();
+
                     if ($equipment) {
-                        $equipment->release($qty);
+                        $equipment->quantity_available = min(
+                            $equipment->quantity,
+                            $equipment->quantity_available + (int) $qty
+                        );
+                        $equipment->save();
                     }
                 }
             }
@@ -108,8 +116,8 @@ class RequestActionController extends Controller
             return redirect()->back()->with('success', 'Request verified and forwarded to Administrator.');
         } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Custodian verification failed for request ' . $facilityRequest->id . ': ' . $e->getMessage(), ['exception' => $e]);
-            return redirect()->back()->withErrors('Unable to verify request at this time: ' . $e->getMessage());
+            Log::error('Custodian verification failed for request ' . $facilityRequest->id, ['exception' => $e]);
+            return redirect()->back()->withErrors('Unable to verify request at this time.');
         }
     }
 
@@ -207,8 +215,8 @@ class RequestActionController extends Controller
             return redirect()->route('supply-office.index')->with('success', 'Final approval granted successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Final approval failed for request ' . $facilityRequest->id . ': ' . $e->getMessage(), ['exception' => $e]);
-            return redirect()->back()->withErrors('Unable to finalize approval: ' . $e->getMessage());
+            Log::error('Final approval failed for request ' . $facilityRequest->id, ['exception' => $e]);
+            return redirect()->back()->withErrors('Unable to finalize approval at this time.');
         }
     }
 
@@ -244,8 +252,8 @@ class RequestActionController extends Controller
             return redirect()->route('supply-office.index')->with('success', 'Request declined successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Decline request failed for request ' . $facilityRequest->id . ': ' . $e->getMessage(), ['exception' => $e]);
-            return redirect()->back()->withErrors('Unable to decline the request: ' . $e->getMessage());
+            Log::error('Decline request failed for request ' . $facilityRequest->id, ['exception' => $e]);
+            return redirect()->back()->withErrors('Unable to decline the request at this time.');
         }
     }
 

@@ -14,7 +14,18 @@
         'approved' => 'emerald',
         'rejected' => 'rose',
         'completed' => 'sky',
+        'needs_reschedule' => 'amber',
         default => 'amber',
+    };
+
+    $requestStatusLabel = match($request->status) {
+        'pending' => 'Pending',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+        'needs_reschedule' => 'Needs Reschedule',
+        default => ucfirst(str_replace('_', ' ', (string) ($request->status ?? 'pending'))),
     };
 
     $workflowSteps = [
@@ -125,7 +136,7 @@
                 @endif
                 <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset
                     {{ $overallStatusTone === 'emerald' ? 'bg-emerald-100 text-emerald-700 ring-emerald-200' : ($overallStatusTone === 'rose' ? 'bg-rose-100 text-rose-700 ring-rose-200' : ($overallStatusTone === 'sky' ? 'bg-sky-100 text-sky-700 ring-sky-200' : 'bg-amber-100 text-amber-700 ring-amber-200')) }}">
-                    {{ ucfirst($request->status) }}
+                    {{ $requestStatusLabel }}
                 </span>
             </div>
         </div>
@@ -383,7 +394,7 @@
         <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                 <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Overall Status</p>
-                <p class="mt-3 text-lg font-semibold text-slate-900">{{ ucfirst($request->status) }}</p>
+                <p class="mt-3 text-lg font-semibold text-slate-900">{{ $requestStatusLabel }}</p>
             </div>
             <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                 <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Current Workflow Stage</p>

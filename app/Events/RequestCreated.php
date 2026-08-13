@@ -17,15 +17,19 @@ class RequestCreated implements ShouldBroadcast
     public $requestId;
     public $controlNumber;
     public $userName;
+    public $ownerId;
+    public $custodianIds = [];
 
     /**
      * Create a new event instance.
      */
-    public function __construct($requestId, $controlNumber, $userName)
+    public function __construct($requestId, $controlNumber, $userName, $ownerId, array $custodianIds = [])
     {
         $this->requestId = $requestId;
         $this->controlNumber = $controlNumber;
         $this->userName = $userName;
+        $this->ownerId = $ownerId;
+        $this->custodianIds = array_values(array_map('intval', $custodianIds));
     }
 
     /**
@@ -33,9 +37,13 @@ class RequestCreated implements ShouldBroadcast
      */
     public function broadcastOn(): array
     {
-        return [
-            new Channel('facility-requests'),
-        ];
+        $channels = [new Channel('facility-requests.admin'), new PrivateChannel('App.Models.User.' . $this->ownerId)];
+
+        foreach ($this->custodianIds as $cid) {
+            $channels[] = new PrivateChannel('facility-requests.custodian.' . (int) $cid);
+        }
+
+        return $channels;
     }
 
     /**
@@ -51,12 +59,14 @@ class RequestCreated implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
+        $ts = now()->toISOString();
         return [
             'type' => 'request_created',
             'request_id' => $this->requestId,
             'control_number' => $this->controlNumber,
             'user_name' => $this->userName,
-            'timestamp' => now()->toISOString(),
+            'timestamp' => $ts,
+            'event_uid' => sha1($this->broadcastAs() . ':' . $this->requestId . ':' . $ts),
         ];
     }
 }

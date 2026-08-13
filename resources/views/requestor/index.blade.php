@@ -66,12 +66,22 @@
         return $requestItem->getVenueNames();
     })->filter()->unique()->sort()->values();
 
+    $statusLabels = [
+        'pending' => 'Pending',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+        'needs_reschedule' => 'Needs Reschedule',
+    ];
+
     $statusBadgeClasses = [
         'pending' => 'bg-amber-100 text-amber-800 ring-amber-200',
         'approved' => 'bg-emerald-100 text-emerald-800 ring-emerald-200',
         'rejected' => 'bg-rose-100 text-rose-800 ring-rose-200',
         'completed' => 'bg-sky-100 text-sky-800 ring-sky-200',
         'cancelled' => 'bg-slate-200 text-slate-700 ring-slate-300',
+        'needs_reschedule' => 'bg-amber-100 text-amber-800 ring-amber-200',
     ];
 
     $priorityBadgeClasses = [
@@ -160,6 +170,7 @@
                             <option value="rejected" {{ $statusFilter === 'rejected' ? 'selected' : '' }}>Rejected</option>
                             <option value="completed" {{ $statusFilter === 'completed' ? 'selected' : '' }}>Completed</option>
                             <option value="cancelled" {{ $statusFilter === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                            <option value="needs_reschedule" {{ $statusFilter === 'needs_reschedule' ? 'selected' : '' }}>Needs Reschedule</option>
                         </select>
                     </div>
                     <div>
@@ -229,6 +240,7 @@
                                     @php
                                         $statusKey = strtolower((string) ($requestItem->status ?? 'pending'));
                                         $statusBadgeClass = $statusBadgeClasses[$statusKey] ?? 'bg-slate-100 text-slate-700 ring-slate-200';
+                                        $statusLabel = $statusLabels[$statusKey] ?? ucfirst(str_replace('_', ' ', $statusKey));
                                         $priorityValue = strtolower((string) ($requestItem->priority ?? ''));
                                         $priorityLabel = $priorityValue === 'institutional' ? 'Institutional' : ($priorityValue === 'regular' ? 'Regular' : null);
                                         $priorityBadgeClass = $priorityLabel ? ($priorityBadgeClasses[$priorityValue] ?? 'bg-slate-100 text-slate-700 ring-slate-200') : null;
@@ -271,7 +283,7 @@
                                         </td>
                                         <td class="px-4 py-4">
                                             <div class="flex flex-wrap gap-2">
-                                                <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $statusBadgeClass }}">{{ ucfirst($statusKey) }}</span>
+                                                <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $statusBadgeClass }}">{{ $statusLabel }}</span>
                                                 @if ($priorityLabel)
                                                     <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $priorityBadgeClass }}">{{ $priorityLabel }}</span>
                                                 @endif
@@ -316,6 +328,7 @@
                         @php
                             $statusKey = strtolower((string) ($requestItem->status ?? 'pending'));
                             $statusBadgeClass = $statusBadgeClasses[$statusKey] ?? 'bg-slate-100 text-slate-700 ring-slate-200';
+                            $statusLabel = $statusLabels[$statusKey] ?? ucfirst(str_replace('_', ' ', $statusKey));
                             $priorityValue = strtolower((string) ($requestItem->priority ?? ''));
                             $priorityLabel = $priorityValue === 'institutional' ? 'Institutional' : ($priorityValue === 'regular' ? 'Regular' : null);
                             $priorityBadgeClass = $priorityLabel ? ($priorityBadgeClasses[$priorityValue] ?? 'bg-slate-100 text-slate-700 ring-slate-200') : null;
@@ -335,7 +348,7 @@
                                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{{ $requestItem->control_number ?? '-' }}</p>
                                     <h4 class="mt-2 text-lg font-semibold text-slate-900">{{ $requestItem->name_of_activity ?? '-' }}</h4>
                                 </div>
-                                <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $statusBadgeClass }}">{{ ucfirst($statusKey) }}</span>
+                                <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $statusBadgeClass }}">{{ $statusLabel }}</span>
                             </div>
                             <div class="mt-4 space-y-2 text-sm text-slate-600">
                                 <div><span class="font-semibold text-slate-900">Venue:</span> {{ $venueLabel }}</div>
@@ -432,6 +445,7 @@
                                 @php
                                     $statusKey = strtolower((string) ($upcomingReservation->status ?? 'pending'));
                                     $statusBadgeClass = $statusBadgeClasses[$statusKey] ?? 'bg-slate-100 text-slate-700 ring-slate-200';
+                                    $statusLabel = $statusLabels[$statusKey] ?? ucfirst(str_replace('_', ' ', $statusKey));
                                 @endphp
                                 <div class="rounded-[20px] border border-slate-200 bg-white p-4 shadow-sm">
                                     <div class="flex items-start justify-between gap-3">
@@ -439,7 +453,7 @@
                                             <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{{ $upcomingReservation->control_number ?? '-' }}</p>
                                             <h4 class="mt-2 text-lg font-semibold text-slate-900">{{ $upcomingReservation->name_of_activity ?? '-' }}</h4>
                                         </div>
-                                        <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $statusBadgeClass }}">{{ ucfirst($statusKey) }}</span>
+                                        <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $statusBadgeClass }}">{{ $statusLabel }}</span>
                                     </div>
                                     <div class="mt-4 space-y-2 text-sm text-slate-600">
                                         <div><span class="font-semibold text-slate-900">Venue:</span> {{ empty($upcomingReservation->getVenueNames()) ? '-' : implode(', ', $upcomingReservation->getVenueNames()) }}</div>

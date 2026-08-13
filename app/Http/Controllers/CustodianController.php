@@ -162,8 +162,12 @@ class CustodianController extends Controller
 
                 DB::commit();
 
-                // Fire Laravel event for broadcasting
-                \App\Events\EquipmentReturned::dispatch($fr->id, $fr->control_number, $user->name);
+                // Fire Laravel event for broadcasting (include custodians)
+                $equipmentCustodianIds = $fr->getAssignedEquipmentCustodianIds();
+                $venueCustodianIds = \App\Models\Venue::whereIn('name', $fr->venue ?? [])->pluck('custodian_id')->filter()->unique()->toArray();
+                $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
+
+                \App\Events\EquipmentReturned::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, $custodianIds);
 
                 $requester = \App\Models\User::find($fr->requested_by_id);
                 if ($requester) {
@@ -264,7 +268,10 @@ class CustodianController extends Controller
 
             // Fire Laravel event for broadcasting
             $eventClass = $statusValue === 'approved' ? \App\Events\RequestApproved::class : \App\Events\RequestRejected::class;
-            $eventClass::dispatch($fr->id, $fr->control_number, $custodianType, $user->name);
+            $equipmentCustodianIds = $fr->getAssignedEquipmentCustodianIds();
+            $venueCustodianIds = \App\Models\Venue::whereIn('name', $fr->venue ?? [])->pluck('custodian_id')->filter()->unique()->toArray();
+            $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
+            $eventClass::dispatch($fr->id, $fr->control_number, $custodianType, $user->name, $fr->requested_by_id, $custodianIds);
 
             $requester = \App\Models\User::find($fr->requested_by_id);
             if ($requester) {
@@ -281,8 +288,8 @@ class CustodianController extends Controller
                              ->with('success', ucfirst($custodianType) . " request {$label} successfully.");
         } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Custodian update failed for request ' . ($validated['id'] ?? 'unknown') . ': ' . $e->getMessage(), ['exception' => $e]);
-            return redirect()->back()->withErrors('Unable to process the request at this time: ' . $e->getMessage());
+            Log::error('Custodian update failed for request ' . ($validated['id'] ?? 'unknown'), ['exception' => $e]);
+            return redirect()->back()->withErrors('Unable to process the request at this time.');
         }
         return redirect()->route('custodian.index')
                          ->with('success', ucfirst($custodianType) . " request {$label} successfully.");
@@ -370,7 +377,8 @@ class CustodianController extends Controller
 
             return back()->with('success', 'Equipment returned successfully.');
         } catch (\Exception $e) {
-            return back()->with('error', $e->getMessage());
+            Log::error('Equipment return failed for request ' . $facilityRequest->id . ': ' . $e->getMessage(), ['exception' => $e]);
+            return back()->with('error', 'Unable to return equipment at this time.');
         }
     }
 

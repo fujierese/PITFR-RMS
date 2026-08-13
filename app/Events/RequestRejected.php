@@ -19,17 +19,21 @@ class RequestRejected implements ShouldBroadcast
     public $rejectionType;
     public $reason;
     public $userName;
+    public $ownerId;
+    public $custodianIds = [];
 
     /**
      * Create a new event instance.
      */
-    public function __construct($requestId, $controlNumber, $rejectionType, $reason, $userName)
+    public function __construct($requestId, $controlNumber, $rejectionType, $reason, $userName, $ownerId, array $custodianIds = [])
     {
         $this->requestId = $requestId;
         $this->controlNumber = $controlNumber;
         $this->rejectionType = $rejectionType;
         $this->reason = $reason;
         $this->userName = $userName;
+        $this->ownerId = $ownerId;
+        $this->custodianIds = array_values(array_map('intval', $custodianIds));
     }
 
     /**
@@ -37,9 +41,11 @@ class RequestRejected implements ShouldBroadcast
      */
     public function broadcastOn(): array
     {
-        return [
-            new Channel('facility-requests'),
-        ];
+        $channels = [new Channel('facility-requests.admin'), new PrivateChannel('App.Models.User.' . $this->ownerId)];
+        foreach ($this->custodianIds as $cid) {
+            $channels[] = new PrivateChannel('facility-requests.custodian.' . (int) $cid);
+        }
+        return $channels;
     }
 
     /**
@@ -55,6 +61,7 @@ class RequestRejected implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
+        $ts = now()->toISOString();
         return [
             'type' => 'request_rejected',
             'request_id' => $this->requestId,
@@ -62,7 +69,8 @@ class RequestRejected implements ShouldBroadcast
             'rejection_type' => $this->rejectionType,
             'reason' => $this->reason,
             'user_name' => $this->userName,
-            'timestamp' => now()->toISOString(),
+            'timestamp' => $ts,
+            'event_uid' => sha1($this->broadcastAs() . ':' . $this->requestId . ':' . $ts),
         ];
     }
 }

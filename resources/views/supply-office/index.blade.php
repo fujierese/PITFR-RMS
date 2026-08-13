@@ -3,29 +3,29 @@
 
 @section('content')
 <div class="space-y-6">
-    <div class="rounded-3xl bg-gradient-to-r from-emerald-700 via-teal-600 to-sky-700 p-4 sm:p-6 shadow-xl text-white">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div class="rounded-3xl bg-gradient-to-r from-emerald-700 via-emerald-600 to-emerald-800 p-4 text-white shadow-xl sm:p-6">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h1 class="text-2xl sm:text-3xl font-bold">🏢 Supply Office</h1>
-                <p class="mt-2 max-w-2xl text-sm text-slate-200">Manage venues, equipment, custodial assignment, final approvals, and administrative oversight.</p>
+                <h1 class="text-2xl font-bold sm:text-3xl">🏢 Supply Office</h1>
+                <p class="mt-2 max-w-2xl text-sm text-emerald-50">Manage venues, equipment, custodial assignment, final approvals, and administrative oversight.</p>
             </div>
-            <div class="text-right">
-                <p class="text-sm uppercase tracking-[0.18em] text-emerald-200">Supply Office</p>
-                <p class="mt-2 text-sm text-slate-200">Venue and equipment governance remains read-write for authorized supply office users only.</p>
+            <div class="text-left sm:text-right">
+                <p class="text-sm uppercase tracking-[0.18em] text-emerald-100">Supply Office</p>
+                <p class="mt-2 text-sm text-emerald-50">Venue and equipment governance remains read-write for authorized supply office users only.</p>
             </div>
         </div>
     </div>
 
     <div class="grid gap-4 md:grid-cols-3">
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm ring-1 ring-emerald-50">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Venues</p>
             <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $venues->count() }}</p>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm ring-1 ring-emerald-50">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Equipment Items</p>
             <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $equipmentItems->count() }}</p>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm ring-1 ring-emerald-50">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Availability Status</p>
             <p class="mt-3 text-3xl font-semibold text-emerald-700">Live</p>
         </div>
@@ -37,13 +37,13 @@
             <p class="mt-3 text-2xl font-semibold text-slate-900">{{ $pendingFinalApprovalCount }}</p>
             <p class="mt-2 text-sm text-slate-600">Pending final approval requests</p>
         </a>
-        <a href="{{ route('supply-office.users') }}" class="rounded-3xl border border-sky-200 bg-sky-50 p-5 shadow-sm transition hover:bg-sky-100">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Users</p>
+        <a href="{{ route('supply-office.users') }}" class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm transition hover:bg-emerald-100">
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Users</p>
             <p class="mt-3 text-2xl font-semibold text-slate-900">{{ \App\Models\User::count() }}</p>
             <p class="mt-2 text-sm text-slate-600">Manage accounts and roles</p>
         </a>
-        <a href="{{ route('supply-office.usage-reports') }}" class="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-sm transition hover:bg-violet-100">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-violet-700">Reports</p>
+        <a href="{{ route('supply-office.usage-reports') }}" class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm transition hover:bg-emerald-100">
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Reports</p>
             <p class="mt-3 text-2xl font-semibold text-slate-900">{{ $allRequests->count() }}</p>
             <p class="mt-2 text-sm text-slate-600">Usage and activity reports</p>
         </a>
@@ -213,7 +213,7 @@
                                                 <option value="{{ $custodian->id }}" {{ (old('custodian_id', $venue->custodian_id) == $custodian->id) ? 'selected' : '' }}>{{ $custodian->name }}</option>
                                             @endforeach
                                         </select>
-                                        <button type="submit" class="rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-700">Save Venue</button>
+                                        <button type="submit" class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Save Venue</button>
                                         <a href="{{ route('supply-office.index') }}" class="rounded-xl border border-slate-300 px-3 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Cancel</a>
                                     </form>
                                 </td>

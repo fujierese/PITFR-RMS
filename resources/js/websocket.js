@@ -6,6 +6,7 @@ class PitfrWebSocket {
         this.connected = false;
         this.channel = null;
         this.eventListeners = {};
+        this.dedupeSeen = new Set();
     }
 
     connect() {
@@ -14,32 +15,45 @@ class PitfrWebSocket {
         }
 
         try {
-            this.channel = window.Echo.channel('facility-requests');
+            // Subscribe to a private channel for the current user (owner notifications)
+            const userMeta = document.querySelector('meta[name="user-id"]');
+            const userId = userMeta ? userMeta.content : null;
+            if (userId) {
+                this.privateChannel = window.Echo.private(`App.Models.User.${userId}`);
 
-            this.channel.listen('.request.created', (e) => {
-                console.log('Request created:', e);
-                this.emit('request_created', e);
-            });
+                const process = (eventName, e) => {
+                    const uid = e.event_uid || (eventName + ':' + (e.request_id || e.requestId || ''));
+                    if (this.dedupeSeen.has(uid)) return;
+                    this.dedupeSeen.add(uid);
+                    this.emit(eventName, e);
+                };
 
-            this.channel.listen('.request.approved', (e) => {
-                console.log('Request approved:', e);
-                this.emit('request_approved', e);
-            });
+                this.privateChannel.listen('.request.created', (e) => { process('request_created', e); });
+                this.privateChannel.listen('.request.approved', (e) => { process('request_approved', e); });
+                this.privateChannel.listen('.request.rejected', (e) => { process('request_rejected', e); });
+                this.privateChannel.listen('.request.cancelled', (e) => { process('request_cancelled', e); });
+                this.privateChannel.listen('.equipment.returned', (e) => { process('equipment_returned', e); });
 
-            this.channel.listen('.request.rejected', (e) => {
-                console.log('Request rejected:', e);
-                this.emit('request_rejected', e);
-            });
+                // attempt to subscribe to custodian private channel too; server authorizer will deny non-custodians
+                try {
+                    this.custodianChannel = window.Echo.private(`facility-requests.custodian.${userId}`);
+                    this.custodianChannel.listen('.request.created', (e) => { process('request_created', e); });
+                    this.custodianChannel.listen('.request.approved', (e) => { process('request_approved', e); });
+                    this.custodianChannel.listen('.request.rejected', (e) => { process('request_rejected', e); });
+                    this.custodianChannel.listen('.request.cancelled', (e) => { process('request_cancelled', e); });
+                    this.custodianChannel.listen('.equipment.returned', (e) => { process('equipment_returned', e); });
+                } catch (err) {
+                    // ignore: Echo may throw if private subscription fails
+                }
+            }
 
-            this.channel.listen('.request.cancelled', (e) => {
-                console.log('Request cancelled:', e);
-                this.emit('request_cancelled', e);
-            });
-
-            this.channel.listen('.equipment.returned', (e) => {
-                console.log('Equipment returned:', e);
-                this.emit('equipment_returned', e);
-            });
+            // Also attempt to subscribe to the admin channel; server will authorize appropriately
+            this.adminChannel = window.Echo.channel('facility-requests.admin');
+            this.adminChannel.listen('.request.created', (e) => { const uid = e.event_uid || ('request_created:' + (e.request_id || e.requestId || '')); if (!this.dedupeSeen.has(uid)) { this.dedupeSeen.add(uid); this.emit('request_created', e); } });
+            this.adminChannel.listen('.request.approved', (e) => { const uid = e.event_uid || ('request_approved:' + (e.request_id || e.requestId || '')); if (!this.dedupeSeen.has(uid)) { this.dedupeSeen.add(uid); this.emit('request_approved', e); } });
+            this.adminChannel.listen('.request.rejected', (e) => { const uid = e.event_uid || ('request_rejected:' + (e.request_id || e.requestId || '')); if (!this.dedupeSeen.has(uid)) { this.dedupeSeen.add(uid); this.emit('request_rejected', e); } });
+            this.adminChannel.listen('.request.cancelled', (e) => { const uid = e.event_uid || ('request_cancelled:' + (e.request_id || e.requestId || '')); if (!this.dedupeSeen.has(uid)) { this.dedupeSeen.add(uid); this.emit('request_cancelled', e); } });
+            this.adminChannel.listen('.equipment.returned', (e) => { const uid = e.event_uid || ('equipment_returned:' + (e.request_id || e.requestId || '')); if (!this.dedupeSeen.has(uid)) { this.dedupeSeen.add(uid); this.emit('equipment_returned', e); } });
 
             this.connected = true;
             console.log('Connected to Laravel Echo facility-requests channel');
@@ -52,14 +66,32 @@ class PitfrWebSocket {
     }
 
     disconnect() {
-        if (this.channel) {
-            this.channel.stopListening('.request.created');
-            this.channel.stopListening('.request.approved');
-            this.channel.stopListening('.request.rejected');
-            this.channel.stopListening('.request.cancelled');
-            this.channel.stopListening('.equipment.returned');
-            window.Echo.leave('facility-requests');
-            this.channel = null;
+        if (this.privateChannel) {
+            this.privateChannel.stopListening('.request.created');
+            this.privateChannel.stopListening('.request.approved');
+            this.privateChannel.stopListening('.request.rejected');
+            this.privateChannel.stopListening('.request.cancelled');
+            this.privateChannel.stopListening('.equipment.returned');
+            window.Echo.leavePrivate(`App.Models.User.${document.querySelector('meta[name="user-id"]')?.content}`);
+            this.privateChannel = null;
+        }
+        if (this.custodianChannel) {
+            this.custodianChannel.stopListening('.request.created');
+            this.custodianChannel.stopListening('.request.approved');
+            this.custodianChannel.stopListening('.request.rejected');
+            this.custodianChannel.stopListening('.request.cancelled');
+            this.custodianChannel.stopListening('.equipment.returned');
+            try { window.Echo.leavePrivate(`facility-requests.custodian.${document.querySelector('meta[name="user-id"]')?.content}`); } catch (e) {}
+            this.custodianChannel = null;
+        }
+        if (this.adminChannel) {
+            this.adminChannel.stopListening('.request.created');
+            this.adminChannel.stopListening('.request.approved');
+            this.adminChannel.stopListening('.request.rejected');
+            this.adminChannel.stopListening('.request.cancelled');
+            this.adminChannel.stopListening('.equipment.returned');
+            window.Echo.leave('facility-requests.admin');
+            this.adminChannel = null;
         }
         this.connected = false;
     }

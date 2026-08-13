@@ -625,6 +625,32 @@ class FacilityRequest extends Model
         ];
     }
 
+    public static function resolveReservationDuration(string $duration, $startDateValue, $startTimeValue = null, $endDateValue = null, $endTimeValue = null): array
+    {
+        $normalizedDuration = strtolower(trim($duration));
+        $effectiveStartDate = $startDateValue ?? now()->toDateString();
+        $effectiveEndDate = $endDateValue ?? $effectiveStartDate;
+
+        if (in_array($normalizedDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
+            return self::normalizeScheduleRange(
+                $effectiveStartDate,
+                '08:00',
+                $effectiveEndDate,
+                '00:00'
+            );
+        }
+
+        $effectiveStartTime = $startTimeValue ?? '08:00';
+        $effectiveEndTime = $endTimeValue ?? $effectiveStartTime;
+
+        return self::normalizeScheduleRange(
+            $effectiveStartDate,
+            $effectiveStartTime,
+            $effectiveEndDate,
+            $effectiveEndTime
+        );
+    }
+
     protected static function normalizeScheduleValue($dateValue, $timeValue, ?\Carbon\Carbon $fallback = null): ?\Carbon\Carbon
     {
         if (!$dateValue && !$timeValue) {
@@ -958,7 +984,15 @@ class FacilityRequest extends Model
 
             // Release stock
             if ($toRelease > 0) {
-                $eq->release($toRelease);
+                // Lock equipment row and cap quantity_available to equipment quantity
+                $locked = \App\Models\Equipment::whereKey($eq->id)->lockForUpdate()->first();
+                if ($locked) {
+                    $locked->quantity_available = min(
+                        $locked->quantity,
+                        $locked->quantity_available + $toRelease
+                    );
+                    $locked->save();
+                }
             }
         }
 

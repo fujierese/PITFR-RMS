@@ -10,6 +10,7 @@ use App\Services\AvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class FacilityRequestApiController extends Controller
@@ -25,10 +26,9 @@ class FacilityRequestApiController extends Controller
     {
         $user = Auth::user();
         
-        // If no authenticated user, return all requests without filtering
+        // Require authentication - avoid returning unfiltered data when no user present
         if (!$user) {
-            $requests = FacilityRequest::with(['user', 'histories'])->orderBy('created_at', 'desc')->paginate(20);
-            return response()->json($requests);
+            return response()->json(['message' => 'Unauthenticated.'], 401);
         }
         
         $query = FacilityRequest::with(['user', 'histories']);
@@ -71,7 +71,16 @@ class FacilityRequestApiController extends Controller
             'start_time' => $request->input('start_time', $request->input('time')),
         ]);
 
+        $reservationDuration = strtolower((string) $request->input('reservation_duration', 'specific_time'));
+        if (in_array($reservationDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
+            $request->merge([
+                'start_time' => '08:00',
+                'end_time' => '00:00',
+            ]);
+        }
+
         $validated = $request->validate([
+            'reservation_duration' => ['nullable', 'in:specific_time,whole_day,whole-day,whole day'],
             'name_of_activity' => 'required|string|max:200',
             'expected_participants' => 'required|integer|min:1',
             'start_date' => 'required|date|after_or_equal:today',
@@ -117,6 +126,18 @@ class FacilityRequestApiController extends Controller
                 }
             }
         }
+
+        $validated['reservation_duration'] = strtolower((string) ($validated['reservation_duration'] ?? 'specific_time'));
+        $scheduleRange = FacilityRequest::resolveReservationDuration(
+            $validated['reservation_duration'],
+            $validated['start_date'],
+            $validated['start_time'],
+            $validated['end_date'] ?? $validated['start_date'],
+            $validated['end_time']
+        );
+        $validated['start_time'] = $scheduleRange['start']->format('H:i');
+        $validated['end_time'] = $scheduleRange['end']->format('H:i');
+        $validated['end_date'] = $scheduleRange['end']->toDateString();
 
         $requestedStart = null;
         $requestedEnd = null;
@@ -197,8 +218,18 @@ class FacilityRequestApiController extends Controller
 
             DB::commit();
 
-            // Fire Laravel event for broadcasting
-            \App\Events\RequestCreated::dispatch($fr->id, $fr->control_number, $user->name);
+            // Determine custodians (equipment + venue custodians) and fire event for broadcasting
+            $equipmentCustodianIds = $fr->getAssignedEquipmentCustodianIds();
+
+            $venueCustodianIds = \App\Models\Venue::whereIn('name', $fr->venue ?? [])->
+                pluck('custodian_id')
+                ->filter()
+                ->unique()
+                ->toArray();
+
+            $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
+
+            \App\Events\RequestCreated::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, $custodianIds);
 
             return response()->json([
                 'success' => true,
@@ -208,9 +239,10 @@ class FacilityRequestApiController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('FacilityRequestApiController@store failed: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to create request: ' . $e->getMessage()
+                'error' => 'Failed to create request.'
             ], 500);
         }
     }
@@ -249,7 +281,12 @@ class FacilityRequestApiController extends Controller
 
             DB::commit();
 
-            \App\Events\RequestCancelled::dispatch($facilityRequest->id, $facilityRequest->control_number, $user->name);
+            // Determine custodians for this request
+            $equipmentCustodianIds = $facilityRequest->getAssignedEquipmentCustodianIds();
+            $venueCustodianIds = \App\Models\Venue::whereIn('name', $facilityRequest->venue ?? [])->pluck('custodian_id')->filter()->unique()->toArray();
+            $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
+
+            \App\Events\RequestCancelled::dispatch($facilityRequest->id, $facilityRequest->control_number, $user->name, $facilityRequest->requested_by_id, $custodianIds);
 
             return response()->json([
                 'success' => true,
@@ -343,7 +380,12 @@ class FacilityRequestApiController extends Controller
 
             DB::commit();
 
-            \App\Events\RequestApproved::dispatch($facilityRequest->id, $facilityRequest->control_number, $approvalType, $user->name);
+            // Determine custodians for this request
+            $equipmentCustodianIds = $facilityRequest->getAssignedEquipmentCustodianIds();
+            $venueCustodianIds = \App\Models\Venue::whereIn('name', $facilityRequest->venue ?? [])->pluck('custodian_id')->filter()->unique()->toArray();
+            $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
+
+            \App\Events\RequestApproved::dispatch($facilityRequest->id, $facilityRequest->control_number, $approvalType, $user->name, $facilityRequest->requested_by_id, $custodianIds);
 
             return response()->json([
                 'success' => true,
@@ -385,7 +427,12 @@ class FacilityRequestApiController extends Controller
 
             DB::commit();
 
-            \App\Events\RequestRejected::dispatch($facilityRequest->id, $facilityRequest->control_number, $rejectionType, $reason, $user->name);
+            // Determine custodians for this request
+            $equipmentCustodianIds = $facilityRequest->getAssignedEquipmentCustodianIds();
+            $venueCustodianIds = \App\Models\Venue::whereIn('name', $facilityRequest->venue ?? [])->pluck('custodian_id')->filter()->unique()->toArray();
+            $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
+
+            \App\Events\RequestRejected::dispatch($facilityRequest->id, $facilityRequest->control_number, $rejectionType, $reason, $user->name, $facilityRequest->requested_by_id, $custodianIds);
 
             return response()->json([
                 'success' => true,
@@ -467,7 +514,12 @@ class FacilityRequestApiController extends Controller
 
             DB::commit();
 
-            \App\Events\EquipmentReturned::dispatch($facilityRequest->id, $facilityRequest->control_number, $user->name);
+            // Determine custodians for this request
+            $equipmentCustodianIds = $facilityRequest->getAssignedEquipmentCustodianIds();
+            $venueCustodianIds = \App\Models\Venue::whereIn('name', $facilityRequest->venue ?? [])->pluck('custodian_id')->filter()->unique()->toArray();
+            $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
+
+            \App\Events\EquipmentReturned::dispatch($facilityRequest->id, $facilityRequest->control_number, $user->name, $facilityRequest->requested_by_id, $custodianIds);
 
             return response()->json([
                 'success' => true,

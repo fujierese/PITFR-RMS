@@ -1,3 +1,44 @@
+const initializeReservationDurationToggles = function () {
+    document.querySelectorAll('.reservation-duration-option').forEach(function (option) {
+        const input = option.querySelector('input[name="reservation_duration"]');
+        if (!input) {
+            return;
+        }
+
+        const updateState = function () {
+            const isSelected = input.checked;
+            const parent = option.closest('.reservation-duration-group');
+            const timeFields = parent ? parent.querySelectorAll('input[name="start_time"], input[name="end_time"]') : [];
+
+            option.classList.toggle('border-emerald-500', isSelected);
+            option.classList.toggle('bg-emerald-50', isSelected);
+            option.classList.toggle('shadow-sm', isSelected);
+            option.classList.toggle('border-slate-200', !isSelected);
+            option.classList.toggle('bg-white', !isSelected);
+            option.classList.toggle('text-slate-900', isSelected);
+            option.classList.toggle('text-slate-600', !isSelected);
+
+            timeFields.forEach(function (field) {
+                if (!field) {
+                    return;
+                }
+                const isWholeDay = input.value === 'whole_day';
+                field.disabled = isWholeDay;
+                field.classList.toggle('opacity-60', isWholeDay);
+                field.classList.toggle('cursor-not-allowed', isWholeDay);
+                if (isWholeDay) {
+                    field.value = field.name === 'start_time' ? '08:00' : '00:00';
+                }
+            });
+        };
+
+        input.addEventListener('change', updateState);
+        updateState();
+    });
+};
+
+document.addEventListener('DOMContentLoaded', initializeReservationDurationToggles);
+
 const initializeRequestForm = function () {
     const form = document.getElementById('request-form');
     if (!form) {
@@ -363,9 +404,10 @@ const initializeRequestForm = function () {
             const row = checkbox.closest('.equipment-row');
             const qtyInput = row?.querySelector('.quantity-input-wrap input[type="number"]');
             const qty = qtyInput?.value || '1';
-            return `<div>• ${checkbox.value} × ${qty}</div>`;
+            return `<div>• ${escapeHtml(checkbox.value)} × ${escapeHtml(qty)}</div>`;
         });
 
+        // Use escaped values to avoid injecting untrusted content via innerHTML
         summaryEquipment.innerHTML = 'Equipment:<br>' + equipmentLines.join('');
     };
 
@@ -606,18 +648,47 @@ const initializeRequestForm = function () {
                 const conflictPriority = (firstConflict?.priority || 'regular').toString().toUpperCase();
                 const priorityTone = conflictPriority === 'URGENT' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700';
                 utilizationCard.className = 'equipment-utilization-card mt-2 w-full rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-left text-[11px] text-slate-600 sm:min-w-[220px]';
-                utilizationCard.innerHTML = `
-                    <div class="font-semibold text-slate-800">⚠ Existing Reservation</div>
-                    <div class="mt-1 space-y-1">
-                        <div class="flex items-center gap-2"><div>Activity: ${firstConflict?.activity || 'Existing reservation'}</div><div class="ml-2 inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset ${priorityTone}">${escapeHtml(conflictPriority)}</div></div>
-                        <div>Reserved Quantity: ${reservedQuantity}</div>
-                        <div>Remaining Quantity: ${remainingQuantity}</div>
-                    </div>
-                    <div class="mt-2 border-t border-amber-200 pt-2 text-[11px] text-slate-500">
-                        <div class="font-medium">Reservation Schedule</div>
-                        <div>${getScheduleSummary()}</div>
-                    </div>
-                `;
+                // Build DOM safely instead of injecting unescaped server values
+                utilizationCard.innerHTML = '';
+                const title = document.createElement('div');
+                title.className = 'font-semibold text-slate-800';
+                title.textContent = '⚠ Existing Reservation';
+                utilizationCard.appendChild(title);
+
+                const infoWrap = document.createElement('div');
+                infoWrap.className = 'mt-1 space-y-1';
+
+                const activityRow = document.createElement('div');
+                activityRow.className = 'flex items-center gap-2';
+                const activityDiv = document.createElement('div');
+                activityDiv.textContent = 'Activity: ' + (firstConflict?.activity || 'Existing reservation');
+                const priorityDiv = document.createElement('div');
+                priorityDiv.className = 'ml-2 inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset ' + priorityTone;
+                priorityDiv.textContent = escapeHtml(conflictPriority);
+                activityRow.appendChild(activityDiv);
+                activityRow.appendChild(priorityDiv);
+                infoWrap.appendChild(activityRow);
+
+                const reservedDiv = document.createElement('div');
+                reservedDiv.textContent = 'Reserved Quantity: ' + reservedQuantity;
+                infoWrap.appendChild(reservedDiv);
+
+                const remainingDiv = document.createElement('div');
+                remainingDiv.textContent = 'Remaining Quantity: ' + remainingQuantity;
+                infoWrap.appendChild(remainingDiv);
+
+                utilizationCard.appendChild(infoWrap);
+
+                const scheduleWrap = document.createElement('div');
+                scheduleWrap.className = 'mt-2 border-t border-amber-200 pt-2 text-[11px] text-slate-500';
+                const scheduleTitle = document.createElement('div');
+                scheduleTitle.className = 'font-medium';
+                scheduleTitle.textContent = 'Reservation Schedule';
+                const scheduleContent = document.createElement('div');
+                scheduleContent.textContent = getScheduleSummary();
+                scheduleWrap.appendChild(scheduleTitle);
+                scheduleWrap.appendChild(scheduleContent);
+                utilizationCard.appendChild(scheduleWrap);
             } else {
                 utilizationCard.className = 'equipment-utilization-card mt-2 hidden';
                 utilizationCard.innerHTML = '';

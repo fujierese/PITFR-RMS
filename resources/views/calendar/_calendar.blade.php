@@ -186,7 +186,7 @@
                                 <td class="px-4 py-3 text-slate-600">{{ optional($request->start_date)->format('M d, Y') }}</td>
                                 <td class="px-4 py-3">
                                     <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold {{ $request->status === 'approved' ? 'bg-emerald-100 text-emerald-700' : ($request->status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700') }}">
-                                        {{ ucfirst($request->status) }}
+                                        {{ $request->status === 'needs_reschedule' ? 'Needs Reschedule' : ucfirst($request->status) }}
                                     </span>
                                 </td>
                                 <td class="px-4 py-3">
@@ -304,8 +304,10 @@
                                             <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700">Approved</span>
                                         @elseif($request->status === 'rejected')
                                             <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold bg-red-100 text-red-700">Rejected</span>
+                                        @elseif($request->status === 'needs_reschedule')
+                                            <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold bg-amber-100 text-amber-700">Needs Reschedule</span>
                                         @else
-                                            <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold bg-slate-100 text-slate-700">{{ ucfirst($request->status) }}</span>
+                                            <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold bg-slate-100 text-slate-700">{{ ucfirst(str_replace('_', ' ', (string) $request->status)) }}</span>
                                         @endif
                                     </td>
                                     <td class="px-4 py-3">
@@ -427,16 +429,10 @@
             body.innerHTML = '<div class="text-center py-10 text-slate-600">Loading request details…</div>';
 
             try {
-                const savedToken = window.localStorage?.getItem('token');
-                if (!savedToken) {
-                    window.location.href = loginRoute;
-                    return;
-                }
-
+                // Use the browser session (cookies) with CSRF token instead of a token from localStorage.
                 const response = await fetch(`/api/facility-requests/${requestId}`, {
                     headers: {
                         'Accept': 'application/json',
-                        'Authorization': `Bearer ${savedToken}`,
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                     },
                     credentials: 'same-origin'
@@ -483,7 +479,11 @@
                     rejectBtn.style.display = 'inline-block';
                 }
             } catch (error) {
-                body.innerHTML = `<div class="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">${error.message}</div>`;
+                const errDiv = document.createElement('div');
+                errDiv.className = 'rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700';
+                errDiv.textContent = error.message || 'An error occurred while loading request details.';
+                body.innerHTML = '';
+                body.appendChild(errDiv);
             }
         }
 
@@ -509,18 +509,12 @@
 
             if (!result.isConfirmed) return;
 
-            const token = window.localStorage?.getItem('token');
-            if (!token) {
-                window.location.href = loginRoute;
-                return;
-            }
-
             try {
+                // Use session cookie auth; include CSRF token. Do not rely on localStorage tokens.
                 const response = await fetch(`/api/facility-requests/${requestId}/approve`, {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',
-                        'Authorization': `Bearer ${token}`,
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                     },
                     credentials: 'same-origin'
@@ -582,18 +576,12 @@
             if (!result.isConfirmed) return;
 
             const reason = result.value;
-            const token = window.localStorage?.getItem('token');
-            if (!token) {
-                window.location.href = loginRoute;
-                return;
-            }
-
             try {
+                // Use session cookie auth; include CSRF token. Do not rely on localStorage tokens.
                 const response = await fetch(`/api/facility-requests/${requestId}/reject`, {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',
-                        'Authorization': `Bearer ${token}`,
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                         'Content-Type': 'application/json'
                     },
@@ -960,6 +948,38 @@
     align-items: center;
     gap: 0.35rem;
     min-width: 0;
+}
+
+.fc-event-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.fc-event-line {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.fc-event-meta-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem 0.5rem;
+    font-size: 0.6rem;
+    line-height: 1.3;
+    opacity: 0.92;
+    min-width: 0;
+    margin-top: 0.1rem;
+}
+
+.fc-event-meta-item {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 /* Events List Container - Compact */
@@ -1350,7 +1370,10 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Calendar element not found!');
         var errorDiv = document.createElement('div');
         errorDiv.className = 'p-4 bg-red-50 border border-red-200 rounded-lg text-red-800';
-        errorDiv.innerHTML = '<strong>Error:</strong> Calendar could not be loaded. Please refresh the page.';
+        var strong = document.createElement('strong');
+        strong.textContent = 'Error:';
+        errorDiv.appendChild(strong);
+        errorDiv.appendChild(document.createTextNode(' Calendar could not be loaded. Please refresh the page.'));
         document.querySelector('.bg-white.rounded-lg.shadow-md.p-6').appendChild(errorDiv);
         return;
     }
@@ -1449,24 +1472,25 @@ document.addEventListener('DOMContentLoaded', function() {
                             var status = event.extendedProps && event.extendedProps.status ? event.extendedProps.status : event.status || '';
                             var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
 
-                            // ✅ TOOLTIP CONTENT: Organization and Activity Purpose
+                            // ✅ TOOLTIP CONTENT: Organization and Activity Purpose (escaped)
+                            function __esc(s) { var d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
                             var tooltipContent = '<div style="text-align: left; padding: 0; margin: 0;">';
-                            tooltipContent += '<div style="margin-bottom: 8px;"><strong style="font-size: 0.95rem;">' + displayTitle + '</strong></div>';
+                            tooltipContent += '<div style="margin-bottom: 8px;"><strong style="font-size: 0.95rem;">' + __esc(displayTitle) + '</strong></div>';
                             if (event.extendedProps && event.extendedProps.venue) {
-                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Venue:</strong> ' + event.extendedProps.venue + '</div>';
+                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Venue:</strong> ' + __esc(event.extendedProps.venue) + '</div>';
                             }
                             if (startDatetime) {
-                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Schedule:</strong> ' + startDatetime.replace('T', ' ') + '</div>';
+                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Schedule:</strong> ' + __esc(startDatetime.replace('T', ' ')) + '</div>';
                             }
                             if (status) {
                                 var statusColors = getStatusColorInfo(status);
-                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Status:</strong> <span style="color: ' + statusColors.bg + '; font-weight: 700;">' + status + '</span></div>';
+                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Status:</strong> <span style="color: ' + __esc(statusColors.bg) + '; font-weight: 700;">' + __esc(status) + '</span></div>';
                             }
                             if (event.extendedProps && event.extendedProps.requestor) {
-                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Requestor:</strong> ' + event.extendedProps.requestor + '</div>';
+                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Requestor:</strong> ' + __esc(event.extendedProps.requestor) + '</div>';
                             }
                             if (event.extendedProps && event.extendedProps.priority) {
-                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Priority:</strong> ' + event.extendedProps.priority + '</div>';
+                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Priority:</strong> ' + __esc(event.extendedProps.priority) + '</div>';
                             }
                             if (event.extendedProps && event.extendedProps.isUrgent) {
                                 tooltipContent += '<div><strong>Urgent:</strong> Yes</div>';
@@ -1504,23 +1528,48 @@ document.addEventListener('DOMContentLoaded', function() {
                         failureCallback(error);
                         var errorDiv = document.createElement('div');
                         errorDiv.className = 'p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 mb-4';
-                        errorDiv.innerHTML = '<strong>Error loading events:</strong> ' + (error.message || 'Unknown error') + '. Check console for details.';
+                        var strong = document.createElement('strong');
+                        strong.textContent = 'Error loading events:';
+                        errorDiv.appendChild(strong);
+                        var msg = (error && error.message) ? error.message : 'Unknown error';
+                        errorDiv.appendChild(document.createTextNode(' ' + msg + '. Check console for details.'));
                         if (calendarEl && calendarEl.parentNode) {
                             calendarEl.parentNode.insertBefore(errorDiv, calendarEl);
                         }
                     });
             },
             eventContent: function(info) {
+                function __esc(s) { var d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
                 var title = info.event.title || '';
                 var venueClass = info.event.extendedProps.venueClass || 'other';
                 var status = info.event.extendedProps.displayStatus || '';
-                var statusLabel = '';
-                if (status) {
-                    statusLabel = '<span class="event-status-badge">' + status + '</span>';
+                var statusLabel = status ? '<span class="event-status-badge">' + __esc(status) + '</span>' : '';
+                var dot = '<span class="event-dot ' + __esc(venueClass) + '"></span>';
+                var label = '<span class="fc-event-label">' + __esc(title) + '</span>';
+
+                var metaItems = [];
+                if (info.event.allDay) {
+                    metaItems.push('<span class="fc-event-meta-item">All day</span>');
+                } else if (info.event.start && info.event.end) {
+                    var start = new Date(info.event.start);
+                    var end = new Date(info.event.end);
+                    var formatTime = function(date) {
+                        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                    };
+                    metaItems.push('<span class="fc-event-meta-item">' + __esc(formatTime(start) + '–' + formatTime(end)) + '</span>');
                 }
-                var dot = '<span class="event-dot ' + venueClass + '"></span>';
-                var label = '<span class="fc-event-label">' + title + '</span>';
-                return { html: '<div class="fc-event-compact">' + dot + '<div class="fc-event-text">' + label + statusLabel + '</div></div>' };
+
+                if (info.event.extendedProps && info.event.extendedProps.venue) {
+                    metaItems.push('<span class="fc-event-meta-item">' + __esc(info.event.extendedProps.venue) + '</span>');
+                }
+
+                if (info.event.extendedProps && info.event.extendedProps.department) {
+                    metaItems.push('<span class="fc-event-meta-item">' + __esc(info.event.extendedProps.department) + '</span>');
+                }
+
+                var metaLine = metaItems.length ? '<div class="fc-event-meta-line">' + metaItems.join(' · ') + '</div>' : '';
+
+                return { html: '<div class="fc-event-compact">' + dot + '<div class="fc-event-body"><div class="fc-event-line">' + label + statusLabel + '</div>' + metaLine + '</div></div>' };
             },
             eventClick: function(info) {
                 const requestId = info.event.id || info.event.extendedProps.facilityRequestId;
@@ -1581,13 +1630,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 var badge = info.el.querySelector('.daily-participants-badge');
-                if (totalParticipants > 0) {
+                    if (totalParticipants > 0) {
                     if (!badge) {
                         badge = document.createElement('div');
                         badge.className = 'daily-participants-badge';
                         info.el.appendChild(badge);
                     }
-                    badge.innerHTML = totalParticipants + '<small>pax</small>';
+                    // Use textContent and a small node to avoid injecting HTML
+                    badge.textContent = String(totalParticipants) + ' ';
+                    var small = document.createElement('small');
+                    small.textContent = 'pax';
+                    badge.appendChild(small);
                 } else if (badge) {
                     badge.remove();
                 }
@@ -1669,7 +1722,11 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('❌ Calendar initialization failed:', error);
         var errorDiv = document.createElement('div');
         errorDiv.className = 'p-4 bg-red-50 border border-red-200 rounded-lg text-red-800';
-        errorDiv.innerHTML = '<strong>Calendar Error:</strong> ' + error.message + '. Check console for details.';
+        var strong = document.createElement('strong');
+        strong.textContent = 'Calendar Error:';
+        errorDiv.appendChild(strong);
+        var msg = (error && error.message) ? error.message : '';
+        errorDiv.appendChild(document.createTextNode(' ' + msg + '. Check console for details.'));
         calendarEl.parentNode.insertBefore(errorDiv, calendarEl);
     }
 });

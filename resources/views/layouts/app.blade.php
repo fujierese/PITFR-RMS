@@ -21,20 +21,20 @@
 </head>
 <body class="@yield('body-class', 'overflow-x-hidden bg-slate-100 min-h-screen text-slate-900')">
 
-<div class="min-h-screen overflow-x-hidden bg-slate-100 lg:flex">
+<div class="min-h-screen overflow-x-hidden bg-slate-100">
     @auth
-        <aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-50 w-72 -translate-x-full transform overflow-hidden border-r border-white/10 bg-slate-950 shadow-[24px_0_60px_rgba(2,6,23,0.3)] transition-transform duration-300 sm:w-80 lg:static lg:translate-x-0 lg:w-80">
+        <aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-50 h-screen w-72 -translate-x-full transform overflow-hidden border-r border-emerald-500/20 bg-slate-950 shadow-[24px_0_60px_rgba(2,6,23,0.3)] transition-transform duration-300 sm:w-80 lg:static lg:h-screen lg:w-80 lg:translate-x-0 lg:overflow-hidden">
             @include('components.dashboard-sidebar')
         </aside>
         <div id="sidebar-backdrop" class="fixed inset-0 z-40 hidden bg-slate-950/40 backdrop-blur-sm lg:hidden"></div>
-        <button id="sidebar-toggle" type="button" aria-controls="dashboard-sidebar" aria-expanded="false" class="fixed left-4 top-4 z-[60] inline-flex items-center rounded-xl bg-slate-900 px-3 py-2 text-white shadow-lg lg:hidden">
+        <button id="sidebar-toggle" type="button" aria-controls="dashboard-sidebar" aria-expanded="false" aria-label="Open navigation menu" title="Open navigation menu" class="fixed left-4 top-4 z-[60] inline-flex items-center rounded-2xl bg-emerald-600 px-3 py-2 text-white shadow-lg shadow-emerald-600/20 ring-1 ring-white/10 transition hover:bg-emerald-500 lg:hidden">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
             </svg>
         </button>
     @endauth
 
-    <main class="flex-1 min-h-screen overflow-x-hidden px-3 py-3 pt-16 sm:px-4 sm:py-4 sm:pt-6 md:px-6 lg:px-8 lg:py-6 lg:pt-8">
+    <main class="min-h-screen overflow-x-hidden px-3 py-3 pt-16 sm:px-4 sm:py-4 sm:pt-6 md:px-6 lg:ml-80 lg:overflow-y-auto lg:px-8 lg:py-6 lg:pt-8">
         <div class="mx-auto w-full max-w-none lg:max-w-7xl">
             @if(session('success'))
                 <div class="mb-6 rounded-3xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-sm">
@@ -136,22 +136,43 @@ document.addEventListener('DOMContentLoaded', function() {
 
         notification.classList.add(...colors[type].split(' '));
 
-        notification.innerHTML = `
-            <div class="flex items-start gap-3">
-                <div class="flex-shrink-0">
-                    ${getIcon(type)}
-                </div>
-                <div class="flex-1">
-                    <p class="text-sm font-semibold">${title}</p>
-                    <p class="text-sm opacity-90">${message}</p>
-                </div>
-                <button onclick="this.parentElement.parentElement.remove()" class="text-gray-400 hover:text-gray-600">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-        `;
+        // Build notification DOM using safe text insertion for dynamic values
+        const inner = document.createElement('div');
+        inner.className = 'flex items-start gap-3';
+
+        const iconWrapper = document.createElement('div');
+        iconWrapper.className = 'flex-shrink-0';
+        // getIcon returns static SVG markup; safe to set as innerHTML
+        iconWrapper.innerHTML = getIcon(type);
+
+        const content = document.createElement('div');
+        content.className = 'flex-1';
+
+        const titleEl = document.createElement('p');
+        titleEl.className = 'text-sm font-semibold';
+        titleEl.textContent = title ?? '';
+
+        const messageEl = document.createElement('p');
+        messageEl.className = 'text-sm opacity-90';
+        messageEl.textContent = message ?? '';
+
+        content.appendChild(titleEl);
+        content.appendChild(messageEl);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'text-gray-400 hover:text-gray-600';
+        closeBtn.setAttribute('aria-label', 'Close notification');
+        closeBtn.addEventListener('click', function () {
+            if (notification.parentElement) notification.parentElement.removeChild(notification);
+        });
+        // Static close icon
+        closeBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+
+        inner.appendChild(iconWrapper);
+        inner.appendChild(content);
+        inner.appendChild(closeBtn);
+
+        notification.appendChild(inner);
 
         document.body.appendChild(notification);
 

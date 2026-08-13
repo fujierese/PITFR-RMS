@@ -60,6 +60,21 @@
                         <input type="number" name="expected_participants" min="1" value="{{ old('expected_participants', $request->expected_participants) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" required>
                         <div id="capacity-warning-banner" role="status" aria-live="polite" class="mt-3 hidden rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900"></div>
                     </div>
+                    <div class="reservation-duration-group md:col-span-2">
+                        <label class="text-sm font-medium text-slate-700">Reservation Duration</label>
+                        <div class="mt-2 flex flex-col gap-3 sm:flex-row">
+                            <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-emerald-500 bg-emerald-50 px-3 py-2 text-sm font-medium text-slate-900 shadow-sm">
+                                <input type="radio" name="reservation_duration" value="specific_time" checked>
+                                <span>Specific Time</span>
+                            </label>
+                            <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                <input type="radio" name="reservation_duration" value="whole_day">
+                                <span>Whole Day</span>
+                                <span class="text-xs text-slate-500">08:00 AM – 12:00 AM</span>
+                            </label>
+                        </div>
+                        <p class="reservation-duration-helper mt-3 text-xs text-emerald-700" aria-live="polite">Whole Day uses 8:00 AM–12:00 AM for each selected date.</p>
+                    </div>
                     <div>
                         <label class="text-sm font-medium text-slate-700">Start Time</label>
                         <input type="time" name="start_time" value="{{ old('start_time', $startTimeValue) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" required>
@@ -176,8 +191,7 @@
             </div>
         </form>
     </div>
-</div>
-@endsection
+</div>@endsection
 
 @section('scripts')
 <script>

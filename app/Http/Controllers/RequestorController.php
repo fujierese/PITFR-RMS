@@ -7,6 +7,7 @@ use App\Services\AvailabilityService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
@@ -267,9 +268,18 @@ class RequestorController extends Controller
             'start_time' => $request->input('start_time', $request->input('time')),
         ]);
 
+        $reservationDuration = strtolower((string) $request->input('reservation_duration', 'specific_time'));
+        if (in_array($reservationDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
+            $request->merge([
+                'start_time' => '08:00',
+                'end_time' => '00:00',
+            ]);
+        }
+
         $isNeedsReschedule = $facilityRequest->status === 'needs_reschedule';
 
         $rules = [
+            'reservation_duration' => ['nullable', 'in:specific_time,whole_day,whole-day,whole day'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'start_time' => ['required', 'date_format:H:i'],
@@ -287,7 +297,16 @@ class RequestorController extends Controller
 
         $validated = $request->validate($rules);
 
-        $scheduleRange = FacilityRequest::normalizeScheduleRange($validated['start_date'], $validated['start_time'], $validated['end_date'] ?? $validated['start_date'], $validated['end_time']);
+        $reservationDuration = strtolower((string) ($validated['reservation_duration'] ?? 'specific_time'));
+        $scheduleRange = FacilityRequest::resolveReservationDuration(
+            $reservationDuration,
+            $validated['start_date'],
+            $validated['start_time'],
+            $validated['end_date'] ?? $validated['start_date'],
+            $validated['end_time']
+        );
+        $validated['start_time'] = $scheduleRange['start']->format('H:i');
+        $validated['end_time'] = $scheduleRange['end']->format('H:i');
         $validated['end_date'] = $scheduleRange['end']?->toDateString() ?? $validated['end_date'] ?? $validated['start_date'];
 
         $selectedEquipment = array_values(array_filter($validated['equipment'] ?? [], fn($item) => !empty($item)));
@@ -581,6 +600,7 @@ class RequestorController extends Controller
 
         // Build validation rules; proposal_file is conditional for students (unless emergency)
         $rules = [
+            'reservation_duration'  => ['nullable', 'in:specific_time,whole_day,whole-day,whole day'],
             'department'            => 'required|string|max:100',
             'name_of_activity'      => 'required|string|max:200',
             'expected_participants' => 'required|integer|min:1',
@@ -609,7 +629,27 @@ class RequestorController extends Controller
             'start_time' => $request->input('start_time', $request->input('time')),
         ]);
 
+        $reservationDuration = strtolower((string) $request->input('reservation_duration', 'specific_time'));
+        if (in_array($reservationDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
+            $request->merge([
+                'start_time' => '08:00',
+                'end_time' => '00:00',
+            ]);
+        }
+
         $validated = $request->validate($rules);
+
+        $reservationDuration = strtolower((string) ($validated['reservation_duration'] ?? 'specific_time'));
+        $scheduleRange = FacilityRequest::resolveReservationDuration(
+            $reservationDuration,
+            $validated['start_date'],
+            $validated['start_time'],
+            $validated['end_date'] ?? $validated['start_date'],
+            $validated['end_time']
+        );
+        $validated['start_time'] = $scheduleRange['start']->format('H:i');
+        $validated['end_time'] = $scheduleRange['end']->format('H:i');
+        $validated['end_date'] = $scheduleRange['end']->toDateString();
 
         $rulesForOtherVenue = ['nullable', 'string', 'max:200', 'required_if:venue,Others (specify)'];
         $request->validate(['other_venue' => $rulesForOtherVenue]);
@@ -647,7 +687,16 @@ class RequestorController extends Controller
         $equipment = array_values(array_filter($request->input('equipment', []),
                         fn($e) => in_array($e, self::EQUIPMENT_OPTIONS)));
  
-        $scheduleRange = FacilityRequest::normalizeScheduleRange($validated['start_date'], $validated['start_time'], $validated['end_date'] ?? $validated['start_date'], $validated['end_time']);
+        $validated['reservation_duration'] = strtolower((string) ($validated['reservation_duration'] ?? 'specific_time'));
+        $scheduleRange = FacilityRequest::resolveReservationDuration(
+            $validated['reservation_duration'],
+            $validated['start_date'],
+            $validated['start_time'],
+            $validated['end_date'] ?? $validated['start_date'],
+            $validated['end_time']
+        );
+        $validated['start_time'] = $scheduleRange['start']->format('H:i');
+        $validated['end_time'] = $scheduleRange['end']->format('H:i');
         $validated['end_date'] = $scheduleRange['end']?->toDateString() ?? $validated['end_date'] ?? $validated['start_date'];
         $startDateTime = $scheduleRange['start'];
         $endDateTime = $scheduleRange['end'];
@@ -815,16 +864,8 @@ class RequestorController extends Controller
         ]);
         $fr->syncRelationalItems();
 
-        // Custodian IDs for equipment (by equipment custodian assignments)
-        $equipmentCustodianIds = [];
-        if (!empty($equipment)) {
-            $equipmentCustodianIds = \App\Models\Equipment::whereIn('name', $equipment)
-                ->pluck('custodian_id')
-                ->filter()
-                ->unique()
-                ->toArray();
-        }
-
+        // Determine custodians using authoritative model helper (includes authorized alternates)
+        $equipmentCustodianIds = $fr->getAssignedEquipmentCustodianIds();
         $venueCustodianIds = \App\Models\Venue::whereIn('name', $venue)
             ->pluck('custodian_id')
             ->filter()
@@ -845,8 +886,8 @@ class RequestorController extends Controller
             }
         }
 
-        // Fire Laravel event for broadcasting
-        \App\Events\RequestCreated::dispatch($fr->id, $fr->control_number, $user->name);
+        // Fire Laravel event for broadcasting (include custodians)
+        \App\Events\RequestCreated::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, $custodianIds);
 
         return redirect()->route('requestor.index', ['tab' => 'requests'])
                         ->with('success', 'Request submitted successfully!')
@@ -860,30 +901,86 @@ class RequestorController extends Controller
                     ->where('requested_by_id', $user->id)
                     ->where('status', 'pending')
                     ->firstOrFail();
- 
-        // ✅ Only release if equipment was already approved (deducted)
-        if ($fr->equipment_status === 'approved') {
-            foreach ($fr->getEquipmentQuantities() as $itemName => $qty) {
-                $eq = \App\Models\Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])->first();
-                if ($eq) $eq->release($qty);
-            }
-        }
- 
-        $fr->addHistory('cancelled', 'Request cancelled by requester ' . $user->name, $user->id);
-        
-        // 📧 Notify custodians and admin about cancellation
-        $fr->notify(new \App\Notifications\RequestStatusChanged(
-            $fr,
-            'request_cancelled',
-            "Request {$fr->control_number} has been cancelled by {$user->name}. Equipment and venue are now available for other requests."
-        ));
-        
-        // Fire Laravel event for broadcasting
-        \App\Events\RequestCancelled::dispatch($fr->id, $fr->control_number, $user->name);
-        
-        $fr->delete();
 
-        return redirect()->back()->with('success', 'Request cancelled successfully');
+        DB::beginTransaction();
+
+        try {
+            // ✅ Only release if equipment was already approved (deducted)
+            if ($fr->equipment_status === 'approved') {
+                foreach ($fr->getEquipmentQuantities() as $itemName => $qty) {
+                    $qty = (int) $qty;
+                    if ($qty <= 0) {
+                        continue;
+                    }
+
+                    $eq = \App\Models\Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($eq) {
+                        $eq->quantity_available = min(
+                            (int) $eq->quantity,
+                            (int) $eq->quantity_available + $qty
+                        );
+                        $eq->save();
+                    }
+                }
+            }
+
+            $fr->addHistory('cancelled', 'Request cancelled by requester ' . $user->name, $user->id);
+
+            // Determine affected custodians (use model helper for equipment + venue custodians)
+            $equipmentCustodianIds = $fr->getAssignedEquipmentCustodianIds();
+            $venueCustodianIds = \App\Models\Venue::whereIn('name', $fr->venue ?? [])->pluck('custodian_id')->filter()->unique()->toArray();
+            $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
+
+            // Notify custodians and admins about cancellation
+            if (!empty($custodianIds)) {
+                $custodians = \App\Models\User::whereIn('id', $custodianIds)->get();
+                try {
+                    Notification::send($custodians, new \App\Notifications\RequestStatusChanged(
+                        $fr,
+                        'request_cancelled',
+                        "Request {$fr->control_number} has been cancelled by {$user->name}. Equipment and venue are now available for other requests."
+                    ));
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to notify custodians for cancelled facility request.', [
+                        'facility_request_id' => $fr->id,
+                        'exception' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Notify admins as well
+            $admins = \App\Models\User::whereIn('role', ['admin', 'facility_admin'])->get();
+            if ($admins->isNotEmpty()) {
+                try {
+                    Notification::send($admins, new \App\Notifications\RequestStatusChanged(
+                        $fr,
+                        'request_cancelled',
+                        "Request {$fr->control_number} has been cancelled by {$user->name}. Equipment and venue are now available for other requests."
+                    ));
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to notify admins for cancelled facility request.', [
+                        'facility_request_id' => $fr->id,
+                        'exception' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Fire Laravel event for broadcasting (include custodians)
+            \App\Events\RequestCancelled::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, $custodianIds);
+
+            $fr->delete();
+
+            DB::commit();
+
+            return redirect()->back()->with('success', 'Request cancelled successfully');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return redirect()->back()->withErrors('Unable to cancel the request at this time.');
+        }
     }
 
     public function show($id)

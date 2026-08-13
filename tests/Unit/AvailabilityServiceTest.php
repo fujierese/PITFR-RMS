@@ -118,4 +118,72 @@ class AvailabilityServiceTest extends TestCase
         $this->assertFalse($result['available']);
         $this->assertStringContainsString('conflict', strtolower($result['message'] ?? ''));
     }
+
+    public function test_multi_day_reservation_spanning_holiday_is_blocked(): void
+    {
+        $service = new AvailabilityService();
+
+        $custodian = User::create([
+            'username' => 'custodian-multiday',
+            'password' => 'secret',
+            'name' => 'Custodian Multiday',
+            'role' => 'custodian',
+        ]);
+
+        Venue::create([
+            'name' => 'Conference Hall & Interaction Center (CHIC)',
+            'capacity' => 150,
+            'custodian_id' => $custodian->id,
+        ]);
+
+        // Holiday on 2026-07-31
+        Holiday::create([
+            'holiday_date' => '2026-07-31',
+            'name' => 'Mid-Year Holiday',
+            'type' => 'public',
+        ]);
+
+        // Reservation start before holiday and end after holiday -> should be blocked
+        $result = $service->checkVenueAvailability(
+            'Conference Hall & Interaction Center (CHIC)',
+            now()->parse('2026-07-30 09:00'),
+            now()->parse('2026-08-01 10:00')
+        );
+
+        $this->assertFalse($result['available']);
+        $this->assertStringContainsString('holiday', strtolower($result['message'] ?? ''));
+    }
+
+    public function test_reservation_not_spanning_holiday_is_allowed(): void
+    {
+        $service = new AvailabilityService();
+
+        $custodian = User::create([
+            'username' => 'custodian-before',
+            'password' => 'secret',
+            'name' => 'Custodian Before',
+            'role' => 'custodian',
+        ]);
+
+        Venue::create([
+            'name' => 'Gymnasium',
+            'capacity' => 500,
+            'custodian_id' => $custodian->id,
+        ]);
+
+        // Holiday on 2026-07-31, but this reservation ends before the holiday
+        Holiday::create([
+            'holiday_date' => '2026-07-31',
+            'name' => 'Mid-Year Holiday',
+            'type' => 'public',
+        ]);
+
+        $result = $service->checkVenueAvailability(
+            'Gymnasium',
+            now()->parse('2026-07-29 09:00'),
+            now()->parse('2026-07-30 10:00')
+        );
+
+        $this->assertTrue($result['available']);
+    }
 }

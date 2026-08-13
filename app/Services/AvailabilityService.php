@@ -92,7 +92,10 @@ class AvailabilityService
             ->where('end_datetime', '>', $requestedStart)
             ->exists();
 
-        $isHoliday = Holiday::whereDate('holiday_date', $requestedStart->toDateString())->exists();
+        // Check if any holiday exists anywhere in the requested date range (inclusive)
+        $isHoliday = Holiday::whereDate('holiday_date', '>=', $requestedStart->toDateString())
+            ->whereDate('holiday_date', '<=', $requestedEnd->toDateString())
+            ->exists();
 
         return [
             'available' => !$conflicts && !$maintenanceConflict && !$isHoliday,

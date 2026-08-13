@@ -121,6 +121,21 @@
                                 <div id="capacity-warning-banner" role="status" aria-live="polite" class="mt-3 hidden rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900"></div>
                             </div>
                         </div>
+                        <div class="reservation-duration-group mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Reservation Duration</p>
+                            <div class="mt-3 flex flex-col gap-3 sm:flex-row">
+                                <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-emerald-500 bg-emerald-50 px-3 py-2 text-sm font-medium text-slate-900 shadow-sm">
+                                    <input type="radio" name="reservation_duration" value="specific_time" checked>
+                                    <span>Specific Time</span>
+                                </label>
+                                <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                    <input type="radio" name="reservation_duration" value="whole_day">
+                                    <span>Whole Day</span>
+                                    <span class="text-xs text-slate-500">08:00 AM – 12:00 AM</span>
+                                </label>
+                            </div>
+                            <p class="reservation-duration-helper mt-3 text-xs text-emerald-700" aria-live="polite">Whole Day uses 8:00 AM–12:00 AM for each selected date.</p>
+                        </div>
                         <div class="grid gap-4 md:grid-cols-2 md:gap-5">
                             <div>
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Time</p>
@@ -241,6 +256,7 @@
                     <div id="summary-equipment"></div>
                 </div>
 
+
                 <section class="rounded-[32px] border border-slate-200 bg-slate-50 p-7 shadow-sm">
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
@@ -345,3 +361,29 @@
     </section>
 </div>
 </form>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const durationInputs = document.querySelectorAll('input[name="reservation_duration"]');
+        const startTimeInput = document.querySelector('input[name="start_time"]');
+        const endTimeInput = document.querySelector('input[name="end_time"]');
+
+        if (!durationInputs.length || !startTimeInput || !endTimeInput) {
+            return;
+        }
+
+        const applyDurationState = () => {
+            const duration = document.querySelector('input[name="reservation_duration"]:checked')?.value ?? 'specific_time';
+            const isWholeDay = duration === 'whole_day';
+            startTimeInput.disabled = isWholeDay;
+            endTimeInput.disabled = isWholeDay;
+
+            if (isWholeDay) {
+                startTimeInput.value = '08:00';
+                endTimeInput.value = '00:00';
+            }
+        };
+
+        durationInputs.forEach((input) => input.addEventListener('change', applyDurationState));
+        applyDurationState();
+    });
+</script>

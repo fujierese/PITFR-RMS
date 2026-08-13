@@ -594,6 +594,36 @@ class SupplyOfficeController extends Controller
         ];
 
         if ($action === 'approve') {
+            $quantities = $fr->getEquipmentQuantities();
+            if (empty($quantities) && !empty($fr->getEquipmentItems())) {
+                $quantities = array_fill_keys($fr->getEquipmentItems(), 1);
+            }
+
+            foreach ($quantities as $itemName => $qty) {
+                $qty = (int) $qty;
+                if ($qty <= 0) {
+                    continue;
+                }
+
+                $equipment = Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$equipment) {
+                    continue;
+                }
+
+                if ($equipment->quantity_available < $qty) {
+                    throw new \RuntimeException("Insufficient inventory for '{$itemName}'.");
+                }
+
+                $equipment->quantity_available = min(
+                    (int) $equipment->quantity,
+                    max(0, (int) $equipment->quantity_available - $qty)
+                );
+                $equipment->save();
+            }
+
             $updates['approved_by'] = Auth::user()->name;
             $updates['approved_by_id'] = Auth::user()->getKey();
             $updates['approved_date'] = now();
