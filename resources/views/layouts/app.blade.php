@@ -21,9 +21,9 @@
 </head>
 <body class="@yield('body-class', 'overflow-x-hidden bg-slate-100 min-h-screen text-slate-900')">
 
-<div class="min-h-screen overflow-x-hidden bg-slate-100">
+<div class="h-screen overflow-hidden bg-slate-100">
     @auth
-        <aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-50 h-screen w-72 -translate-x-full transform overflow-hidden border-r border-emerald-500/20 bg-slate-950 shadow-[24px_0_60px_rgba(2,6,23,0.3)] transition-transform duration-300 sm:w-80 lg:static lg:h-screen lg:w-80 lg:translate-x-0 lg:overflow-hidden">
+        <aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-50 h-screen w-72 -translate-x-full transform overflow-hidden border-r border-emerald-500/20 bg-slate-950 shadow-[24px_0_60px_rgba(2,6,23,0.3)] transition-transform duration-300 sm:w-80 lg:fixed lg:inset-y-0 lg:left-0 lg:h-screen lg:w-80 lg:translate-x-0 lg:overflow-hidden">
             @include('components.dashboard-sidebar')
         </aside>
         <div id="sidebar-backdrop" class="fixed inset-0 z-40 hidden bg-slate-950/40 backdrop-blur-sm lg:hidden"></div>
@@ -34,12 +34,12 @@
         </button>
     @endauth
 
-    <main class="min-h-screen overflow-x-hidden px-3 py-3 pt-16 sm:px-4 sm:py-4 sm:pt-6 md:px-6 lg:ml-80 lg:overflow-y-auto lg:px-8 lg:py-6 lg:pt-8">
+    <main class="h-screen overflow-y-auto overflow-x-hidden px-3 py-3 pt-16 sm:px-4 sm:py-4 sm:pt-6 md:px-6 lg:ml-80 lg:h-screen lg:overflow-y-auto lg:px-8 lg:py-6 lg:pt-8">
         <div class="mx-auto w-full max-w-none lg:max-w-7xl">
             @if(session('success'))
-                <div class="mb-6 rounded-3xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-sm">
+                <div role="status" aria-live="polite" aria-label="Success" class="mb-6 rounded-3xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-sm">
                     <div class="flex items-center gap-3">
-                        <svg class="w-5 h-5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-5 h-5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                         </svg>
                         <span>{{ session('success') }}</span>
@@ -47,9 +47,9 @@
                 </div>
             @endif
             @if(session('warning'))
-                <div class="mb-6 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 shadow-sm">
+                <div role="alert" aria-live="polite" aria-label="Warning" class="mb-6 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 shadow-sm">
                     <div class="flex items-center gap-3">
-                        <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         <span>{{ session('warning') }}</span>
@@ -57,9 +57,9 @@
                 </div>
             @endif
             @if($errors->any())
-                <div class="mb-6 rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-800 shadow-sm">
+                <div role="alert" aria-live="assertive" aria-label="Error" class="mb-6 rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-800 shadow-sm">
                     <div class="flex items-center gap-3">
-                        <svg class="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
                         <span>{{ $errors->first() }}</span>
@@ -233,10 +233,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
         button.dataset.originalHtml = button.dataset.originalHtml || button.innerHTML;
         button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        button.setAttribute('aria-label', loadingText || 'Loading...');
         button.classList.add('opacity-80', 'cursor-not-allowed');
         button.innerHTML = `
             <span class="inline-flex items-center gap-2">
-                <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -279,6 +281,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 setLoadingButtonState(submitButton, loadingText);
                 form.submit();
+            }
+        });
+    });
+
+    document.querySelectorAll('form[data-show-loading="true"]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton && !form.dataset.swalConfirm) {
+                const buttonText = (submitButton?.textContent || '').toLowerCase();
+                let loadingText = 'Submitting...';
+
+                if (buttonText.includes('approve')) {
+                    loadingText = 'Approving...';
+                } else if (buttonText.includes('reject')) {
+                    loadingText = 'Rejecting...';
+                } else if (buttonText.includes('return')) {
+                    loadingText = 'Returning...';
+                } else if (buttonText.includes('save') || buttonText.includes('update')) {
+                    loadingText = 'Saving...';
+                } else if (buttonText.includes('delete')) {
+                    loadingText = 'Deleting...';
+                }
+
+                setLoadingButtonState(submitButton, loadingText);
             }
         });
     });

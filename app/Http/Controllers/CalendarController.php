@@ -40,16 +40,20 @@ class CalendarController extends Controller
             $startDateTime = $schedule ? $schedule->start_datetime : \Illuminate\Support\Carbon::parse($req->start_date . ' ' . ($req->start_time ?? '00:00'));
             $endDateTime = $schedule ? $schedule->end_datetime : \Illuminate\Support\Carbon::parse(($req->end_date ?? $req->start_date) . ' ' . ($req->end_time ?? $req->start_time ?? '00:00'));
 
-            $hasTime = $startDateTime->format('H:i:s') !== '00:00:00' || $endDateTime->format('H:i:s') !== '00:00:00';
-            $isAllDay = !$hasTime;
-
-            if ($isAllDay) {
-                $eventStart = $startDateTime->toDateString();
-                $eventEnd = $endDateTime->copy()->addDay()->toDateString();
-            } else {
-                $eventStart = $startDateTime->format('Y-m-d\TH:i:s');
-                $eventEnd = $endDateTime->format('Y-m-d\TH:i:s');
+            // Ensure times are Carbon instances in the app timezone (Asia/Manila)
+            if (!$startDateTime instanceof \Illuminate\Support\Carbon) {
+                $startDateTime = \Illuminate\Support\Carbon::parse($startDateTime);
             }
+            if (!$endDateTime instanceof \Illuminate\Support\Carbon) {
+                $endDateTime = \Illuminate\Support\Carbon::parse($endDateTime);
+            }
+
+            // Calendar design requirement: every reservation is a timed event.
+            // Preserve the original reservation datetime range exactly as stored locally.
+            // Multi-day reservations remain timed; do not convert them to all-day.
+            $eventStart = $startDateTime->copy()->format('Y-m-d\TH:i:s');
+            $eventEnd = $endDateTime->copy()->format('Y-m-d\TH:i:s');
+            $isAllDay = false;
 
             $venueNames = $req->getVenueNames();
             $requestor = $req->user ?: $req->requester;
@@ -73,9 +77,9 @@ class CalendarController extends Controller
                 'title' => $req->name_of_activity . ' (' . $req->control_number . ')',
                 'start' => $eventStart,
                 'end' => $eventEnd,
-                'start_datetime' => \Illuminate\Support\Carbon::parse($eventStart)->format('Y-m-d H:i:s'),
-                'end_datetime' => \Illuminate\Support\Carbon::parse($eventEnd)->format('Y-m-d H:i:s'),
-                'allDay' => $isAllDay,
+                'start_datetime' => $startDateTime->copy()->format('Y-m-d H:i:s'),
+                'end_datetime' => $endDateTime->copy()->format('Y-m-d H:i:s'),
+                'allDay' => false,
                 'status' => $req->status,
                 'venue' => implode(', ', $venueNames),
                 'backgroundColor' => $eventColor['background'],

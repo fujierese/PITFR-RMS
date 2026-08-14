@@ -110,11 +110,56 @@ class CalendarEventPayloadTest extends TestCase
         $event = $payload->firstWhere('id', $request->id);
 
         $this->assertNotNull($event);
+        // Timed multi-day reservations must preserve their real start/end range and remain timed.
         $this->assertSame('2026-08-10T08:00:00', $event['start']);
         $this->assertSame('2026-08-12T17:00:00', $event['end']);
+        $this->assertFalse($event['allDay']);
         $this->assertSame('College of Information and Computing Sciences', $event['extendedProps']['department']);
         $this->assertSame('PIT Innovation Hub', $event['extendedProps']['organization']);
         $this->assertSame('PIT Multi-Purpose Gymnasium, CHIC Conference Hall', $event['venue']);
+    }
+
+    public function test_calendar_events_preserve_exact_multi_day_time_range_boundaries(): void
+    {
+        $requestor = User::factory()->create([
+            'name' => 'Time Range Requestor',
+            'username' => 'time-range-requestor',
+            'role' => 'requestor',
+            'contact_number' => '09181234567',
+        ]);
+
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-2026-005',
+            'date_requested' => now()->toDateString(),
+            'department' => 'BSIT',
+            'name_of_activity' => 'Time Window Reservation',
+            'expected_participants' => 18,
+            'start_date' => '2026-08-14',
+            'end_date' => '2026-08-16',
+            'start_time' => '09:00',
+            'end_time' => '17:00',
+            'requested_by_id' => $requestor->id,
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
+
+        ReservationSchedule::create([
+            'facility_request_id' => $request->id,
+            'start_datetime' => '2026-08-14 09:00:00',
+            'end_datetime' => '2026-08-16 17:00:00',
+        ]);
+
+        $response = $this->getJson(route('calendar.events'));
+        $response->assertOk();
+
+        $event = collect($response->json())->firstWhere('id', $request->id);
+
+        $this->assertNotNull($event);
+        // Timed multi-day reservations must preserve the real reservation window and remain timed.
+        $this->assertFalse($event['allDay']);
+        $this->assertSame('2026-08-14T09:00:00', $event['start']);
+        $this->assertSame('2026-08-16T17:00:00', $event['end']);
     }
 
     public function test_public_calendar_hides_requestor_contact_details(): void

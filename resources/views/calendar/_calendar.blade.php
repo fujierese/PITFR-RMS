@@ -205,7 +205,12 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="px-4 py-6 text-center text-slate-500">No requests found. Use the Create Request button to submit your first booking.</td>
+                                <td colspan="5" class="px-4 py-8 text-center">
+                                    <div class="flex flex-col items-center gap-2">
+                                        <p class="text-sm font-medium text-slate-700">No requests found.</p>
+                                        <p class="text-xs text-slate-500">Your request list is empty. Create a new request to get started.</p>
+                                    </div>
+                                </td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -245,7 +250,10 @@
             <h2 class="text-lg font-semibold text-slate-900">Initial Verification Queue</h2>
             <p class="mt-1 text-sm text-slate-500">Review requests assigned to your custodial responsibilities.</p>
             @if ($verificationQueue->isEmpty())
-                <div class="mt-4 rounded-2xl bg-white p-4 text-slate-600">No requests are currently waiting for your verification.</div>
+                <div class="mt-4 rounded-2xl bg-slate-50 p-4 text-center border border-slate-200 shadow-sm">
+                    <p class="text-sm font-medium text-slate-700">No requests are currently waiting for your verification.</p>
+                    <p class="text-xs text-slate-500 mt-1">Requests will appear here when they need your initial review.</p>
+                </div>
             @else
                 <div class="mt-4 overflow-x-auto">
                     <table class="min-w-full divide-y divide-slate-200 text-sm text-left">
@@ -278,7 +286,10 @@
             <h2 class="text-lg font-semibold text-slate-900">Final Approval Queue</h2>
             <p class="mt-1 text-sm text-slate-500">Requests are ready for final approval before being released.</p>
             @if ($totalCount == 0)
-                <div class="mt-4 rounded-2xl bg-white p-4 text-slate-600">No final approval requests found.</div>
+                <div class="mt-4 rounded-2xl bg-slate-50 p-4 text-center border border-slate-200 shadow-sm">
+                    <p class="text-sm font-medium text-slate-700">No requests are waiting for final approval.</p>
+                    <p class="text-xs text-slate-500 mt-1">Requests will appear here when they're ready for your final review.</p>
+                </div>
             @else
                 <div class="mt-4 overflow-x-auto" id="approval-queue-container">
                     <table class="min-w-full divide-y divide-slate-200 text-sm text-left">
@@ -319,8 +330,9 @@
                             @endforeach
                         </tbody>
                     </table>
-                    <div id="no-filter-results" class="hidden mt-4 rounded-2xl bg-white p-4 text-slate-600 text-center">
-                        No requests found for the selected filter.
+                    <div id="no-filter-results" class="hidden mt-4 rounded-2xl bg-slate-50 p-4 text-center text-sm text-slate-600 border border-slate-200 shadow-sm">
+                        <p class="font-medium text-slate-700">No matching requests found.</p>
+                        <p class="text-xs text-slate-500 mt-1">Try adjusting your filters or search criteria.</p>
                     </div>
                 </div>
             @endif
@@ -934,13 +946,52 @@
 .event-status-badge {
     margin-left: 0.4rem;
     border-radius: 9999px;
-    padding: 0.1rem 0.45rem;
-    font-size: 0.65rem;
-    line-height: 1;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.62rem;
+    line-height: 1.2;
     font-weight: 700;
-    color: #ffffff;
-    background-color: rgba(0, 0, 0, 0.25);
+    letter-spacing: 0.02em;
     white-space: nowrap;
+    border: 1px solid transparent;
+    align-self: flex-start;
+}
+
+.event-status-badge.status-approved {
+    background: rgba(16, 185, 129, 0.12);
+    color: #065f46;
+    border-color: rgba(16, 185, 129, 0.24);
+}
+
+.event-status-badge.status-pending {
+    background: rgba(245, 158, 11, 0.12);
+    color: #92400e;
+    border-color: rgba(245, 158, 11, 0.26);
+}
+
+.event-status-badge.status-rejected,
+.event-status-badge.status-conflict,
+.event-status-badge.status-urgent {
+    background: rgba(239, 68, 68, 0.12);
+    color: #991b1b;
+    border-color: rgba(239, 68, 68, 0.24);
+}
+
+.event-status-badge.status-needs-reschedule {
+    background: rgba(249, 115, 22, 0.12);
+    color: #9a4d00;
+    border-color: rgba(249, 115, 22, 0.22);
+}
+
+.event-status-badge.status-completed {
+    background: rgba(148, 163, 184, 0.14);
+    color: #334155;
+    border-color: rgba(148, 163, 184, 0.26);
+}
+
+.event-status-badge.status-neutral {
+    background: rgba(100, 116, 139, 0.12);
+    color: #334155;
+    border-color: rgba(100, 116, 139, 0.2);
 }
 
 .fc-event-text {
@@ -1008,12 +1059,23 @@
     align-items: center !important;
     gap: 6px;
     flex: 0 0 auto;
-    position: static !important;
-    height: auto !important;
-    width: 100% !important;
+    /* Allow FullCalendar's native positioning to work correctly */
+    /* position: NOT static - let FullCalendar use absolute positioning */
+    /* height: NOT auto - let FullCalendar calculate based on duration */
+    /* width: NOT 100% - let FullCalendar set based on column layout */
     box-shadow: none !important;
     border: 1px solid transparent !important;
     background-color: transparent !important;
+}
+
+.fc-timegrid-event {
+    /* Enable FullCalendar's calculated positioning for time grid events */
+    position: absolute !important;
+}
+
+.fc-timegrid .fc-event-main {
+    /* Allow height to be calculated by FullCalendar */
+    height: 100%;
 }
 
 .fc-event:hover {
@@ -1027,9 +1089,10 @@
     align-items: center;
     width: 100%;
     gap: 8px;
-    padding: 6px 8px;
+    padding: 5px 7px;
     border-radius: 0.75rem;
     color: inherit;
+    min-width: 0;
 }
 
 .fc-event-label {
@@ -1037,8 +1100,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
-    font-weight: 600;
+    font-weight: 700;
     color: inherit;
+    min-width: 0;
 }
 
 .fc-event-meta {
@@ -1214,6 +1278,11 @@
     border-color: #4b5563 !important;
 }
 
+/* Ensure all events are visible in month view */
+.fc .fc-daygrid-event {
+    visibility: visible !important;
+}
+
 /* Responsive Calendar */
 #calendar {
     min-height: auto !important;
@@ -1352,16 +1421,62 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
 
-    function getStatusColorInfo(statusValue) {
-        var normalized = String(statusValue || '').toLowerCase();
-        if (normalized === 'approved') {
-            return { bg: '#16a34a', text: '#166534' };
-        }
-        if (normalized === 'pending') {
-            return { bg: '#f59e0b', text: '#92400e' };
-        }
-        if (normalized === 'rejected' || normalized === 'cancelled') {
-            return { bg: '#dc2626', text: '#991b1b' };
+function normalizeStatusLabel(statusValue) {
+                var normalized = String(statusValue || '').trim();
+                if (!normalized) return '';
+                var lower = normalized.toLowerCase();
+                var labelMap = {
+                    approved: 'Approved',
+                    pending: 'Pending',
+                    rejected: 'Rejected',
+                    cancelled: 'Cancelled',
+                    completed: 'Completed',
+                    needs_reschedule: 'Needs Reschedule',
+                    conflict: 'Conflict',
+                    urgent: 'Urgent',
+                    'under review': 'Under Review'
+                };
+                return labelMap[lower] || normalized.replace(/_/g, ' ').replace(/\b\w/g, function(letter) {
+                    return letter.toUpperCase();
+                });
+            }
+
+            function getStatusBadgeTone(statusValue) {
+                var normalized = String(statusValue || '').trim().toLowerCase();
+                if (normalized === 'approved') {
+                    return 'status-approved';
+                }
+                if (normalized === 'pending') {
+                    return 'status-pending';
+                }
+                if (['rejected', 'cancelled', 'conflict', 'urgent'].includes(normalized)) {
+                    return 'status-rejected';
+                }
+                if (normalized === 'needs_reschedule') {
+                    return 'status-needs-reschedule';
+                }
+                if (normalized === 'completed') {
+                    return 'status-completed';
+                }
+                return 'status-neutral';
+            }
+
+            function getStatusColorInfo(statusValue) {
+                var normalized = String(statusValue || '').toLowerCase();
+                if (normalized === 'approved') {
+                    return { bg: '#16a34a', text: '#166534' };
+                }
+                if (normalized === 'pending') {
+                    return { bg: '#f59e0b', text: '#92400e' };
+                }
+                if (['rejected', 'cancelled', 'conflict', 'urgent'].includes(normalized)) {
+                    return { bg: '#dc2626', text: '#991b1b' };
+                }
+                if (normalized === 'needs_reschedule') {
+                    return { bg: '#f97316', text: '#9a4d00' };
+                }
+                if (normalized === 'completed') {
+                    return { bg: '#64748b', text: '#334155' };
         }
         return { bg: '#6b7280', text: '#374151' };
     }
@@ -1389,11 +1504,19 @@ document.addEventListener('DOMContentLoaded', function() {
             return 'dayGridMonth';
         }
 
+        // Track current view for use in event callbacks
+        var currentViewType = getInitialCalendarView();
+
         var calendar = new FullCalendar.Calendar(calendarEl, {
             initialView: getInitialCalendarView(),
             nextDayThreshold: '00:00:00',
-            displayEventEnd: false,
+            displayEventEnd: true,
             contentHeight: 'auto',
+            timeZone: 'Asia/Manila',
+            locale: 'en',
+            eventDisplay: 'block',
+            dayMaxEvents: false, // Show all events, don't limit
+            dayMaxEventRows: false, // Don't cap rows for daygrid
             headerToolbar: {
                 left: 'prev,next today',
                 center: 'title',
@@ -1404,13 +1527,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 hour: 'numeric',
                 minute: '2-digit'
             },
+            eventTimeFormat: {
+                meridiem: 'short',
+                hour: 'numeric',
+                minute: '2-digit'
+            },
             slotLabelInterval: '01:00',
+            // Visible time range only. This must not alter the actual reservation start/end time.
+            slotMinTime: '08:00',
+            slotMaxTime: '24:00',
+            // Keep a single continuous timed grid; no all-day section.
+            allDaySlot: false,
             windowResizeDelay: 100,
             windowResize: function() {
                 var nextView = getInitialCalendarView();
                 if (calendar.view.type !== nextView) {
                     calendar.changeView(nextView);
                 }
+            },
+            viewDidMount: function(info) {
+                // Update the current view type whenever the view changes
+                currentViewType = info.view.type;
+                
+                // Refetch events with new view type to trigger transformation
+                setTimeout(function() {
+                    calendar.refetchEvents();
+                }, 100);
             },
             dayCellClassNames: function(info) {
                 var classes = [];
@@ -1420,7 +1562,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 return classes;
             },
             events: function(fetchInfo, successCallback, failureCallback) {
-                console.log('📅 Fetching calendar events:', fetchInfo.startStr, 'to', fetchInfo.endStr);
+                // Detect view type from fetch range: month view fetches longer ranges
+                var startDate = new Date(fetchInfo.startStr);
+                var endDate = new Date(fetchInfo.endStr);
+                var daysDiff = (endDate - startDate) / (1000 * 60 * 60 * 24);
+                
+                // Heuristic: if range > 20 days, it's likely a month view; if ~7 days, it's week view
+                var viewType = currentViewType;
+                if (daysDiff > 20) {
+                    viewType = 'dayGridMonth';
+                } else if (daysDiff > 6 && daysDiff <= 20) {
+                    viewType = 'timeGridWeek';
+                }
+                
+                console.log('📅 Events:', viewType, '|', Math.round(daysDiff), 'days');
 
                 fetch('{{ route("calendar.events") }}')
                     .then(function(response) {
@@ -1435,46 +1590,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Store all events globally for dayCell rendering
                         window.allEventsData = data;
 
-                        var mapped = data.map(function(event) {
-                            var startDatetime = event.start_datetime || event.start || '';
-                            var endDatetime = event.end_datetime || event.end || '';
-
-                            if (startDatetime.indexOf(' ') !== -1) {
-                                startDatetime = startDatetime.replace(' ', 'T');
-                            }
-                            if (endDatetime.indexOf(' ') !== -1) {
-                                endDatetime = endDatetime.replace(' ', 'T');
-                            }
-
-                            var isTimed = /\dT\d{2}:\d{2}/.test(startDatetime);
-                            var allDay = event.allDay !== undefined ? !!event.allDay : !isTimed;
-                            if (isTimed) {
-                                allDay = false;
-                            }
-
-                            // ✅ MIDNIGHT LOGIC: Treat 00:00:00 end times as 23:59:59 of the same day
-                            if (isTimed && startDatetime && endDatetime) {
-                                var startDateObj = new Date(startDatetime);
-                                var endDateObj = new Date(endDatetime);
-                                var nextDayStart = new Date(startDateObj);
-                                nextDayStart.setHours(0, 0, 0, 0);
-                                nextDayStart.setDate(nextDayStart.getDate() + 1);
-
-                                if (endDateObj.getTime() === nextDayStart.getTime() || endDatetime.endsWith('T00:00:00')) {
-                                    endDateObj = new Date(endDateObj.getTime() - 1000);
-                                    endDatetime = endDateObj.toISOString().slice(0, 19);
-                                }
-                            }
-
-                            // ✅ COLOR CODING: Preserve venue colors and add status only as a badge
-                            var venue = event.extendedProps && event.extendedProps.venue ? event.extendedProps.venue : '';
-                            var venueInfo = getVenueColorInfo(venue);
-                            var status = event.extendedProps && event.extendedProps.status ? event.extendedProps.status : event.status || '';
-                            var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
-
-                            // ✅ TOOLTIP CONTENT: Organization and Activity Purpose (escaped)
+                        // Helper function to create tooltip content
+                        function createTooltipContent(event, startDatetime, status) {
                             function __esc(s) { var d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
                             var tooltipContent = '<div style="text-align: left; padding: 0; margin: 0;">';
+                            var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
                             tooltipContent += '<div style="margin-bottom: 8px;"><strong style="font-size: 0.95rem;">' + __esc(displayTitle) + '</strong></div>';
                             if (event.extendedProps && event.extendedProps.venue) {
                                 tooltipContent += '<div style="margin-bottom: 6px;"><strong>Venue:</strong> ' + __esc(event.extendedProps.venue) + '</div>';
@@ -1496,28 +1616,143 @@ document.addEventListener('DOMContentLoaded', function() {
                                 tooltipContent += '<div><strong>Urgent:</strong> Yes</div>';
                             }
                             tooltipContent += '</div>';
+                            return tooltipContent;
+                        }
+
+                        // Helper function to create a single FC event object
+                        function createFcEvent(event, startDatetime, endDatetime, isSegment) {
+                            var venue = event.extendedProps && event.extendedProps.venue ? event.extendedProps.venue : '';
+                            var venueInfo = getVenueColorInfo(venue);
+                            var status = event.extendedProps && event.extendedProps.status ? event.extendedProps.status : event.status || '';
+                            var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
 
                             return {
                                 id: event.id,
                                 title: displayTitle,
                                 start: startDatetime,
                                 end: endDatetime,
-                                allDay: allDay,
+                                allDay: false,
                                 backgroundColor: venueInfo.bg,
                                 borderColor: venueInfo.border,
                                 textColor: '#ffffff',
                                 classNames: ['fc-event-' + venueInfo.className],
                                 extendedProps: Object.assign({}, event.extendedProps, {
-                                    tooltipContent: tooltipContent,
+                                    tooltipContent: createTooltipContent(event, startDatetime, status),
                                     venueClass: venueInfo.className,
                                     venueDotColor: venueInfo.bg,
                                     participants: event.extendedProps.expected_participants || 0,
                                     statusClass: status.toLowerCase(),
-                                    displayStatus: status
+                                    displayStatus: status,
+                                    isSegment: !!isSegment  // Mark if this is a multi-day segment
                                 })
                             };
+                        }
+
+                        // Helper: check if event spans multiple days
+                        function isMultiDay(startStr, endStr) {
+                            var startDate = startStr.substring(0, 10);
+                            var endDate = endStr.substring(0, 10);
+                            return startDate !== endDate;
+                        }
+
+                        // Helper: create end-of-day datetime
+                        function getEndOfDay(dateStr) {
+                            return dateStr + 'T23:59:59';
+                        }
+
+                        // Helper: create start-of-day datetime
+                        function getStartOfDay(dateStr) {
+                            return dateStr + 'T00:00:00';
+                        }
+
+                        // Helper: get next day at 00:00 (for month view spanning)
+                        function getNextDayStart(dateStr) {
+                            var date = new Date(dateStr);
+                            date.setDate(date.getDate() + 1);
+                            return date.toISOString().substring(0, 10) + 'T00:00:00';
+                        }
+
+                        // Transform events based on view type
+                        var isTimeGridView = viewType === 'timeGridWeek' || viewType === 'timeGridDay';
+                        var isMonthView = viewType === 'dayGridMonth';
+
+                        var mapped = [];
+
+                        data.forEach(function(event) {
+                            var startDatetime = event.start || '';
+                            var endDatetime = event.end || '';
+
+                            // For Month View: create separate events for each day so clicking any day shows the event
+                            if (isMonthView) {
+                                if (isMultiDay(startDatetime, endDatetime)) {
+                                    // Create per-day events for multi-day reservations in Month View
+                                    var currentDate = startDatetime.substring(0, 10);
+                                    var endDate = endDatetime.substring(0, 10);
+                                    var startTime = startDatetime.substring(11, 19);
+                                    var endTime = endDatetime.substring(11, 19);
+
+                                    // First day: from actual start time to end of day
+                                    var firstDayEnd = getEndOfDay(currentDate);
+                                    mapped.push(createFcEvent(event, startDatetime, firstDayEnd, true));
+
+                                    // Middle days: full day
+                                    currentDate = new Date(currentDate);
+                                    currentDate.setDate(currentDate.getDate() + 1);
+                                    while (currentDate.toISOString().substring(0, 10) < endDate) {
+                                        var dateStr = currentDate.toISOString().substring(0, 10);
+                                        mapped.push(createFcEvent(
+                                            event,
+                                            getStartOfDay(dateStr),
+                                            getEndOfDay(dateStr),
+                                            true
+                                        ));
+                                        currentDate.setDate(currentDate.getDate() + 1);
+                                    }
+
+                                    // Last day: from start of day to actual end time
+                                    mapped.push(createFcEvent(event, getStartOfDay(endDate), endDatetime, true));
+                                } else {
+                                    // Single day: keep as-is
+                                    mapped.push(createFcEvent(event, startDatetime, endDatetime, false));
+                                }
+                                return;
+                            }
+
+                            // For timeGrid views (Week/Day): handle multi-day events specially
+                            if (isTimeGridView && isMultiDay(startDatetime, endDatetime)) {
+                                // Create per-day visual segments for multi-day reservations in Week View
+                                var currentDate = startDatetime.substring(0, 10);
+                                var endDate = endDatetime.substring(0, 10);
+                                var startTime = startDatetime.substring(11, 19);
+                                var endTime = endDatetime.substring(11, 19);
+
+                                // First day: from actual start time to end of day
+                                var firstDayEnd = getEndOfDay(currentDate);
+                                mapped.push(createFcEvent(event, startDatetime, firstDayEnd, true));
+
+                                // Middle days: full day (or at least start to end of day within viewport)
+                                currentDate = new Date(currentDate);
+                                currentDate.setDate(currentDate.getDate() + 1);
+                                while (currentDate.toISOString().substring(0, 10) < endDate) {
+                                    var dateStr = currentDate.toISOString().substring(0, 10);
+                                    mapped.push(createFcEvent(
+                                        event,
+                                        getStartOfDay(dateStr),
+                                        getEndOfDay(dateStr),
+                                        true
+                                    ));
+                                    currentDate.setDate(currentDate.getDate() + 1);
+                                }
+
+                                // Last day: from start of day to actual end time
+                                mapped.push(createFcEvent(event, getStartOfDay(endDate), endDatetime, true));
+                            } else {
+                                // Single-day or Day View: use canonical event
+                                mapped.push(createFcEvent(event, startDatetime, endDatetime, false));
+                            }
                         });
 
+                        console.log('✅ Rendered', mapped.length, 'segments for', viewType);
                         successCallback(mapped);
                         
                         // ✅ Initialize tooltips after events are rendered
@@ -1540,10 +1775,25 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             eventContent: function(info) {
                 function __esc(s) { var d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
+                function formatTimeTo12Hour(dateStr) {
+                    if (!dateStr) return '';
+                    // Parse the ISO string directly without timezone conversion
+                    var parts = dateStr.substring(11, 19).split(':');
+                    if (parts.length < 2) return '';
+                    var hours = parseInt(parts[0], 10);
+                    var minutes = parseInt(parts[1], 10);
+                    var ampm = hours >= 12 ? 'PM' : 'AM';
+                    hours = hours % 12 || 12;
+                    minutes = minutes < 10 ? '0' + minutes : minutes;
+                    return hours + ':' + minutes + ' ' + ampm;
+                }
+                
                 var title = info.event.title || '';
                 var venueClass = info.event.extendedProps.venueClass || 'other';
-                var status = info.event.extendedProps.displayStatus || '';
-                var statusLabel = status ? '<span class="event-status-badge">' + __esc(status) + '</span>' : '';
+                var status = info.event.extendedProps.displayStatus || info.event.extendedProps.status || info.event.status || '';
+                var statusTone = getStatusBadgeTone(status);
+                var statusText = normalizeStatusLabel(status);
+                var statusLabel = statusText ? '<span class="event-status-badge ' + __esc(statusTone) + '">' + __esc(statusText) + '</span>' : '';
                 var dot = '<span class="event-dot ' + __esc(venueClass) + '"></span>';
                 var label = '<span class="fc-event-label">' + __esc(title) + '</span>';
 
@@ -1551,12 +1801,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (info.event.allDay) {
                     metaItems.push('<span class="fc-event-meta-item">All day</span>');
                 } else if (info.event.start && info.event.end) {
-                    var start = new Date(info.event.start);
-                    var end = new Date(info.event.end);
-                    var formatTime = function(date) {
-                        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-                    };
-                    metaItems.push('<span class="fc-event-meta-item">' + __esc(formatTime(start) + '–' + formatTime(end)) + '</span>');
+                    var startStr = typeof info.event.start === 'string' ? info.event.start : info.event.start.toISOString();
+                    var endStr = typeof info.event.end === 'string' ? info.event.end : info.event.end.toISOString();
+                    metaItems.push('<span class="fc-event-meta-item">' + __esc(formatTimeTo12Hour(startStr) + '–' + formatTimeTo12Hour(endStr)) + '</span>');
                 }
 
                 if (info.event.extendedProps && info.event.extendedProps.venue) {
@@ -1572,7 +1819,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return { html: '<div class="fc-event-compact">' + dot + '<div class="fc-event-body"><div class="fc-event-line">' + label + statusLabel + '</div>' + metaLine + '</div></div>' };
             },
             eventClick: function(info) {
-                const requestId = info.event.id || info.event.extendedProps.facilityRequestId;
+                let requestId = info.event.id || info.event.extendedProps.facilityRequestId;
+
                 if (requestId) {
                     window.location.href = '{{ url("/request") }}/' + requestId;
                 }
@@ -1715,7 +1963,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         });
-        
+
+        window.calendar = calendar;
         calendar.render();
         console.log('✅ Calendar initialized successfully');
     } catch (error) {

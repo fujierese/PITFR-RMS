@@ -30,8 +30,12 @@
         </form>
 
         @if($requests->isEmpty())
-            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                No requests are waiting for final approval.
+            <div class="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 p-6 text-center shadow-sm sm:p-8">
+                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-700 mb-4">
+                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-900">No requests are waiting for final approval.</h3>
+                <p class="mt-2 text-sm text-slate-600">Requests will appear here once they're ready for your final review.</p>
             </div>
         @else
             <div class="space-y-4">

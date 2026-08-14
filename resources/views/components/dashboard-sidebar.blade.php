@@ -18,11 +18,7 @@
 
     if ($user) {
         if ($user->isAdmin()) {
-            // Overview
-            $navigation[] = [
-                'section' => 'Overview',
-                'type' => 'section-header',
-            ];
+            // Dashboard (Unified Admin/Supply Office)
             $navigation[] = [
                 'key' => 'dashboard',
                 'label' => 'Dashboard',
@@ -31,14 +27,14 @@
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l9-9 9 9v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9z"/></svg>',
             ];
 
-            // Requests Workflow
+            // Requests & Approvals
             $navigation[] = [
-                'section' => 'Requests',
+                'section' => 'Requests & Approvals',
                 'type' => 'section-header',
             ];
             $navigation[] = [
                 'key' => 'pending-requests',
-                'label' => 'Pending / For Review',
+                'label' => 'Pending Review',
                 'route' => route('supply-office.requests.pending'),
                 'route_name' => 'supply-office.requests.pending',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7 12a5 5 0 1110 0 5 5 0 01-10 0z"/></svg>',
@@ -52,10 +48,17 @@
             ];
             $navigation[] = [
                 'key' => 'final-approval',
-                'label' => 'Final Approval Queue',
+                'label' => 'Final Approval',
                 'route' => route('supply-office.requests.final-approval'),
                 'route_name' => 'supply-office.requests.final-approval',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+            ];
+            $navigation[] = [
+                'key' => 'final-approved-activities',
+                'label' => 'Approved',
+                'route' => route('supply-office.requests.approved'),
+                'route_name' => 'supply-office.requests.approved',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m7 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
             ];
             $navigation[] = [
                 'key' => 'rejected-requests',
@@ -65,24 +68,13 @@
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>',
             ];
 
-            // Scheduling & Activities
-            $navigation[] = [
-                'section' => 'Scheduling',
-                'type' => 'section-header',
-            ];
+            // Calendar
             $navigation[] = [
                 'key' => 'calendar',
                 'label' => 'Calendar',
                 'route' => route('supply-office.calendar'),
                 'route_name' => 'supply-office.calendar',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
-            ];
-            $navigation[] = [
-                'key' => 'final-approved-activities',
-                'label' => 'Final Approved Activities',
-                'route' => route('supply-office.requests.approved'),
-                'route_name' => 'supply-office.requests.approved',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m7 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
             ];
 
             // Management
@@ -92,23 +84,23 @@
             ];
             $navigation[] = [
                 'key' => 'users',
-                'label' => 'User Management',
+                'label' => 'Users',
                 'route' => route('supply-office.users'),
                 'route_name' => 'supply-office.users',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4a4 4 0 100 8 4 4 0 000-8zm-7 16a7 7 0 0114 0"/></svg>',
             ];
-
-            // Monitoring
             $navigation[] = [
-                'section' => 'Monitoring',
-                'type' => 'section-header',
+                'key' => 'reports',
+                'label' => 'Reports',
+                'route' => route('supply-office.usage-reports'),
+                'route_name' => 'supply-office.usage-reports',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M7 16V8m5 8V5m5 11v-6"/></svg>',
             ];
+
+            // Account & Administration
             $navigation[] = [
-                'key' => 'notifications',
-                'label' => 'Notifications',
-                'route' => route('notifications.index'),
-                'route_name' => 'notifications.index',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>',
+                'section' => 'Administration',
+                'type' => 'section-header',
             ];
             $navigation[] = [
                 'key' => 'audit-logs',
@@ -116,25 +108,6 @@
                 'route' => route('supply-office.audit-logs'),
                 'route_name' => 'supply-office.audit-logs',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M5 21h14a2 2 0 002-2V7l-5-5H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
-            ];
-
-            // Reports & Documentation
-            $navigation[] = [
-                'section' => 'Reports & Documentation',
-                'type' => 'section-header',
-            ];
-            $navigation[] = [
-                'key' => 'reports',
-                'label' => 'Usage Reports',
-                'route' => route('supply-office.usage-reports'),
-                'route_name' => 'supply-office.usage-reports',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M7 16V8m5 8V5m5 11v-6"/></svg>',
-            ];
-
-            // System
-            $navigation[] = [
-                'section' => 'System',
-                'type' => 'section-header',
             ];
             $navigation[] = [
                 'key' => 'settings',
@@ -147,18 +120,11 @@
 
         if ($user->isCustodian()) {
             $navigation[] = [
-                'key' => 'overview',
-                'label' => 'Overview',
+                'key' => 'dashboard',
+                'label' => 'Dashboard',
                 'route' => $dashboardRoute,
                 'route_name' => 'custodian.index',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l9-9 9 9v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9z"/></svg>',
-            ];
-            $navigation[] = [
-                'key' => 'incoming-requests',
-                'label' => 'Incoming Requests',
-                'route' => route('custodian.index'),
-                'route_name' => 'custodian.index',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7 7h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
             ];
             $navigation[] = [
                 'key' => 'calendar',
@@ -166,20 +132,6 @@
                 'route' => $calendarRoute,
                 'route_name' => $calendarRouteName,
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
-            ];
-            $navigation[] = [
-                'key' => 'assigned-items',
-                'label' => 'Assigned Venues / Equipment',
-                'route' => route('custodian.index'),
-                'route_name' => 'custodian.index',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 12h14M5 16h14"/></svg>',
-            ];
-            $navigation[] = [
-                'key' => 'notifications',
-                'label' => 'Notifications',
-                'route' => route('notifications.index'),
-                'route_name' => 'notifications.index',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>',
             ];
             $navigation[] = [
                 'key' => 'settings',
@@ -261,13 +213,17 @@
         $activeKey = 'reports';
     } elseif ($currentRoute === 'supply-office.settings') {
         $activeKey = 'settings';
+    } elseif ($currentRoute === 'custodian.index') {
+        $activeKey = 'dashboard';
+    } elseif ($currentRoute === 'custodian.settings') {
+        $activeKey = 'settings';
     }
 
     $isActive = fn($key) => $activeKey === $key;
 @endphp
 
-<div class="flex h-screen flex-col bg-slate-950 text-slate-100 shadow-[0_20px_60px_rgba(2,6,23,0.35)]">
-    <div class="border-b border-white/10 p-4">
+<div class="flex h-full flex-col bg-slate-950 text-slate-100 shadow-[0_20px_60px_rgba(2,6,23,0.35)]">
+    <div class="flex-shrink-0 border-b border-white/10 p-4">
         <div class="flex items-center justify-between gap-2">
             <a href="{{ $dashboardRoute }}" class="flex min-w-0 items-center gap-3">
                 <img src="{{ asset('images/PIT-LOGO.jpg') }}" alt="PIT Logo" class="h-10 w-10 rounded-full border border-white/10 object-cover shadow-sm">
@@ -288,7 +244,7 @@
         </div>
     </div>
 
-    <nav class="flex-1 overflow-y-auto px-2.5 py-3">
+    <nav class="flex-1 min-h-0 overflow-y-auto px-2.5 py-3">
         <div class="space-y-1">
             @foreach($navigation as $item)
                 @if(($item['type'] ?? null) === 'section-header')

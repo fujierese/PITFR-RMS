@@ -15,7 +15,7 @@
         $classificationTone = 'sky';
     }
 @endphp
-<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
+<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-show-loading="true" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
     @csrf
 
 <div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]">
@@ -35,17 +35,43 @@
                 </div>
             </div>
 
+            <div class="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Step 1</p>
+                    <p class="mt-1 text-sm font-semibold text-slate-900">Request Details</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 2</p>
+                    <p class="mt-1 text-sm font-semibold text-slate-900">Venue & Schedule</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 3</p>
+                    <p class="mt-1 text-sm font-semibold text-slate-900">Equipment</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 4</p>
+                    <p class="mt-1 text-sm font-semibold text-slate-900">Review & Submit</p>
+                </div>
+            </div>
+
             <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-6 md:rounded-[28px] md:p-8 lg:p-10">
                 <div class="space-y-8">
 
                     @if ($errors->any())
-                <div class="mb-6 rounded-3xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-                    <p class="font-semibold">Please fix the errors below before submitting.</p>
-                    <ul class="mt-3 list-disc pl-5 space-y-1">
-                        @foreach ($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
+                <div role="alert" aria-live="assertive" aria-label="Validation errors" class="mb-6 rounded-3xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm">
+                    <div class="flex gap-3">
+                        <svg class="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                        <div class="flex-1">
+                            <p class="font-semibold">Please fix the errors below before submitting.</p>
+                            <ul class="mt-3 list-disc pl-5 space-y-1">
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             @endif
 
@@ -79,8 +105,11 @@
                     </div>
                     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
                         <div class="space-y-3">
-                            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Dept. / Requisitioning Office</p>
-                            <input type="text" name="department" value="{{ $currentUser?->department ?? old('department') }}" required class="w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white">
+                            <label for="department" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Dept. / Requisitioning Office <span class="text-red-500">*</span></label>
+                            <input id="department" type="text" name="department" value="{{ $currentUser?->department ?? old('department') }}" required class="w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('department') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('department') ? 'true' : 'false' }}">
+                            @error('department')
+                                <p class="text-xs font-medium text-red-600">{{ $message }}</p>
+                            @enderror
                         </div>
                         <div class="grid gap-4 sm:grid-cols-2 sm:gap-5">
                             <div class="space-y-3">
@@ -102,22 +131,34 @@
                     </div>
                     <div class="space-y-4 md:space-y-6">
                         <div>
-                            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Activity / Purpose</p>
-                            <input type="text" name="name_of_activity" required value="{{ old('name_of_activity') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white">
+                            <label for="name_of_activity" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Activity / Purpose <span class="text-red-500">*</span></label>
+                            <input id="name_of_activity" type="text" name="name_of_activity" required value="{{ old('name_of_activity') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('name_of_activity') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('name_of_activity') ? 'true' : 'false' }}">
+                            @error('name_of_activity')
+                                <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
+                            @enderror
                         </div>
                         <div class="grid gap-4 md:grid-cols-3 md:gap-5">
                             <div>
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Date</p>
-                                <input type="date" name="start_date" required min="{{ now()->toDateString() }}" value="{{ old('start_date') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white">
+                                <label for="start_date" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Date <span class="text-red-500">*</span></label>
+                                <input id="start_date" type="date" name="start_date" required min="{{ now()->toDateString() }}" value="{{ old('start_date') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('start_date') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('start_date') ? 'true' : 'false' }}">
+                                @error('start_date')
+                                    <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
+                                @enderror
                             </div>
                             <div>
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Date (inclusive)</p>
-                                <input id="end_date" type="date" name="end_date" required min="{{ now()->toDateString() }}" value="{{ old('end_date') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white">
+                                <label for="end_date" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Date (inclusive) <span class="text-red-500">*</span></label>
+                                <input id="end_date" type="date" name="end_date" required min="{{ now()->toDateString() }}" value="{{ old('end_date') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('end_date') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('end_date') ? 'true' : 'false' }}">
+                                @error('end_date')
+                                    <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
+                                @enderror
                                 <p id="overnight-hint" class="mt-2 text-xs text-emerald-600 hidden">Overnight booking detected: end date auto-updated to the next day.</p>
                             </div>
                             <div>
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Expected No. of Participants</p>
-                                <input type="number" name="expected_participants" required min="1" value="{{ old('expected_participants') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white">
+                                <label for="expected_participants" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Expected No. of Participants <span class="text-red-500">*</span></label>
+                                <input id="expected_participants" type="number" name="expected_participants" required min="1" value="{{ old('expected_participants') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('expected_participants') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('expected_participants') ? 'true' : 'false' }}">
+                                @error('expected_participants')
+                                    <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
+                                @enderror
                                 <div id="capacity-warning-banner" role="status" aria-live="polite" class="mt-3 hidden rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900"></div>
                             </div>
                         </div>
@@ -138,12 +179,18 @@
                         </div>
                         <div class="grid gap-4 md:grid-cols-2 md:gap-5">
                             <div>
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Time</p>
-                                <input type="time" name="start_time" required value="{{ old('start_time') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white">
+                                <label for="start_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Time <span class="text-red-500">*</span></label>
+                                <input id="start_time" type="time" name="start_time" required value="{{ old('start_time') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('start_time') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('start_time') ? 'true' : 'false' }}">
+                                @error('start_time')
+                                    <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
+                                @enderror
                             </div>
                             <div>
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Time</p>
-                                <input type="time" name="end_time" required value="{{ old('end_time') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white">
+                                <label for="end_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Time <span class="text-red-500">*</span></label>
+                                <input id="end_time" type="time" name="end_time" required value="{{ old('end_time') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('end_time') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('end_time') ? 'true' : 'false' }}">
+                                @error('end_time')
+                                    <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
+                                @enderror
                             </div>
                         </div>
                     </div>
@@ -162,38 +209,35 @@
                     <div class="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                         <p class="font-semibold text-slate-800">External Requestor Guidance</p>
                         <p class="mt-1">Applicable rental fees and payment procedures</p>
-                        <p class="mt-2 text-xs text-slate-500">Selected Items Summary</p>
-                        <p class="mt-1 text-xs text-slate-500">Request Progress</p>
-                        <p class="mt-1 text-xs text-slate-500">Submission checklist</p>
                     </div>
-                    <div class="mt-4 border-b border-gray-400">
-                        <div class="bg-gray-100 px-3 py-2 border-b border-gray-400">
-                            <p class="text-xs font-bold uppercase">Facility / Venue</p>
-                        </div>
-                        <div class="p-3">
-                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                                @foreach(['Conference Hall & Interaction Center (CHIC)', 'Gymnasium', 'Balay Alumni', 'Oval Grounds', 'Covered Court', 'Volleyball Court', 'Others (specify)'] as $v)
-                                <label class="flex items-center gap-2 cursor-pointer hover:bg-emerald-50 p-1 rounded">
+                    <div class="mt-4 space-y-3">
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            @foreach(['Conference Hall & Interaction Center (CHIC)', 'Gymnasium', 'Balay Alumni', 'Oval Grounds', 'Covered Court', 'Volleyball Court', 'Others (specify)'] as $v)
+                                <label class="venue-option flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 {{ in_array($v, (array) old('venue'), true) ? 'border-emerald-500 bg-emerald-50 shadow-sm' : '' }}">
                                     <input type="radio" name="venue" value="{{ $v }}"
                                            {{ in_array($v, (array) old('venue'), true) ? 'checked' : '' }}
                                            {{ $v === 'Others (specify)' ? 'data-other=venue-other' : '' }}
                                            required
-                                           class="w-4 h-4 rounded border-gray-400 text-emerald-600">
-                                    <span class="text-xs">{{ $v }}</span>
+                                           class="mt-0.5 h-4 w-4 rounded-full border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                                    <span class="flex-1 text-sm font-medium text-slate-700">{{ $v }}</span>
+                                    <span class="hidden text-emerald-600">✓</span>
                                 </label>
-                                @endforeach
-                            </div>
-                            <div id="venue-other-wrap" style="display:none" class="mt-2">
-                                <input type="text" name="other_venue" id="venue-other"
-                                       value="{{ old('other_venue') }}"
-                                       placeholder="Please specify venue"
-                                       class="w-full border-b border-gray-400 focus:outline-none focus:border-emerald-500 text-sm py-1">
-                                @error('other_venue')
-                                    <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
-                                @enderror
-                            </div>
-                            <div id="venue-conflict-alert-wrap" class="mt-4"></div>
+                            @endforeach
                         </div>
+                        @error('venue')
+                            <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
+                        @enderror
+                        <div id="venue-other-wrap" style="display:none" class="mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                            <label for="venue-other" class="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Other Venue <span class="text-red-500">*</span></label>
+                            <input type="text" name="other_venue" id="venue-other"
+                                   value="{{ old('other_venue') }}"
+                                   placeholder="Please specify venue"
+                                   class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 focus:border-emerald-500 focus:outline-none @error('other_venue') border-red-300 bg-red-50 @enderror">
+                            @error('other_venue')
+                                <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div id="venue-conflict-alert-wrap" class="mt-4"></div>
                     </div>
                 </section>
 
@@ -233,16 +277,18 @@
                             $itemQty = is_object($eq) ? ($eq->quantity ?? 0) : ($eq['quantity'] ?? 0);
                             $itemAvailable = max(0, (int) (is_object($eq) ? ($eq->quantity_available ?? $itemQty) : ($eq['quantity_available'] ?? $itemQty)));
                             $badgeClass = $itemAvailable <= 0 ? 'bg-red-100 text-red-700' : ($itemAvailable == $itemQty ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700');
+                            $isSelected = in_array($itemName, old('equipment', []), true);
                         @endphp
-                        <div class="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between equipment-row {{ $itemAvailable > 0 ? 'hover:border-purple-400 hover:bg-purple-50/70' : 'border-red-100 bg-red-50/70 opacity-70' }}" data-available="{{ $itemAvailable }}" data-total="{{ $itemQty }}" data-name="{{ $itemName }}" data-index="{{ $loop->index }}">
-                            <label class="flex items-center gap-3 cursor-pointer sm:flex-1">
-                                <input type="checkbox" name="equipment[]" value="{{ $itemName }}" {{ $itemAvailable <= 0 ? 'disabled' : '' }} {{ in_array($itemName, old('equipment', [])) ? 'checked' : '' }} class="h-4 w-4 rounded border-slate-300 text-purple-600 equipment-checkbox" data-equipment="{{ $itemName }}">
+                        <div class="equipment-row flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between {{ $itemAvailable > 0 ? 'hover:border-purple-400 hover:bg-purple-50/70' : 'border-red-100 bg-red-50/70 opacity-70' }} {{ $isSelected ? 'border-emerald-300 bg-emerald-50/60' : '' }}" data-available="{{ $itemAvailable }}" data-total="{{ $itemQty }}" data-name="{{ $itemName }}" data-index="{{ $loop->index }}">
+                            <label class="flex flex-1 cursor-pointer items-center gap-3">
+                                <input type="checkbox" name="equipment[]" value="{{ $itemName }}" {{ $itemAvailable <= 0 ? 'disabled' : '' }} {{ $isSelected ? 'checked' : '' }} class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="{{ $itemName }}">
                                 <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
                             </label>
                             <div class="flex flex-col items-start gap-2 sm:items-end sm:text-right">
                                 <span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">{{ $itemAvailable }} / {{ $itemQty }} available</span>
-                                <div class="quantity-input-wrap" id="qty-wrap-{{ $loop->index }}" style="display:none;">
-                                    <input type="number" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ old('equipment_quantities.'.$itemName, 1) }}" disabled class="w-full sm:w-16 rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500">
+                                <div class="quantity-input-wrap {{ $isSelected ? '' : 'hidden' }}" id="qty-wrap-{{ $loop->index }}">
+                                    <label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Qty</label>
+                                    <input type="number" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ old('equipment_quantities.'.$itemName, 1) }}" {{ $isSelected ? '' : 'disabled' }} class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-16">
                                 </div>
                                 <div class="equipment-utilization-card mt-2 hidden w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 sm:min-w-[220px]"></div>
                             </div>
@@ -251,11 +297,39 @@
                     </div>
                 </section>
 
-                <div class="hidden">
-                    <div id="summary-venue"></div>
-                    <div id="summary-equipment"></div>
-                </div>
-
+                <section class="rounded-[32px] border border-slate-200 bg-slate-50 p-7 shadow-sm">
+                    <div class="mb-5 flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
+                        <div>
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Request Summary</p>
+                            <p class="mt-1 text-sm text-slate-500">Review your selections before submitting.</p>
+                        </div>
+                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Live</span>
+                    </div>
+                    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Activity</p>
+                            <p id="summary-activity" class="mt-2 text-sm font-semibold text-slate-800">Not specified</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Venue</p>
+                            <p id="summary-venue" class="mt-2 text-sm font-semibold text-slate-800">Not selected</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Date</p>
+                            <p id="summary-date" class="mt-2 text-sm font-semibold text-slate-800">Not selected</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Time</p>
+                            <p id="summary-time" class="mt-2 text-sm font-semibold text-slate-800">Not selected</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Equipment</p>
+                        <ul id="summary-equipment" class="mt-2 space-y-1 text-sm text-slate-700">
+                            <li class="text-slate-500">No equipment selected</li>
+                        </ul>
+                    </div>
+                </section>
 
                 <section class="rounded-[32px] border border-slate-200 bg-slate-50 p-7 shadow-sm">
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -347,8 +421,11 @@
                     <p class="text-sm leading-6 text-slate-600">I certify that the information provided is true, complete, and accurate. I understand that approval is subject to institutional policies, facility availability, and administrative review.</p>
                 </div>
 
-                <div class="flex justify-end pt-2 md:pt-4">
-                    <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-[24px] bg-emerald-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 md:w-auto md:px-8">
+                <div class="flex flex-col-reverse gap-3 pt-2 md:flex-row md:items-center md:justify-end md:pt-4">
+                    <a href="{{ route('requestor.index', ['tab' => 'dashboard']) }}" class="inline-flex items-center justify-center rounded-[20px] border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">
+                        Cancel
+                    </a>
+                    <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-[20px] bg-emerald-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 md:w-auto md:px-8">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -363,27 +440,125 @@
 </form>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('request-form');
+        if (!form) return;
+
         const durationInputs = document.querySelectorAll('input[name="reservation_duration"]');
         const startTimeInput = document.querySelector('input[name="start_time"]');
         const endTimeInput = document.querySelector('input[name="end_time"]');
 
-        if (!durationInputs.length || !startTimeInput || !endTimeInput) {
-            return;
+        if (durationInputs.length && startTimeInput && endTimeInput) {
+            const applyDurationState = () => {
+                const duration = document.querySelector('input[name="reservation_duration"]:checked')?.value ?? 'specific_time';
+                const isWholeDay = duration === 'whole_day';
+                startTimeInput.disabled = isWholeDay;
+                endTimeInput.disabled = isWholeDay;
+
+                if (isWholeDay) {
+                    startTimeInput.value = '08:00';
+                    endTimeInput.value = '00:00';
+                }
+            };
+
+            durationInputs.forEach((input) => input.addEventListener('change', applyDurationState));
+            applyDurationState();
         }
 
-        const applyDurationState = () => {
-            const duration = document.querySelector('input[name="reservation_duration"]:checked')?.value ?? 'specific_time';
-            const isWholeDay = duration === 'whole_day';
-            startTimeInput.disabled = isWholeDay;
-            endTimeInput.disabled = isWholeDay;
-
-            if (isWholeDay) {
-                startTimeInput.value = '08:00';
-                endTimeInput.value = '00:00';
-            }
+        const summaryDetails = {
+            activity: document.getElementById('summary-activity'),
+            venue: document.getElementById('summary-venue'),
+            date: document.getElementById('summary-date'),
+            time: document.getElementById('summary-time'),
+            equipment: document.getElementById('summary-equipment')
         };
 
-        durationInputs.forEach((input) => input.addEventListener('change', applyDurationState));
-        applyDurationState();
+        function formatDisplayDate(value) {
+            if (!value) return 'Not selected';
+            const date = new Date(`${value}T00:00:00`);
+            if (Number.isNaN(date.getTime())) return value;
+            return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+        }
+
+        function formatDisplayTime(value) {
+            if (!value) return 'Not selected';
+            const [hours, minutes] = value.split(':').map(Number);
+            const safeHours = Number.isFinite(hours) ? hours : 0;
+            const safeMinutes = Number.isFinite(minutes) ? minutes : 0;
+            const date = new Date();
+            date.setHours(safeHours, safeMinutes, 0, 0);
+            return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date);
+        }
+
+        function updateSummary() {
+            const activityInput = form.querySelector('[name="name_of_activity"]');
+            const selectedVenue = form.querySelector('input[name="venue"]:checked');
+            const venueText = selectedVenue ? (selectedVenue.value === 'Others (specify)' ? (document.getElementById('venue-other')?.value.trim() || 'Other venue') : selectedVenue.value) : 'Not selected';
+            const startDate = form.querySelector('[name="start_date"]')?.value;
+            const endDate = form.querySelector('[name="end_date"]')?.value;
+            const startTime = form.querySelector('[name="start_time"]')?.value;
+            const endTime = form.querySelector('[name="end_time"]')?.value;
+
+            if (summaryDetails.activity) summaryDetails.activity.textContent = activityInput?.value.trim() || 'Not specified';
+            if (summaryDetails.venue) summaryDetails.venue.textContent = venueText;
+            if (summaryDetails.date) summaryDetails.date.textContent = startDate && endDate ? `${formatDisplayDate(startDate)} – ${formatDisplayDate(endDate)}` : 'Not selected';
+            if (summaryDetails.time) summaryDetails.time.textContent = startTime && endTime ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}` : 'Not selected';
+
+            const selectedEquipment = [...form.querySelectorAll('.equipment-row')].filter((row) => {
+                const checkbox = row.querySelector('.equipment-checkbox');
+                return checkbox && checkbox.checked;
+            }).map((row) => {
+                const name = row.dataset.name || 'Equipment';
+                const qtyInput = row.querySelector('input[type="number"]');
+                const qty = qtyInput && qtyInput.value ? Number(qtyInput.value) : 1;
+                return `${name} × ${qty}`;
+            });
+
+            if (summaryDetails.equipment) {
+                if (selectedEquipment.length) {
+                    summaryDetails.equipment.innerHTML = selectedEquipment.map((item) => `<li class="text-sm text-slate-700">${item}</li>`).join('');
+                } else {
+                    summaryDetails.equipment.innerHTML = '<li class="text-sm text-slate-500">No equipment selected</li>';
+                }
+            }
+        }
+
+        const venueInputs = form.querySelectorAll('input[name="venue"]');
+        venueInputs.forEach((input) => input.addEventListener('change', function () {
+            const otherWrap = document.getElementById('venue-other-wrap');
+            if (otherWrap) {
+                otherWrap.style.display = input.value === 'Others (specify)' && input.checked ? 'block' : 'none';
+            }
+            updateSummary();
+        }));
+
+        const otherVenueInput = document.getElementById('venue-other');
+        if (otherVenueInput) {
+            otherVenueInput.addEventListener('input', updateSummary);
+        }
+
+        form.querySelectorAll('input, textarea, select').forEach((field) => {
+            field.addEventListener('input', updateSummary);
+            field.addEventListener('change', updateSummary);
+        });
+
+        const venueSelectionState = () => {
+            venueInputs.forEach((input) => {
+                const label = input.closest('.venue-option');
+                if (!label) return;
+                const isSelected = input.checked;
+                label.classList.toggle('border-emerald-500', isSelected);
+                label.classList.toggle('bg-emerald-50', isSelected);
+                label.classList.toggle('shadow-sm', isSelected);
+                const checkmark = label.querySelector('span:last-child');
+                if (checkmark) {
+                    checkmark.classList.toggle('hidden', !isSelected);
+                    checkmark.classList.toggle('inline', isSelected);
+                }
+            });
+        };
+
+        venueInputs.forEach((input) => input.addEventListener('change', venueSelectionState));
+        venueSelectionState();
+        updateSummary();
     });
 </script>

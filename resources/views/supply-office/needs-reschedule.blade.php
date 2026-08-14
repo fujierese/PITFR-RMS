@@ -56,7 +56,12 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="px-4 py-12 text-center text-sm text-slate-500">No requests need rescheduling.</td></tr>
+                        <tr><td colspan="7" class="px-4 py-8 text-center">
+                            <div class="flex flex-col items-center gap-2">
+                                <p class="text-sm font-medium text-slate-700">No requests need rescheduling.</p>
+                                <p class="text-xs text-slate-500">All requests are on track or have been resolved.</p>
+                            </div>
+                        </td></tr>
                     @endforelse
                 </tbody>
             </table>
