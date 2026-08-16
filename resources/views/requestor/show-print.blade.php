@@ -40,7 +40,7 @@
 <div class="document-sheet">
     <header class="document-header">
         <div class="header-left">
-            <img src="{{ asset('images/PIT-LOGO.jpg') }}" alt="PIT Logo" class="header-logo">
+            <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="header-logo">
         </div>
         <div class="header-center">
             <p class="header-subtitle">Palompon Institute of Technology</p>

@@ -13,9 +13,9 @@
 <body class="bg-emerald-900 min-h-screen flex flex-col">
 
 {{-- Hero --}}
-<section class="relative overflow-hidden bg-cover bg-center px-4 py-16 text-center text-white sm:px-6 sm:py-16 lg:py-20"
-            style="background-image: url('{{ asset('images/GPD-BG.jpg') }}');">
-    <div class="absolute inset-0 bg-slate-950/60"></div>
+<section class="relative overflow-hidden bg-cover bg-top px-4 py-16 text-center text-white sm:px-6 sm:py-16 lg:py-20 min-h-[920px]"
+        style="background-image: url('{{ asset('images/GPD-BG.jpg') }}');">
+    <div class="absolute inset-0 bg-slate-950/20"></div>
     <div class="relative z-10 mx-auto max-w-4xl">
         <div class="inline-flex items-center justify-center w-72 h-72 rounded-full mx-auto mb-8 bg-white/10 backdrop-blur-sm border border-white/20 shadow-lg">
             <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo"

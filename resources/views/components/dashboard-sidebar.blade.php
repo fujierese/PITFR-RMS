@@ -226,7 +226,7 @@
     <div class="flex-shrink-0 border-b border-white/10 p-4">
         <div class="flex items-center justify-between gap-2">
             <a href="{{ $dashboardRoute }}" class="flex min-w-0 items-center gap-3">
-                <img src="{{ asset('images/PIT-LOGO.jpg') }}" alt="PIT Logo" class="h-10 w-10 rounded-full border border-white/10 object-cover shadow-sm">
+                <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-10 w-10 rounded-full border border-white/10 object-cover shadow-sm">
                 <div class="min-w-0">
                     <p class="truncate text-xs font-semibold uppercase tracking-[0.18em] text-white">PIT</p>
                     <p class="truncate text-[11px] text-slate-400">Facility Request</p>

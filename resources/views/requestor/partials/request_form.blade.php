@@ -79,7 +79,7 @@
                 <section class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-6 md:rounded-[44px] md:p-8 lg:p-10">
                     <div class="grid gap-4 grid-cols-1 md:grid-cols-3 md:gap-6">
                         <div class="flex items-center justify-center rounded-[24px] border border-slate-200 bg-white p-4">
-                            <img src="{{ asset('images/PIT-LOGO.jpg') }}" alt="PIT Logo" class="h-20 w-20 rounded-full border border-slate-200 bg-slate-100 object-cover p-1 shadow-sm">
+                            <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-20 w-20 rounded-full border border-slate-200 bg-slate-100 object-cover p-1 shadow-sm">
                         </div>
                         <div class="space-y-2 rounded-[24px] border border-slate-200 bg-white p-4 text-center">
                             <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Official Request Form</p>

@@ -18,84 +18,47 @@
         <!-- =========================
              LEFT SIDE — IMAGES / BRAND
         ========================== -->
-        <section class="relative hidden h-full overflow-hidden bg-slate-950 lg:flex lg:flex-col lg:justify-center lg:px-10 xl:px-16">
+        <section class="relative hidden h-full overflow-hidden bg-slate-950 lg:flex lg:flex-col lg:justify-start lg:pt-12 lg:pl-6 lg:pr-10 xl:pl-8 xl:pr-16">
 
             <!-- Background effects -->
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%)]"></div>
             <div class="absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl"></div>
             <div class="absolute -bottom-32 right-0 h-96 w-96 rounded-full bg-emerald-400/10 blur-3xl"></div>
 
-            <div class="relative z-10 mx-auto w-full max-w-[650px]">
+            <div class="relative z-10 ml-0 w-full max-w-[920px] pt-2">
 
                 <!-- Logo / Header -->
                 <div class="flex items-center gap-4">
-                    <div class="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-lg">
+                    <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-lg ring-1 ring-white/10">
                         <img
                             src="{{ asset('images/PIT-LOGO.png') }}"
                             alt="PIT Logo"
-                            class="h-20 w-20 rounded-full object-cover"
+                            class="h-16 w-16 rounded-full object-cover"
                         >
                     </div>
 
-                    <div>
-                        <p class="text-xs uppercase tracking-[0.60em] text-slate-100">
+                    <div class="leading-tight">
+                        <p class="text-[11px] uppercase tracking-[0.46em] text-slate-100">
                             PITFR-RMS
                         </p>
 
-                        <p class="text-sm font-semibold text-slate-200">
+                        <p class="mt-2 text-sm font-semibold text-slate-200">
                             Palompon Institute of Technology
                         </p>
                     </div>
-
                 </div>
 
-
-                <!-- Images -->
-                <div class="mt-10 grid grid-cols-12 gap-4">
-
-                    <!-- Large image -->
-                    <div class="relative col-span-7 overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-xl">
+                <div class="mt-8 flex justify-center">
+                    <div class="relative mx-auto w-full max-w-[920px] overflow-hidden rounded-[28px] border border-white/10 bg-slate-900 shadow-[0_30px_80px_rgba(15,23,42,0.45)]">
                         <img
-                            src="{{ asset('images/loginpage1.jpg') }}"
-                            alt="Image"
-                            class="h-25 w-full object-cover"
+                            src="{{ asset('images/loginpage2.jpg') }}"
+                            alt="PIT Facility Request Portal"
+                            class="block h-[520px] w-full object-cover sm:h-[580px]"
                         >
-                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent"></div>
                     </div>
-
-
-                    <!-- Right images -->
-                    <div class="col-span-5 grid gap-4">
-
-                        <div class="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900">
-                            <img
-                                src="{{ asset('images/GuestPage_BG.jpg') }}"
-                                alt="Image"
-                                class="h-25 w-full object-cover"
-                            >
-                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 to-transparent"></div>
-                        </div>
-
-
-                        <div class="flex min-h-[104px] items-center justify-center rounded-2xl border border-white/10 bg-slate-900">
-                            <div class="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900">
-                                <img
-                                    src="{{ asset('images/GuestPage_BG.jpg') }}"
-                                    alt="Image"
-                                    class="h-25 w-full object-cover"
-                                >
-                                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 to-transparent"></div>
-                            </div>
-                        </div>
-
-                    </div>
-
                 </div>
 
-            </div>
-
-                        <!-- Main Heading -->
-                <div class="mt-12 max-w-xl">
+                <div class="mt-3 max-w-[420px]">
                     <h1 class="text-5xl font-black leading-[1.05] tracking-[-0.04em] text-white xl:text-6xl">
                         Book the
                         <br>
@@ -104,7 +67,9 @@
                         you
                         <span class="text-emerald-400">need.</span>
                     </h1>
-                </div>    
+                </div>
+
+            </div>
 
         </section>
 

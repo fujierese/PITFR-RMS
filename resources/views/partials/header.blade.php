@@ -1,7 +1,7 @@
 <header class="sticky top-0 z-50 w-full bg-slate-900 border-b border-slate-800 shadow-xl">
     <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <a href="{{ Auth::check() ? Auth::user()->getDashboardRoute() : route('home') }}" class="flex items-center gap-3">
-            <img src="{{ asset('images/PIT-LOGO.jpg') }}" alt="PIT Logo"
+            <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo"
                  class="h-11 w-11 rounded-full object-cover border border-white/10 shadow-sm">
             <div class="min-w-0">
                 <p class="text-base font-semibold text-white leading-tight">PIT Facility Request System</p>

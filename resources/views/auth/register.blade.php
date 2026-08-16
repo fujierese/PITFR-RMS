@@ -19,7 +19,7 @@
             <div class="relative z-10 mx-auto w-full max-w-none space-y-6 md:max-w-5xl md:space-y-10">
                 <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-center gap-4">
-                        <img src="{{ asset('images/PIT-LOGO.jpg') }}" alt="PIT Logo" class="h-14 w-14 rounded-full border border-white/20 object-cover shadow-lg">
+                        <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-14 w-14 rounded-full border border-white/20 object-cover shadow-lg">
                         <div>
                             <p class="text-base font-semibold uppercase tracking-[0.25em] text-white">Palompon Institute of Technology</p>
                             <p class="text-xs uppercase tracking-[0.32em] text-slate-200/75">Facility Request System</p>

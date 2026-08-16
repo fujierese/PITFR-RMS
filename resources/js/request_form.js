@@ -59,6 +59,22 @@ const initializeRequestForm = function () {
         csrfToken: document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
     };
 
+    const ensureCsrfToken = function () {
+        if (!config.csrfToken) {
+            return;
+        }
+
+        let tokenInput = form.querySelector('input[name="_token"]');
+        if (!tokenInput) {
+            tokenInput = document.createElement('input');
+            tokenInput.type = 'hidden';
+            tokenInput.name = '_token';
+            form.appendChild(tokenInput);
+        }
+
+        tokenInput.value = config.csrfToken;
+    };
+
     const fileInput = document.getElementById('proposal_file');
     const filePreview = document.getElementById('file-preview');
     const fileName = document.getElementById('file-name');
@@ -1155,6 +1171,8 @@ const initializeRequestForm = function () {
     syncOvernightEndDate();
 
     form.addEventListener('submit', function (e) {
+        ensureCsrfToken();
+
         const clickedButton = document.activeElement && document.activeElement.matches('button[type="submit"]') ? document.activeElement : form.querySelector('button[type="submit"]');
         const requiredOk = validateRequiredFields();
         const dateTimeOk = validateDateTimeRange();
