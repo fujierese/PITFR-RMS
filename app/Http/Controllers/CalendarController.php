@@ -48,12 +48,14 @@ class CalendarController extends Controller
                 $endDateTime = \Illuminate\Support\Carbon::parse($endDateTime);
             }
 
-            // Calendar design requirement: every reservation is a timed event.
-            // Preserve the original reservation datetime range exactly as stored locally.
-            // Multi-day reservations remain timed; do not convert them to all-day.
+            // Calendar design requirement:
+            // - explicit whole-day reservations are all-day events
+            // - timed reservations must keep their exact start/end timestamps
+            $normalizedDuration = strtolower((string) ($req->reservation_duration ?? ''));
+            $isAllDay = in_array($normalizedDuration, ['whole_day', 'whole-day', 'whole day'], true);
+
             $eventStart = $startDateTime->copy()->format('Y-m-d\TH:i:s');
             $eventEnd = $endDateTime->copy()->format('Y-m-d\TH:i:s');
-            $isAllDay = false;
 
             $venueNames = $req->getVenueNames();
             $requestor = $req->user ?: $req->requester;
@@ -72,6 +74,10 @@ class CalendarController extends Controller
             // Determine event color based on role and status
             $eventColor = $this->getEventColor($req, $role);
 
+            if ($isAllDay && $eventEnd) {
+                $eventEnd = $endDateTime->copy()->addDay()->format('Y-m-d\TH:i:s');
+            }
+
             return [
                 'id' => $req->id,
                 'title' => $req->name_of_activity . ' (' . $req->control_number . ')',
@@ -79,7 +85,7 @@ class CalendarController extends Controller
                 'end' => $eventEnd,
                 'start_datetime' => $startDateTime->copy()->format('Y-m-d H:i:s'),
                 'end_datetime' => $endDateTime->copy()->format('Y-m-d H:i:s'),
-                'allDay' => false,
+                'allDay' => $isAllDay,
                 'status' => $req->status,
                 'venue' => implode(', ', $venueNames),
                 'backgroundColor' => $eventColor['background'],

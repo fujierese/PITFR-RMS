@@ -63,6 +63,7 @@ class AdminController extends Controller
                 $updates['priority'] = $validated['priority'];
             }
 
+            $originalStatus = $fr->status;
             $fr->update($updates);
 
             $fr->addHistory($statusValue,
@@ -72,17 +73,20 @@ class AdminController extends Controller
 
             DB::commit();
 
-            // Notify the requestor
-        $requester = \App\Models\User::find($fr->requested_by_id);
-        if ($requester) {
-            $requester->notify(new \App\Notifications\RequestStatusChanged(
-                $fr,
-                $validated['action'],
-                $validated['notes'] ?? ''
-            ));
-        }
+            // ✅ Only notify if status actually changed
+            if ($originalStatus !== $statusValue) {
+                $requester = \App\Models\User::find($fr->requested_by_id);
+                if ($requester) {
+                    $requester->notify(new \App\Notifications\RequestStatusChanged(
+                        $fr,
+                        $validated['action'],
+                        $validated['notes'] ?? '',
+                        Auth::user()->name
+                    ));
+                }
+            }
 
-        $label = $validated['action'] === 'approve' ? 'approved' : 'rejected';
+            $label = $validated['action'] === 'approve' ? 'approved' : 'rejected';
         return redirect()->route('supply-office.index')
                         ->with('success', "Request {$label} successfully.");
         } catch (\Throwable $e) {

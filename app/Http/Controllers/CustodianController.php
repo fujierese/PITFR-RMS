@@ -237,9 +237,14 @@ class CustodianController extends Controller
                     $notesField => $validated['notes'] ?? '',
                 ]);
 
+                // ✅ Track if equipment status transitioned to approved
+                $equipmentStatusChanged = !$wasEquipmentPreviouslyApproved && $fr->equipment_status === 'approved';
+
             } else {
                 // Venue custodian — simple single approval
-                if ($fr->{$statusField} === $statusValue) {
+                $originalVenueStatus = $fr->{$statusField};
+                
+                if ($originalVenueStatus === $statusValue) {
                     DB::commit();
                     return redirect()->route('custodian.index')
                         ->with('info', 'This request already has the selected ' . $custodianType . ' status.');
@@ -273,15 +278,16 @@ class CustodianController extends Controller
             $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
             $eventClass::dispatch($fr->id, $fr->control_number, $custodianType, $user->name, $fr->requested_by_id, $custodianIds);
 
-            $requester = \App\Models\User::find($fr->requested_by_id);
-            if ($requester) {
-                $notifStatus = $custodianType . '_' . $statusValue;
-                $requester->notify(new \App\Notifications\RequestStatusChanged(
-                    $fr,
-                    $notifStatus,
-                    $validated['notes'] ?? ''
-                ));
+            // ✅ Only notify if relevant status actually changed
+            $shouldNotify = false;
+            if ($custodianType === 'equipment' && isset($equipmentStatusChanged) && $equipmentStatusChanged) {
+                $shouldNotify = true;
+            } elseif ($custodianType === 'venue' && $statusValue === 'approved') {
+                $shouldNotify = true;
             }
+
+            // ✅ Don't send notifications at custodian stage - only at final approval
+            // Notifications will be consolidated and sent when supply office approves
 
             $label = $statusValue === 'approved' ? 'approved' : 'rejected';
             return redirect()->route('custodian.index')

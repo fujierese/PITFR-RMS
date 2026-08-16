@@ -246,6 +246,7 @@ class SupplyOfficeController extends Controller
         ]);
 
         $facilityRequest = FacilityRequest::findOrFail($validated['id']);
+        $originalStatus = $facilityRequest->status;
 
         DB::transaction(function () use ($facilityRequest, $validated): void {
             $facilityRequest->update([
@@ -262,13 +263,22 @@ class SupplyOfficeController extends Controller
             );
         });
 
-        $requester = $facilityRequest->requester;
-        if ($requester) {
-            $requester->notify(new RequestStatusChanged(
-                $facilityRequest,
-                'needs_reschedule',
-                $validated['notes'] ?? 'Your request requires rescheduling before final review.'
-            ));
+        // ✅ Only notify if status actually changed
+        if ($originalStatus !== 'needs_reschedule') {
+            $requester = $facilityRequest->requester;
+            if ($requester) {
+                $reason = $validated['notes'] ?? 'scheduling conflict';
+                $requester->notify(new RequestStatusChanged(
+                    $facilityRequest,
+                    'needs_reschedule',
+                    $validated['notes'] ?? 'Your request requires rescheduling before final review.',
+                    null,
+                    null,
+                    [],
+                    Auth::user()->name,
+                    $reason
+                ));
+            }
         }
 
         return redirect()->route('supply-office.requests.final-approval')->with('success', 'Request marked for rescheduling.');
@@ -436,6 +446,8 @@ class SupplyOfficeController extends Controller
             ]);
         }
 
+        $originalStatus = $fr->status;
+        
         $this->applyRequestApproval($fr, $validated['action'], $validated['notes'] ?? '', $validated['priority'] ?? null);
 
         $fr->addHistory($validated['action'] === 'approve' ? 'approved' : 'rejected',
@@ -445,13 +457,36 @@ class SupplyOfficeController extends Controller
 
         DB::commit();
 
-        $requester = \App\Models\User::find($fr->requested_by_id);
-        if ($requester) {
-            $requester->notify(new \App\Notifications\RequestStatusChanged(
-                $fr,
-                $validated['action'],
-                $validated['notes'] ?? ''
-            ));
+        // ✅ Send consolidated notification at final approval/rejection
+        if ($originalStatus !== $fr->status) {
+            $requester = \App\Models\User::find($fr->requested_by_id);
+            if ($requester) {
+                if ($validated['action'] === 'approve') {
+                    // Get all custodian approval details
+                    $approvalDetails = $fr->getConsolidatedApprovalDetails();
+                    
+                    $requester->notify(new \App\Notifications\RequestStatusChanged(
+                        $fr,
+                        'approved',
+                        $validated['notes'] ?? '',
+                        null,
+                        $approvalDetails['venue_custodian'],
+                        $approvalDetails['equipment_custodians'],
+                        Auth::user()->name
+                    ));
+                } else {
+                    // Rejection notification
+                    $requester->notify(new \App\Notifications\RequestStatusChanged(
+                        $fr,
+                        'rejected',
+                        $validated['notes'] ?? '',
+                        null,
+                        null,
+                        [],
+                        Auth::user()->name
+                    ));
+                }
+            }
         }
 
         $label = $validated['action'] === 'approve' ? 'approved' : 'rejected';
@@ -570,11 +605,17 @@ class SupplyOfficeController extends Controller
                 $priorityLabel = $urgentPriority === 'INSTITUTIONAL' ? 'URGENT' : strtoupper($urgentRequest->priority ?? 'REGULAR');
                 $overrideMessage = "Your reservation ({$conflictingRequest->control_number}) has been overridden due to an {$priorityLabel} institutional reservation.\n\nReason:\n" . trim((string) ($validated['override_reason'] ?? '')) . "\n\nPlease edit and reschedule your reservation.";
 
-                DB::afterCommit(function () use ($requester, $conflictingRequest, $overrideMessage): void {
+                DB::afterCommit(function () use ($requester, $conflictingRequest, $overrideMessage, $actingUser, $validated): void {
+                    $reason = trim((string) ($validated['override_reason'] ?? '')) ?: 'calendar conflict';
                     $requester->notify(new RequestStatusChanged(
                         $conflictingRequest,
                         'needs_reschedule',
-                        $overrideMessage
+                        $overrideMessage,
+                        null,
+                        null,
+                        [],
+                        $actingUser->name,
+                        $reason
                     ));
                 });
             }

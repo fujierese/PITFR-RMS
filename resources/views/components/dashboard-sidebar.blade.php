@@ -18,6 +18,11 @@
 
     if ($user) {
         if ($user->isAdmin()) {
+            $navigation[] = [
+                'section' => 'Overview',
+                'type' => 'section-header',
+            ];
+
             // Dashboard (Unified Admin/Supply Office)
             $navigation[] = [
                 'key' => 'dashboard',
@@ -29,7 +34,7 @@
 
             // Requests & Approvals
             $navigation[] = [
-                'section' => 'Requests & Approvals',
+                'section' => 'Requests',
                 'type' => 'section-header',
             ];
             $navigation[] = [
@@ -70,6 +75,10 @@
 
             // Calendar
             $navigation[] = [
+                'section' => 'Scheduling',
+                'type' => 'section-header',
+            ];
+            $navigation[] = [
                 'key' => 'calendar',
                 'label' => 'Calendar',
                 'route' => route('supply-office.calendar'),
@@ -99,7 +108,7 @@
 
             // Account & Administration
             $navigation[] = [
-                'section' => 'Administration',
+                'section' => 'Monitoring',
                 'type' => 'section-header',
             ];
             $navigation[] = [
@@ -228,8 +237,8 @@
             <a href="{{ $dashboardRoute }}" class="flex min-w-0 items-center gap-3">
                 <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-10 w-10 rounded-full border border-white/10 object-cover shadow-sm">
                 <div class="min-w-0">
-                    <p class="truncate text-xs font-semibold uppercase tracking-[0.18em] text-white">PIT</p>
-                    <p class="truncate text-[11px] text-slate-400">Facility Request</p>
+                    <p class="truncate text-xs font-semibold uppercase tracking-[0.18em] text-white">PITFR - RMS</p>
+                    <p class="truncate text-[11px] text-slate-400">Facility Reservation System</p>
                 </div>
             </a>
             <button id="sidebar-close" type="button" aria-label="Close navigation menu" title="Close navigation menu" class="rounded-lg border border-white/10 bg-white/5 p-2 text-slate-200 transition hover:bg-emerald-500/20 hover:text-white lg:hidden">

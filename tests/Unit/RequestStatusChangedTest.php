@@ -68,7 +68,7 @@ class RequestStatusChangedTest extends TestCase
         $notification = new RequestStatusChanged($request, 'needs_reschedule', 'Institutional urgency');
         $mail = $notification->toMail($requester);
 
-        $this->assertStringContainsString('Request', $mail->subject);
+        $this->assertStringContainsString('Rescheduling', $mail->subject);
         $this->assertStringContainsString('Institutional urgency', $mail->render());
     }
 

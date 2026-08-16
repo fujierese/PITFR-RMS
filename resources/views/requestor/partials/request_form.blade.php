@@ -35,22 +35,25 @@
                 </div>
             </div>
 
-            <div class="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                    <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Step 1</p>
-                    <p class="mt-1 text-sm font-semibold text-slate-900">Request Details</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                    <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 2</p>
-                    <p class="mt-1 text-sm font-semibold text-slate-900">Venue & Schedule</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                    <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 3</p>
-                    <p class="mt-1 text-sm font-semibold text-slate-900">Equipment</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                    <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 4</p>
-                    <p class="mt-1 text-sm font-semibold text-slate-900">Review & Submit</p>
+            <div class="mb-6">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 mb-3">Request Progress</p>
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Step 1</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">Request Details</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 2</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">Venue & Schedule</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 3</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">Equipment</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 4</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">Review & Submit</p>
+                    </div>
                 </div>
             </div>
 
@@ -300,7 +303,7 @@
                 <section class="rounded-[32px] border border-slate-200 bg-slate-50 p-7 shadow-sm">
                     <div class="mb-5 flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
                         <div>
-                            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Request Summary</p>
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Selected Items Summary</p>
                             <p class="mt-1 text-sm text-slate-500">Review your selections before submitting.</p>
                         </div>
                         <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Live</span>
@@ -414,6 +417,27 @@
                     </div>
                     <div id="file-preview" class="mt-3 hidden">
                         <p class="text-sm text-slate-600">Selected file: <span id="file-name" class="font-medium"></span></p>
+                    </div>
+                </section>
+
+                <section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
+                    <div class="mb-5 border-b border-slate-200 pb-4">
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Submission checklist</p>
+                        <p class="mt-1 text-sm text-slate-500">Please review the following before submitting your request.</p>
+                    </div>
+                    <div class="space-y-3">
+                        <label class="flex items-start gap-3">
+                            <input id="checklist-required-fields" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
+                            <span class="text-sm text-slate-700">All required fields are completed</span>
+                        </label>
+                        <label class="flex items-start gap-3">
+                            <input id="checklist-venue-availability" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
+                            <span class="text-sm text-slate-700">Venue and equipment availability confirmed</span>
+                        </label>
+                        <label class="flex items-start gap-3">
+                            <input id="checklist-document-upload" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
+                            <span class="text-sm text-slate-700">Activity proposal document uploaded</span>
+                        </label>
                     </div>
                 </section>
 
@@ -541,6 +565,48 @@
             field.addEventListener('change', updateSummary);
         });
 
+        const checklistRequiredFields = document.getElementById('checklist-required-fields');
+        const checklistVenueAvailability = document.getElementById('checklist-venue-availability');
+        const checklistDocumentUpload = document.getElementById('checklist-document-upload');
+
+        const updateChecklistState = () => {
+            const requiredFields = [
+                form.querySelector('[name="department"]'),
+                form.querySelector('[name="name_of_activity"]'),
+                form.querySelector('[name="start_date"]'),
+                form.querySelector('[name="end_date"]'),
+                form.querySelector('[name="expected_participants"]'),
+                form.querySelector('[name="start_time"]'),
+                form.querySelector('[name="end_time"]'),
+                form.querySelector('[name="requested_by_position"]'),
+                form.querySelector('[name="venue"]:checked')
+            ];
+
+            const allRequiredComplete = requiredFields.every((field) => {
+                if (!field) return true;
+                if (field.type === 'radio' || field.type === 'checkbox') {
+                    return field.checked;
+                }
+                return String(field.value).trim() !== '';
+            });
+
+            const selectedVenue = form.querySelector('[name="venue"]:checked');
+            const hasEquipmentSelected = form.querySelectorAll('.equipment-checkbox:checked').length > 0;
+            const hasFileSelected = form.querySelector('[name="proposal_file"]')?.files?.length > 0;
+
+            if (checklistRequiredFields) {
+                checklistRequiredFields.checked = allRequiredComplete;
+            }
+
+            if (checklistVenueAvailability) {
+                checklistVenueAvailability.checked = Boolean(selectedVenue) && (hasEquipmentSelected || !selectedVenue || selectedVenue.value !== '');
+            }
+
+            if (checklistDocumentUpload) {
+                checklistDocumentUpload.checked = hasFileSelected;
+            }
+        };
+
         const venueSelectionState = () => {
             venueInputs.forEach((input) => {
                 const label = input.closest('.venue-option');
@@ -557,8 +623,20 @@
             });
         };
 
+        form.querySelectorAll('input, textarea, select').forEach((field) => {
+            field.addEventListener('input', () => {
+                updateSummary();
+                updateChecklistState();
+            });
+            field.addEventListener('change', () => {
+                updateSummary();
+                updateChecklistState();
+            });
+        });
+
         venueInputs.forEach((input) => input.addEventListener('change', venueSelectionState));
         venueSelectionState();
         updateSummary();
+        updateChecklistState();
     });
 </script>

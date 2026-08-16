@@ -1043,4 +1043,47 @@ class FacilityRequest extends Model
         return $eventEndDate && now()->gt($eventEndDate)
             && $this->equipment_returned_status !== 'returned';
     }
+
+    /**
+     * Get consolidated custodian approval details for notification
+     * Returns: [venue_custodian, equipment_custodians[], supply_office]
+     */
+    public function getConsolidatedApprovalDetails(): array
+    {
+        $venueCustodian = null;
+        $equipmentCustodians = [];
+        $supplyOffice = null;
+
+        // Extract venue custodian from history
+        if ($this->venue_status === 'approved') {
+            $venueHistory = $this->histories()
+                ->where('action', 'like', '%venue%')
+                ->whereIn('action', ['venue_status_approved', 'custodian_endorsed'])
+                ->latest('occurred_at')
+                ->first();
+            $venueCustodian = $venueHistory?->user?->name;
+        }
+
+        // Extract equipment custodians from statuses and history
+        if ($this->equipment_status === 'approved' && !empty($this->equipment_custodian_statuses)) {
+            $custodianIds = array_keys($this->equipment_custodian_statuses ?? []);
+            foreach ($custodianIds as $custodianId) {
+                $user = User::find($custodianId);
+                if ($user && $this->getCustodianEquipmentStatus($custodianId) === 'approved') {
+                    $equipmentCustodians[] = $user->name;
+                }
+            }
+        }
+
+        // Extract supply office from approved_by
+        if ($this->status === 'approved' && !empty($this->approved_by)) {
+            $supplyOffice = $this->approved_by;
+        }
+
+        return [
+            'venue_custodian' => $venueCustodian,
+            'equipment_custodians' => array_values(array_filter($equipmentCustodians)),
+            'supply_office' => $supplyOffice,
+        ];
+    }
 }

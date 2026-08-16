@@ -103,9 +103,10 @@ class SystemConsistencyTest extends TestCase
         $this->assertNotNull($event);
         $this->assertSame('approved', $event['status']);
         $this->assertSame($request->start_date->toDateString(), substr($event['start'], 0, 10));
-        // For all-day events, FullCalendar uses exclusive end dates (day after the actual end)
-        $expectedEndDateInCalendar = $request->end_date->copy()->addDay()->toDateString();
-        $this->assertSame($expectedEndDateInCalendar, substr($event['end'], 0, 10));
+        // ✅ For timed events (with specific start/end times), FullCalendar uses exact end dates
+        // ✅ For all-day events only, FullCalendar uses exclusive end dates (day after the actual end)
+        // Since this request has start_time and end_time, it's a timed event, not all-day
+        $this->assertSame($request->end_date->toDateString(), substr($event['end'], 0, 10));
     }
 
     public function test_rejection_clears_approval_metadata_and_records_one_consistent_transition(): void

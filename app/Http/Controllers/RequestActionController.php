@@ -110,7 +110,7 @@ class RequestActionController extends Controller
             }
 
             $facilityRequest->save();
-            $this->notifyRequestorForStatusChange($facilityRequest, $user->isCustodianVenue() ? 'venue_approved' : 'equipment_approved', $request->input('notes', ''));
+            $this->notifyRequestorForStatusChange($facilityRequest, $user->isCustodianVenue() ? 'venue_approved' : 'equipment_approved', $request->input('notes', ''), $user->name);
             DB::commit();
 
             return redirect()->back()->with('success', 'Request verified and forwarded to Administrator.');
@@ -153,7 +153,7 @@ class RequestActionController extends Controller
             $facilityRequest->status = 'pending';
             $facilityRequest->addHistory('revision_requested', 'Revision requested by ' . $user->name . ': ' . $notes, $user->id);
             $facilityRequest->save();
-            $this->notifyRequestorForStatusChange($facilityRequest, 'revision_requested', $notes);
+            $this->notifyRequestorForStatusChange($facilityRequest, 'revision_requested', $notes, $user->name);
 
             DB::commit();
             return redirect()->back()->with('success', 'Revision requested; requester has been notified.');
@@ -192,6 +192,8 @@ class RequestActionController extends Controller
                 return redirect()->back()->withErrors('Cannot finalize approval: required custodial endorsements are incomplete.');
             }
 
+            $originalStatus = $facilityRequest->status;
+            
             $facilityRequest->status = 'approved';
             $facilityRequest->approved_by_id = $user->getKey();
             $facilityRequest->approved_by = $user->name;
@@ -209,7 +211,11 @@ class RequestActionController extends Controller
             }
             
             $facilityRequest->addHistory('final_approved', 'Final approval granted by ' . $user->name, $user->getKey());
-            $this->notifyRequestorForStatusChange($facilityRequest, 'approved', $request->input('notes', ''));
+            
+            // ✅ Only notify if status actually changed
+            if ($originalStatus !== 'approved') {
+                $this->notifyRequestorForStatusChange($facilityRequest, 'approved', $request->input('notes', ''), $user->name);
+            }
 
             DB::commit();
             return redirect()->route('supply-office.index')->with('success', 'Final approval granted successfully.');
@@ -236,6 +242,8 @@ class RequestActionController extends Controller
                 return redirect()->route('supply-office.index')->with('info', 'This request is already rejected.');
             }
 
+            $originalStatus = $facilityRequest->status;
+            
             $facilityRequest->status = 'rejected';
             $facilityRequest->approved_by_id = null;
             $facilityRequest->approved_by = null;
@@ -246,7 +254,11 @@ class RequestActionController extends Controller
             }
             
             $facilityRequest->addHistory('final_rejected', 'Final decline issued by ' . $user->name, $user->getKey());
-            $this->notifyRequestorForStatusChange($facilityRequest, 'rejected', $request->input('notes', ''));
+            
+            // ✅ Only notify if status actually changed
+            if ($originalStatus !== 'rejected') {
+                $this->notifyRequestorForStatusChange($facilityRequest, 'rejected', $request->input('notes', ''), $user->name);
+            }
 
             DB::commit();
             return redirect()->route('supply-office.index')->with('success', 'Request declined successfully.');
@@ -276,7 +288,7 @@ class RequestActionController extends Controller
         throw new \InvalidArgumentException('Invalid facility request reference.');
     }
 
-    private function notifyRequestorForStatusChange(FacilityRequest $facilityRequest, string $status, ?string $notes = null): void
+    private function notifyRequestorForStatusChange(FacilityRequest $facilityRequest, string $status, ?string $notes = null, ?string $actor = null): void
     {
         $requester = $facilityRequest->requester()->first();
         if (! $requester) {
@@ -284,7 +296,7 @@ class RequestActionController extends Controller
         }
 
         try {
-            $requester->notify(new RequestStatusChanged($facilityRequest, $status, $notes ?? ''));
+            $requester->notify(new RequestStatusChanged($facilityRequest, $status, $notes ?? '', $actor));
         } catch (\Throwable $e) {
             Log::warning('Request status notification failed after workflow update.', [
                 'facility_request_id' => $facilityRequest->id,
