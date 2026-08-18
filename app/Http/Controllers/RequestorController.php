@@ -598,7 +598,7 @@ class RequestorController extends Controller
             return redirect()->route('login')->withErrors(['authorization' => 'Only registered requestors may submit facility/equipment requests.']);
         }
 
-        // Build validation rules; proposal_file is conditional for students (unless emergency)
+        // Build validation rules
         $rules = [
             'reservation_duration'  => ['nullable', 'in:specific_time,whole_day,whole-day,whole day'],
             'department'            => 'required|string|max:100',
@@ -615,12 +615,23 @@ class RequestorController extends Controller
             'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
             'priority'              => 'nullable|in:regular,institutional',
             'is_emergency'          => 'nullable|boolean',
+            // E-signature is required for all requestors
+            'e_signature_file'      => 'required|file|mimes:pdf,jpeg,jpg,png|max:10240',
         ];
 
-        if ($user->requestor_type === 'student' && ! $request->input('is_emergency')) {
-            $rules['proposal_file'] = 'required|file|mimes:pdf,jpeg,jpg,png|max:10240';
-        } else {
-            $rules['proposal_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
+        // Conditional document requirements based on requestor type
+        if (in_array($user->requestor_type, ['student', 'faculty'], true)) {
+            // Student and Faculty require Activity Proposal
+            if (!$request->input('is_emergency')) {
+                $rules['activity_proposal_file'] = 'required|file|mimes:pdf,jpeg,jpg,png|max:10240';
+            } else {
+                $rules['activity_proposal_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
+            }
+            $rules['igp_receipt_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
+        } elseif ($user->requestor_type === 'outsider') {
+            // External/Organization requires IGP Receipt
+            $rules['igp_receipt_file'] = 'required|file|mimes:pdf,jpeg,jpg,png|max:10240';
+            $rules['activity_proposal_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
         }
 
         $request->merge([
@@ -823,44 +834,101 @@ class RequestorController extends Controller
             $notes = trim(($notes ? $notes . "\n" : '') . 'Urgent request submitted for administrative review; venue conflicts will be handled during approval.');
         }
  
-        // Handle proposal file upload
+        // Generate control number for this request
+        $controlNumber = FacilityRequest::generateControlNumber();
+
+        // Initialize document filenames
         $proposalFileName = null;
+        $activityProposalFileName = null;
+        $igpReceiptFileName = null;
+        $eSignatureFileName = null;
+        $documentMetadata = [];
+
+        // Get the document upload service
+        $documentUploadService = app(\App\Services\DocumentUploadService::class);
+
+        // Handle proposal file upload (backward compatibility)
         if ($request->hasFile('proposal_file')) {
             $file = $request->file('proposal_file');
-            $originalName = $file->getClientOriginalName();
             $extension = $file->getClientOriginalExtension();
             $timestamp = now()->format('Ymd_His');
-            $controlNumber = FacilityRequest::generateControlNumber();
             $proposalFileName = $controlNumber . '_proposal_' . $timestamp . '.' . $extension;
-
-            // Store the file in storage/app/public/proposals
             $file->storeAs('proposals', $proposalFileName, 'local');
+        }
+
+        // Handle activity proposal upload (Student/Faculty)
+        if ($request->hasFile('activity_proposal_file')) {
+            $file = $request->file('activity_proposal_file');
+            $result = $documentUploadService->uploadDocument($file, 'activity_proposal', $controlNumber);
+            if ($result['success']) {
+                $activityProposalFileName = $result['filename'];
+                $documentMetadata['activity_proposal'] = [
+                    'uploaded_at' => now()->toDateTimeString(),
+                    'original_name' => $file->getClientOriginalName(),
+                ];
+            } else {
+                return back()->withErrors(['activity_proposal_file' => $result['error']])->withInput();
+            }
+        }
+
+        // Handle IGP Receipt upload (External/Organization)
+        if ($request->hasFile('igp_receipt_file')) {
+            $file = $request->file('igp_receipt_file');
+            $result = $documentUploadService->uploadDocument($file, 'igp_receipt', $controlNumber);
+            if ($result['success']) {
+                $igpReceiptFileName = $result['filename'];
+                $documentMetadata['igp_receipt'] = [
+                    'uploaded_at' => now()->toDateTimeString(),
+                    'original_name' => $file->getClientOriginalName(),
+                ];
+            } else {
+                return back()->withErrors(['igp_receipt_file' => $result['error']])->withInput();
+            }
+        }
+
+        // Handle e-signature upload (Required for all)
+        if ($request->hasFile('e_signature_file')) {
+            $file = $request->file('e_signature_file');
+            $result = $documentUploadService->uploadDocument($file, 'e_signature', $controlNumber);
+            if ($result['success']) {
+                $eSignatureFileName = $result['filename'];
+                $documentMetadata['e_signature'] = [
+                    'uploaded_at' => now()->toDateTimeString(),
+                    'original_name' => $file->getClientOriginalName(),
+                ];
+            } else {
+                return back()->withErrors(['e_signature_file' => $result['error']])->withInput();
+            }
         }
 
         // ✅ DO NOT call $eq->reserve() here — reservation happens on approval
 
         $fr = FacilityRequest::create([
-            'control_number'        => FacilityRequest::generateControlNumber(),
-            'date_requested'        => now()->toDateString(),
-            'department'            => $validated['department'],
-            'name_of_activity'      => $validated['name_of_activity'],
-            'expected_participants' => $validated['expected_participants'],
-            'start_date'            => $validated['start_date'],
-            'end_date'              => $validated['end_date'] ?? $validated['start_date'],
-            'start_time'            => $validated['start_time'],
-            'end_time'              => $validated['end_time'],
-            'venue'                 => $venue,
-            'equipment'             => $equipment,
-            'equipment_quantities'  => $quantities,
-            'other_venue'           => $validated['other_venue'] ?? null,
-            'notes'                 => $notes,
-            'requested_by_id'       => $user->id,
-            'status'                => 'pending',
-            'venue_status'          => 'pending',
-            'equipment_status'      => 'pending',
-            'priority'              => $validated['priority'] ?? 'regular',
-            'is_emergency'          => $validated['is_emergency'] ?? false,
-            'proposal_file'         => $proposalFileName,
+            'control_number'           => $controlNumber,
+            'date_requested'           => now()->toDateString(),
+            'department'               => $validated['department'],
+            'name_of_activity'         => $validated['name_of_activity'],
+            'expected_participants'    => $validated['expected_participants'],
+            'start_date'               => $validated['start_date'],
+            'end_date'                 => $validated['end_date'] ?? $validated['start_date'],
+            'start_time'               => $validated['start_time'],
+            'end_time'                 => $validated['end_time'],
+            'venue'                    => $venue,
+            'equipment'                => $equipment,
+            'equipment_quantities'     => $quantities,
+            'other_venue'              => $validated['other_venue'] ?? null,
+            'notes'                    => $notes,
+            'requested_by_id'          => $user->id,
+            'status'                   => 'pending',
+            'venue_status'             => 'pending',
+            'equipment_status'         => 'pending',
+            'priority'                 => $validated['priority'] ?? 'regular',
+            'is_emergency'             => $validated['is_emergency'] ?? false,
+            'proposal_file'            => $proposalFileName,
+            'activity_proposal_file'   => $activityProposalFileName,
+            'igp_receipt_file'         => $igpReceiptFileName,
+            'e_signature_file'         => $eSignatureFileName,
+            'document_metadata'        => $documentMetadata,
         ]);
         $fr->syncRelationalItems();
 
@@ -1034,7 +1102,7 @@ class RequestorController extends Controller
     public function print($id)
     {
         $request = FacilityRequest::findOrFail($id);
-        $this->authorize('view', $request);
+        $this->authorize('print', $request);
 
         return view('request.print', [
             'request' => $request,

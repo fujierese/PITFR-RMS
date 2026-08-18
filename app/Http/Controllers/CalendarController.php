@@ -121,54 +121,45 @@ class CalendarController extends Controller
 
     private function getEventColor($request, $role = null)
     {
-        $venueColor = $this->getVenueColor($request);
-        $isApproved = $request->status === 'approved';
+        $status = strtolower((string) ($request->status ?? ''));
 
-        if ($role === 'requestor' && $isApproved) {
-            return [
+        return match ($status) {
+            'approved' => [
                 'background' => '#10B981',
-                'border' => '#10B981',
+                'border' => '#059669',
                 'text' => '#FFFFFF',
-                'className' => 'approved-event'
-            ];
-        }
-
-        // For guest and all other dashboards, use the venue color for status-aware events.
-        return [
-            'background' => $venueColor,
-            'border' => $venueColor,
-            'text' => '#FFFFFF',
-            'className' => $isApproved ? 'approved-event' : 'pending-event'
-        ];
-    }
-
-    private function getVenueColor($request)
-    {
-        $venue = implode(', ', $request->getVenueNames());
-
-        // Use request-specific color_code when available.
-        if (! empty($request->color_code)) {
-            return $request->color_code;
-        }
-
-        $primaryVenue = explode(', ', $venue)[0] ?? null;
-        if ($primaryVenue) {
-            $venueModel = Venue::where('name', $primaryVenue)->first();
-            if ($venueModel && ! empty($venueModel->color_code)) {
-                return $venueModel->color_code;
-            }
-        }
-
-        return match($primaryVenue) {
-            'Conference Hall & Interaction Center (CHIC)' => '#3B82F6', 
-            'Gymnasium' => '#3B82F6',
-            'Balay Alumni' => '#10B981',
-            'Oval Grounds' => '#F59E0B',
-            'Covered Court' => '#8B5CF6',
-            'AVR' => '#8B5CF6',
-            'Volleyball Court' => '#F97316',
-            'Others (specify)' => '#6B7280',
-            default => '#6B7280'
+                'className' => 'approved-event',
+            ],
+            'pending' => [
+                'background' => '#F59E0B',
+                'border' => '#D97706',
+                'text' => '#111827',
+                'className' => 'pending-event',
+            ],
+            'needs_reschedule' => [
+                'background' => '#F97316',
+                'border' => '#EA580C',
+                'text' => '#FFFFFF',
+                'className' => 'needs-reschedule-event',
+            ],
+            'rejected' => [
+                'background' => '#DC2626',
+                'border' => '#B91C1C',
+                'text' => '#FFFFFF',
+                'className' => 'rejected-event',
+            ],
+            'cancelled' => [
+                'background' => '#6B7280',
+                'border' => '#4B5563',
+                'text' => '#FFFFFF',
+                'className' => 'neutral-event',
+            ],
+            default => [
+                'background' => '#E5E7EB',
+                'border' => '#CBD5E1',
+                'text' => '#111827',
+                'className' => 'neutral-event',
+            ],
         };
     }
 
@@ -207,7 +198,7 @@ class CalendarController extends Controller
             'showExport' => $role === 'admin',
             'showInventory' => $role === 'custodian',
             'showAuditLogs' => $role === 'admin',
-            'showHowToRequest' => $role === 'guest',
+            'showHowToRequest' => false,
             'showViewOnlyCalendar' => $role === 'guest',
             'showStatsCards' => $role === 'requestor',
             'showVerificationQueue' => $role === 'custodian',

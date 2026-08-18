@@ -16,4 +16,27 @@ class ExampleTest extends TestCase
 
         $response->assertStatus(200);
     }
+
+    public function test_guest_landing_page_does_not_repeat_calendar_explanations(): void
+    {
+        $response = $this->get('/');
+
+        $response->assertOk()
+            ->assertSee('View Facility Calendar')
+            ->assertDontSee('Public Facility Availability')
+            ->assertDontSee('How to Request')
+            ->assertDontSee('Availability overview');
+    }
+
+    public function test_login_page_uses_email_and_home_return_link(): void
+    {
+        $response = $this->get(route('login'));
+
+        $response->assertOk()
+            ->assertSee('Email')
+            ->assertSee('Forgot Password?')
+            ->assertSee('Return to Home')
+            ->assertDontSee('Username')
+            ->assertDontSee('Continue as Guest');
+    }
 }

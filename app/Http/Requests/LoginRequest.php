@@ -14,16 +14,18 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'username' => ['required', 'string'],
+            'email' => ['required', 'email', 'string'],
             'password' => ['required', 'string'],
         ];
     }
 
     public function authenticate(): bool
     {
-        return Auth::guard('web')->attempt(
-            $this->only('username', 'password'),
-            $this->boolean('remember')
-        );
+        $email = trim((string) $this->input('email', $this->input('username', '')));
+
+        return Auth::guard('web')->attempt([
+            'username' => $email,
+            'password' => $this->input('password'),
+        ], $this->boolean('remember'));
     }
 }

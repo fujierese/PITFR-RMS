@@ -23,6 +23,7 @@ class FacilityRequest extends Model
         'approved_by', 'approved_by_id', 'approved_date', 'notes', 'venue_notes', 'equipment_notes',
         'equipment_returned_status', 'equipment_returned_by', 'equipment_returned_date', 'equipment_return_notes',
         'equipment_returned_items', 'priority', 'is_emergency', 'proposal_file',
+        'activity_proposal_file', 'igp_receipt_file', 'e_signature_file', 'document_metadata',
     ];
 
     protected static function booted(): void
@@ -52,6 +53,7 @@ class FacilityRequest extends Model
         'equipment_returned_items'     => 'array',
         'is_emergency'                 => 'boolean',
         'approval_signature_meta'      => 'array',
+        'document_metadata'            => 'array',
     ];
 
     public function getRequestingDateAttribute()

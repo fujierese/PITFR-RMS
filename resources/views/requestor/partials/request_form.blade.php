@@ -396,27 +396,109 @@
 
                 <section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
                     <div class="mb-5 border-b border-slate-200 pb-4">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section VIII. Supporting Document</p>
-                        <p class="mt-1 text-sm text-slate-500">Upload the activity proposal or supporting document required for this request.</p>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section VIII. Supporting Documents</p>
+                        <p class="mt-1 text-sm text-slate-500">Upload the required supporting documents for this request.</p>
                     </div>
-                    <label for="proposal_file" class="mb-3 block text-sm font-semibold text-slate-700">Upload activity proposal <span class="text-red-500">*</span></label>
-                    <div class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition hover:border-emerald-400">
-                        <div class="space-y-3 text-center">
-                            <svg class="mx-auto h-14 w-14 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                            </svg>
-                            <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
-                                <label for="proposal_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
-                                    <span>Upload a file</span>
-                                    <input id="proposal_file" name="proposal_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only">
+
+                    <div class="space-y-6">
+                        @php
+                            $isStudent = ($currentUser->requestor_type ?? null) === 'student';
+                            $isFaculty = ($currentUser->requestor_type ?? null) === 'faculty' || in_array($currentUser->role ?? null, ['faculty', 'staff', 'office_staff']);
+                            $isExternal = ($currentUser->requestor_type ?? null) === 'outsider';
+                        @endphp
+
+                        @if ($isStudent || $isFaculty)
+                            {{-- Activity Proposal for Student/Faculty --}}
+                            <div>
+                                <label for="activity_proposal_file" class="mb-3 block text-sm font-semibold text-slate-700">
+                                    Activity Proposal @if (!($currentUser->is_emergency ?? false))<span class="text-red-500">*</span>@endif
                                 </label>
-                                <span>or drag and drop</span>
+                                <p class="mb-3 text-xs text-slate-500">Required document: Comprehensive proposal describing the activity objectives, expected outcomes, and how facilities/equipment support the activity goals.</p>
+                                <div class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition hover:border-emerald-400">
+                                    <div class="space-y-3 text-center">
+                                        <svg class="mx-auto h-14 w-14 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                        </svg>
+                                        <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
+                                            <label for="activity_proposal_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
+                                                <span>Upload a file</span>
+                                                <input id="activity_proposal_file" name="activity_proposal_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only">
+                                            </label>
+                                            <span>or drag and drop</span>
+                                        </div>
+                                        <p class="text-xs text-slate-500">PDF, JPEG, PNG up to 10MB</p>
+                                    </div>
+                                </div>
+                                <div id="activity-proposal-preview" class="mt-3 hidden">
+                                    <p class="text-sm text-slate-600">Selected file: <span id="activity-proposal-name" class="font-medium"></span></p>
+                                </div>
+                                @error('activity_proposal_file')
+                                    <p class="mt-2 text-sm text-red-500">{{ $message }}</p>
+                                @enderror
                             </div>
-                            <p class="text-xs text-slate-500">PDF, JPEG, PNG up to 10MB</p>
+                        @elseif ($isExternal)
+                            {{-- IGP Receipt for External/Organization --}}
+                            <div>
+                                <label for="igp_receipt_file" class="mb-3 block text-sm font-semibold text-slate-700">
+                                    IGP Receipt <span class="text-red-500">*</span>
+                                </label>
+                                <p class="mb-3 text-xs text-slate-500">Required document: Inter-agency Collaborative Agreement (IGP) receipt or approval document for external organizations.</p>
+                                <div class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition hover:border-emerald-400">
+                                    <div class="space-y-3 text-center">
+                                        <svg class="mx-auto h-14 w-14 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                        </svg>
+                                        <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
+                                            <label for="igp_receipt_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
+                                                <span>Upload a file</span>
+                                                <input id="igp_receipt_file" name="igp_receipt_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only">
+                                            </label>
+                                            <span>or drag and drop</span>
+                                        </div>
+                                        <p class="text-xs text-slate-500">PDF, JPEG, PNG up to 10MB</p>
+                                    </div>
+                                </div>
+                                <div id="igp-receipt-preview" class="mt-3 hidden">
+                                    <p class="text-sm text-slate-600">Selected file: <span id="igp-receipt-name" class="font-medium"></span></p>
+                                </div>
+                                @error('igp_receipt_file')
+                                    <p class="mt-2 text-sm text-red-500">{{ $message }}</p>
+                                @enderror
+                            </div>
+                        @endif
+
+                        {{-- E-Signature (Required for all) --}}
+                        <div class="rounded-[24px] border border-emerald-200 bg-emerald-50 p-4">
+                            <div class="mb-4 border-b border-emerald-200 pb-3">
+                                <p class="text-sm font-semibold text-emerald-800">E-Signature <span class="text-red-500">*</span></p>
+                                <p class="mt-1 text-xs text-emerald-700">Required for all requestors. Your e-signature will appear on the official request form for administrative records.</p>
+                            </div>
+                            <label for="e_signature_file" class="mb-3 block text-sm font-semibold text-slate-700">
+                                Upload your e-signature
+                            </label>
+                            <p class="mb-3 text-xs text-slate-500">Upload an image or PDF of your digital signature or typed name.</p>
+                            <div class="rounded-[32px] border-2 border-dashed border-emerald-300 bg-white px-8 pb-8 pt-8 transition hover:border-emerald-400">
+                                <div class="space-y-3 text-center">
+                                    <svg class="mx-auto h-14 w-14 text-emerald-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                    <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
+                                        <label for="e_signature_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
+                                            <span>Upload a file</span>
+                                            <input id="e_signature_file" name="e_signature_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only">
+                                        </label>
+                                        <span>or drag and drop</span>
+                                    </div>
+                                    <p class="text-xs text-slate-500">PDF, JPEG, PNG up to 10MB</p>
+                                </div>
+                            </div>
+                            <div id="e-signature-preview" class="mt-3 hidden">
+                                <p class="text-sm text-slate-600">Selected file: <span id="e-signature-name" class="font-medium"></span></p>
+                            </div>
+                            @error('e_signature_file')
+                                <p class="mt-2 text-sm text-red-500">{{ $message }}</p>
+                            @enderror
                         </div>
-                    </div>
-                    <div id="file-preview" class="mt-3 hidden">
-                        <p class="text-sm text-slate-600">Selected file: <span id="file-name" class="font-medium"></span></p>
                     </div>
                 </section>
 
@@ -436,7 +518,11 @@
                         </label>
                         <label class="flex items-start gap-3">
                             <input id="checklist-document-upload" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
-                            <span class="text-sm text-slate-700">Activity proposal document uploaded</span>
+                            <span class="text-sm text-slate-700" id="checklist-document-label">Supporting documents uploaded</span>
+                        </label>
+                        <label class="flex items-start gap-3">
+                            <input id="checklist-e-signature" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
+                            <span class="text-sm text-slate-700">E-signature uploaded</span>
                         </label>
                     </div>
                 </section>
@@ -448,6 +534,49 @@
                 <div class="flex flex-col-reverse gap-3 pt-2 md:flex-row md:items-center md:justify-end md:pt-4">
                     <a href="{{ route('requestor.index', ['tab' => 'dashboard']) }}" class="inline-flex items-center justify-center rounded-[20px] border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">
                         Cancel
+                    </a>
+                    <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-[20px] bg-emerald-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 md:w-auto md:px-8">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Submit Request
+                    </button>
+                </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+</form>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('request-form');
+        if (!form) return;
+
+        // File input change handlers for preview
+        const fileInputs = [
+            { id: 'activity_proposal_file', previewId: 'activity-proposal-preview', nameId: 'activity-proposal-name' },
+            { id: 'igp_receipt_file', previewId: 'igp-receipt-preview', nameId: 'igp-receipt-name' },
+            { id: 'e_signature_file', previewId: 'e-signature-preview', nameId: 'e-signature-name' }
+        ];
+
+        fileInputs.forEach(({ id, previewId, nameId }) => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('change', function() {
+                    const preview = document.getElementById(previewId);
+                    const name = document.getElementById(nameId);
+                    if (this.files.length > 0) {
+                        if (name) name.textContent = this.files[0].name;
+                        if (preview) preview.classList.remove('hidden');
+                    } else {
+                        if (preview) preview.classList.add('hidden');
+                    }
+                });
+            }
+        });
+
+        const durationInputs = document.querySelectorAll('input[name="reservation_duration"]');
                     </a>
                     <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-[20px] bg-emerald-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 md:w-auto md:px-8">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -544,6 +673,9 @@
                     summaryDetails.equipment.innerHTML = '<li class="text-sm text-slate-500">No equipment selected</li>';
                 }
             }
+
+            // Update checklist state
+            updateChecklistState();
         }
 
         const venueInputs = form.querySelectorAll('input[name="venue"]');
@@ -568,6 +700,7 @@
         const checklistRequiredFields = document.getElementById('checklist-required-fields');
         const checklistVenueAvailability = document.getElementById('checklist-venue-availability');
         const checklistDocumentUpload = document.getElementById('checklist-document-upload');
+        const checklistESignature = document.getElementById('checklist-e-signature');
 
         const updateChecklistState = () => {
             const requiredFields = [
@@ -592,7 +725,18 @@
 
             const selectedVenue = form.querySelector('[name="venue"]:checked');
             const hasEquipmentSelected = form.querySelectorAll('.equipment-checkbox:checked').length > 0;
-            const hasFileSelected = form.querySelector('[name="proposal_file"]')?.files?.length > 0;
+            
+            // Check for appropriate document file based on requestor type
+            const isStudent = form.dataset.isStudent === '1';
+            const activityProposalFile = form.querySelector('[name="activity_proposal_file"]')?.files?.length > 0;
+            const igpReceiptFile = form.querySelector('[name="igp_receipt_file"]')?.files?.length > 0;
+            const eSignatureFile = form.querySelector('[name="e_signature_file"]')?.files?.length > 0;
+            
+            // For backward compatibility, also check proposal_file
+            const proposalFile = form.querySelector('[name="proposal_file"]')?.files?.length > 0;
+            
+            // Has required supporting document based on type
+            const hasSupportingDocument = isStudent ? (activityProposalFile || proposalFile) : igpReceiptFile;
 
             if (checklistRequiredFields) {
                 checklistRequiredFields.checked = allRequiredComplete;
@@ -603,7 +747,11 @@
             }
 
             if (checklistDocumentUpload) {
-                checklistDocumentUpload.checked = hasFileSelected;
+                checklistDocumentUpload.checked = hasSupportingDocument;
+            }
+
+            if (checklistESignature) {
+                checklistESignature.checked = eSignatureFile;
             }
         };
 

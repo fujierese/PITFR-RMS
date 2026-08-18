@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Models\Department;
 use App\Models\Equipment;
 use App\Models\FacilityRequest;
 use App\Models\Venue;
@@ -14,6 +15,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SupplyOfficeController extends Controller
 {
+    private function getFilterOptions(): array
+    {
+        return [
+            'departments' => Department::orderBy('name')->get(),
+            'venues' => Venue::orderBy('name')->get(),
+        ];
+    }
+
     public function index(Request $request)
     {
         $baseQuery = FacilityRequest::whereIn('status', ['pending', 'approved']);
@@ -82,6 +91,8 @@ class SupplyOfficeController extends Controller
 
         $custodians = \App\Models\User::where('role', 'custodian')->orderBy('name')->get();
 
+        $filterOptions = $this->getFilterOptions();
+
         return view('supply-office.index', [
             'requests'          => $filteredRequests,
             'allRequests'       => $allRequests,
@@ -99,6 +110,8 @@ class SupplyOfficeController extends Controller
             'custodians'        => $custodians,
             'venueSearch'       => $venueSearch,
             'equipmentSearch'   => $equipmentSearch,
+            'allDepartments'    => $filterOptions['departments'],
+            'allVenues'         => $filterOptions['venues'],
             'editVenueId'       => (int) $request->get('edit_venue', 0),
             'editEquipmentId'   => (int) $request->get('edit_equipment', 0),
         ]);

@@ -63,7 +63,7 @@
         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
             <div>
                     <h1 class="text-xl sm:text-2xl font-bold text-gray-800">
-                        @if ($role === 'guest') 📅 Public Facility Availability
+                        @if ($role === 'guest') 📅 Facility Calendar
                         @elseif ($role === 'requestor') 📅 Requestor Dashboard
                         @elseif ($role === 'custodian') 🛡️ Custodian Dashboard
                         @elseif ($role === 'admin') 👑 Administrator Dashboard
@@ -73,7 +73,7 @@
                     <p class="text-sm text-gray-500 mt-1">
                         @switch($role)
                             @case('guest')
-                                Use this public calendar to check availability and review upcoming requests. Sign in to submit a reservation request.
+                                Review venue and equipment availability before signing in to submit a request.
                                 @break
                             @case('requestor')
                                 Review venue and equipment availability, track your requests, and submit a new reservation request.
@@ -120,18 +120,6 @@
             </div>
         </div>
     @endunless
-
-    @if ($showHowToRequest)
-        <div class="mb-6 rounded-3xl bg-slate-50 border border-slate-200 p-5">
-            <h2 class="text-lg font-semibold text-slate-900">How to Request</h2>
-            <p class="mt-2 text-sm text-slate-600">Guests can review public availability here. Sign in to access the request form and submit a reservation request.</p>
-            <ol class="mt-4 list-decimal list-inside text-sm text-slate-600 space-y-2">
-                <li>Login with your PIT account.</li>
-                <li>Review the calendar dates and venue availability.</li>
-                <li>Use the Create Request button after sign in to submit a new reservation request.</li>
-            </ol>
-        </div>
-    @endif
 
     @if ($showStatsCards)
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
@@ -364,40 +352,18 @@
         </div>
     @endif
 
-    @if ($showAvailabilityPanel)
-        <div class="mb-5 rounded-[28px] border border-slate-200 bg-gradient-to-br from-emerald-50 via-white to-slate-50 p-5 shadow-sm">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div class="max-w-2xl">
-                    <p class="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Availability overview</p>
-                    <h3 class="mt-2 text-lg font-semibold text-slate-900">View reservations and open dates at a glance</h3>
-                    <p class="mt-2 text-sm text-slate-600">This calendar highlights approved reservations and pending requests so you can quickly check availability before submitting a new booking.</p>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-sm font-medium text-emerald-700 shadow-sm">
-                        <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-                        Available
-                    </span>
-                    <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-3 py-1.5 text-sm font-medium text-amber-700 shadow-sm">
-                        <span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>
-                        Pending
-                    </span>
-                    <span class="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-white px-3 py-1.5 text-sm font-medium text-rose-700 shadow-sm">
-                        <span class="h-2.5 w-2.5 rounded-full bg-rose-500"></span>
-                        Reserved
-                    </span>
-                </div>
-            </div>
-        </div>
-    @endif
-
     <div class="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,23,42,0.06)]">
         <div class="border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Interactive calendar</p>
                     <p class="mt-1 text-sm text-slate-600">Tap a date to inspect request details and availability.</p>
                 </div>
-                <div class="text-sm font-medium text-slate-500">Live facility overview</div>
+                <div class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
+                    <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"><span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>Pending</span>
+                    <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Reserved</span>
+                    <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600"><span class="h-2.5 w-2.5 rounded-full bg-slate-300"></span>Available</span>
+                </div>
             </div>
         </div>
         <div id="calendar" class="w-full p-4 sm:p-6 min-h-[420px] sm:min-h-[520px] lg:min-h-[600px]"></div>
@@ -742,25 +708,76 @@
 <style>
 /* Event styling based on status */
 .rejected-event {
-    opacity: 0.6 !important;
+    opacity: 0.75 !important;
+    border-style: solid !important;
     text-decoration: line-through !important;
 }
 
 .pending-event {
-    opacity: 0.8 !important;
+    opacity: 0.95 !important;
     border-style: dashed !important;
 }
 
 .approved-event {
-    opacity: 1.0 !important;
-    font-weight: bold !important;
+    opacity: 1 !important;
+    font-weight: 700 !important;
+}
+
+.needs-reschedule-event {
+    opacity: 0.96 !important;
+    box-shadow: inset 0 0 0 1px rgba(234, 88, 12, 0.4) !important;
 }
 
 .neutral-event {
     opacity: 0.9 !important;
 }
 
-/* Legend styling */
+/* Keep event content clipped within the event area */
+.fc-event-main,
+.fc-event-main-frame,
+.fc-event-title-container,
+.fc-event-title,
+.fc-event-time,
+.fc-event-label,
+.fc-event-body,
+.fc-event-line,
+.fc-event-meta-line,
+.fc-event-meta-item {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fc-event-main-frame {
+    width: 100%;
+}
+
+.fc-event-compact {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
+}
+
+.fc-event-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fc-event-meta-line {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fc-event-meta-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
 .legend-item {
     display: inline-flex;
     align-items: center;
@@ -862,8 +879,13 @@
     background-color: #f9fafb !important;
 }
 
-.fc-daygrid-day.fc-day-weekend {
-    background-color: #fef2f2 !important;
+.fc-daygrid-day.fc-day-weekend,
+.fc-timegrid-col.fc-day-sat,
+.fc-timegrid-col.fc-day-sun,
+.fc-daygrid-day.fc-day-weekend .fc-daygrid-day-number,
+.fc-daygrid-day.fc-day-weekend .fc-daygrid-day-frame {
+    background-color: #ffffff !important;
+    color: #1f2937 !important;
 }
 
 /* Day Cell Inner Container */
@@ -897,10 +919,10 @@
     position: relative;
 }
 
-/* Weekend/Capacity Indicator Background */
+/* Weekend dates keep the same neutral background as weekdays while preserving labels */
 .fc-day-weekend .fc-daygrid-day-number {
-    background-color: #fecaca !important;
-    color: #991b1b !important;
+    background-color: #ffffff !important;
+    color: #1f2937 !important;
 }
 
 /* Status Icons Container (Pending/Conflict) */
@@ -1110,41 +1132,24 @@
     color: rgba(255, 255, 255, 0.85);
 }
 
-/* Event Dot (Venue Color Indicator) */
+/* Event Dot (status indicator) */
 .event-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
     display: inline-block;
+    background-color: #cbd5e1;
 }
 
-.event-dot.gymnasium {
-    background-color: #10b981;
-}
-
-.event-dot.chic {
-    background-color: #3b82f6;
-}
-
-.event-dot.oval {
-    background-color: #f97316;
-}
-
-.event-dot.balay {
-    background-color: #ec4899;
-}
-
-.event-dot.covered-court {
-    background-color: #8b5cf6;
-}
-
-.event-dot.volleyball {
-    background-color: #06b6d4;
-}
-
+.event-dot.gymnasium,
+.event-dot.chic,
+.event-dot.oval,
+.event-dot.balay,
+.event-dot.covered-court,
+.event-dot.volleyball,
 .event-dot.other {
-    background-color: #6b7280;
+    background-color: #cbd5e1;
 }
 
 /* Event Title (Truncated) */
@@ -1242,40 +1247,16 @@
     background-color: #2563eb;
 } 
 
-/* Venue-Based Color Coding */
-.fc-event-gymnasium {
-    background-color: #10b981 !important;
-    border-color: #059669 !important;
-}
-
-.fc-event-chic {
-    background-color: #3b82f6 !important;
-    border-color: #1d4ed8 !important;
-}
-
-.fc-event-oval {
-    background-color: #f97316 !important;
-    border-color: #c2410c !important;
-}
-
-.fc-event-balay {
-    background-color: #ec4899 !important;
-    border-color: #be185d !important;
-}
-
-.fc-event-covered-court {
-    background-color: #8b5cf6 !important;
-    border-color: #6d28d9 !important;
-}
-
-.fc-event-volleyball {
-    background-color: #06b6d4 !important;
-    border-color: #0891b2 !important;
-}
-
+/* Status-based event colors override any venue-driven color mapping */
+.fc-event-gymnasium,
+.fc-event-chic,
+.fc-event-oval,
+.fc-event-balay,
+.fc-event-covered-court,
+.fc-event-volleyball,
 .fc-event-other {
-    background-color: #6b7280 !important;
-    border-color: #4b5563 !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
 }
 
 /* Ensure all events are visible in month view */
@@ -1390,38 +1371,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return String(value || '').toLowerCase().trim();
     }
 
-    function getVenueColorInfo(venueName) {
-        var normalized = normalizeVenueName(venueName);
-        var venueGroups = {
-            'conference hall & interaction center (chic)': { bg: '#dc2626', border: '#b91c1c', className: 'chic' },
-            'balay alumni': { bg: '#2563eb', border: '#1d4ed8', className: 'balay' },
-            'oval grounds': { bg: '#16a34a', border: '#15803d', className: 'oval' },
-            'gymnasium': { bg: '#16a34a', border: '#15803d', className: 'gymnasium' },
-            'covered court': { bg: '#16a34a', border: '#15803d', className: 'covered-court' },
-            'covered/basketball court': { bg: '#16a34a', border: '#15803d', className: 'covered-court' },
-            'volleyball court': { bg: '#16a34a', border: '#15803d', className: 'volleyball' },
-        };
-
-        if (venueGroups[normalized]) {
-            return venueGroups[normalized];
-        }
-
-        if (!normalized) {
-            return { bg: '#6b7280', border: '#4b5563', className: 'other' };
-        }
-
-        var hash = Array.from(normalized).reduce(function(sum, char) {
-            return (sum * 31 + char.charCodeAt(0)) % 360;
-        }, 0);
-
-        return {
-            bg: 'hsl(' + hash + ' 70% 45%)',
-            border: 'hsl(' + hash + ' 70% 35%)',
-            className: 'other'
-        };
-    }
-
-function normalizeStatusLabel(statusValue) {
+    function normalizeStatusLabel(statusValue) {
                 var normalized = String(statusValue || '').trim();
                 if (!normalized) return '';
                 var lower = normalized.toLowerCase();
@@ -1464,22 +1414,22 @@ function normalizeStatusLabel(statusValue) {
             function getStatusColorInfo(statusValue) {
                 var normalized = String(statusValue || '').toLowerCase();
                 if (normalized === 'approved') {
-                    return { bg: '#16a34a', text: '#166534' };
+                    return { bg: '#10b981', border: '#059669', text: '#ffffff' };
                 }
                 if (normalized === 'pending') {
-                    return { bg: '#f59e0b', text: '#92400e' };
+                    return { bg: '#f59e0b', border: '#d97706', text: '#111827' };
                 }
                 if (['rejected', 'cancelled', 'conflict', 'urgent'].includes(normalized)) {
-                    return { bg: '#dc2626', text: '#991b1b' };
+                    return { bg: '#dc2626', border: '#b91c1c', text: '#ffffff' };
                 }
                 if (normalized === 'needs_reschedule') {
-                    return { bg: '#f97316', text: '#9a4d00' };
+                    return { bg: '#f97316', border: '#ea580c', text: '#ffffff' };
                 }
                 if (normalized === 'completed') {
-                    return { bg: '#64748b', text: '#334155' };
-        }
-        return { bg: '#6b7280', text: '#374151' };
-    }
+                    return { bg: '#64748b', border: '#475569', text: '#ffffff' };
+                }
+                return { bg: '#e5e7eb', border: '#cbd5e1', text: '#111827' };
+            }
 
     if (!calendarEl) {
         console.error('Calendar element not found!');
@@ -1621,9 +1571,8 @@ function normalizeStatusLabel(statusValue) {
 
                         // Helper function to create a single FC event object
                         function createFcEvent(event, startDatetime, endDatetime, isSegment) {
-                            var venue = event.extendedProps && event.extendedProps.venue ? event.extendedProps.venue : '';
-                            var venueInfo = getVenueColorInfo(venue);
                             var status = event.extendedProps && event.extendedProps.status ? event.extendedProps.status : event.status || '';
+                            var statusPalette = getStatusColorInfo(status);
                             var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
 
                             return {
@@ -1632,18 +1581,18 @@ function normalizeStatusLabel(statusValue) {
                                 start: startDatetime,
                                 end: endDatetime,
                                 allDay: false,
-                                backgroundColor: venueInfo.bg,
-                                borderColor: venueInfo.border,
-                                textColor: '#ffffff',
-                                classNames: ['fc-event-' + venueInfo.className],
+                                backgroundColor: statusPalette.bg,
+                                borderColor: statusPalette.border,
+                                textColor: statusPalette.text,
+                                classNames: ['status-event', 'status-' + String(status || 'neutral').toLowerCase().replace(/\s+/g, '-')],
                                 extendedProps: Object.assign({}, event.extendedProps, {
                                     tooltipContent: createTooltipContent(event, startDatetime, status),
-                                    venueClass: venueInfo.className,
-                                    venueDotColor: venueInfo.bg,
+                                    venueClass: 'status-indicator',
+                                    venueDotColor: statusPalette.bg,
                                     participants: event.extendedProps.expected_participants || 0,
-                                    statusClass: status.toLowerCase(),
+                                    statusClass: String(status || 'neutral').toLowerCase(),
                                     displayStatus: status,
-                                    isSegment: !!isSegment  // Mark if this is a multi-day segment
+                                    isSegment: !!isSegment
                                 })
                             };
                         }
@@ -1789,18 +1738,15 @@ function normalizeStatusLabel(statusValue) {
                 }
                 
                 var title = info.event.title || '';
-                var venueClass = info.event.extendedProps.venueClass || 'other';
                 var status = info.event.extendedProps.displayStatus || info.event.extendedProps.status || info.event.status || '';
                 var statusTone = getStatusBadgeTone(status);
                 var statusText = normalizeStatusLabel(status);
                 var statusLabel = statusText ? '<span class="event-status-badge ' + __esc(statusTone) + '">' + __esc(statusText) + '</span>' : '';
-                var dot = '<span class="event-dot ' + __esc(venueClass) + '"></span>';
+                var dot = '<span class="event-dot"></span>';
                 var label = '<span class="fc-event-label">' + __esc(title) + '</span>';
 
                 var metaItems = [];
-                if (info.event.allDay) {
-                    metaItems.push('<span class="fc-event-meta-item">All day</span>');
-                } else if (info.event.start && info.event.end) {
+                if (info.event.start && info.event.end) {
                     var startStr = typeof info.event.start === 'string' ? info.event.start : info.event.start.toISOString();
                     var endStr = typeof info.event.end === 'string' ? info.event.end : info.event.end.toISOString();
                     metaItems.push('<span class="fc-event-meta-item">' + __esc(formatTimeTo12Hour(startStr) + '–' + formatTimeTo12Hour(endStr)) + '</span>');
@@ -1808,10 +1754,6 @@ function normalizeStatusLabel(statusValue) {
 
                 if (info.event.extendedProps && info.event.extendedProps.venue) {
                     metaItems.push('<span class="fc-event-meta-item">' + __esc(info.event.extendedProps.venue) + '</span>');
-                }
-
-                if (info.event.extendedProps && info.event.extendedProps.department) {
-                    metaItems.push('<span class="fc-event-meta-item">' + __esc(info.event.extendedProps.department) + '</span>');
                 }
 
                 var metaLine = metaItems.length ? '<div class="fc-event-meta-line">' + metaItems.join(' · ') + '</div>' : '';

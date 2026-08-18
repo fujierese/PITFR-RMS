@@ -55,57 +55,6 @@
     </div>
 </section>
 
-{{-- Public Facility Availability Container --}}
-<section class="mx-auto w-full max-w-none px-3 pb-8 sm:px-6 sm:pb-12 lg:max-w-7xl lg:pb-16">
-    <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-6 lg:p-8">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div class="max-w-2xl">
-                <h2 class="text-2xl font-bold text-slate-900">Public Facility Availability</h2>
-                <p class="mt-2 text-sm sm:text-base text-slate-600">
-                    Use the public calendar to view venue schedules and equipment availability before signing in to request a reservation.
-                </p>
-            </div>
-            <a href="{{ route('login') }}" class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">
-                Login to Submit a Request
-            </a>
-        </div>
-
-        <div class="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            @php
-                $venueLegend = [
-                    ['label' => 'Conference Hall & Interaction Center (CHIC)', 'color' => '#3b82f6'],
-                    ['label' => 'Balay Alumni', 'color' => '#ec4899'],
-                    ['label' => 'Oval Grounds', 'color' => '#f97316'],
-                    ['label' => 'Gymnasium', 'color' => '#10b981'],
-                    ['label' => 'Covered Court', 'color' => '#8b5cf6'],
-                    ['label' => 'Volleyball Court', 'color' => '#06b6d4'],
-                ];
-            @endphp
-            @foreach ($venueLegend as $legendItem)
-                <div class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                    <span class="inline-flex h-3 w-3 rounded-full" style="background-color: {{ $legendItem['color'] }}"></span>
-                    <span class="text-sm font-medium text-slate-700">{{ $legendItem['label'] }}</span>
-                </div>
-            @endforeach
-        </div>
-
-        <div class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            Review the calendar, then sign in to submit a reservation request for the venue and equipment you need.
-        </div>
-
-        <div class="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 class="text-xl font-semibold text-slate-900">How to Request</h3>
-            <p class="mt-2 text-sm text-slate-600">Use the public calendar to review availability first, then sign in to submit a reservation request for the facility or equipment you need.</p>
-            <ol class="mt-4 list-decimal list-inside space-y-2 text-sm text-slate-600">
-                <li>Sign in with your PIT account.</li>
-                <li>Review the calendar for available dates and venue schedules.</li>
-                <li>Submit a reservation request with your preferred venue and equipment details.</li>
-                <li>Wait for custodian review and administrator final approval.</li>
-            </ol>
-        </div>
-    </div>
-</section>
-
 {{-- Features --}}
 <main class="mx-auto w-full max-w-none flex-1 px-3 py-8 sm:px-6 sm:py-12 lg:max-w-7xl lg:py-16">
     <div class="mb-12 rounded-3xl bg-gradient-to-br from-slate-50 to-blue-50 p-4 sm:p-6 lg:mb-16 lg:p-10">

@@ -61,6 +61,11 @@ class FacilityRequestPolicy
             || ($user->isCustodianEquipment() && ! empty($facilityRequest->getAssignedEquipmentForCustodian($user->id)));
     }
 
+    public function print(User $user, FacilityRequest $facilityRequest): bool
+    {
+        return $user->isAdmin();
+    }
+
     private function managesAssignedResource(User $user, FacilityRequest $facilityRequest): bool
     {
         if (! $user->isCustodian()) {

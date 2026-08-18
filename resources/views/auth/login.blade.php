@@ -163,11 +163,11 @@
                     @csrf
 
 
-                    <!-- Username -->
+                    <!-- Email -->
                     <div>
 
                         <label class="mb-2 block text-sm font-semibold text-slate-700">
-                            Username
+                            Email
                         </label>
 
                         <div class="relative">
@@ -191,11 +191,11 @@
                             </span>
 
                             <input
-                                type="text"
-                                name="username"
+                                type="email"
+                                name="email"
                                 required
-                                value="{{ old('username') }}"
-                                placeholder="Enter your username"
+                                value="{{ old('email', old('username')) }}"
+                                placeholder="Enter your email address"
                                 class="w-full border-0 border-b-2 border-slate-300 bg-transparent px-4 py-3 pl-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-0"
                             >
 
@@ -277,7 +277,7 @@
 
 
                     <!-- Options -->
-                    <div class="flex items-center justify-between">
+                    <div class="flex items-center justify-between gap-4">
 
                         <label class="inline-flex items-center gap-2 text-sm text-slate-500">
 
@@ -298,7 +298,7 @@
                             href="{{ route('home') }}"
                             class="text-sm font-semibold text-emerald-600 transition hover:text-emerald-700"
                         >
-                            Continue as Guest
+                            Forgot Password?
                         </a>
 
                     </div>
@@ -316,16 +316,27 @@
 
 
                 <!-- Register -->
-                <div class="mt-7 text-center text-sm text-slate-500">
+                <div class="mt-7 space-y-3 text-center text-sm text-slate-500">
 
-                    Don't have an account?
+                    <div>
+                        Don't have an account?
 
-                    <a
-                        href="{{ route('register') }}"
-                        class="font-semibold text-emerald-600 transition hover:text-emerald-700"
-                    >
-                        Create requestor account
-                    </a>
+                        <a
+                            href="{{ route('register') }}"
+                            class="font-semibold text-emerald-600 transition hover:text-emerald-700"
+                        >
+                            Create requestor account
+                        </a>
+                    </div>
+
+                    <div>
+                        <a
+                            href="{{ route('home') }}"
+                            class="font-semibold text-emerald-600 transition hover:text-emerald-700"
+                        >
+                            Return to Home
+                        </a>
+                    </div>
 
                 </div>
 

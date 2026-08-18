@@ -92,9 +92,8 @@
                     <div class="space-y-10">
                         <div class="space-y-6">
                             <p class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">I am a…</p>
-                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <button type="button" data-type="student" class="requestor-type-button rounded-[18px] border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-400">🎓 Student</button>
-                                <button type="button" data-type="faculty" class="requestor-type-button rounded-[18px] border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-400">👨‍🏫 Faculty</button>
                                 <button type="button" data-type="outsider" class="requestor-type-button rounded-[18px] border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-400">🏢 External / Org</button>
                             </div>
                         </div>
@@ -103,36 +102,59 @@
                             @csrf
                             <input type="hidden" id="requestor_type" name="requestor_type" value="{{ old('requestor_type', 'student') }}" />
 
-                            <div class="grid gap-6 sm:grid-cols-2">
+                            <div class="grid gap-6 sm:grid-cols-3">
                                 <div class="space-y-3">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Full name</label>
-                                    <input type="text" name="name" value="{{ old('name') }}" required placeholder="ex: Daniel Zrael C. Barro" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                    @error('name')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
+                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">First name</label>
+                                    <input type="text" name="first_name" value="{{ old('first_name') }}" required placeholder="Daniel" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                    @error('first_name')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                                 </div>
+                                <div class="space-y-3">
+                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Middle name <span class="text-slate-400">(optional)</span></label>
+                                    <input type="text" name="middle_name" value="{{ old('middle_name') }}" placeholder="Zrael" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                    @error('middle_name')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
+                                </div>
+                                <div class="space-y-3">
+                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Last name</label>
+                                    <input type="text" name="last_name" value="{{ old('last_name') }}" required placeholder="Barro" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                    @error('last_name')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
+                                </div>
+                            </div>
+
+                            <div class="grid gap-6 sm:grid-cols-2">
                                 <div class="space-y-3">
                                     <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Phone number</label>
                                     <input type="text" name="contact_number" value="{{ old('contact_number') }}" placeholder="09171234567" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
                                     @error('contact_number')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                                 </div>
-                            </div>
-
-                            <div class="space-y-3">
-                                <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Email address</label>
-                                <input type="email" name="username" value="{{ old('username') }}" required placeholder="you@example.com" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                @error('username')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
+                                <div class="space-y-3">
+                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Email address</label>
+                                    <input type="email" name="username" value="{{ old('username') }}" required placeholder="you@example.com" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                    @error('username')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
+                                </div>
                             </div>
 
                             <div class="grid gap-6 sm:grid-cols-2">
+                                <div class="space-y-4" id="college-group">
+                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">College</label>
+                                    <select id="collegeSelect" name="college_id" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                                        <option value="">Select College</option>
+                                    </select>
+                                    @error('college_id')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
+                                </div>
                                 <div class="space-y-4" id="department-group">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">College / department</label>
-                                    <input type="text" id="departmentInput" name="department" value="{{ old('department') }}" placeholder="College of Engineering" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                    <p class="text-xs text-slate-400">Complete College Name.</p>
+                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Department</label>
+                                    <select id="departmentSelect" name="department_id" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                                        <option value="">Select Department</option>
+                                    </select>
+                                    @error('department_id')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                                 </div>
-                                <div class="space-y-4" id="school-id-group">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Student ID</label>
-                                    <input type="text" name="school_id_number" value="{{ old('school_id_number') }}" placeholder="23-0098-635" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                    @error('school_id_number')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
-                                </div>
+                            </div>
+
+                            <div class="space-y-4" id="school-id-group">
+                                <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Student ID</label>
+                                <input type="text" id="studentIdInput" name="school_id_number" value="{{ old('school_id_number') }}" placeholder="23-0098-635" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                <p class="text-xs text-slate-400">Format: 23-0098-635 (2 digits - 4 digits - 3 digits)</p>
+                                @error('school_id_number')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                             </div>
 
                             <div class="grid gap-6 sm:grid-cols-2">
@@ -183,18 +205,102 @@
     </div>
 </div>
 
+@php
+    $collegesData = \App\Models\College::with('departments')
+        ->get()
+        ->map(function ($college) {
+            return [
+                'id' => $college->id,
+                'name' => $college->name,
+                'departments' => $college->departments
+                    ->map(function ($department) {
+                        return ['id' => $department->id, 'name' => $department->name];
+                    })
+                    ->values()
+                    ->all(),
+            ];
+        })
+        ->all();
+@endphp
+
 <script>
+    const collegesData = @json($collegesData);
+
     const typeField = document.getElementById('requestor_type');
     const schoolIdGroup = document.getElementById('school-id-group');
     const officeOrgGroup = document.getElementById('office-org-group');
     const officeOrgLabel = document.getElementById('officeOrgLabel');
     const officeOrgInput = document.getElementById('officeOrgInput');
+    const collegeGroup = document.getElementById('college-group');
     const departmentGroup = document.getElementById('department-group');
-    const departmentInput = document.getElementById('departmentInput');
+    const collegeSelect = document.getElementById('collegeSelect');
+    const departmentSelect = document.getElementById('departmentSelect');
+    const studentIdInput = document.getElementById('studentIdInput');
+
+    // Initialize colleges dropdown
+    function initializeColleges() {
+        collegeSelect.innerHTML = '<option value="">Select College</option>';
+        collegesData.forEach(college => {
+            const option = document.createElement('option');
+            option.value = college.id;
+            option.textContent = college.name;
+            collegeSelect.appendChild(option);
+        });
+        if (collegeSelect.value === '' && collegesData.length > 0) {
+            collegeSelect.value = collegesData[0].id;
+        }
+    }
+
+    // Update departments based on selected college
+    collegeSelect.addEventListener('change', function() {
+        const selectedCollegeId = parseInt(this.value);
+        const selectedCollege = collegesData.find(c => c.id === selectedCollegeId);
+        
+        departmentSelect.innerHTML = '<option value="">Select Department</option>';
+        if (selectedCollege) {
+            selectedCollege.departments.forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept.id;
+                option.textContent = dept.name;
+                departmentSelect.appendChild(option);
+            });
+            if (departmentSelect.options.length > 1) {
+                departmentSelect.value = selectedCollege.departments[0]?.id || '';
+            }
+        }
+    });
+
+    // Validate Student ID format: XX-XXXX-XXX
+    function validateStudentId(id) {
+        const pattern = /^\d{2}-\d{4}-\d{3}$/;
+        return pattern.test(id.trim());
+    }
+
+    studentIdInput.addEventListener('blur', function() {
+        if (this.value && !validateStudentId(this.value)) {
+            this.classList.add('border-red-500');
+            this.classList.remove('border-slate-300');
+        } else {
+            this.classList.remove('border-red-500');
+            this.classList.add('border-slate-300');
+        }
+    });
 
     function updateRequestorTypeFields() {
         const selected = typeField.value;
+        
+        // Show/hide college and department for students only
+        const showCollege = selected === 'student';
+        collegeGroup.classList.toggle('hidden', !showCollege);
+        departmentGroup.classList.toggle('hidden', !showCollege);
+        collegeSelect.disabled = !showCollege;
+        departmentSelect.disabled = !showCollege;
+        
+        // Show/hide student ID for students only (required)
         schoolIdGroup.classList.toggle('hidden', selected !== 'student');
+        studentIdInput.required = selected === 'student';
+        
+        // Show/hide office/organization for external users only
         const showOffice = selected === 'outsider';
         officeOrgGroup.classList.toggle('hidden', !showOffice);
 
@@ -204,13 +310,6 @@
         } else {
             officeOrgLabel.textContent = 'Office / organization';
             officeOrgInput.placeholder = 'External partner or individual';
-        }
-
-        const showDept = selected === 'student' || selected === 'faculty';
-        departmentGroup.classList.toggle('hidden', !showDept);
-        departmentInput.disabled = !showDept;
-        if (!showDept) {
-            departmentInput.value = '';
         }
     }
 
@@ -231,5 +330,7 @@
         button.addEventListener('click', () => selectRequestorType(button.dataset.type));
     });
 
+    // Initialize
+    initializeColleges();
     selectRequestorType(typeField.value || 'student');
 </script>

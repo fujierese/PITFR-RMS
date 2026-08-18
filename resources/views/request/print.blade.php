@@ -469,6 +469,13 @@
             margin-bottom: 0.2rem;
         }
 
+        .e-signature-image {
+            max-width: 100%;
+            max-height: 1.8rem;
+            object-fit: contain;
+            margin-bottom: 0.1rem;
+        }
+
         .signature-name {
             font-size: 0.68rem;
             font-weight: 700;
@@ -1088,10 +1095,17 @@
 
                         <div class="signature-block">
                             <span class="field-label">Requisitioner</span>
-                            <div class="signature-line"></div>
+                            @if($request->e_signature_file)
+                                <img src="{{ url('storage/documents/e_signature/' . $request->e_signature_file) }}" 
+                                     alt="E-Signature" class="e-signature-image">
+                            @else
+                                <div class="signature-line"></div>
+                            @endif
                             <div class="signature-name">{{ $requesterName }}</div>
                             <div class="signature-name" style="font-weight: 600; margin-top: 0.3rem;">{{ $requesterPosition }}</div>
-                            <div style="font-size: 0.52rem; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 0.4rem; color: var(--muted);">Signature over printed name</div>
+                            <div style="font-size: 0.52rem; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 0.4rem; color: var(--muted);">
+                                @if($request->e_signature_file)Electronic Signature@else Signature over printed name @endif
+                            </div>
                         </div>
 
                         <div class="approval-row">
