@@ -8,7 +8,10 @@ const initializeReservationDurationToggles = function () {
         const updateState = function () {
             const isSelected = input.checked;
             const parent = option.closest('.reservation-duration-group');
-            const timeFields = parent ? parent.querySelectorAll('input[name="start_time"], input[name="end_time"]') : [];
+            const scopedTimeFields = parent ? parent.querySelectorAll('input[name="start_time"], input[name="end_time"]') : [];
+            const timeFields = scopedTimeFields.length
+                ? scopedTimeFields
+                : document.querySelectorAll('input[name="start_time"], input[name="end_time"]');
 
             option.classList.toggle('border-emerald-500', isSelected);
             option.classList.toggle('bg-emerald-50', isSelected);
@@ -22,8 +25,8 @@ const initializeReservationDurationToggles = function () {
                 if (!field) {
                     return;
                 }
-                const isWholeDay = input.value === 'whole_day';
-                field.disabled = isWholeDay;
+                const isWholeDay = input.checked && input.value === 'whole_day';
+                field.readOnly = isWholeDay;
                 field.classList.toggle('opacity-60', isWholeDay);
                 field.classList.toggle('cursor-not-allowed', isWholeDay);
                 if (isWholeDay) {
@@ -37,7 +40,11 @@ const initializeReservationDurationToggles = function () {
     });
 };
 
-document.addEventListener('DOMContentLoaded', initializeReservationDurationToggles);
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeReservationDurationToggles, { once: true });
+} else {
+    initializeReservationDurationToggles();
+}
 
 const initializeRequestForm = function () {
     const form = document.getElementById('request-form');
@@ -50,6 +57,7 @@ const initializeRequestForm = function () {
     }
 
     form.dataset.requestFormInitialized = '1';
+    initializeReservationDurationToggles();
 
     const config = {
         equipmentAvailabilityUrl: form.dataset.equipmentAvailabilityUrl || '',
@@ -138,6 +146,106 @@ const initializeRequestForm = function () {
     const capacityWarningBanner = document.getElementById('capacity-warning-banner');
     const conflictAlert = document.createElement('div');
     const conflictAlertWrapper = document.getElementById('venue-conflict-alert-wrap');
+    const summaryDetails = {
+        activity: document.getElementById('summary-activity'),
+        venue: document.getElementById('summary-venue'),
+        date: document.getElementById('summary-date'),
+        time: document.getElementById('summary-time'),
+        equipment: document.getElementById('summary-equipment')
+    };
+
+    const formatDisplayDate = function (value) {
+        if (!value) {
+            return 'Not selected';
+        }
+
+        const date = new Date(`${value}T00:00:00`);
+        return Number.isNaN(date.getTime())
+            ? value
+            : new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(date);
+    };
+
+    const formatDisplayTime = function (value) {
+        if (!value) {
+            return 'Not selected';
+        }
+
+        const [hours, minutes] = value.split(':').map(Number);
+        const date = new Date();
+        date.setHours(hours, minutes, 0, 0);
+        return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date);
+    };
+
+    const updateChecklistState = function () {
+        const requestorType = form.dataset.requestorType || '';
+        const requiredFields = [
+            requestorType === 'outsider' ? form.querySelector('[name="organization_name"]') : form.querySelector('[name="college_id"]'),
+            requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
+            form.querySelector('[name="name_of_activity"]'),
+            form.querySelector('[name="purpose"]'),
+            form.querySelector('[name="start_date"]'),
+            form.querySelector('[name="end_date"]'),
+            form.querySelector('[name="expected_participants"]'),
+            form.querySelector('[name="start_time"]'),
+            form.querySelector('[name="end_time"]'),
+            form.querySelector('[name="requested_by_position"]'),
+            form.querySelector('[name="venue"]:checked')
+        ];
+        const allRequiredComplete = requiredFields.every(function (field) {
+            if (!field) {
+                return true;
+            }
+            return field.type === 'radio' || field.type === 'checkbox'
+                ? field.checked
+                : String(field.value || '').trim() !== '';
+        });
+        const selectedVenue = form.querySelector('[name="venue"]:checked');
+        const equipmentSelected = form.querySelectorAll('.equipment-checkbox:checked').length > 0;
+        const activityProposalSelected = Boolean(form.querySelector('[name="activity_proposal_file"]')?.files?.length || form.querySelector('[name="proposal_file"]')?.files?.length);
+        const igpReceiptSelected = Boolean(form.querySelector('[name="igp_receipt_file"]')?.files?.length);
+        const eSignatureSelected = Boolean(form.querySelector('[name="e_signature_file"]')?.files?.length);
+        const supportingDocumentSelected = requestorType === 'student' || requestorType === 'faculty'
+            ? activityProposalSelected
+            : igpReceiptSelected;
+
+        const requiredChecklist = document.getElementById('checklist-required-fields');
+        const venueChecklist = document.getElementById('checklist-venue-availability');
+        const documentChecklist = document.getElementById('checklist-document-upload');
+        const signatureChecklist = document.getElementById('checklist-e-signature');
+        if (requiredChecklist) requiredChecklist.checked = allRequiredComplete;
+        if (venueChecklist) venueChecklist.checked = Boolean(selectedVenue) && equipmentSelected;
+        if (documentChecklist) documentChecklist.checked = supportingDocumentSelected;
+        if (signatureChecklist) signatureChecklist.checked = eSignatureSelected;
+    };
+
+    const updateFormSummary = function () {
+        const startDate = startDateInput?.value || '';
+        const endDate = endDateInput?.value || '';
+        const startTime = startTimeInput?.value || '';
+        const endTime = endTimeInput?.value || '';
+        const isWholeDay = form.querySelector('[name="reservation_duration"]:checked')?.value === 'whole_day';
+        const selectedVenue = form.querySelector('[name="venue"]:checked');
+        const selectedEquipment = Array.from(form.querySelectorAll('.equipment-checkbox:checked')).map(function (checkbox) {
+            const quantity = checkbox.closest('.equipment-row')?.querySelector('input[type="number"]')?.value || '1';
+            return `${checkbox.value} x ${quantity}`;
+        });
+
+        if (summaryDetails.activity) summaryDetails.activity.textContent = form.querySelector('[name="name_of_activity"]')?.value.trim() || 'Not specified';
+        if (summaryDetails.venue) summaryDetails.venue.textContent = selectedVenue?.value || 'Not selected';
+        if (summaryDetails.date) summaryDetails.date.textContent = startDate && endDate
+            ? `${formatDisplayDate(startDate)}${startDate === endDate ? '' : ` - ${formatDisplayDate(endDate)}`}`
+            : 'Not selected';
+        if (summaryDetails.time) summaryDetails.time.textContent = isWholeDay
+            ? 'Whole day (8:00 AM - 12:00 AM)'
+            : startTime && endTime ? `${formatDisplayTime(startTime)} - ${formatDisplayTime(endTime)}` : 'Not selected';
+        if (summaryDetails.equipment) {
+            summaryDetails.equipment.innerHTML = selectedEquipment.length
+                ? selectedEquipment.map(item => `<li class="text-sm text-slate-700">${escapeHtml(item)}</li>`).join('')
+                : '<li class="text-sm text-slate-500">No equipment selected</li>';
+        }
+
+        updateChecklistState();
+    };
 
     if (capacityWarningBanner) {
         capacityWarningBanner.setAttribute('role', 'status');
@@ -260,7 +368,8 @@ const initializeRequestForm = function () {
         const draft = {};
 
         formData.forEach((value, key) => {
-            if (key === 'proposal_file' || key === 'equipment[]' || key === 'venue') {
+            const field = form.querySelector(`[name="${key}"]`);
+            if (field?.type === 'file' || key === 'proposal_file' || key === 'equipment[]' || key === 'venue') {
                 return;
             }
             draft[key] = value;
@@ -318,6 +427,10 @@ const initializeRequestForm = function () {
 
                 const field = form.querySelector(`[name="${key}"]`);
                 if (!field) {
+                    return;
+                }
+
+                if (field.type === 'file') {
                     return;
                 }
 
@@ -413,6 +526,7 @@ const initializeRequestForm = function () {
 
         if (selectedEquipment.length === 0) {
             summaryEquipment.innerHTML = 'Equipment: No equipment selected.';
+            updateFormSummary();
             return;
         }
 
@@ -425,6 +539,7 @@ const initializeRequestForm = function () {
 
         // Use escaped values to avoid injecting untrusted content via innerHTML
         summaryEquipment.innerHTML = 'Equipment:<br>' + equipmentLines.join('');
+        updateFormSummary();
     };
 
     const updateOtherVenueVisibility = function () {
@@ -604,6 +719,42 @@ const initializeRequestForm = function () {
         });
 
         return valid;
+    };
+
+    const initializeFileInputs = function () {
+        const fileInputs = [
+            { name: 'activity_proposal_file', preview: 'activity-proposal-preview', label: 'activity-proposal-name', extensions: ['pdf', 'png', 'jpg', 'jpeg'] },
+            { name: 'igp_receipt_file', preview: 'igp-receipt-preview', label: 'igp-receipt-name', extensions: ['pdf', 'png', 'jpg', 'jpeg'] },
+            { name: 'e_signature_file', preview: 'e-signature-preview', label: 'e-signature-name', extensions: ['png', 'jpg', 'jpeg'] },
+            { name: 'proposal_file', preview: 'file-preview', label: 'file-name', extensions: ['pdf', 'png', 'jpg', 'jpeg'] }
+        ];
+
+        fileInputs.forEach(function (config) {
+            const input = form.querySelector(`[name="${config.name}"]`);
+            if (!input) {
+                return;
+            }
+
+            input.addEventListener('change', function () {
+                const file = input.files?.[0];
+                const extension = file?.name.split('.').pop()?.toLowerCase();
+                const preview = document.getElementById(config.preview);
+                const label = document.getElementById(config.label);
+
+                if (file && !config.extensions.includes(extension)) {
+                    input.value = '';
+                    setInputValidationState(input, false, `Invalid file type. Allowed formats: ${config.extensions.join(', ')}`);
+                    preview?.classList.add('hidden');
+                    updateFormSummary();
+                    return;
+                }
+
+                setInputValidationState(input, true);
+                if (label) label.textContent = file?.name || '';
+                if (preview) preview.classList.toggle('hidden', !file);
+                updateFormSummary();
+            });
+        });
     };
 
     const validateQuantities = function () {
@@ -925,6 +1076,7 @@ const initializeRequestForm = function () {
             if (endDateInput.value !== nextDayString) {
                 endDateInput.value = nextDayString;
             }
+            autoAdjustedEndDate = true;
             if (overnightHint) {
                 overnightHint.textContent = 'Overnight booking detected: end date auto-updated to the next day.';
                 overnightHint.classList.remove('hidden');
@@ -938,6 +1090,11 @@ const initializeRequestForm = function () {
                 overnightHint.classList.remove('hidden');
             }
             return;
+        }
+
+        if (autoAdjustedEndDate && endDateInput.value === nextDayString) {
+            endDateInput.value = startDateValue;
+            autoAdjustedEndDate = false;
         }
 
         if (overnightHint) {
@@ -957,12 +1114,14 @@ const initializeRequestForm = function () {
                     setInputValidationState(field, true);
                 }
                 saveDraft();
+                updateFormSummary();
             });
             field.addEventListener('change', function () {
                 if (field.validity.valid) {
                     setInputValidationState(field, true);
                 }
                 saveDraft();
+                updateFormSummary();
             });
         });
     };
@@ -1014,6 +1173,7 @@ const initializeRequestForm = function () {
 
     let conflictCheckTimeout;
     let equipmentAvailabilityRefreshTimeout;
+    let autoAdjustedEndDate = false;
 
     if (fileInput) {
         fileInput.addEventListener('change', function (e) {
@@ -1042,6 +1202,7 @@ const initializeRequestForm = function () {
     }
 
     createValidationListeners();
+    initializeFileInputs();
     attachSelectionListeners();
     restoreDraft();
     updateOtherVenueVisibility();
@@ -1132,6 +1293,7 @@ const initializeRequestForm = function () {
     });
 
     startDateInput?.addEventListener('change', function () {
+        autoAdjustedEndDate = false;
         syncOvernightEndDate();
         clearTimeout(conflictCheckTimeout);
         conflictCheckTimeout = setTimeout(checkConflicts, 500);
@@ -1140,6 +1302,7 @@ const initializeRequestForm = function () {
     });
 
     endDateInput?.addEventListener('change', function () {
+        autoAdjustedEndDate = false;
         syncOvernightEndDate();
         clearTimeout(conflictCheckTimeout);
         conflictCheckTimeout = setTimeout(checkConflicts, 500);

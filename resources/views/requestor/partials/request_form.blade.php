@@ -14,8 +14,14 @@
         $requestClassification = 'External Request';
         $classificationTone = 'sky';
     }
+
+    $isStudent = ($currentUser?->requestor_type ?? null) === 'student';
+    $isFaculty = ($currentUser?->requestor_type ?? null) === 'faculty' || in_array($currentUser?->role ?? null, ['faculty', 'staff', 'office_staff'], true);
+    $isExternal = ($currentUser?->requestor_type ?? null) === 'outsider';
+    $selectedCollegeId = old('college_id', $profileCollegeId ?? null);
+    $selectedDepartmentId = old('department_id', $profileDepartmentId ?? null);
 @endphp
-<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-show-loading="true" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
+<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-show-loading="true" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
     @csrf
 
 <div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]">
@@ -107,13 +113,46 @@
                         <p class="mt-1 text-sm text-slate-500">Provide the requesting office and the reference details for this submission.</p>
                     </div>
                     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
-                        <div class="space-y-3">
-                            <label for="department" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Dept. / Requisitioning Office <span class="text-red-500">*</span></label>
-                            <input id="department" type="text" name="department" value="{{ $currentUser?->department ?? old('department') }}" required class="w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('department') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('department') ? 'true' : 'false' }}">
-                            @error('department')
-                                <p class="text-xs font-medium text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
+                        @if ($isExternal)
+                            <div class="space-y-3">
+                                <label for="organization_name" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Organization Name <span class="text-red-500">*</span></label>
+                                <input id="organization_name" type="text" name="organization_name" value="{{ old('organization_name', $currentUser?->office_or_organization) }}" required class="w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('organization_name') border-red-300 bg-red-50 @enderror">
+                                @error('organization_name')
+                                    <p class="text-xs font-medium text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+                        @else
+                            <div class="space-y-3">
+                                <label for="college_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">College <span class="text-red-500">*</span></label>
+                                <select id="college_id" name="college_id" required {{ ($profileCollegeId ?? null) ? 'disabled' : '' }} class="w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('college_id') border-red-300 bg-red-50 @enderror">
+                                    <option value="">Select college</option>
+                                    @foreach ($colleges as $college)
+                                        <option value="{{ $college->id }}" {{ (string) $selectedCollegeId === (string) $college->id ? 'selected' : '' }}>{{ $college->name }}</option>
+                                    @endforeach
+                                </select>
+                                @if ($profileCollegeId)
+                                    <input type="hidden" name="college_id" value="{{ $profileCollegeId }}">
+                                @endif
+                                @error('college_id')
+                                    <p class="text-xs font-medium text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+                            <div class="space-y-3">
+                                <label for="department_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Department / Requisitioning Office <span class="text-red-500">*</span></label>
+                                <select id="department_id" name="department_id" required {{ ($profileDepartmentId ?? null) ? 'disabled' : '' }} data-selected="{{ $selectedDepartmentId }}" class="w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('department_id') border-red-300 bg-red-50 @enderror">
+                                    <option value="">Select department</option>
+                                    @foreach ($departments as $departmentOption)
+                                        <option value="{{ $departmentOption->id }}" data-college-id="{{ $departmentOption->college_id }}" {{ (string) $selectedDepartmentId === (string) $departmentOption->id ? 'selected' : '' }}>{{ $departmentOption->name }}</option>
+                                    @endforeach
+                                </select>
+                                @if ($profileDepartmentId)
+                                    <input type="hidden" name="department_id" value="{{ $profileDepartmentId }}">
+                                @endif
+                                @error('department_id')
+                                    <p class="text-xs font-medium text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+                        @endif
                         <div class="grid gap-4 sm:grid-cols-2 sm:gap-5">
                             <div class="space-y-3">
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Control Number</p>
@@ -134,9 +173,16 @@
                     </div>
                     <div class="space-y-4 md:space-y-6">
                         <div>
-                            <label for="name_of_activity" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Activity / Purpose <span class="text-red-500">*</span></label>
+                            <label for="name_of_activity" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Activity Name <span class="text-red-500">*</span></label>
                             <input id="name_of_activity" type="text" name="name_of_activity" required value="{{ old('name_of_activity') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('name_of_activity') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('name_of_activity') ? 'true' : 'false' }}">
                             @error('name_of_activity')
+                                <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div>
+                            <label for="purpose" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Purpose <span class="text-red-500">*</span></label>
+                            <textarea id="purpose" name="purpose" rows="3" required class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('purpose') border-red-300 bg-red-50 @enderror">{{ old('purpose') }}</textarea>
+                            @error('purpose')
                                 <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                             @enderror
                         </div>
@@ -203,7 +249,7 @@
                     <div class="mb-5 border-b border-slate-200 pb-4">
                         <div class="flex items-center justify-between gap-4">
                             <div>
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section III. Facility Selection</p>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section III. Venue and Schedule</p>
                                 <p class="mt-1 text-sm text-slate-500">Select the facility / venue requested for the activity.</p>
                             </div>
                             <p class="text-xs text-slate-500">Choose one</p>
@@ -215,11 +261,10 @@
                     </div>
                     <div class="mt-4 space-y-3">
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                            @foreach(['Conference Hall & Interaction Center (CHIC)', 'Gymnasium', 'Balay Alumni', 'Oval Grounds', 'Covered Court', 'Volleyball Court', 'Others (specify)'] as $v)
-                                <label class="venue-option flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 {{ in_array($v, (array) old('venue'), true) ? 'border-emerald-500 bg-emerald-50 shadow-sm' : '' }}">
+                            @foreach($venueOptions as $v)
+                                <label class="venue-option flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 {{ old('venue') === $v ? 'border-emerald-500 bg-emerald-50 shadow-sm' : '' }}">
                                     <input type="radio" name="venue" value="{{ $v }}"
-                                           {{ in_array($v, (array) old('venue'), true) ? 'checked' : '' }}
-                                           {{ $v === 'Others (specify)' ? 'data-other=venue-other' : '' }}
+                                           {{ old('venue') === $v ? 'checked' : '' }}
                                            required
                                            class="mt-0.5 h-4 w-4 rounded-full border-slate-300 text-emerald-600 focus:ring-emerald-500">
                                     <span class="flex-1 text-sm font-medium text-slate-700">{{ $v }}</span>
@@ -230,16 +275,6 @@
                         @error('venue')
                             <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                         @enderror
-                        <div id="venue-other-wrap" style="display:none" class="mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                            <label for="venue-other" class="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Other Venue <span class="text-red-500">*</span></label>
-                            <input type="text" name="other_venue" id="venue-other"
-                                   value="{{ old('other_venue') }}"
-                                   placeholder="Please specify venue"
-                                   class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 focus:border-emerald-500 focus:outline-none @error('other_venue') border-red-300 bg-red-50 @enderror">
-                            @error('other_venue')
-                                <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
                         <div id="venue-conflict-alert-wrap" class="mt-4"></div>
                     </div>
                 </section>
@@ -248,7 +283,7 @@
                     <div class="mb-5 border-b border-slate-200 pb-4">
                         <div class="flex items-center justify-between gap-4">
                             <div>
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section IV. Equipment Request</p>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Equipment Selection</p>
                                 <p class="mt-1 text-sm text-slate-500">Indicate any equipment required for the activity and review availability.</p>
                             </div>
                             <p class="text-xs text-slate-500">Real-time availability</p>
@@ -396,17 +431,11 @@
 
                 <section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
                     <div class="mb-5 border-b border-slate-200 pb-4">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section VIII. Supporting Documents</p>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section IV. Required Documents</p>
                         <p class="mt-1 text-sm text-slate-500">Upload the required supporting documents for this request.</p>
                     </div>
 
                     <div class="space-y-6">
-                        @php
-                            $isStudent = ($currentUser->requestor_type ?? null) === 'student';
-                            $isFaculty = ($currentUser->requestor_type ?? null) === 'faculty' || in_array($currentUser->role ?? null, ['faculty', 'staff', 'office_staff']);
-                            $isExternal = ($currentUser->requestor_type ?? null) === 'outsider';
-                        @endphp
-
                         @if ($isStudent || $isFaculty)
                             {{-- Activity Proposal for Student/Faculty --}}
                             <div>
@@ -470,13 +499,14 @@
                         {{-- E-Signature (Required for all) --}}
                         <div class="rounded-[24px] border border-emerald-200 bg-emerald-50 p-4">
                             <div class="mb-4 border-b border-emerald-200 pb-3">
-                                <p class="text-sm font-semibold text-emerald-800">E-Signature <span class="text-red-500">*</span></p>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">Section V. E-Signature</p>
+                                <p class="mt-2 text-sm font-semibold text-emerald-800">Upload E-Signature <span class="text-red-500">*</span></p>
                                 <p class="mt-1 text-xs text-emerald-700">Required for all requestors. Your e-signature will appear on the official request form for administrative records.</p>
                             </div>
                             <label for="e_signature_file" class="mb-3 block text-sm font-semibold text-slate-700">
                                 Upload your e-signature
                             </label>
-                            <p class="mb-3 text-xs text-slate-500">Upload an image or PDF of your digital signature or typed name.</p>
+                            <p class="mb-3 text-xs text-slate-500">Upload a PNG or JPG image of your digital signature.</p>
                             <div class="rounded-[32px] border-2 border-dashed border-emerald-300 bg-white px-8 pb-8 pt-8 transition hover:border-emerald-400">
                                 <div class="space-y-3 text-center">
                                     <svg class="mx-auto h-14 w-14 text-emerald-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
@@ -485,11 +515,11 @@
                                     <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
                                         <label for="e_signature_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
                                             <span>Upload a file</span>
-                                            <input id="e_signature_file" name="e_signature_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only">
+                                            <input id="e_signature_file" name="e_signature_file" type="file" accept=".jpeg,.jpg,.png" class="sr-only">
                                         </label>
                                         <span>or drag and drop</span>
                                     </div>
-                                    <p class="text-xs text-slate-500">PDF, JPEG, PNG up to 10MB</p>
+                                    <p class="text-xs text-slate-500">JPEG or PNG up to 10MB</p>
                                 </div>
                             </div>
                             <div id="e-signature-preview" class="mt-3 hidden">
@@ -553,6 +583,34 @@
         const form = document.getElementById('request-form');
         if (!form) return;
 
+        const collegeSelect = document.getElementById('college_id');
+        const departmentSelect = document.getElementById('department_id');
+        if (collegeSelect && departmentSelect) {
+            const departmentOptions = Array.from(departmentSelect.options).map((option) => ({
+                value: option.value,
+                label: option.textContent,
+                collegeId: option.dataset.collegeId || '',
+            }));
+            const selectedDepartment = departmentSelect.dataset.selected || departmentSelect.value;
+
+            const filterDepartments = () => {
+                const collegeId = collegeSelect.value;
+                departmentSelect.innerHTML = '';
+                departmentSelect.add(new Option('Select department', ''));
+                departmentOptions
+                    .filter((option) => option.value === '' || option.collegeId === collegeId)
+                    .forEach((option) => departmentSelect.add(new Option(option.label, option.value)));
+
+                const matchingOption = Array.from(departmentSelect.options).find((option) => option.value === selectedDepartment);
+                departmentSelect.value = matchingOption ? selectedDepartment : '';
+                departmentSelect.disabled = !collegeId || departmentSelect.dataset.profileLocked === '1';
+            };
+
+            departmentSelect.dataset.profileLocked = departmentSelect.disabled ? '1' : '0';
+            collegeSelect.addEventListener('change', filterDepartments);
+            filterDepartments();
+        }
+
         // File input change handlers for preview
         const fileInputs = [
             { id: 'activity_proposal_file', previewId: 'activity-proposal-preview', nameId: 'activity-proposal-name' },
@@ -564,6 +622,13 @@
             const input = document.getElementById(id);
             if (input) {
                 input.addEventListener('change', function() {
+                    const allowedExtensions = id === 'e_signature_file' ? ['jpg', 'jpeg', 'png'] : ['pdf', 'jpg', 'jpeg', 'png'];
+                    const extension = this.files[0]?.name.split('.').pop()?.toLowerCase();
+                    if (extension && !allowedExtensions.includes(extension)) {
+                        this.value = '';
+                        window.alert(`Invalid file type. Allowed formats: ${allowedExtensions.join(', ')}`);
+                        return;
+                    }
                     const preview = document.getElementById(previewId);
                     const name = document.getElementById(nameId);
                     if (this.files.length > 0) {
@@ -604,8 +669,8 @@
             const applyDurationState = () => {
                 const duration = document.querySelector('input[name="reservation_duration"]:checked')?.value ?? 'specific_time';
                 const isWholeDay = duration === 'whole_day';
-                startTimeInput.disabled = isWholeDay;
-                endTimeInput.disabled = isWholeDay;
+                startTimeInput.readOnly = isWholeDay;
+                endTimeInput.readOnly = isWholeDay;
 
                 if (isWholeDay) {
                     startTimeInput.value = '08:00';
@@ -653,8 +718,9 @@
 
             if (summaryDetails.activity) summaryDetails.activity.textContent = activityInput?.value.trim() || 'Not specified';
             if (summaryDetails.venue) summaryDetails.venue.textContent = venueText;
-            if (summaryDetails.date) summaryDetails.date.textContent = startDate && endDate ? `${formatDisplayDate(startDate)} – ${formatDisplayDate(endDate)}` : 'Not selected';
-            if (summaryDetails.time) summaryDetails.time.textContent = startTime && endTime ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}` : 'Not selected';
+            const isWholeDay = form.querySelector('[name="reservation_duration"]:checked')?.value === 'whole_day';
+            if (summaryDetails.date) summaryDetails.date.textContent = startDate && endDate ? `${formatDisplayDate(startDate)}${startDate === endDate ? '' : ` – ${formatDisplayDate(endDate)}`}` : 'Not selected';
+            if (summaryDetails.time) summaryDetails.time.textContent = isWholeDay ? 'Whole day (8:00 AM – 12:00 AM)' : (startTime && endTime ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}` : 'Not selected');
 
             const selectedEquipment = [...form.querySelectorAll('.equipment-row')].filter((row) => {
                 const checkbox = row.querySelector('.equipment-checkbox');
@@ -703,9 +769,12 @@
         const checklistESignature = document.getElementById('checklist-e-signature');
 
         const updateChecklistState = () => {
+            const requestorType = form.dataset.requestorType;
             const requiredFields = [
-                form.querySelector('[name="department"]'),
+                requestorType === 'outsider' ? form.querySelector('[name="organization_name"]') : form.querySelector('[name="college_id"]'),
+                requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
                 form.querySelector('[name="name_of_activity"]'),
+                form.querySelector('[name="purpose"]'),
                 form.querySelector('[name="start_date"]'),
                 form.querySelector('[name="end_date"]'),
                 form.querySelector('[name="expected_participants"]'),
@@ -728,6 +797,7 @@
             
             // Check for appropriate document file based on requestor type
             const isStudent = form.dataset.isStudent === '1';
+            const isFaculty = requestorType === 'faculty';
             const activityProposalFile = form.querySelector('[name="activity_proposal_file"]')?.files?.length > 0;
             const igpReceiptFile = form.querySelector('[name="igp_receipt_file"]')?.files?.length > 0;
             const eSignatureFile = form.querySelector('[name="e_signature_file"]')?.files?.length > 0;
@@ -736,7 +806,7 @@
             const proposalFile = form.querySelector('[name="proposal_file"]')?.files?.length > 0;
             
             // Has required supporting document based on type
-            const hasSupportingDocument = isStudent ? (activityProposalFile || proposalFile) : igpReceiptFile;
+            const hasSupportingDocument = (isStudent || isFaculty) ? (activityProposalFile || proposalFile) : igpReceiptFile;
 
             if (checklistRequiredFields) {
                 checklistRequiredFields.checked = allRequiredComplete;

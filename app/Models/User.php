@@ -2,6 +2,8 @@
 namespace App\Models;
 
 use App\Models\Equipment;
+use App\Models\College;
+use App\Models\Department;
 use App\Models\Venue;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -18,6 +20,8 @@ class User extends Authenticatable
         'name',
         'role',
         'department',
+        'college_id',
+        'department_id',
         'requestor_type',
         'school_id_number',
         'office_or_organization',
@@ -160,6 +164,16 @@ class User extends Authenticatable
     public function facilityRequests()
     {
         return $this->hasMany(FacilityRequest::class, 'requested_by_id');
+    }
+
+    public function college()
+    {
+        return $this->belongsTo(College::class);
+    }
+
+    public function departmentRecord()
+    {
+        return $this->belongsTo(Department::class, 'department_id');
     }
 
     public function venues()

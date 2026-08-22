@@ -62,7 +62,7 @@
         $filteredRequests = $filteredRequests->sortBy([['start_date', 'desc'], ['created_at', 'desc']]);
     }
 
-    $venueOptions = $requests->flatMap(function ($requestItem) {
+    $requestVenueOptions = $requests->flatMap(function ($requestItem) {
         return $requestItem->getVenueNames();
     })->filter()->unique()->sort()->values();
 
@@ -177,7 +177,7 @@
                         <label for="venue" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Venue</label>
                         <select id="venue" name="venue" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                             <option value="">All</option>
-                            @foreach ($venueOptions as $venueOption)
+                            @foreach ($requestVenueOptions as $venueOption)
                                 <option value="{{ $venueOption }}" {{ $venueFilter === $venueOption ? 'selected' : '' }}>{{ $venueOption }}</option>
                             @endforeach
                         </select>

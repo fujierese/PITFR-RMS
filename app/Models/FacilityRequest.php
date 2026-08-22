@@ -16,7 +16,7 @@ class FacilityRequest extends Model
 
     protected $fillable = [
         'control_number', 'date_requested', 'department', 'name_of_activity',
-        'expected_participants', 'start_date', 'end_date', 'start_time', 'end_time', 'venue', 'equipment',
+        'expected_participants', 'start_date', 'end_date', 'start_time', 'end_time', 'venue', 'equipment', 'purpose',
         'equipment_quantities', 'other_venue', 'equipment_custodian_statuses',
         'requested_by_id', 'status', 'venue_status', 'equipment_status',
         'venue_approval_signature', 'equipment_approval_signature', 'approval_signature_meta',

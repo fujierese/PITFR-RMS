@@ -81,6 +81,9 @@ class AuthController extends Controller
         $department = null;
         if (!empty($data['department_id'])) {
             $department = \App\Models\Department::find($data['department_id']);
+            if ($department && !empty($data['college_id']) && (int) $department->college_id !== (int) $data['college_id']) {
+                return back()->withErrors(['department_id' => 'Please select a department under the selected college.'])->withInput();
+            }
         }
 
         // Get department name for storage
@@ -96,6 +99,8 @@ class AuthController extends Controller
             'office_or_organization' => $org,
             'contact_number' => $data['contact_number'] ?? null,
             'department' => $departmentName,
+            'college_id' => $data['college_id'] ?? null,
+            'department_id' => $data['department_id'] ?? null,
         ]);
 
         Auth::login($user);

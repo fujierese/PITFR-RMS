@@ -2,7 +2,10 @@
 namespace App\Http\Controllers;
  
 use App\Models\FacilityRequest;
+use App\Models\College;
+use App\Models\Department;
 use App\Models\User;
+use App\Models\Venue;
 use App\Services\AvailabilityService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -149,9 +152,23 @@ class RequestorController extends Controller
         }
 
         $venueCapacityMap = [];
-        foreach (self::VENUE_OPTIONS as $venueName) {
+        $venueRecords = Venue::query()->orderBy('name')->get();
+        $venueOptions = array_values(array_unique(array_merge(
+            $venueRecords->pluck('name')->filter()->values()->all(),
+            self::VENUE_OPTIONS
+        )));
+
+        foreach ($venueOptions as $venueName) {
             $venueCapacityMap[$venueName] = $this->availabilityService->getVenueCapacity($venueName);
         }
+
+        $departments = Department::query()->orderBy('name')->get();
+        $colleges = College::query()->with('departments')->orderBy('name')->get();
+        $profileDepartment = $user->department_id
+            ? $departments->firstWhere('id', (int) $user->department_id)
+            : $departments->firstWhere('name', $user->department);
+        $profileCollegeId = $user->college_id ?? $profileDepartment?->college_id;
+        $profileDepartmentId = $user->department_id ?? $profileDepartment?->id;
 
         return view('requestor.index', [
             'user'              => $user,
@@ -165,7 +182,12 @@ class RequestorController extends Controller
             'currentSemester'   => $currentSemester,
             'profileMeta'       => $profileMeta,
             'activeTab'         => $request->get('tab', 'calendar'),
-            'venueOptions'      => self::VENUE_OPTIONS,
+            'venueOptions'      => $venueOptions,
+            'venueRecords'      => $venueRecords,
+            'colleges'          => $colleges,
+            'departments'       => $departments,
+            'profileCollegeId'  => $profileCollegeId,
+            'profileDepartmentId' => $profileDepartmentId,
             'equipOptions'      => self::EQUIPMENT_OPTIONS,
             'controlNumber'     => FacilityRequest::generateControlNumber(),
             'equipment'         => $equipment,
@@ -348,7 +370,10 @@ class RequestorController extends Controller
             $submittedVenue = reset($submittedVenue);
         }
         $submittedVenue = trim((string) $submittedVenue);
-        $allowedVenues = array_merge(self::VENUE_OPTIONS, ['Others (specify)']);
+        $allowedVenues = Venue::query()->pluck('name')->filter()->values()->all();
+        if ($allowedVenues === []) {
+            $allowedVenues = self::VENUE_OPTIONS;
+        }
         $venue = in_array($submittedVenue, $allowedVenues, true) ? [$submittedVenue] : [];
 
         if (!empty($venue)) {
@@ -599,16 +624,21 @@ class RequestorController extends Controller
         }
 
         // Build validation rules
+        $hasDepartmentDirectory = College::query()->exists() && Department::query()->exists();
         $rules = [
             'reservation_duration'  => ['nullable', 'in:specific_time,whole_day,whole-day,whole day'],
-            'department'            => 'required|string|max:100',
+            'college_id'            => ['nullable', 'exists:colleges,id'],
+            'department_id'         => ['nullable', 'exists:departments,id'],
+            'department'            => ['nullable', 'string', 'max:100'],
+            'organization_name'     => ['nullable', 'string', 'max:191'],
             'name_of_activity'      => 'required|string|max:200',
+            'purpose'               => ['nullable', 'string', 'max:2000'],
             'expected_participants' => 'required|integer|min:1',
             'start_date'            => 'required|date|after_or_equal:today',
             'end_date'              => 'required|date|after_or_equal:start_date',
             'start_time'            => 'required|date_format:H:i',
             'end_time'              => 'required|date_format:H:i',
-            'venue'                 => ['required', 'string', Rule::in(array_merge(self::VENUE_OPTIONS, ['Others (specify)']))],
+            'venue'                 => ['required', 'string'],
             'equipment'             => 'required|array|min:1',
             'equipment_quantities'  => 'nullable|array',
             'other_venue'           => 'nullable|string|max:200',
@@ -616,8 +646,20 @@ class RequestorController extends Controller
             'priority'              => 'nullable|in:regular,institutional',
             'is_emergency'          => 'nullable|boolean',
             // E-signature is required for all requestors
-            'e_signature_file'      => 'required|file|mimes:pdf,jpeg,jpg,png|max:10240',
+            'e_signature_file'      => 'required|file|mimes:jpeg,jpg,png|max:10240',
         ];
+
+        if (in_array($user->requestor_type, ['student', 'faculty'], true)) {
+            if ($hasDepartmentDirectory) {
+                $rules['college_id'][] = 'required';
+                $rules['department_id'][] = 'required';
+            } else {
+                $rules['college_id'][] = 'required_without:department';
+                $rules['department_id'][] = 'required_without:department';
+            }
+        } elseif ($user->requestor_type === 'outsider') {
+            $rules['organization_name'][] = $hasDepartmentDirectory ? 'required' : 'required_without:department';
+        }
 
         // Conditional document requirements based on requestor type
         if (in_array($user->requestor_type, ['student', 'faculty'], true)) {
@@ -649,6 +691,31 @@ class RequestorController extends Controller
         }
 
         $validated = $request->validate($rules);
+        $validated['purpose'] = trim((string) ($validated['purpose'] ?? $validated['name_of_activity']));
+
+        if (in_array($user->requestor_type, ['student', 'faculty'], true)) {
+            $selectedDepartment = Department::query()->find($validated['department_id'] ?? null);
+            if ($selectedDepartment && $validated['college_id'] && (int) $selectedDepartment->college_id !== (int) $validated['college_id']) {
+                return back()->withErrors(['department_id' => 'Please select a department under the selected college.'])->withInput();
+            }
+
+            if ($user->college_id && (int) ($validated['college_id'] ?? 0) !== (int) $user->college_id) {
+                return back()->withErrors(['college_id' => 'Your college is taken from your profile.'])->withInput();
+            }
+
+            if ($user->department_id && (int) ($validated['department_id'] ?? 0) !== (int) $user->department_id) {
+                return back()->withErrors(['department_id' => 'Your department is taken from your profile.'])->withInput();
+            }
+
+            if ($selectedDepartment) {
+                $validated['department'] = $selectedDepartment->name;
+            }
+        } elseif ($user->requestor_type === 'outsider') {
+            $validated['department'] = trim((string) ($validated['organization_name'] ?? $validated['department'] ?? ''));
+            if ($validated['department'] === '') {
+                return back()->withErrors(['organization_name' => 'Please enter your organization name.'])->withInput();
+            }
+        }
 
         $reservationDuration = strtolower((string) ($validated['reservation_duration'] ?? 'specific_time'));
         $scheduleRange = FacilityRequest::resolveReservationDuration(
@@ -908,6 +975,7 @@ class RequestorController extends Controller
             'date_requested'           => now()->toDateString(),
             'department'               => $validated['department'],
             'name_of_activity'         => $validated['name_of_activity'],
+            'purpose'                  => $validated['purpose'],
             'expected_participants'    => $validated['expected_participants'],
             'start_date'               => $validated['start_date'],
             'end_date'                 => $validated['end_date'] ?? $validated['start_date'],

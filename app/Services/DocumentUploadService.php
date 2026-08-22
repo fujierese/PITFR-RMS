@@ -29,19 +29,28 @@ class DocumentUploadService
         try {
             // Validate file extension
             $extension = strtolower($file->getClientOriginalExtension());
-            if (!in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
+            $allowedExtensions = $documentType === 'e_signature'
+                ? ['jpg', 'jpeg', 'png']
+                : self::ALLOWED_EXTENSIONS;
+            $allowedMimeTypes = $documentType === 'e_signature'
+                ? ['image/jpeg', 'image/png']
+                : self::ALLOWED_MIME_TYPES;
+
+            if (!in_array($extension, $allowedExtensions, true)) {
                 return [
                     'success' => false,
-                    'error' => "Invalid file type. Allowed formats: " . implode(', ', array_map('strtoupper', self::ALLOWED_EXTENSIONS)),
+                    'error' => "Invalid file type. Allowed formats: " . implode(', ', array_map('strtoupper', $allowedExtensions)),
                 ];
             }
 
             // Validate MIME type
             $mimeType = $file->getMimeType();
-            if (!in_array($mimeType, self::ALLOWED_MIME_TYPES, true)) {
+            if (!in_array($mimeType, $allowedMimeTypes, true)) {
                 return [
                     'success' => false,
-                    'error' => "Invalid file format detected. Please upload a valid PDF, JPEG, or PNG file.",
+                    'error' => $documentType === 'e_signature'
+                        ? 'Invalid file format detected. Please upload a valid JPEG or PNG image.'
+                        : "Invalid file format detected. Please upload a valid PDF, JPEG, or PNG file.",
                 ];
             }
 
