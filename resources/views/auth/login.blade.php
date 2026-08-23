@@ -4,6 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In — PIT Facility Request Portal</title>
+    <style>
+        @keyframes login-panel-reveal {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .login-panel-reveal {
+            animation: login-panel-reveal 700ms ease-out both;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .login-panel-reveal { animation: none !important; }
+        }
+    </style>
     @if (app()->runningUnitTests())
         {{-- Skip Vite asset loading in tests when the manifest may not exist. --}}
     @else
@@ -18,7 +32,7 @@
         <!-- =========================
              LEFT SIDE — IMAGES / BRAND
         ========================== -->
-        <section class="relative hidden h-full overflow-hidden bg-slate-950 lg:flex lg:flex-col lg:justify-start lg:pt-12 lg:pl-6 lg:pr-10 xl:pl-8 xl:pr-16">
+        <section class="login-panel-reveal relative hidden min-h-screen overflow-x-hidden overflow-y-auto bg-slate-950 lg:flex lg:h-screen lg:flex-col lg:justify-start lg:pt-12 lg:pl-6 lg:pr-10 xl:pl-8 xl:pr-16">
 
             <!-- Background effects -->
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%)]"></div>
@@ -85,7 +99,7 @@
              RIGHT SIDE — LOGIN
         ========================== -->
 
-        <section class="flex min-h-screen items-center justify-center bg-slate-100 px-6 py-12 sm:px-10 lg:px-16 xl:px-24">
+        <section class="login-panel-reveal flex min-h-screen items-center justify-center bg-slate-100 px-6 py-12 sm:px-10 lg:px-16 xl:px-24" style="animation-delay: 80ms;">
 
             <div class="w-full max-w-[460px]">
 
@@ -151,6 +165,12 @@
 
                 @endif
 
+                @if(session('status'))
+                    <div class="mb-6 border-l-4 border-emerald-500 bg-emerald-50 p-4 text-sm text-emerald-800">
+                        {{ session('status') }}
+                    </div>
+                @endif
+
 
                 <!-- Login Form -->
                 <form
@@ -162,12 +182,17 @@
 
                     @csrf
 
+                    <a href="{{ route('google.redirect', ['type' => 'student']) }}" class="mb-6 flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-500">
+                        <span class="text-base font-bold text-red-500">G</span>
+                        Continue with Google
+                    </a>
+
 
                     <!-- Email -->
                     <div>
 
-                        <label class="mb-2 block text-sm font-semibold text-slate-700">
-                            Email
+                        <label for="email" class="mb-2 block text-sm font-semibold text-slate-700">
+                            Username or Email Address
                         </label>
 
                         <div class="relative">
@@ -191,7 +216,8 @@
                             </span>
 
                             <input
-                                type="email"
+                                type="text"
+                                id="email"
                                 name="email"
                                 required
                                 value="{{ old('email', old('username')) }}"
@@ -294,13 +320,6 @@
                         </label>
 
 
-                        <a
-                            href="{{ route('home') }}"
-                            class="text-sm font-semibold text-emerald-600 transition hover:text-emerald-700"
-                        >
-                            Forgot Password?
-                        </a>
-
                     </div>
 
 
@@ -325,7 +344,16 @@
                             href="{{ route('register') }}"
                             class="font-semibold text-emerald-600 transition hover:text-emerald-700"
                         >
-                            Create requestor account
+                            Create Requestor Account
+                        </a>
+                    </div>
+
+                    <div>
+                        <a
+                            href="{{ route('password.request') }}"
+                            class="font-semibold text-emerald-600 transition hover:text-emerald-700"
+                        >
+                            Forgot Password?
                         </a>
                     </div>
 

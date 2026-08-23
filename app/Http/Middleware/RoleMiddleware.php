@@ -26,6 +26,14 @@ class RoleMiddleware
                 return $next($request);
             }
 
+            if ($role === 'system_admin' && $user->isSystemAdmin()) {
+                return $next($request);
+            }
+
+            if ($role === 'supply_office' && $user->isSupplyOffice()) {
+                return $next($request);
+            }
+
             if ($role === 'requestor' && $user->isRequestee()) {
                 return $next($request);
             }

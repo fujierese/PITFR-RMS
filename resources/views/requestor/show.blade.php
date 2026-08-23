@@ -33,29 +33,61 @@
         ['label' => 'Venue Review', 'key' => 'venue'],
         ['label' => 'Equipment Review', 'key' => 'equipment'],
         ['label' => 'Final Approval', 'key' => 'approval'],
-        ['label' => 'Completed', 'key' => 'completed'],
+        ['label' => 'Fulfilled', 'key' => 'completed'],
     ];
 
     $currentWorkflowIndex = 0;
-    if ($request->status === 'rejected') {
+    if ($request->status === 'pending' && $request->venue_status === 'approved' && $request->equipment_status === 'approved') {
         $currentWorkflowIndex = 3;
     } elseif ($request->status === 'approved' || $request->status === 'completed') {
         $currentWorkflowIndex = 4;
+    } elseif ($request->status === 'rejected') {
+        $currentWorkflowIndex = $request->venue_status === 'rejected' || $request->equipment_status === 'rejected' ? 1 : 3;
     } elseif ($request->venue_status === 'approved' && $request->equipment_status === 'approved') {
         $currentWorkflowIndex = 3;
     } elseif ($request->venue_status === 'approved' || $request->equipment_status === 'approved') {
         $currentWorkflowIndex = 2;
-    } elseif ($request->venue_status === 'rejected' || $request->equipment_status === 'rejected') {
-        $currentWorkflowIndex = 1;
     } else {
         $currentWorkflowIndex = 1;
     }
 
     $workflowStageLabel = $workflowSteps[$currentWorkflowIndex]['label'] ?? 'Submitted';
+    $workflowStatuses = [
+        'submitted' => 'approved',
+        'venue' => $request->venue_status,
+        'equipment' => $request->equipment_status,
+        'approval' => $request->status === 'approved' || $request->status === 'completed'
+            ? 'approved'
+            : ($request->status === 'rejected' && $request->venue_status !== 'rejected' && $request->equipment_status !== 'rejected' ? 'rejected' : 'pending'),
+        'completed' => $request->status === 'completed' ? 'approved' : 'pending',
+    ];
     $requestDateLabel = $request->date_requested ? \Carbon\Carbon::parse($request->date_requested)->format('M j, Y') : 'N/A';
     $lastUpdatedLabel = $request->updated_at ? \Carbon\Carbon::parse($request->updated_at)->format('M j, Y \a\t g:i A') : null;
     $scheduledStart = $request->reservationSchedule?->start_datetime ?? \Carbon\Carbon::parse($request->start_date . ' ' . ($request->start_time ?? '00:00'));
     $scheduledEnd = $request->reservationSchedule?->end_datetime ?? \Carbon\Carbon::parse(($request->end_date ?? $request->start_date) . ' ' . ($request->end_time ?? $request->start_time ?? '00:00'));
+    $durationMinutes = abs($scheduledStart->diffInMinutes($scheduledEnd));
+    $durationHours = intdiv($durationMinutes, 60);
+    $durationRemainder = $durationMinutes % 60;
+    $reservationDurationLabel = ($durationHours ? $durationHours . ' hour' . ($durationHours === 1 ? '' : 's') : '')
+        . ($durationRemainder ? ($durationHours ? ' ' : '') . $durationRemainder . ' minute' . ($durationRemainder === 1 ? '' : 's') : '');
+    $reservationDurationLabel = $reservationDurationLabel ?: 'Not specified';
+    $proposalFilename = $request->activity_proposal_file ?: $request->proposal_file;
+    $proposalIsPdf = strtolower(pathinfo((string) $proposalFilename, PATHINFO_EXTENSION)) === 'pdf';
+    $venueNames = $request->getVenueNames();
+    $equipmentItems = $request->getEquipmentItems();
+    $equipmentQuantities = $request->getEquipmentQuantities();
+    $requestStartDate = $request->start_date?->copy()->setTimezone(config('app.timezone', 'Asia/Manila'));
+    $requestEndDate = ($request->end_date ?? $request->start_date)?->copy()->setTimezone(config('app.timezone', 'Asia/Manila'));
+    $reservationDateLabel = $requestStartDate && $requestEndDate && !$requestStartDate->isSameDay($requestEndDate)
+        ? $requestStartDate->format('M j, Y') . ' - ' . $requestEndDate->format('M j, Y')
+        : ($requestStartDate?->format('M j, Y') ?? 'Not specified');
+    $reservationTimeLabel = $scheduledStart->setTimezone(config('app.timezone', 'Asia/Manila'))->format('g:i A')
+        . ' - ' . $scheduledEnd->setTimezone(config('app.timezone', 'Asia/Manila'))->format('g:i A');
+    $wholeDayRequested = in_array(strtolower((string) ($request->reservation_duration ?? '')), ['whole_day', 'whole-day', 'whole day'], true)
+        || ($request->start_time === '00:00' && $request->end_time === '23:59');
+    if ($wholeDayRequested) {
+        $reservationTimeLabel = '12:00 AM - 11:59 PM';
+    }
 
     $approvalTone = 'amber';
     $approverTone = 'amber';
@@ -66,45 +98,52 @@
     $approvalTimestamp = null;
 
     if ($request->status === 'approved') {
-        $approvalMessage = 'Approved by Administrator';
+        $approvalMessage = 'Reservation approved and confirmed';
+        $approverMessage = 'Your reservation is approved and confirmed.';
         $approvalTone = 'emerald';
         $currentApprover = 'Administrator';
         $nextStep = null;
         $approvalTimestamp = $request->approved_date ? \Carbon\Carbon::parse($request->approved_date)->format('M j, Y \a\t g:i A') : null;
     } elseif ($request->status === 'rejected') {
-        $approvalMessage = 'Declined by Administrator';
+        $approvalMessage = 'Reservation request declined';
+        $approverMessage = 'This reservation request was declined.';
         $approvalTone = 'rose';
         $currentApprover = 'Administrator';
         $nextStep = null;
         $approvalTimestamp = $request->updated_at ? \Carbon\Carbon::parse($request->updated_at)->format('M j, Y \a\t g:i A') : null;
     } elseif ($request->venue_status === 'approved' && $request->equipment_status === 'approved') {
-        $approvalMessage = 'Waiting for final approval';
+        $approvalMessage = 'Reservation is awaiting final confirmation';
+        $approverMessage = 'Your reservation has passed venue and equipment review and is awaiting final confirmation.';
         $approvalTone = 'amber';
         $currentApprover = 'Administrator';
         $nextStep = 'Final Approval';
     } elseif ($request->venue_status === 'approved') {
-        $approvalMessage = 'Venue approved, awaiting equipment review';
+        $approvalMessage = 'Venue approved; equipment review is in progress';
+        $approverMessage = 'Your venue is approved. The equipment request is now being reviewed.';
         $approvalTone = 'amber';
         $currentApprover = 'Equipment Custodian';
         $nextStep = 'Equipment Review';
     } elseif ($request->equipment_status === 'approved') {
-        $approvalMessage = 'Equipment approved, awaiting venue review';
+        $approvalMessage = 'Equipment approved; venue review is in progress';
+        $approverMessage = 'Your equipment request is approved. The venue request is now being reviewed.';
         $approvalTone = 'amber';
         $currentApprover = 'Venue Custodian';
         $nextStep = 'Venue Review';
     } elseif ($request->venue_status === 'rejected' || $request->equipment_status === 'rejected') {
-        $approvalMessage = 'Revision requested by custodian';
+        $approvalMessage = 'Reservation changes requested';
+        $approverMessage = 'A custodian requested changes before this reservation can proceed.';
         $approvalTone = 'rose';
         $currentApprover = 'Custodian';
         $nextStep = 'Respond to revision';
     }
 
     $approverTone = $approvalTone;
-    $approverMessage = $approvalMessage;
     $hasUrgentConflict = (bool) ($request->is_emergency && $request->venue_status === 'approved' && $request->status === 'pending');
 @endphp
 
 @section('content')
+
+<div class="space-y-6">
 
     {{-- Header --}}
     <div class="rounded-[32px] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:p-8">
@@ -116,10 +155,14 @@
                     </svg>
                     Back
                 </a>
-                <button type="button" data-print-url="{{ route('request.print', $request->id) }}" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50" onclick="window.open(this.dataset.printUrl, '_blank', 'width=1200,height=900')">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-3a2 2 0 00-2-2h-2M7 17H5a2 2 0 01-2-2v-3a2 2 0 012-2h2m10 0V7a2 2 0 00-2-2H9a2 2 0 00-2 2v3m10 0H7"/></svg>
-                    Print Request
-                </button>
+                @if(!auth()->user()->isRequestor())
+                @can('print', $request)
+                    <button type="button" data-print-url="{{ route('request.print', $request->id) }}" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50" onclick="window.open(this.dataset.printUrl, '_blank', 'width=1200,height=900')">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-3a2 2 0 00-2-2h-2M7 17H5a2 2 0 01-2-2v-3a2 2 0 012-2h2m10 0V7a2 2 0 00-2-2H9a2 2 0 00-2 2v3m10 0H7"/></svg>
+                        Print Request
+                    </button>
+                @endcan
+                @endif
                 <div>
                     <p class="text-sm font-semibold uppercase tracking-[0.25em] text-emerald-600">Request tracking</p>
                     <h1 class="mt-1 text-2xl font-semibold text-slate-900">Request Details</h1>
@@ -154,22 +197,18 @@
                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Workflow progress</p>
                     <p class="mt-1 text-sm font-semibold text-slate-700">Current stage: {{ $workflowStageLabel }}</p>
                 </div>
-                <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    <span class="rounded-full bg-emerald-500 px-2.5 py-1 text-white">Completed</span>
-                    <span class="rounded-full bg-amber-400 px-2.5 py-1 text-white">Current</span>
-                    <span class="rounded-full bg-slate-300 px-2.5 py-1 text-white">Upcoming</span>
-                </div>
             </div>
             <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 @foreach($workflowSteps as $index => $step)
                     @php
-                        $isCompleted = $index < $currentWorkflowIndex;
-                        $isCurrent = $index === $currentWorkflowIndex;
-                        $stepTone = $isCompleted ? 'emerald' : ($isCurrent ? 'amber' : 'slate');
+                        $stepStatus = $workflowStatuses[$step['key']] ?? 'pending';
+                        $isCurrent = $step['key'] === 'approval' && $currentWorkflowIndex === 3;
+                        $stepIcon = $stepStatus === 'rejected' ? '✕' : ($stepStatus === 'approved' ? '✓' : ($isCurrent ? '◉' : '🕐'));
+                        $stepTone = $stepStatus === 'rejected' ? 'rose' : ($stepStatus === 'approved' ? 'emerald' : ($isCurrent ? 'amber' : 'slate'));
                     @endphp
                     <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
-                        <div class="mx-auto flex h-8 w-8 items-center justify-center rounded-full {{ $stepTone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : ($stepTone === 'amber' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500') }}">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <div class="mx-auto flex h-8 w-8 items-center justify-center rounded-full text-lg {{ $stepTone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : ($stepTone === 'rose' ? 'bg-rose-100 text-rose-700' : ($stepTone === 'amber' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500')) }}" aria-label="{{ $stepStatus }}">
+                            {{ $stepIcon }}
                         </div>
                         <p class="mt-2 text-sm font-semibold text-slate-800">{{ $step['label'] }}</p>
                     </div>
@@ -179,7 +218,7 @@
     </div>
 
     {{-- Role-Based Actions --}}
-    <div class="grid gap-4 mb-6">
+    <div class="grid gap-4">
         @if(auth()->check() && auth()->user()->isRequestee() && auth()->id() === $request->requested_by_id && ($request->status === 'needs_reschedule' || $request->venue_status === 'needs_reschedule' || $request->equipment_status === 'needs_reschedule'))
             <div class="bg-amber-50 border border-amber-200 rounded-3xl p-5 shadow-sm">
                 <div class="flex items-start justify-between gap-4">
@@ -225,7 +264,7 @@
                             </span>
                         </div>
 
-                        <div class="grid gap-3 sm:grid-cols-2">
+                        <div class="grid gap-3 sm:grid-cols-3">
                             <form method="POST" action="{{ route('request.custodian.verify', $request->id) }}" data-swal-confirm data-swal-title="Verify and endorse this request?" data-swal-text="This will forward the request for final approval." data-swal-confirm-text="Yes, endorse it" data-swal-confirm-color="#059669">
                                 @csrf
                                 <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-emerald-700">
@@ -326,6 +365,15 @@
                                 <button type="button" onclick="handleDecline(event)"
                                         class="w-full inline-flex items-center justify-center rounded-2xl bg-red-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-red-700">
                                     Decline
+                                </button>
+                            </form>
+
+                            <form method="POST" action="{{ route('supply-office.requests.needs-revision') }}" class="sm:col-span-2 lg:col-span-1">
+                                @csrf
+                                <input type="hidden" name="id" value="{{ $request->id }}">
+                                <input type="hidden" name="notes" value="Needs revision before final approval.">
+                                <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-100">
+                                    Needs Revision
                                 </button>
                             </form>
                         </div>
@@ -449,11 +497,16 @@
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-white p-4">
                     <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Venue</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">{{ implode(', ', $request->getVenueNames()) ?: '—' }}</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">{{ implode(', ', $venueNames) ?: '—' }}</p>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Reservation Schedule</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">{{ $scheduledStart->setTimezone(config('app.timezone', 'Asia/Manila'))->format('M j, Y g:i A') }} @if($scheduledEnd && $scheduledEnd->ne($scheduledStart)) — {{ $scheduledEnd->setTimezone(config('app.timezone', 'Asia/Manila'))->format('M j, Y g:i A') }} @endif</p>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Reservation Dates</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">{{ $reservationDateLabel }}</p>
+                    <p class="mt-1 text-xs text-slate-500">{{ $reservationTimeLabel }}</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Reservation Duration</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">{{ $reservationDurationLabel }}</p>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-white p-4">
                     <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Expected Participants</p>
@@ -476,7 +529,7 @@
             </div>
             <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Purpose</p>
-                <p class="mt-2 text-sm text-slate-700">{{ $request->notes ?: 'No purpose details provided.' }}</p>
+                        <p class="mt-2 text-sm text-slate-700">{{ $request->purpose ?: $request->notes ?: 'No purpose details provided.' }}</p>
             </div>
             <div class="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Special Instructions</p>
@@ -507,8 +560,8 @@
             Equipment
         </div>
         <div class="mt-5 grid gap-4 md:grid-cols-2">
-            @if(!empty($request->getEquipmentItems()))
-                @foreach($request->getEquipmentItems() as $e)
+            @if(!empty($equipmentItems))
+                @foreach($equipmentItems as $e)
                     <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <div class="flex items-center justify-between gap-3">
                             <div class="flex items-center gap-2">
@@ -517,7 +570,7 @@
                                 </div>
                                 <p class="text-sm font-semibold text-slate-900">{{ $e }}</p>
                             </div>
-                            <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">Qty {{ !empty($request->getEquipmentQuantities()[$e]) ? $request->getEquipmentQuantities()[$e] : 1 }}</span>
+                            <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">Qty {{ !empty($equipmentQuantities[$e]) ? $equipmentQuantities[$e] : 1 }}</span>
                         </div>
                     </div>
                 @endforeach
@@ -527,7 +580,7 @@
         </div>
     </div>
 
-    @if($request->proposal_file)
+    @if($proposalFilename || $request->igp_receipt_file || $request->e_signature_file)
         <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div class="flex items-start gap-3">
@@ -536,25 +589,52 @@
                     </div>
                     <div>
                         <p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Proposal</p>
-                        <p class="mt-1 text-lg font-semibold text-slate-900">{{ $request->proposal_file }}</p>
-                        <p class="mt-1 text-sm text-slate-500">Upload status available through the existing proposal actions.</p>
+                        <p class="mt-1 text-lg font-semibold text-slate-900">{{ $proposalFilename ?: 'No activity proposal uploaded' }}</p>
+                        @if($request->igp_receipt_file)
+                            <p class="mt-2 text-sm text-slate-600">IGP receipt: {{ $request->igp_receipt_file }}</p>
+                        @endif
+                        <p class="mt-1 text-sm text-slate-500">Uploaded documents</p>
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-3">
-                    <a href="{{ route('request.proposal', ['id' => $request->id]) }}" target="_blank"
+                    @if($proposalFilename)
+                    <button type="button" data-proposal-url="{{ route('request.proposal', ['id' => $request->id]) }}" data-proposal-pdf="{{ $proposalIsPdf ? 'true' : 'false' }}" onclick="openProposalPreview(this)"
                         class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                         Preview
-                    </a>
+                    </button>
                     <a href="{{ route('request.proposal.download', ['id' => $request->id]) }}"
                         class="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         Download
                     </a>
+                    @endif
                 </div>
             </div>
         </div>
     @endif
+
+    @if($request->e_signature_file)
+        <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
+                <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
+                E-Signature
+            </div>
+            <div class="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <img src="{{ route('request.signature', ['id' => $request->id]) }}" alt="Requestor e-signature" class="max-h-32 max-w-full object-contain">
+            </div>
+        </div>
+    @endif
+
+    <div id="proposal-preview-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/75 p-4" role="dialog" aria-modal="true" aria-labelledby="proposal-preview-title">
+        <div class="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                <h2 id="proposal-preview-title" class="text-lg font-semibold text-slate-900">Activity Proposal Preview</h2>
+                <button type="button" onclick="closeProposalPreview()" class="rounded-full px-3 py-1 text-2xl leading-none text-slate-500 hover:bg-slate-100" aria-label="Close preview">&times;</button>
+            </div>
+            <div id="proposal-preview-content" class="min-h-[60vh] overflow-auto bg-slate-100 p-4"></div>
+        </div>
+    </div>
 
     <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -567,9 +647,12 @@
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                 </div>
                 <div>
-                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Current approver</p>
+                        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Reservation approval status</p>
                     <p class="mt-1 text-lg font-semibold text-slate-900">{{ $approverMessage }}</p>
-                    <p class="mt-1 text-sm text-slate-600">The request will continue through the existing approval workflow without changing the backend process.</p>
+                            <p class="mt-1 text-sm text-slate-600">{{ $approvalMessage }}@if($approvalTimestamp) on {{ $approvalTimestamp }}@endif</p>
+                    @if(auth()->user()->isRequestor() && $request->status === 'approved')
+                        <p class="mt-3 text-sm font-semibold text-emerald-700">Your approved request is ready for pickup from the Supply Office.</p>
+                    @endif
                 </div>
             </div>
         </div>
@@ -616,6 +699,31 @@
         const params = new URLSearchParams(window.location.search);
         if (params.get('print') === '1') {
             window.print();
+        }
+    });
+
+    function openProposalPreview(button) {
+        const modal = document.getElementById('proposal-preview-modal');
+        const content = document.getElementById('proposal-preview-content');
+        const url = button.dataset.proposalUrl;
+        content.innerHTML = button.dataset.proposalPdf === 'true'
+            ? '<iframe src="' + url + '" title="Activity proposal document" class="h-[70vh] w-full border-0"></iframe>'
+            : '<img src="' + url + '" alt="Activity proposal" class="mx-auto max-h-[70vh] max-w-full object-contain">';
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeProposalPreview() {
+        const modal = document.getElementById('proposal-preview-modal');
+        const content = document.getElementById('proposal-preview-content');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        content.replaceChildren();
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeProposalPreview();
         }
     });
 

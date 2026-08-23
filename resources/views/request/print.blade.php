@@ -934,14 +934,17 @@
         $endTime = $request->end_time ? \Carbon\Carbon::parse($request->end_time)->format('g:i A') : null;
         $normalizedDuration = strtolower((string) ($request->reservation_duration ?? ''));
         $wholeDayRequested = in_array($normalizedDuration, ['whole_day', 'whole-day', 'whole day'], true)
-            || ((string) ($request->start_time ?? '') === '08:00' && (string) ($request->end_time ?? '') === '00:00');
+            || ((string) ($request->start_time ?? '') === '08:00' && (string) ($request->end_time ?? '') === '00:00')
+            || ((string) ($request->start_time ?? '') === '00:00' && (string) ($request->end_time ?? '') === '23:59');
         $scheduleTime = $endTime ? $startTime . ' - ' . $endTime : $startTime;
-        $displayScheduleTime = $wholeDayRequested ? 'WHOLE DAY (8:00 AM – 12:00 AM)' : $scheduleTime;
+        $displayScheduleTime = $wholeDayRequested ? 'WHOLE DAY (12:00 AM – 11:59 PM)' : $scheduleTime;
 
         $requesterName = $request->requested_by ?? $request->requester?->name ?? 'N/A';
         $requesterPosition = $request->requested_by_position ?? $request->requester?->position ?? 'N/A';
         $venueApprover = $request->getStageApproverName('venue') ?: 'Pending';
         $equipmentApprover = $request->getStageApproverName('equipment') ?: 'Pending';
+        $venueSignatureRecorded = $request->venue_status === 'approved' && !empty($request->venue_approval_signature);
+        $equipmentSignatureRecorded = $request->equipment_status === 'approved' && !empty($request->equipment_approval_signature);
         $statusLabel = match ($request->status) {
             'approved' => 'Approved',
             'rejected' => 'Rejected',
@@ -1096,7 +1099,7 @@
                         <div class="signature-block">
                             <span class="field-label">Requisitioner</span>
                             @if($request->e_signature_file)
-                                <img src="{{ url('storage/documents/e_signature/' . $request->e_signature_file) }}" 
+                                <img src="{{ route('request.signature', ['id' => $request->id]) }}"
                                      alt="E-Signature" class="e-signature-image">
                             @else
                                 <div class="signature-line"></div>
@@ -1112,7 +1115,12 @@
                             <div class="approval-panel">
                                 <span class="title">Recommending Approval (Venue)</span>
                                 <div class="approval-list">
-                                    <div>{{ $venueApprover }}</div>
+                                    @if($venueSignatureRecorded)
+                                        <div>{{ $venueApprover }}</div>
+                                        <div>Electronic signature recorded</div>
+                                    @else
+                                        <div>Pending</div>
+                                    @endif
                                 </div>
                             </div>
                             <div class="approval-panel">
@@ -1128,7 +1136,12 @@
                             <div class="approval-panel">
                                 <span class="title">Recommending Approval (Equipment)</span>
                                 <div class="approval-list">
-                                    <div>{{ $equipmentApprover }}</div>
+                                    @if($equipmentSignatureRecorded)
+                                        <div>{{ $equipmentApprover }}</div>
+                                        <div>Electronic signature recorded</div>
+                                    @else
+                                        <div>Pending</div>
+                                    @endif
                                 </div>
                             </div>
                             <div class="approval-panel">

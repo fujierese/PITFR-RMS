@@ -87,25 +87,28 @@
             ];
 
             // Management
-            $navigation[] = [
-                'section' => 'Management',
-                'type' => 'section-header',
-            ];
-            $navigation[] = [
-                'key' => 'users',
-                'label' => 'Users',
-                'route' => route('supply-office.users'),
-                'route_name' => 'supply-office.users',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4a4 4 0 100 8 4 4 0 000-8zm-7 16a7 7 0 0114 0"/></svg>',
-            ];
-            $navigation[] = [
-                'key' => 'reports',
-                'label' => 'Reports',
-                'route' => route('supply-office.usage-reports'),
-                'route_name' => 'supply-office.usage-reports',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M7 16V8m5 8V5m5 11v-6"/></svg>',
-            ];
 
+                // System administration is restricted to system admins.
+                if ($user->isSystemAdmin()) {
+                    $navigation[] = [
+                        'section' => 'Management',
+                        'type' => 'section-header',
+                    ];
+                    $navigation[] = [
+                        'key' => 'users',
+                        'label' => 'Users',
+                        'route' => route('supply-office.users'),
+                        'route_name' => 'supply-office.users',
+                        'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4a4 4 0 100 8 4 4 0 000-8zm-7 16a7 7 0 0114 0"/></svg>',
+                    ];
+                    $navigation[] = [
+                        'key' => 'reports',
+                        'label' => 'Reports',
+                        'route' => route('supply-office.usage-reports'),
+                        'route_name' => 'supply-office.usage-reports',
+                        'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M7 16V8m5 8V5m5 11v-6"/></svg>',
+                    ];
+                }
             // Account & Administration
             $navigation[] = [
                 'section' => 'Monitoring',
@@ -252,7 +255,6 @@
             <p class="text-xs text-slate-300">{{ $user?->role_label ?? 'Requestor' }}</p>
         </div>
     </div>
-
     <nav class="flex-1 min-h-0 overflow-y-auto px-2.5 py-3">
         <div class="space-y-1">
             @foreach($navigation as $item)

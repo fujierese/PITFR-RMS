@@ -120,6 +120,28 @@ class RequestDocumentUploadTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('igp_receipt_file');
+        $this->assertDatabaseCount('facility_requests', 0);
+    }
+
+    public function test_external_requires_both_documents(): void
+    {
+        $this->actingAs($this->externalUser);
+
+        $response = $this->post(route('requestor.store'), [
+            'department' => 'External Org',
+            'name_of_activity' => 'Partnership Event',
+            'expected_participants' => 30,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '14:00',
+            'end_time' => '16:00',
+            'venue' => 'Gymnasium',
+            'equipment' => ['Tables'],
+            'equipment_quantities' => ['Tables' => 5],
+        ]);
+
+        $response->assertSessionHasErrors(['igp_receipt_file', 'e_signature_file']);
+        $this->assertDatabaseCount('facility_requests', 0);
     }
 
     public function test_all_requestors_require_e_signature(): void
@@ -142,6 +164,28 @@ class RequestDocumentUploadTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('e_signature_file');
+        $this->assertDatabaseCount('facility_requests', 0);
+    }
+
+    public function test_student_requires_both_documents(): void
+    {
+        $this->actingAs($this->studentUser);
+
+        $response = $this->post(route('requestor.store'), [
+            'department' => 'Computer Science',
+            'name_of_activity' => 'Tech Workshop',
+            'expected_participants' => 50,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'venue' => 'Conference Hall & Interaction Center (CHIC)',
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => 1],
+        ]);
+
+        $response->assertSessionHasErrors(['activity_proposal_file', 'e_signature_file']);
+        $this->assertDatabaseCount('facility_requests', 0);
     }
 
     public function test_student_can_submit_with_activity_proposal_and_e_signature(): void
@@ -224,7 +268,7 @@ class RequestDocumentUploadTest extends TestCase
         $response->assertSessionHasErrors('activity_proposal_file');
     }
 
-    public function test_emergency_request_waives_activity_proposal(): void
+    public function test_emergency_request_still_requires_activity_proposal(): void
     {
         $this->actingAs($this->studentUser);
 
@@ -242,10 +286,10 @@ class RequestDocumentUploadTest extends TestCase
             'is_emergency' => true,
             'emergency_justification' => 'This is an urgent matter.',
             'e_signature_file' => UploadedFile::fake()->create('signature.pdf', 100),
-            // activity_proposal_file is optional for emergency
+            // activity_proposal_file is still required for emergency requests
         ]);
 
-        $response->assertRedirect();
+        $response->assertSessionHasErrors('activity_proposal_file');
     }
 
     public function test_file_type_validation(): void
@@ -269,6 +313,29 @@ class RequestDocumentUploadTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('activity_proposal_file');
+    }
+
+    public function test_file_content_must_match_allowed_mime_type(): void
+    {
+        $this->actingAs($this->studentUser);
+
+        $response = $this->post(route('requestor.store'), [
+            'department' => 'Computer Science',
+            'name_of_activity' => 'Tech Workshop',
+            'expected_participants' => 50,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'venue' => 'Conference Hall & Interaction Center (CHIC)',
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => 1],
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'text/plain'),
+            'e_signature_file' => UploadedFile::fake()->create('signature.png', 100, 'image/png'),
+        ]);
+
+        $response->assertSessionHasErrors('activity_proposal_file');
+        $this->assertDatabaseCount('facility_requests', 0);
     }
 
     public function test_document_metadata_stored(): void

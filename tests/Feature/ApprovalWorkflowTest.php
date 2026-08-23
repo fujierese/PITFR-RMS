@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\FacilityRequest;
+use App\Models\Equipment;
 use App\Models\User;
 use App\Models\Venue;
 use App\Notifications\RequestStatusChanged;
@@ -139,5 +140,111 @@ class ApprovalWorkflowTest extends TestCase
             'user_id' => $adminUser->id,
         ]);
         Notification::assertSentTo($requester, RequestStatusChanged::class);
+    }
+
+    public function test_api_stage_approval_cannot_finalize_request(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $venueCustodian = User::factory()->create(['role' => 'custodian-venue']);
+        Venue::create([
+            'name' => 'Conference Hall & Interaction Center (CHIC)',
+            'custodian_id' => $venueCustodian->id,
+        ]);
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-API-STAGE-001',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'API Stage Approval Test',
+            'expected_participants' => 25,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'venue' => ['Conference Hall & Interaction Center (CHIC)'],
+            'equipment' => [],
+            'equipment_quantities' => [],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'approved',
+        ]);
+
+        $this->actingAs($venueCustodian, 'sanctum')
+            ->postJson('/api/facility-requests/' . $request->id . '/approve', ['type' => 'venue'])
+            ->assertOk();
+
+        $request->refresh();
+        $this->assertSame('approved', $request->venue_status);
+        $this->assertSame('pending', $request->status);
+        $this->assertNull($request->approved_by_id);
+        $this->assertNull($request->approved_date);
+    }
+
+    public function test_api_venue_custodian_cannot_approve_equipment(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $venueCustodian = User::factory()->create(['role' => 'custodian-venue']);
+        $equipmentCustodian = User::factory()->create(['role' => 'custodian-equipment']);
+        Venue::create(['name' => 'Gymnasium', 'custodian_id' => $venueCustodian->id]);
+        Equipment::create([
+            'name' => 'Sound System',
+            'custodian_id' => $equipmentCustodian->id,
+            'quantity' => 2,
+            'quantity_available' => 2,
+        ]);
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-API-AUTH-001',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'API Authorization Test',
+            'expected_participants' => 25,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'venue' => ['Gymnasium'],
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => 1],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+        ]);
+
+        $this->actingAs($venueCustodian, 'sanctum')
+            ->postJson('/api/facility-requests/' . $request->id . '/approve', ['type' => 'equipment'])
+            ->assertForbidden();
+
+        $this->assertSame('pending', $request->fresh()->equipment_status);
+    }
+
+    public function test_legacy_admin_rejection_clears_final_approval_metadata(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $request = FacilityRequest::factory()->create([
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+            'approved_by' => 'Previous Approver',
+            'approved_by_id' => $admin->id,
+            'approved_date' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.update'), [
+                'id' => $request->id,
+                'action' => 'reject',
+                'notes' => 'Legacy rejection reason',
+            ])
+            ->assertRedirect();
+
+        $request->refresh();
+        $this->assertSame('rejected', $request->status);
+        $this->assertNull($request->approved_by);
+        $this->assertNull($request->approved_by_id);
+        $this->assertNull($request->approved_date);
+        $this->assertSame('Legacy rejection reason', $request->notes);
     }
 }

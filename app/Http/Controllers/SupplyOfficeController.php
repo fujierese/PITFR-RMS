@@ -52,7 +52,7 @@ class SupplyOfficeController extends Controller
 
         $filteredRequests = $query->orderByDesc('created_at')->get();
         $allRequests = $baseQuery->orderByDesc('created_at')->get();
-        $pendingReviewQueue = FacilityRequest::with('requester')
+        $pendingReviewQueue = $this->buildRequestListQuery($request)
             ->where('status', 'pending')
             ->where(function ($query) {
                 $query->where('venue_status', '!=', 'rejected')
@@ -272,7 +272,7 @@ class SupplyOfficeController extends Controller
             $facilityRequest->addHistory(
                 'needs_reschedule',
                 'Request moved to Needs Reschedule by Supply Office.' . ($validated['notes'] ? ' Reason: ' . $validated['notes'] : ''),
-                Auth::id()
+                Auth::user()->getKey()
             );
         });
 
@@ -295,6 +295,43 @@ class SupplyOfficeController extends Controller
         }
 
         return redirect()->route('supply-office.requests.final-approval')->with('success', 'Request marked for rescheduling.');
+    }
+
+    public function needsRevision(Request $request)
+    {
+        $this->ensureAdminAccess();
+
+        $validated = $request->validate([
+            'id' => ['required', 'integer', 'exists:facility_requests,id'],
+            'notes' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $facilityRequest = FacilityRequest::findOrFail($validated['id']);
+        $notes = trim($validated['notes']);
+
+        DB::transaction(function () use ($facilityRequest, $notes): void {
+            $facilityRequest->update([
+                'status' => 'needs_reschedule',
+                'notes' => $notes,
+            ]);
+            $facilityRequest->addHistory(
+                'needs_revision',
+                'Needs Revision decision recorded by Supply Office: ' . $notes,
+                Auth::user()->getKey()
+            );
+        });
+
+        $requester = $facilityRequest->requester;
+        if ($requester) {
+            $requester->notify(new RequestStatusChanged(
+                $facilityRequest,
+                'needs_revision',
+                $notes,
+                Auth::user()->name
+            ));
+        }
+
+        return redirect()->route('supply-office.index')->with('success', 'Request marked as Needs Revision.');
     }
 
     public function storeVenue(Request $request)
@@ -720,6 +757,7 @@ class SupplyOfficeController extends Controller
                     ->orWhereRaw('LOWER(department) LIKE ?', [$searchTerm])
                     ->orWhereHas('requester', function (Builder $requesterQuery) use ($searchTerm): void {
                         $requesterQuery->whereRaw('LOWER(name) LIKE ?', [$searchTerm]);
+                        $requesterQuery->orWhereRaw('LOWER(office_or_organization) LIKE ?', [$searchTerm]);
                     })
                     ->orWhereHas('requestVenues', function (Builder $venueQuery) use ($searchTerm): void {
                         $venueQuery->whereRaw('LOWER(name) LIKE ?', [$searchTerm]);

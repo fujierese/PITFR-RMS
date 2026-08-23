@@ -5,6 +5,8 @@
 @php
     $startTimeValue = old('start_time', $request->start_time);
     $endTimeValue = old('end_time', $request->end_time);
+    $isWholeDay = old('reservation_duration') === 'whole_day'
+        || (($startTimeValue === '00:00' || $startTimeValue === '00:00:00') && ($endTimeValue === '23:59' || $endTimeValue === '23:59:00'));
     $isNeedsReschedule = $request->status === 'needs_reschedule'
         || $request->venue_status === 'needs_reschedule'
         || $request->equipment_status === 'needs_reschedule';
@@ -64,16 +66,16 @@
                         <label class="text-sm font-medium text-slate-700">Reservation Duration</label>
                         <div class="mt-2 flex flex-col gap-3 sm:flex-row">
                             <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-emerald-500 bg-emerald-50 px-3 py-2 text-sm font-medium text-slate-900 shadow-sm">
-                                <input type="radio" name="reservation_duration" value="specific_time" checked>
+                                <input type="radio" name="reservation_duration" value="specific_time" @checked(!$isWholeDay)>
                                 <span>Specific Time</span>
                             </label>
                             <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                                <input type="radio" name="reservation_duration" value="whole_day">
+                                <input type="radio" name="reservation_duration" value="whole_day" @checked($isWholeDay)>
                                 <span>Whole Day</span>
-                                <span class="text-xs text-slate-500">08:00 AM – 12:00 AM</span>
+                                <span class="text-xs text-slate-500">12:00 AM – 11:59 PM</span>
                             </label>
                         </div>
-                        <p class="reservation-duration-helper mt-3 text-xs text-emerald-700" aria-live="polite">Whole Day uses 8:00 AM–12:00 AM for each selected date.</p>
+                        <p class="reservation-duration-helper mt-3 text-xs text-emerald-700" aria-live="polite">Whole Day uses 12:00 AM–11:59 PM for each selected date.</p>
                     </div>
                     <div>
                         <label class="text-sm font-medium text-slate-700">Start Time</label>

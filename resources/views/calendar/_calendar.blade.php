@@ -11,9 +11,9 @@
         'admin' => 'Administrator',
         default => 'User',
     };
-    $hideHeader = $dashboardData['hideHeader'] ?? false;
-    $showCreateRequest = $dashboardData['showCreateRequest'] ?? ($user && $user->isRequestee());
-    $showLoginCTA = $dashboardData['showLoginCTA'] ?? ($role === 'guest');
+    $hideHeader = $dashboardData['hideHeader'] ?? ($hideHeader ?? false);
+    $showCreateRequest = $dashboardData['showCreateRequest'] ?? ($showCreateRequest ?? ($user && $user->isRequestee()));
+    $showLoginCTA = $dashboardData['showLoginCTA'] ?? ($showLoginCTA ?? ($role === 'guest'));
     $showUsageReports = $dashboardData['showUsageReports'] ?? ($role === 'admin');
     $showExport = $dashboardData['showExport'] ?? ($role === 'admin');
     $showStatsCards = $dashboardData['showStatsCards'] ?? ($user && $user->isRequestee());
@@ -21,9 +21,9 @@
     $showVerificationQueue = $dashboardData['showVerificationQueue'] ?? ($user && $user->isCustodian());
     $showUserManagement = $dashboardData['showUserManagement'] ?? ($user && $user->isAdmin());
     $showAuditLogs = $dashboardData['showAuditLogs'] ?? ($user && $user->isAdmin());
-    $showHowToRequest = $dashboardData['showHowToRequest'] ?? ($role === 'guest');
-    $showViewOnlyCalendar = $dashboardData['showViewOnlyCalendar'] ?? ($role === 'guest');
-    $showAvailabilityPanel = $dashboardData['showAvailabilityPanel'] ?? true;
+    $showHowToRequest = $dashboardData['showHowToRequest'] ?? ($showHowToRequest ?? ($role === 'guest'));
+    $showViewOnlyCalendar = $dashboardData['showViewOnlyCalendar'] ?? ($showViewOnlyCalendar ?? ($role === 'guest'));
+    $showAvailabilityPanel = $dashboardData['showAvailabilityPanel'] ?? ($showAvailabilityPanel ?? true);
     $stats = $dashboardData['stats'] ?? [
         'upcoming' => 0,
         'pending' => 0,
@@ -885,7 +885,75 @@
 .fc-daygrid-day.fc-day-weekend .fc-daygrid-day-number,
 .fc-daygrid-day.fc-day-weekend .fc-daygrid-day-frame {
     background-color: #ffffff !important;
-    color: #1f2937 !important;
+    color: inherit !important;
+}
+
+.activity-marquee-viewport {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.activity-name {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.activity-name.is-overflowing {
+    --event-scroll-distance: -40px;
+    display: inline-block;
+    animation: event-label-marquee var(--event-marquee-duration, 9s) linear infinite;
+    will-change: transform;
+}
+
+.venue-marquee-viewport {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    vertical-align: bottom;
+}
+
+.venue-name {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.activity-name.is-overflowing,
+.venue-name.is-overflowing {
+    text-overflow: clip !important;
+}
+
+.venue-name.is-overflowing {
+    --event-scroll-distance: -40px;
+    display: inline-block;
+    animation: event-label-marquee var(--event-marquee-duration, 10s) linear infinite;
+    will-change: transform;
+}
+
+@keyframes event-label-marquee {
+    0%, 12% { transform: translateX(0); }
+    88%, 100% { transform: translateX(var(--event-scroll-distance)); }
+}
+
+.venue-name {
+    font-weight: 800;
+}
+
+.venue-chic { color: #1d4ed8; }
+.venue-balay { color: #be185d; }
+.venue-oval { color: #c2410c; }
+.venue-gymnasium { color: #047857; }
+.venue-covered-court { color: #7e22ce; }
+.venue-volleyball { color: #0891b2; }
+.venue-other { color: #475569; }
+
+@media (prefers-reduced-motion: reduce) {
+    .activity-name.is-overflowing,
+    .venue-name.is-overflowing {
+        animation: none;
+    }
 }
 
 /* Day Cell Inner Container */
@@ -966,10 +1034,10 @@
 }
 
 .event-status-badge {
-    margin-left: 0.4rem;
+    margin-left: 0;
     border-radius: 9999px;
-    padding: 0.15rem 0.5rem;
-    font-size: 0.62rem;
+    padding: 0.12rem 0.42rem;
+    font-size: 0.58rem;
     line-height: 1.2;
     font-weight: 700;
     letter-spacing: 0.02em;
@@ -1032,20 +1100,25 @@
 
 .fc-event-line {
     display: flex;
-    align-items: center;
-    gap: 0.35rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.18rem;
     min-width: 0;
+}
+
+.fc-event-line .fc-event-label {
+    width: 100%;
 }
 
 .fc-event-meta-line {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.15rem 0.5rem;
+    gap: 0.08rem 0.4rem;
     font-size: 0.6rem;
-    line-height: 1.3;
+    line-height: 1.28;
     opacity: 0.92;
     min-width: 0;
-    margin-top: 0.1rem;
+    margin-top: 0.02rem;
 }
 
 .fc-event-meta-item {
@@ -1086,8 +1159,6 @@
     /* height: NOT auto - let FullCalendar calculate based on duration */
     /* width: NOT 100% - let FullCalendar set based on column layout */
     box-shadow: none !important;
-    border: 1px solid transparent !important;
-    background-color: transparent !important;
 }
 
 .fc-timegrid-event {
@@ -1110,8 +1181,8 @@
     display: flex;
     align-items: center;
     width: 100%;
-    gap: 8px;
-    padding: 5px 7px;
+    gap: 6px;
+    padding: 3px 5px;
     border-radius: 0.75rem;
     color: inherit;
     min-width: 0;
@@ -1262,6 +1333,8 @@
 /* Ensure all events are visible in month view */
 .fc .fc-daygrid-event {
     visibility: visible !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
 }
 
 /* Responsive Calendar */
@@ -1317,14 +1390,39 @@
 }
 
 .tippy-content {
-    padding: 12px;
+    padding: 10px 12px;
     font-size: 0.875rem;
-    line-height: 1.5;
+    line-height: 1.45;
 }
 
 .tippy-content strong {
     font-weight: 600;
     color: #1e293b;
+}
+
+.calendar-event-tooltip {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+}
+
+.calendar-event-tooltip__title {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.4;
+    font-weight: 700;
+}
+
+.calendar-event-tooltip__row {
+    margin: 0;
+    line-height: 1.4;
+    font-size: 0.82rem;
+}
+
+.calendar-event-tooltip__row strong {
+    margin-right: 4px;
 }
 
 </style>
@@ -1339,30 +1437,6 @@
 <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/themes/light.css">
 
 <script>
-// Helper function to initialize tooltips for all event elements
-function initializeTooltips() {
-    if (typeof tippy === 'undefined') return;
-    
-    var eventElements = document.querySelectorAll('.fc-event');
-    eventElements.forEach(function(el) {
-        // Destroy existing tooltip if any
-        if (el._tippy) {
-            el._tippy.destroy();
-        }
-        
-        // Initialize Tippy for hover
-        var title = el.getAttribute('title') || el.textContent;
-        tippy(el, {
-            content: title || 'Event Details',
-            theme: 'light',
-            arrow: true,
-            placement: 'top',
-            interactive: false,
-            delay: [400, 0]
-        });
-    });
-}
-
 document.addEventListener('DOMContentLoaded', function() {
     var calendarEl = document.getElementById('calendar');
     var currentRole = '{{ $role }}';
@@ -1370,6 +1444,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function normalizeVenueName(value) {
         return String(value || '').toLowerCase().trim();
     }
+
+            function getVenueClass(venueName) {
+                var normalized = normalizeVenueName(venueName);
+                if (normalized.includes('chic') || normalized.includes('conference hall')) return 'venue-chic';
+                if (normalized.includes('balay alumni')) return 'venue-balay';
+                if (normalized.includes('oval grounds')) return 'venue-oval';
+                if (normalized.includes('gymnasium')) return 'venue-gymnasium';
+                if (normalized.includes('covered court')) return 'venue-covered-court';
+                if (normalized.includes('volleyball court')) return 'venue-volleyball';
+                return 'venue-other';
+            }
 
     function normalizeStatusLabel(statusValue) {
                 var normalized = String(statusValue || '').trim();
@@ -1541,29 +1626,56 @@ document.addEventListener('DOMContentLoaded', function() {
                         window.allEventsData = data;
 
                         // Helper function to create tooltip content
-                        function createTooltipContent(event, startDatetime, status) {
+                        function createTooltipContent(event, status) {
                             function __esc(s) { var d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
-                            var tooltipContent = '<div style="text-align: left; padding: 0; margin: 0;">';
+                            function formatDate(dateTime) {
+                                if (!dateTime) return '';
+                                var parts = String(dateTime).substring(0, 10).split('-');
+                                if (parts.length !== 3) return '';
+                                var date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                                return isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-US', {
+                                    month: 'long',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                });
+                            }
+                            function formatTime(dateTime) {
+                                if (!dateTime) return '';
+                                var time = String(dateTime).substring(11, 16).split(':');
+                                if (time.length !== 2) return '';
+                                var hours = Number(time[0]);
+                                var minutes = Number(time[1]);
+                                if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return '';
+                                var meridiem = hours >= 12 ? 'PM' : 'AM';
+                                return (hours % 12 || 12) + ':' + String(minutes).padStart(2, '0') + ' ' + meridiem;
+                            }
+                            var tooltipContent = '<div class="calendar-event-tooltip">';
                             var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
-                            tooltipContent += '<div style="margin-bottom: 8px;"><strong style="font-size: 0.95rem;">' + __esc(displayTitle) + '</strong></div>';
-                            if (event.extendedProps && event.extendedProps.venue) {
-                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Venue:</strong> ' + __esc(event.extendedProps.venue) + '</div>';
-                            }
-                            if (startDatetime) {
-                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Schedule:</strong> ' + __esc(startDatetime.replace('T', ' ')) + '</div>';
-                            }
-                            if (status) {
-                                var statusColors = getStatusColorInfo(status);
-                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Status:</strong> <span style="color: ' + __esc(statusColors.bg) + '; font-weight: 700;">' + __esc(status) + '</span></div>';
-                            }
+                            var statusText = status ? __esc(status) : 'Pending';
+                            var canonicalStart = event.start_datetime || event.start || '';
+                            var canonicalEnd = event.end_datetime || event.end || '';
+                            var startDate = formatDate(canonicalStart);
+                            var endDate = formatDate(canonicalEnd);
+                            var dateText = startDate && endDate && startDate !== endDate ? startDate + ' – ' + endDate : (startDate || endDate);
+                            var startTime = formatTime(canonicalStart);
+                            var endTime = formatTime(canonicalEnd);
+                            var timeText = startTime && endTime ? startTime + ' – ' + endTime : (startTime || endTime);
+                            var venueText = event.extendedProps && event.extendedProps.venue ? __esc(event.extendedProps.venue) : '';
+
+                            tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Activity:</strong> ' + __esc(displayTitle) + '</div>';
+                            tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Status:</strong> ' + statusText + '</div>';
+                            if (dateText) tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Date:</strong> ' + __esc(dateText) + '</div>';
+                            if (timeText) tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Time:</strong> ' + __esc(timeText) + '</div>';
+                            if (venueText) tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Venue:</strong> ' + venueText + '</div>';
+
                             if (event.extendedProps && event.extendedProps.requestor) {
-                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Requestor:</strong> ' + __esc(event.extendedProps.requestor) + '</div>';
+                                tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Requestor:</strong> ' + __esc(event.extendedProps.requestor) + '</div>';
                             }
                             if (event.extendedProps && event.extendedProps.priority) {
-                                tooltipContent += '<div style="margin-bottom: 6px;"><strong>Priority:</strong> ' + __esc(event.extendedProps.priority) + '</div>';
+                                tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Priority:</strong> ' + __esc(event.extendedProps.priority) + '</div>';
                             }
                             if (event.extendedProps && event.extendedProps.isUrgent) {
-                                tooltipContent += '<div><strong>Urgent:</strong> Yes</div>';
+                                tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Urgent:</strong> Yes</div>';
                             }
                             tooltipContent += '</div>';
                             return tooltipContent;
@@ -1586,7 +1698,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 textColor: statusPalette.text,
                                 classNames: ['status-event', 'status-' + String(status || 'neutral').toLowerCase().replace(/\s+/g, '-')],
                                 extendedProps: Object.assign({}, event.extendedProps, {
-                                    tooltipContent: createTooltipContent(event, startDatetime, status),
+                                    tooltipContent: createTooltipContent(event, status),
                                     venueClass: 'status-indicator',
                                     venueDotColor: statusPalette.bg,
                                     participants: event.extendedProps.expected_participants || 0,
@@ -1667,36 +1779,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 return;
                             }
 
-                            // For timeGrid views (Week/Day): handle multi-day events specially
-                            if (isTimeGridView && isMultiDay(startDatetime, endDatetime)) {
-                                // Create per-day visual segments for multi-day reservations in Week View
-                                var currentDate = startDatetime.substring(0, 10);
-                                var endDate = endDatetime.substring(0, 10);
-                                var startTime = startDatetime.substring(11, 19);
-                                var endTime = endDatetime.substring(11, 19);
-
-                                // First day: from actual start time to end of day
-                                var firstDayEnd = getEndOfDay(currentDate);
-                                mapped.push(createFcEvent(event, startDatetime, firstDayEnd, true));
-
-                                // Middle days: full day (or at least start to end of day within viewport)
-                                currentDate = new Date(currentDate);
-                                currentDate.setDate(currentDate.getDate() + 1);
-                                while (currentDate.toISOString().substring(0, 10) < endDate) {
-                                    var dateStr = currentDate.toISOString().substring(0, 10);
-                                    mapped.push(createFcEvent(
-                                        event,
-                                        getStartOfDay(dateStr),
-                                        getEndOfDay(dateStr),
-                                        true
-                                    ));
-                                    currentDate.setDate(currentDate.getDate() + 1);
-                                }
-
-                                // Last day: from start of day to actual end time
-                                mapped.push(createFcEvent(event, getStartOfDay(endDate), endDatetime, true));
-                            } else {
-                                // Single-day or Day View: use canonical event
+                            // Use the canonical reservation range for timed grid views so
+                            // FullCalendar positions the event across its actual dates and times.
+                            if (isTimeGridView) {
                                 mapped.push(createFcEvent(event, startDatetime, endDatetime, false));
                             }
                         });
@@ -1704,8 +1789,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log('✅ Rendered', mapped.length, 'segments for', viewType);
                         successCallback(mapped);
                         
-                        // ✅ Initialize tooltips after events are rendered
-                        setTimeout(initializeTooltips, 300);
                     })
                     .catch(function(error) {
                         console.error('❌ Failed to load calendar events:', error);
@@ -1743,7 +1826,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 var statusText = normalizeStatusLabel(status);
                 var statusLabel = statusText ? '<span class="event-status-badge ' + __esc(statusTone) + '">' + __esc(statusText) + '</span>' : '';
                 var dot = '<span class="event-dot"></span>';
-                var label = '<span class="fc-event-label">' + __esc(title) + '</span>';
+                var label = '<span class="fc-event-label activity-marquee-viewport"><span class="activity-name">' + __esc(title) + '</span></span>';
 
                 var metaItems = [];
                 if (info.event.start && info.event.end) {
@@ -1753,7 +1836,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 if (info.event.extendedProps && info.event.extendedProps.venue) {
-                    metaItems.push('<span class="fc-event-meta-item">' + __esc(info.event.extendedProps.venue) + '</span>');
+                    var venueItems = String(info.event.extendedProps.venue).split(',').map(function(venueName) {
+                        var trimmedVenue = venueName.trim();
+                        return '<span class="fc-event-meta-item venue-marquee-viewport"><span class="venue-name ' + getVenueClass(trimmedVenue) + '">' + __esc(trimmedVenue) + '</span></span>';
+                    });
+                    metaItems.push(venueItems.join(' <span aria-hidden="true">·</span> '));
                 }
 
                 var metaLine = metaItems.length ? '<div class="fc-event-meta-line">' + metaItems.join(' · ') + '</div>' : '';
@@ -1903,6 +1990,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (info.event.textColor) {
                     info.el.style.color = info.event.textColor;
                 }
+
+                var label = info.el.querySelector('.activity-marquee-viewport');
+                var track = info.el.querySelector('.activity-name');
+                if (label && track) {
+                    window.requestAnimationFrame(function() {
+                        var overflow = track.scrollWidth - label.clientWidth;
+                        if (overflow > 16) {
+                            track.classList.add('is-overflowing');
+                            track.style.setProperty('--event-scroll-distance', '-' + overflow + 'px');
+                            track.style.setProperty('--event-marquee-duration', Math.max(5, Math.min(14, 4 + (overflow / 24))) + 's');
+                        }
+                    });
+                }
+
+                info.el.querySelectorAll('.venue-marquee-viewport').forEach(function(viewport) {
+                    var venue = viewport.querySelector('.venue-name');
+                    if (!venue) return;
+                    window.requestAnimationFrame(function() {
+                        var overflow = venue.scrollWidth - viewport.clientWidth;
+                        if (overflow > 16) {
+                            venue.classList.add('is-overflowing');
+                            venue.style.setProperty('--event-scroll-distance', '-' + overflow + 'px');
+                            venue.style.setProperty('--event-marquee-duration', Math.max(6, Math.min(18, 5 + (overflow / 18))) + 's');
+                        }
+                    });
+                });
             }
         });
 

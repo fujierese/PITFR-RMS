@@ -69,6 +69,13 @@
                             <span class="text-sm font-medium text-slate-500">{{ $venues->count() }} total</span>
                         </div>
 
+                        <form method="POST" action="{{ route('custodian.venues.store') }}" class="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3">
+                            @csrf
+                            <input type="text" name="name" placeholder="Venue name" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
+                            <input type="number" name="capacity" placeholder="Capacity" min="1" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                            <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Add Venue</button>
+                        </form>
+
                         @if($venues->isEmpty())
                             <p class="mt-4 text-sm text-slate-500">No venues assigned to you.</p>
                         @else
@@ -80,11 +87,25 @@
                                                 <h4 class="text-lg font-semibold text-slate-900">{{ $venue->name }}</h4>
                                                 <p class="mt-2 text-sm text-slate-600">ID: {{ $venue->id }}</p>
                                             </div>
-                                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-800">Assigned</span>
+                                            <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide {{ $venue->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700' }}">{{ $venue->is_active ? 'Enabled' : 'Disabled' }}</span>
                                         </div>
                                         @if($venue->description)
                                             <p class="mt-4 text-sm leading-6 text-slate-600">{{ $venue->description }}</p>
                                         @endif
+                                        <div class="mt-4 flex flex-wrap gap-2">
+                                            <form method="POST" action="{{ route('custodian.venues.toggle', $venue) }}">
+                                                @csrf
+                                                @method('PATCH')
+                                                <button type="submit" class="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700">{{ $venue->is_active ? 'Disable' : 'Enable' }}</button>
+                                            </form>
+                                            <form method="POST" action="{{ route('custodian.venues.update', $venue) }}" class="flex flex-wrap gap-2">
+                                                @csrf
+                                                @method('PUT')
+                                                <input type="text" name="name" value="{{ $venue->name }}" class="w-40 rounded-xl border border-slate-300 px-2 py-1 text-xs" required>
+                                                <input type="number" name="capacity" value="{{ $venue->capacity }}" min="1" class="w-24 rounded-xl border border-slate-300 px-2 py-1 text-xs">
+                                                <button type="submit" class="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">Save</button>
+                                            </form>
+                                        </div>
                                     </div>
                                 @endforeach
                             </div>
@@ -99,6 +120,14 @@
                             <span class="text-sm font-medium text-slate-500">{{ $equipment->count() }} total</span>
                         </div>
 
+                        <form method="POST" action="{{ route('custodian.equipment.store') }}" class="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-4">
+                            @csrf
+                            <input type="text" name="name" placeholder="Equipment name" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
+                            <input type="number" name="quantity" placeholder="Total quantity" min="1" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
+                            <input type="number" name="quantity_available" placeholder="Available quantity" min="0" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                            <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Add Equipment</button>
+                        </form>
+
                         @if($equipment->isEmpty())
                             <p class="mt-4 text-sm text-slate-500">No equipment assigned to you.</p>
                         @else
@@ -110,13 +139,28 @@
                                                 <h4 class="text-lg font-semibold text-slate-900">{{ $item->name }}</h4>
                                                 <p class="mt-2 text-sm text-slate-600">ID: {{ $item->id }}</p>
                                             </div>
-                                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-800">Assigned</span>
+                                            <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide {{ $item->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700' }}">{{ $item->is_active ? 'Enabled' : 'Disabled' }}</span>
                                         </div>
                                         <div class="mt-4 space-y-2 text-sm text-slate-600">
                                             <p>Available: <span class="font-semibold text-slate-900">{{ $item->quantity_available }} / {{ $item->quantity }}</span></p>
                                             @if($item->description)
                                                 <p>{{ $item->description }}</p>
                                             @endif
+                                        </div>
+                                        <div class="mt-4 flex flex-wrap gap-2">
+                                            <form method="POST" action="{{ route('custodian.equipment.toggle', $item) }}">
+                                                @csrf
+                                                @method('PATCH')
+                                                <button type="submit" class="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700">{{ $item->is_active ? 'Disable' : 'Enable' }}</button>
+                                            </form>
+                                            <form method="POST" action="{{ route('custodian.equipment.update', $item) }}" class="flex flex-wrap gap-2">
+                                                @csrf
+                                                @method('PUT')
+                                                <input type="text" name="name" value="{{ $item->name }}" class="w-36 rounded-xl border border-slate-300 px-2 py-1 text-xs" required>
+                                                <input type="number" name="quantity" value="{{ $item->quantity }}" min="1" class="w-20 rounded-xl border border-slate-300 px-2 py-1 text-xs" required>
+                                                <input type="number" name="quantity_available" value="{{ $item->quantity_available }}" min="0" class="w-20 rounded-xl border border-slate-300 px-2 py-1 text-xs" required>
+                                                <button type="submit" class="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">Save</button>
+                                            </form>
                                         </div>
                                     </div>
                                 @endforeach

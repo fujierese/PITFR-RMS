@@ -15,7 +15,7 @@
 
     <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/50">
         <form method="GET" action="{{ route('supply-office.requests.pending') }}" class="mb-6 grid gap-3 md:grid-cols-4">
-            <input type="text" name="search" value="{{ $searchQuery }}" placeholder="Search request" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
+            <input type="search" name="search" value="{{ $searchQuery }}" placeholder="Search request number, activity, organization, venue, equipment..." class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
             <input type="text" name="department" value="{{ $departmentFilter }}" placeholder="Department" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
             <input type="text" name="venue" value="{{ $venueFilter }}" placeholder="Venue" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
             <select name="priority" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
@@ -25,8 +25,8 @@
             </select>
             <input type="date" name="date_from" value="{{ $dateFrom }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
             <input type="date" name="date_to" value="{{ $dateTo }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <button type="submit" class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Apply Filters</button>
-            <a href="{{ route('supply-office.requests.pending') }}" class="rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Reset</a>
+            <button type="submit" class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Advanced Filters</button>
+            <a href="{{ route('supply-office.requests.pending') }}" class="rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Clear</a>
         </form>
 
         <div class="overflow-x-auto">
@@ -44,16 +44,14 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse($requests as $request)
-                        <tr>
-                            <td class="px-4 py-4 font-medium text-slate-900">{{ $request->control_number }}</td>
+                        <tr class="transition hover:bg-slate-50 focus-within:bg-slate-50">
+                            <td class="px-4 py-4 font-medium text-slate-900"><a href="{{ route('request.show', $request->id) }}" class="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-600">{{ $request->control_number }}</a></td>
                             <td class="px-4 py-4">{{ $request->requester?->name ?? 'Unknown' }}</td>
                             <td class="px-4 py-4">{{ $request->department ?? '—' }}</td>
                             <td class="px-4 py-4">{{ implode(', ', $request->getVenueNames()) ?: '—' }}</td>
                             <td class="px-4 py-4">{{ $request->start_date ? \Carbon\Carbon::parse($request->start_date)->format('M d, Y') : '—' }}</td>
                             <td class="px-4 py-4"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">Pending</span></td>
-                            <td class="px-4 py-4 text-right">
-                                <a href="{{ route('request.show', $request->id) }}" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">View</a>
-                            </td>
+                            <td class="px-4 py-4 text-right"></td>
                         </tr>
                     @empty
                         <tr><td colspan="7" class="px-4 py-12 text-center text-sm text-slate-500">No pending requests found.</td></tr>

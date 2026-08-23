@@ -58,6 +58,9 @@ class RequestStatusChanged extends Notification
             }
             
             $message .= ". Control No: {$this->facilityRequest->control_number}";
+            if ($this->supplyOffice) {
+                $message .= ' Your approved request is ready for pickup from the Supply Office.';
+            }
         } elseif ($this->status === 'rejected') {
             // Format: "{Venue Custodian} rejected your request"
             $rejecter = $this->venueCustodian ?? $this->supplyOffice ?? 'The system';

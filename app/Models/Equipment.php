@@ -8,10 +8,11 @@ class Equipment extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'custodian_id', 'authorized_custodian_ids', 'quantity', 'quantity_available'];
+    protected $fillable = ['name', 'custodian_id', 'authorized_custodian_ids', 'quantity', 'quantity_available', 'is_active'];
 
     protected $casts = [
         'authorized_custodian_ids' => 'array',
+        'is_active' => 'boolean',
     ];
 
     public function custodian()

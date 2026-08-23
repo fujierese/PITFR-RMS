@@ -6,16 +6,21 @@ use App\Models\College;
 use App\Models\Department;
 use App\Models\Venue;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Contracts\Auth\CanResetPassword;
+use Illuminate\Auth\Passwords\CanResetPassword as CanResetPasswordTrait;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Laravel\Sanctum\HasApiTokens;
+use App\Notifications\ResetPasswordNotification;
 
-class User extends Authenticatable
+class User extends Authenticatable implements CanResetPassword
 {
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasFactory, Notifiable, HasApiTokens, CanResetPasswordTrait;
 
     protected $fillable = [
         'username',
+        'e_signature_file',
+        'notification_preferences',
         'password',
         'name',
         'role',
@@ -24,16 +29,48 @@ class User extends Authenticatable
         'department_id',
         'requestor_type',
         'school_id_number',
+        'faculty_id',
         'office_or_organization',
         'contact_number',
+        'email_verified_at',
+        'otp_hash',
+        'otp_expires_at',
+        'otp_attempts',
+        'otp_last_sent_at',
+        'google_id',
     ];
 
     protected $hidden = ['password', 'remember_token'];
+
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'otp_expires_at' => 'datetime',
+            'otp_last_sent_at' => 'datetime',
+            'notification_preferences' => 'array',
+        ];
+    }
 
     // Override default auth field
     public function getAuthIdentifierName(): string
     {
         return 'username';
+    }
+
+    public function getEmailForPasswordReset(): string
+    {
+        return $this->username;
+    }
+
+    public function routeNotificationForMail(): string
+    {
+        return $this->username;
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPasswordNotification($token));
     }
 
     public function isRequestee(): bool
@@ -54,6 +91,22 @@ class User extends Authenticatable
     public function isOutsider(): bool
     {
         return $this->requestor_type === 'outsider';
+    }
+
+    public function isStudentOrganization(): bool
+    {
+        return $this->requestor_type === 'student_organization';
+    }
+
+    public function getAccountTypeLabelAttribute(): string
+    {
+        return match ($this->requestor_type) {
+            'student' => 'Student',
+            'faculty' => 'Faculty',
+            'student_organization' => 'Student Organization',
+            'outsider' => 'Outsider',
+            default => $this->role_label,
+        };
     }
 
     public function isRequestor(): bool
@@ -95,6 +148,16 @@ class User extends Authenticatable
     public function isFacilityAdministrator(): bool
     {
         return in_array($this->role, ['admin', 'facility_admin', 'supply_office'], true);
+    }
+
+    public function isSupplyOffice(): bool
+    {
+        return in_array($this->role, ['admin', 'facility_admin', 'supply_office'], true);
+    }
+
+    public function isSystemAdmin(): bool
+    {
+        return in_array($this->role, ['admin', 'facility_admin'], true);
     }
 
     public function isAdminRole(): bool

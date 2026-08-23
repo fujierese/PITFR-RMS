@@ -8,10 +8,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use App\Http\Controllers\Concerns\ManagesAccountSettings;
 use Illuminate\Support\Facades\Log;
 
 class CustodianController extends Controller
 {
+    use ManagesAccountSettings;
+
     public function index(Request $request)
     {
         /** @var \App\Models\User $user */
@@ -124,6 +127,16 @@ class CustodianController extends Controller
         return redirect()->route('custodian.settings')->with('success', 'Password updated successfully.');
     }
 
+    public function updateNotificationPreferences(Request $request)
+    {
+        return $this->saveNotificationPreferences($request, 'custodian.settings');
+    }
+
+    public function updateSignature(Request $request)
+    {
+        return $this->saveSignature($request, 'custodian.settings');
+    }
+
     public function update(Request $request)
     {
         /** @var \App\Models\User $user */
@@ -214,6 +227,11 @@ class CustodianController extends Controller
                 $fr->recomputeEquipmentStatus();
                 $fr->refresh();
 
+                if ($statusValue === 'approved') {
+                    $fr->recordApprovalSignature('equipment', $user);
+                    $fr->save();
+                }
+
                 // ✅ Deduct quantity ONLY when ALL custodians have approved (full approval)
                 if (!$wasEquipmentPreviouslyApproved && $fr->equipment_status === 'approved') {
                     $quantities = $fr->getEquipmentQuantities();
@@ -254,6 +272,11 @@ class CustodianController extends Controller
                     $statusField => $statusValue,
                     $notesField  => $validated['notes'] ?? '',
                 ]);
+
+                if ($statusValue === 'approved') {
+                    $fr->recordApprovalSignature('venue', $user);
+                    $fr->save();
+                }
             }
 
             $historyAction = $statusField . '_' . $statusValue;
@@ -412,5 +435,79 @@ class CustodianController extends Controller
             'venues' => $venues,
             'equipment' => $equipment,
         ]);
+    }
+
+    public function storeVenue(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user->isCustodianVenue(), 403);
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:200'],
+            'capacity' => ['nullable', 'integer', 'min:1'],
+        ]);
+        Venue::create($validated + ['custodian_id' => $user->id, 'is_active' => true]);
+
+        return redirect()->route('custodian.assignments')->with('success', 'Venue added successfully.');
+    }
+
+    public function updateVenue(Request $request, Venue $venue)
+    {
+        $user = Auth::user();
+        abort_unless($user->isCustodianVenue() && $venue->custodian_id === $user->id, 403);
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:200'],
+            'capacity' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $venue->update($validated);
+
+        return redirect()->route('custodian.assignments')->with('success', 'Venue updated successfully.');
+    }
+
+    public function toggleVenue(Venue $venue)
+    {
+        $user = Auth::user();
+        abort_unless($user->isCustodianVenue() && $venue->custodian_id === $user->id, 403);
+        $venue->update(['is_active' => ! $venue->is_active]);
+
+        return redirect()->route('custodian.assignments')->with('success', 'Venue availability updated.');
+    }
+
+    public function storeEquipment(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user->isCustodianEquipment(), 403);
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:200'],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'quantity_available' => ['nullable', 'integer', 'min:0'],
+        ]);
+        $validated['quantity_available'] = min($validated['quantity'], $validated['quantity_available'] ?? $validated['quantity']);
+        Equipment::create($validated + ['custodian_id' => $user->id, 'is_active' => true]);
+
+        return redirect()->route('custodian.assignments')->with('success', 'Equipment added successfully.');
+    }
+
+    public function updateEquipment(Request $request, Equipment $equipment)
+    {
+        $user = Auth::user();
+        abort_unless($user->isCustodianEquipment() && $equipment->custodian_id === $user->id, 403);
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:200'],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'quantity_available' => ['required', 'integer', 'min:0'],
+        ]);
+        $validated['quantity_available'] = min($validated['quantity'], $validated['quantity_available']);
+        $equipment->update($validated);
+
+        return redirect()->route('custodian.assignments')->with('success', 'Equipment updated successfully.');
+    }
+
+    public function toggleEquipment(Equipment $equipment)
+    {
+        $user = Auth::user();
+        abort_unless($user->isCustodianEquipment() && $equipment->custodian_id === $user->id, 403);
+        $equipment->update(['is_active' => ! $equipment->is_active]);
+
+        return redirect()->route('custodian.assignments')->with('success', 'Equipment availability updated.');
     }
 }

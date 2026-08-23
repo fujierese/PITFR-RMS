@@ -3,6 +3,8 @@ namespace App\Http\Controllers;
 
 use App\Models\FacilityRequest;
 use App\Models\User;
+use App\Models\College;
+use App\Models\Department;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -10,9 +12,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use App\Http\Controllers\Concerns\ManagesAccountSettings;
 
 class AdminController extends Controller
 {
+    use ManagesAccountSettings;
+
     public function index(Request $request)
     {
         return app(SupplyOfficeController::class)->index($request);
@@ -53,10 +58,10 @@ class AdminController extends Controller
 
             $updates = [
                 'status'        => $statusValue,  // ← 'approved' or 'rejected'
-                'approved_by'   => Auth::user()->name,
-                'approved_by_id' => Auth::user()->getKey(),
                 'notes'         => $validated['notes'] ?? '',
-                'approved_date' => now(),
+                'approved_by'   => $validated['action'] === 'approve' ? Auth::user()->name : null,
+                'approved_by_id' => $validated['action'] === 'approve' ? Auth::user()->getKey() : null,
+                'approved_date' => $validated['action'] === 'approve' ? now() : null,
             ];
 
             if (!empty($validated['priority'] ?? null)) {
@@ -115,7 +120,63 @@ class AdminController extends Controller
         return view('supply-office.users', [
             'users' => $users,
             'editUserId' => $editUserId,
+            'showAddUser' => $request->boolean('add_user'),
+            'colleges' => College::with('departments')->orderBy('name')->get(),
         ]);
+    }
+
+    public function storeUser(Request $request)
+    {
+        $validated = $request->validate([
+            'account_type' => ['required', 'in:student,outsider,faculty,student_organization'],
+            'name' => ['required', 'string', 'max:100'],
+            'username' => ['required', 'email', 'max:255', 'unique:users,username'],
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'college_id' => ['required_if:account_type,student,faculty', 'nullable', 'exists:colleges,id'],
+            'department_id' => ['required_if:account_type,student,faculty', 'nullable', 'exists:departments,id'],
+            'school_id_number' => ['required_if:account_type,student', 'nullable', 'string', 'regex:/^\d{2}-\d{4}-\d{3}$/'],
+            'faculty_id' => ['required_if:account_type,faculty', 'nullable', 'string', 'max:50', 'unique:users,faculty_id'],
+            'office_or_organization' => ['required_if:account_type,outsider,student_organization', 'nullable', 'string', 'max:191'],
+            'contact_number' => ['nullable', 'string', 'max:50'],
+        ], [
+            'school_id_number.regex' => 'Student ID must be in format: 23-0098-635 (2 digits - 4 digits - 3 digits).',
+            'office_or_organization.required_if' => 'Organization name is required for this account type.',
+        ]);
+
+        $department = null;
+        if (!empty($validated['department_id'])) {
+            $department = Department::find($validated['department_id']);
+            if ($department && (int) $department->college_id !== (int) $validated['college_id']) {
+                return back()->withErrors(['department_id' => 'Please select a department under the selected college.'])
+                    ->withInput();
+            }
+        }
+
+        $isStudent = $validated['account_type'] === 'student';
+        $isAcademic = in_array($validated['account_type'], ['student', 'faculty'], true);
+
+        User::create([
+            'username' => strtolower(trim($validated['username'])),
+            'password' => Hash::make($validated['password']),
+            'name' => $validated['name'],
+            'role' => 'requestor',
+            'requestor_type' => match ($validated['account_type']) {
+                'student' => 'student',
+                'faculty' => 'faculty',
+                'student_organization' => 'student_organization',
+                default => 'outsider',
+            },
+            'school_id_number' => $isStudent ? $validated['school_id_number'] : null,
+            'faculty_id' => $validated['account_type'] === 'faculty' ? $validated['faculty_id'] : null,
+            'office_or_organization' => !$isStudent ? ($validated['office_or_organization'] ?? null) : null,
+            'contact_number' => $validated['contact_number'] ?? null,
+            'department' => $isAcademic ? $department?->name : null,
+            'college_id' => $isAcademic ? $validated['college_id'] : null,
+            'department_id' => $isAcademic ? $validated['department_id'] : null,
+            'email_verified_at' => now(),
+        ]);
+
+        return redirect()->route('admin.users')->with('success', 'User account created successfully.');
     }
 
     public function updateUser(Request $request, User $user)
@@ -167,10 +228,7 @@ class AdminController extends Controller
         $user = Auth::user();
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'department' => ['nullable', 'string', 'max:255'],
             'contact_number' => ['nullable', 'string', 'max:255'],
-            'office_or_organization' => ['nullable', 'string', 'max:255'],
-            'school_id_number' => ['nullable', 'string', 'max:255'],
         ]);
 
         $user->fill($validated);
@@ -195,6 +253,13 @@ class AdminController extends Controller
         $user->save();
 
         return redirect()->route('supply-office.settings')->with('success', 'Password updated successfully.');
+    }
+
+    public function updateNotificationPreferences(Request $request)
+    {
+        $route = $request->routeIs('admin.*') ? 'admin.settings' : 'supply-office.settings';
+
+        return $this->saveNotificationPreferences($request, $route);
     }
 
     public function calendar(Request $request)

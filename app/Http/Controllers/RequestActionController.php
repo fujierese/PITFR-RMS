@@ -90,6 +90,7 @@ class RequestActionController extends Controller
 
             if ($user->isCustodianVenue()) {
                 $facilityRequest->venue_status = 'approved';
+                $facilityRequest->recordApprovalSignature('venue', $user);
                 $facilityRequest->addHistory('custodian_endorsed', 'Venue request verified and endorsed by ' . $user->name, $user->id);
             } elseif ($user->isCustodianEquipment()) {
                 $assigned = $facilityRequest->getAssignedEquipmentForCustodian($user->id);
@@ -103,6 +104,8 @@ class RequestActionController extends Controller
                 $facilityRequest->equipment_custodian_statuses = $statuses;
                 $facilityRequest->save();
                 $facilityRequest->recomputeEquipmentStatus();
+                $facilityRequest->recordApprovalSignature('equipment', $user);
+                $facilityRequest->save();
                 $facilityRequest->addHistory('custodian_endorsed', 'Equipment request verified and endorsed by ' . $user->name, $user->id);
 
                 DB::commit();

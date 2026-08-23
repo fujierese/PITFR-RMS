@@ -141,4 +141,26 @@ class SupplyOfficeWorkflowTest extends TestCase
         $this->assertSame(1, $request->histories()->where('action', 'approved')->count());
         Notification::assertSentToTimes($requester, RequestStatusChanged::class, 1);
     }
+
+    public function test_supply_office_needs_revision_records_human_decision_without_changing_priority(): void
+    {
+        $request = $this->makeRequest(['priority' => 'institutional']);
+        $admin = User::factory()->create(['role' => 'admin', 'name' => 'Revision Reviewer']);
+        $requester = User::findOrFail($request->requested_by_id);
+
+        $this->actingAs($admin)->post(route('supply-office.requests.needs-revision'), [
+            'id' => $request->id,
+            'notes' => 'Please confirm the venue schedule.',
+        ])->assertRedirect(route('supply-office.index'));
+
+        $request->refresh();
+        $this->assertSame('needs_reschedule', $request->status);
+        $this->assertSame('institutional', $request->priority);
+        $this->assertDatabaseHas('request_histories', [
+            'facility_request_id' => $request->id,
+            'action' => 'needs_revision',
+            'user_id' => $admin->getKey(),
+        ]);
+        Notification::assertSentToTimes($requester, RequestStatusChanged::class, 1);
+    }
 }

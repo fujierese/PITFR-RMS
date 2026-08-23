@@ -2,11 +2,8 @@
     <div class="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h3 class="text-lg font-semibold text-slate-900">User Management</h3>
-            <p class="mt-1 text-sm text-slate-500">Add, review, and deactivate system users.</p>
+            <p class="mt-1 text-sm text-slate-500">Review and deactivate system users.</p>
         </div>
-        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700">
-            + Add User
-        </button>
     </div>
 
     <div class="overflow-x-auto">
@@ -25,7 +22,7 @@
                     <tr>
                         <td class="px-4 py-4 font-medium text-slate-900">{{ $user->name }}</td>
                         <td class="px-4 py-4">{{ $user->username }}</td>
-                        <td class="px-4 py-4">{{ $user->role_label }}</td>
+                        <td class="px-4 py-4">{{ $user->account_type_label }}</td>
                         <td class="px-4 py-4">{{ $user->department ?? 'N/A' }}</td>
                         <td class="px-4 py-4 text-right">
                             <a href="{{ route('supply-office.users', ['edit_user' => $user->id]) }}" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</a>
@@ -66,7 +63,7 @@
                     @endif
                 @empty
                     <tr>
-                        <td colspan="5" class="px-4 py-12 text-center text-sm text-slate-500">No users found. Seed your user table or add a new account above.</td>
+                        <td colspan="5" class="px-4 py-12 text-center text-sm text-slate-500">No users found.</td>
                     </tr>
                 @endforelse
             </tbody>

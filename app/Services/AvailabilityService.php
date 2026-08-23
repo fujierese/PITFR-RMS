@@ -40,6 +40,10 @@ class AvailabilityService
             return ['available' => false, 'message' => "Equipment '{$itemName}' not found.", 'total' => 0];
         }
 
+        if (! $equipment->is_active) {
+            return ['available' => false, 'message' => "Equipment '{$itemName}' is currently unavailable.", 'total' => (int) $equipment->quantity];
+        }
+
         $requestedStart = $requestedStart ?? now();
         $requestedEnd = $requestedEnd ?? $requestedStart->copy()->addHour();
 
@@ -60,7 +64,7 @@ class AvailabilityService
         $venueRecord = $venue ?: null;
         $capacity = $this->getVenueCapacity($venueName);
 
-        if ($venueRecord && $venueRecord->capacity !== null && $venueRecord->capacity <= 0) {
+        if ($venueRecord && (! $venueRecord->is_active || ($venueRecord->capacity !== null && $venueRecord->capacity <= 0))) {
             return ['available' => false, 'message' => 'The selected venue is unavailable.', 'capacity' => $venueRecord->capacity];
         }
 

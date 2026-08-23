@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Models\User;
 use App\Models\Venue;
 use App\Services\AvailabilityService;
+use App\Http\Controllers\Concerns\ManagesAccountSettings;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,6 +20,8 @@ use Illuminate\Validation\Rule;
 
 class RequestorController extends Controller
 {
+    use ManagesAccountSettings;
+
     public function __construct(private readonly AvailabilityService $availabilityService)
     {
     }
@@ -107,7 +110,7 @@ class RequestorController extends Controller
             ->orderBy($sort === 'oldest' ? 'created_at' : 'created_at', $sort === 'oldest' ? 'asc' : 'desc');
 
         $requests = $query->get();
-        $equipment = \App\Models\Equipment::all();
+        $equipment = \App\Models\Equipment::where('is_active', true)->get();
 
         // Separate by future/past dates and approval status
         $today = now()->toDateString();
@@ -152,7 +155,7 @@ class RequestorController extends Controller
         }
 
         $venueCapacityMap = [];
-        $venueRecords = Venue::query()->orderBy('name')->get();
+        $venueRecords = Venue::query()->where('is_active', true)->orderBy('name')->get();
         $venueOptions = array_values(array_unique(array_merge(
             $venueRecords->pluck('name')->filter()->values()->all(),
             self::VENUE_OPTIONS
@@ -210,11 +213,14 @@ class RequestorController extends Controller
         $user = $this->currentUser();
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'department' => ['nullable', 'string', 'max:255'],
             'contact_number' => ['nullable', 'string', 'max:255'],
-            'office_or_organization' => ['nullable', 'string', 'max:255'],
-            'school_id_number' => ['nullable', 'string', 'max:255'],
         ]);
+
+        if ($user->isOutsider()) {
+            $validated['office_or_organization'] = $request->validate([
+                'office_or_organization' => ['nullable', 'string', 'max:255'],
+            ])['office_or_organization'];
+        }
 
         $user->fill($validated);
         $user->save();
@@ -238,6 +244,16 @@ class RequestorController extends Controller
         $user->save();
 
         return redirect()->route('requestor.settings')->with('success', 'Password updated successfully.');
+    }
+
+    public function updateNotificationPreferences(Request $request)
+    {
+        return $this->saveNotificationPreferences($request, 'requestor.settings');
+    }
+
+    public function updateSignature(Request $request)
+    {
+        return $this->saveSignature($request, 'requestor.settings');
     }
 
     public function edit(FacilityRequest $facilityRequest)
@@ -267,7 +283,7 @@ class RequestorController extends Controller
             'venueOptions' => self::VENUE_OPTIONS,
             'equipmentOptions' => self::EQUIPMENT_OPTIONS,
             'controlNumber' => $facilityRequest->control_number,
-            'equipment' => \App\Models\Equipment::all(),
+            'equipment' => \App\Models\Equipment::where('is_active', true)->get(),
             'equipmentQuantityLimits' => $equipmentQuantityLimits,
             'venueCapacityMap' => $venueCapacityMap,
         ]);
@@ -293,8 +309,8 @@ class RequestorController extends Controller
         $reservationDuration = strtolower((string) $request->input('reservation_duration', 'specific_time'));
         if (in_array($reservationDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
             $request->merge([
-                'start_time' => '08:00',
-                'end_time' => '00:00',
+                'start_time' => '00:00',
+                'end_time' => '23:59',
             ]);
         }
 
@@ -370,7 +386,7 @@ class RequestorController extends Controller
             $submittedVenue = reset($submittedVenue);
         }
         $submittedVenue = trim((string) $submittedVenue);
-        $allowedVenues = Venue::query()->pluck('name')->filter()->values()->all();
+        $allowedVenues = Venue::query()->where('is_active', true)->pluck('name')->filter()->values()->all();
         if ($allowedVenues === []) {
             $allowedVenues = self::VENUE_OPTIONS;
         }
@@ -476,6 +492,15 @@ class RequestorController extends Controller
             ];
         }
 
+        if (! $equipment->is_active) {
+            return [
+                'available' => false,
+                'message' => "Equipment '{$itemName}' is currently unavailable.",
+                'available_qty' => 0,
+                'total' => (int) $equipment->quantity,
+            ];
+        }
+
         $outstanding = 0;
         $requests = FacilityRequest::where(function ($query) {
             $query->where('status', 'approved')->orWhere(function ($pendingQuery) {
@@ -517,7 +542,7 @@ class RequestorController extends Controller
         $venue = \App\Models\Venue::where('name', $venueName)->first();
         $venueRecord = $venue ?: null;
 
-        if ($venueRecord && $venueRecord->capacity !== null && $venueRecord->capacity <= 0) {
+        if ($venueRecord && (! $venueRecord->is_active || ($venueRecord->capacity !== null && $venueRecord->capacity <= 0))) {
             return ['available' => false, 'message' => 'The selected venue is unavailable.', 'capacity' => $venueRecord->capacity];
         }
 
@@ -625,12 +650,15 @@ class RequestorController extends Controller
 
         // Build validation rules
         $hasDepartmentDirectory = College::query()->exists() && Department::query()->exists();
+        $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Other'];
         $rules = [
             'reservation_duration'  => ['nullable', 'in:specific_time,whole_day,whole-day,whole day'],
             'college_id'            => ['nullable', 'exists:colleges,id'],
             'department_id'         => ['nullable', 'exists:departments,id'],
             'department'            => ['nullable', 'string', 'max:100'],
             'organization_name'     => ['nullable', 'string', 'max:191'],
+            'requested_by_position' => ['required', 'in:' . implode(',', $positionOptions)],
+            'requested_by_position_other' => ['nullable', 'string', 'max:100', 'required_if:requested_by_position,Other'],
             'name_of_activity'      => 'required|string|max:200',
             'purpose'               => ['nullable', 'string', 'max:2000'],
             'expected_participants' => 'required|integer|min:1',
@@ -663,12 +691,8 @@ class RequestorController extends Controller
 
         // Conditional document requirements based on requestor type
         if (in_array($user->requestor_type, ['student', 'faculty'], true)) {
-            // Student and Faculty require Activity Proposal
-            if (!$request->input('is_emergency')) {
-                $rules['activity_proposal_file'] = 'required|file|mimes:pdf,jpeg,jpg,png|max:10240';
-            } else {
-                $rules['activity_proposal_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
-            }
+            // Student and Faculty always require Activity Proposal
+            $rules['activity_proposal_file'] = 'required|file|mimes:pdf,jpeg,jpg,png|max:10240';
             $rules['igp_receipt_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
         } elseif ($user->requestor_type === 'outsider') {
             // External/Organization requires IGP Receipt
@@ -685,12 +709,18 @@ class RequestorController extends Controller
         $reservationDuration = strtolower((string) $request->input('reservation_duration', 'specific_time'));
         if (in_array($reservationDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
             $request->merge([
-                'start_time' => '08:00',
-                'end_time' => '00:00',
+                'start_time' => '00:00',
+                'end_time' => '23:59',
             ]);
         }
 
         $validated = $request->validate($rules);
+        $validated['requested_by_position'] = $validated['requested_by_position'] === 'Other'
+            ? trim((string) ($validated['requested_by_position_other'] ?? ''))
+            : $validated['requested_by_position'];
+        if ($validated['requested_by_position'] === '') {
+            return back()->withErrors(['requested_by_position_other' => 'Please enter your position.'])->withInput();
+        }
         $validated['purpose'] = trim((string) ($validated['purpose'] ?? $validated['name_of_activity']));
 
         if (in_array($user->requestor_type, ['student', 'faculty'], true)) {
@@ -974,6 +1004,7 @@ class RequestorController extends Controller
             'control_number'           => $controlNumber,
             'date_requested'           => now()->toDateString(),
             'department'               => $validated['department'],
+            'requested_by_position'    => $validated['requested_by_position'],
             'name_of_activity'         => $validated['name_of_activity'],
             'purpose'                  => $validated['purpose'],
             'expected_participants'    => $validated['expected_participants'],
@@ -1123,7 +1154,7 @@ class RequestorController extends Controller
     {
         $request   = FacilityRequest::with(['requestVenues', 'requestEquipment', 'reservationSchedule'])->findOrFail($id);
         $this->authorize('view', $request);
-        $equipment = \App\Models\Equipment::all();
+        $equipment = \App\Models\Equipment::where('is_active', true)->get();
         $assignedCustodians = \App\Models\User::whereIn('id', $request->getAssignedEquipmentCustodianIds())->get();
         $custodianStatuses = $request->equipment_custodian_statuses ?? [];
         /** @var \App\Models\User|null $currentUser */
@@ -1151,7 +1182,9 @@ class RequestorController extends Controller
                 ->exists();
 
             if (!$hasEndorsed) {
-                $hasEndorsed = $request->venue_status === 'approved' || $request->equipment_status === 'approved';
+                $hasEndorsed = $currentUser->isCustodianVenue()
+                    ? $request->venue_status === 'approved'
+                    : $request->getCustodianEquipmentStatus((int) $currentUser->id) === 'approved';
             }
         }
  
@@ -1182,11 +1215,34 @@ class RequestorController extends Controller
         $request = FacilityRequest::findOrFail($id);
         $this->authorize('view', $request);
 
-        if (!$request->proposal_file) {
+        $filename = $request->activity_proposal_file ?: $request->proposal_file;
+        $filePath = $request->activity_proposal_file
+            ? 'documents/activity_proposal/' . $filename
+            : 'proposals/' . $filename;
+
+        if (!$filename) {
             abort(404);
         }
 
-        $filePath = 'proposals/' . $request->proposal_file;
+        $disk = Storage::disk('local')->exists($filePath) ? 'local' : 'public';
+
+        if (!Storage::disk($disk)->exists($filePath)) {
+            abort(404);
+        }
+
+        return response()->file(Storage::disk($disk)->path($filePath));
+    }
+
+    public function signature($id)
+    {
+        $request = FacilityRequest::findOrFail($id);
+        $this->authorize('view', $request);
+
+        if (!$request->e_signature_file) {
+            abort(404);
+        }
+
+        $filePath = 'documents/e_signature/' . $request->e_signature_file;
         $disk = Storage::disk('local')->exists($filePath) ? 'local' : 'public';
 
         if (!Storage::disk($disk)->exists($filePath)) {
@@ -1201,18 +1257,22 @@ class RequestorController extends Controller
         $request = FacilityRequest::findOrFail($id);
         $this->authorize('view', $request);
 
-        if (!$request->proposal_file) {
+        $filename = $request->activity_proposal_file ?: $request->proposal_file;
+        $filePath = $request->activity_proposal_file
+            ? 'documents/activity_proposal/' . $filename
+            : 'proposals/' . $filename;
+
+        if (!$filename) {
             abort(404);
         }
 
-        $filePath = 'proposals/' . $request->proposal_file;
         $disk = Storage::disk('local')->exists($filePath) ? 'local' : 'public';
 
         if (!Storage::disk($disk)->exists($filePath)) {
             abort(404);
         }
 
-        return response()->download(Storage::disk($disk)->path($filePath), $request->proposal_file);
+        return response()->download(Storage::disk($disk)->path($filePath), $filename);
     }
 
     // ✅ Real-time availability check endpoint

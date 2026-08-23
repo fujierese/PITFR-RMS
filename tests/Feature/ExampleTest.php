@@ -22,6 +22,10 @@ class ExampleTest extends TestCase
         $response = $this->get('/');
 
         $response->assertOk()
+            ->assertSee('aria-label="Guest navigation"', false)
+            ->assertSee('href="#calendar-section"', false)
+            ->assertSee('href="#features"', false)
+            ->assertSee('href="#how-it-works"', false)
             ->assertSee('View Facility Calendar')
             ->assertDontSee('Public Facility Availability')
             ->assertDontSee('How to Request')

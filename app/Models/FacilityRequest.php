@@ -152,6 +152,30 @@ class FacilityRequest extends Model
         ]);
     }
 
+    public function recordApprovalSignature(string $approvalType, User $approver): void
+    {
+        $payload = json_encode([
+            'request_id' => $this->id,
+            'approver_id' => $approver->id,
+            'type' => $approvalType,
+            'time' => now()->toISOString(),
+        ]);
+
+        $this->{$approvalType . '_approval_signature'} = hash_hmac('sha256', $payload, config('app.key'));
+        $meta = $this->approval_signature_meta ?? [];
+        if ($approvalType === 'equipment') {
+            $equipmentMeta = $meta[$approvalType] ?? [];
+            if (! is_array($equipmentMeta) || array_is_list($equipmentMeta) === false) {
+                $equipmentMeta = $equipmentMeta ? [$equipmentMeta] : [];
+            }
+            $equipmentMeta[] = $payload;
+            $meta[$approvalType] = $equipmentMeta;
+        } else {
+            $meta[$approvalType] = $payload;
+        }
+        $this->approval_signature_meta = $meta;
+    }
+
     public function getStageApproverName(string $stage): ?string
     {
         if ($stage === 'final') {
@@ -636,9 +660,9 @@ class FacilityRequest extends Model
         if (in_array($normalizedDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
             return self::normalizeScheduleRange(
                 $effectiveStartDate,
-                '08:00',
+                '00:00',
                 $effectiveEndDate,
-                '00:00'
+                '23:59'
             );
         }
 

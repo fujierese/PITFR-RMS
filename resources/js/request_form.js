@@ -236,7 +236,7 @@ const initializeRequestForm = function () {
             ? `${formatDisplayDate(startDate)}${startDate === endDate ? '' : ` - ${formatDisplayDate(endDate)}`}`
             : 'Not selected';
         if (summaryDetails.time) summaryDetails.time.textContent = isWholeDay
-            ? 'Whole day (8:00 AM - 12:00 AM)'
+            ? 'Whole day (12:00 AM - 11:59 PM)'
             : startTime && endTime ? `${formatDisplayTime(startTime)} - ${formatDisplayTime(endTime)}` : 'Not selected';
         if (summaryDetails.equipment) {
             summaryDetails.equipment.innerHTML = selectedEquipment.length
@@ -437,7 +437,9 @@ const initializeRequestForm = function () {
                 if (field.type === 'checkbox') {
                     field.checked = value === '1' || value === true;
                 } else if (field.type === 'radio') {
-                    field.checked = field.value === value;
+                    form.querySelectorAll(`input[type="radio"][name="${key}"]`).forEach(function (radio) {
+                        radio.checked = radio.value === value;
+                    });
                 } else {
                     field.value = value;
                 }
@@ -448,6 +450,8 @@ const initializeRequestForm = function () {
             updateOtherVenueVisibility();
             updateSelectedItemsSummary();
             updateCapacityWarning();
+            form.querySelector('[name="reservation_duration"]:checked')?.dispatchEvent(new Event('change', { bubbles: true }));
+            form.querySelector('[name="reservation_duration"]:checked')?.dispatchEvent(new Event('change', { bubbles: true }));
             syncOvernightEndDate();
             refreshAllEquipmentAvailability();
             clearTimeout(conflictCheckTimeout);

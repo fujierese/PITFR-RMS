@@ -8,6 +8,7 @@ use App\Models\FacilityRequest;
 use App\Models\User;
 use App\Models\Venue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class Phase7AdminSearchPrintingTest extends TestCase
@@ -96,6 +97,38 @@ class Phase7AdminSearchPrintingTest extends TestCase
     }
 
     /** @test */
+    public function custodian_cannot_print_facility_request(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+
+        $this->actingAs($custodian)
+            ->get(route('request.print', $this->approvedRequest->id))
+            ->assertStatus(403);
+    }
+
+    /** @test */
+    public function admin_sees_print_request_on_request_details(): void
+    {
+        $this->actingAs($this->admin);
+
+        $response = $this->get(route('request.show', $this->approvedRequest->id));
+
+        $response->assertOk();
+        $response->assertSee('Print Request');
+    }
+
+    /** @test */
+    public function requestor_does_not_see_print_request_on_request_details(): void
+    {
+        $this->actingAs($this->student);
+
+        $response = $this->get(route('request.show', $this->approvedRequest->id));
+
+        $response->assertOk();
+        $response->assertDontSee('Print Request');
+    }
+
+    /** @test */
     public function print_form_displays_e_signature_when_present(): void
     {
         $this->actingAs($this->admin);
@@ -103,12 +136,9 @@ class Phase7AdminSearchPrintingTest extends TestCase
         $response = $this->get(route('request.print', $this->approvedRequest->id));
 
         $response->assertStatus(200);
-        // Check for "Electronic Signature" text and the e-signature file path
-        $this->assertTrue(
-            str_contains(strtolower($response->getContent()), 'electronic') &&
-            str_contains($response->getContent(), 'e_signature'),
-            'Electronic signature indicator or file path not found in print view'
-        );
+        $response->assertSee(route('request.signature', ['id' => $this->approvedRequest->id]), false);
+        $response->assertDontSee('/storage/documents/e_signature/', false);
+        $response->assertSee('Electronic Signature', false);
     }
 
     /** @test */
@@ -125,6 +155,20 @@ class Phase7AdminSearchPrintingTest extends TestCase
             str_contains(strtolower($response->getContent()), 'printed name'),
             'Neither signature-line div nor printed name text found in print view'
         );
+    }
+
+    /** @test */
+    public function protected_signature_route_serves_the_private_requestor_signature(): void
+    {
+        Storage::disk('local')->put(
+            'documents/e_signature/test_signature_001.png',
+            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+        );
+
+        $this->actingAs($this->admin)
+            ->get(route('request.signature', $this->approvedRequest->id))
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png');
     }
 
     /** @test */

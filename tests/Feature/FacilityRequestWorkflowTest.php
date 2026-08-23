@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Equipment;
 use App\Models\Venue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -74,6 +75,8 @@ class FacilityRequestWorkflowTest extends TestCase
                 'equipment_quantities' => ['Sound System' => 1],
                 'emergency_justification' => 'Need immediate review',
                 'is_emergency' => true,
+                'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+                'e_signature_file' => UploadedFile::fake()->create('signature.png', 100, 'image/png'),
             ]);
 
         $response->assertRedirect(route('requestor.index', ['tab' => 'requests']));
@@ -127,6 +130,81 @@ class FacilityRequestWorkflowTest extends TestCase
             'action' => 'custodian_endorsed',
             'user_id' => $venueCustodian->id,
         ]);
+    }
+
+    public function test_request_details_uses_independent_workflow_icons(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $facilityRequest = FacilityRequest::create([
+            'control_number' => 'TEST-WORKFLOW-ICONS',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Workflow Icon Test',
+            'expected_participants' => 20,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'venue' => ['Conference Hall & Interaction Center (CHIC)'],
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => 1],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'approved',
+            'equipment_status' => 'pending',
+            'priority' => 'regular',
+        ]);
+
+        $response = $this->withViewErrors([])
+            ->actingAs($requester)
+            ->get(route('request.show', $facilityRequest));
+
+        $response->assertOk();
+        $response->assertSee('aria-label="approved"', false);
+        $response->assertSee('aria-label="pending"', false);
+        $response->assertSee('✓', false);
+        $response->assertSee('🕐', false);
+        $response->assertDontSee('>Completed</span>', false);
+        $response->assertDontSee('>Current</span>', false);
+        $response->assertDontSee('>Upcoming</span>', false);
+    }
+
+    public function test_request_details_groups_consecutive_dates_and_displays_activity_items_and_status(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $facilityRequest = FacilityRequest::create([
+            'control_number' => 'TEST-REQUEST-DETAILS-DATES',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Three-Day Workshop',
+            'expected_participants' => 30,
+            'start_date' => '2026-09-01',
+            'end_date' => '2026-09-03',
+            'start_time' => '09:00',
+            'end_time' => '17:00',
+            'venue' => ['Gymnasium'],
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => 2],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'approved',
+            'equipment_status' => 'pending',
+            'priority' => 'regular',
+        ]);
+
+        $response = $this->withViewErrors([])
+            ->actingAs($requester)
+            ->get(route('request.show', $facilityRequest));
+
+        $response->assertOk();
+        $response->assertSee('Three-Day Workshop');
+        $response->assertSee('Sep 1, 2026 - Sep 3, 2026');
+        $response->assertSee('Sound System');
+        $response->assertSee('Qty 2');
+        $response->assertSee('Venue approved; equipment review is in progress');
+        $response->assertSee('Your venue is approved. The equipment request is now being reviewed.');
+        $response->assertDontSee('Current approver');
+        $response->assertDontSee('The request will continue through the existing approval workflow without changing the backend process.');
     }
 
     public function test_repeated_custodian_endorsement_is_idempotent_and_closes_its_transaction()

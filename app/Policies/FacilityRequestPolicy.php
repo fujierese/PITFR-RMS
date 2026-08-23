@@ -55,6 +55,28 @@ class FacilityRequestPolicy
         return $user->isAdmin() || $this->managesAssignedResource($user, $facilityRequest);
     }
 
+    public function approveVenue(User $user, FacilityRequest $facilityRequest): bool
+    {
+        return $user->isCustodianVenue()
+            && $this->managesAssignedVenue($user, $facilityRequest);
+    }
+
+    public function approveEquipment(User $user, FacilityRequest $facilityRequest): bool
+    {
+        return $user->isCustodianEquipment()
+            && ! empty($facilityRequest->getAssignedEquipmentForCustodian($user->id));
+    }
+
+    public function rejectVenue(User $user, FacilityRequest $facilityRequest): bool
+    {
+        return $this->approveVenue($user, $facilityRequest);
+    }
+
+    public function rejectEquipment(User $user, FacilityRequest $facilityRequest): bool
+    {
+        return $this->approveEquipment($user, $facilityRequest);
+    }
+
     public function returnEquipment(User $user, FacilityRequest $facilityRequest): bool
     {
         return $user->isAdmin()
@@ -64,6 +86,16 @@ class FacilityRequestPolicy
     public function print(User $user, FacilityRequest $facilityRequest): bool
     {
         return $user->isAdmin();
+    }
+
+    private function managesAssignedVenue(User $user, FacilityRequest $facilityRequest): bool
+    {
+        $assignedVenues = $user->venues()->pluck('name')
+            ->map(fn (string $name) => mb_strtolower($name));
+        $requestedVenues = collect($facilityRequest->getVenueNames())
+            ->map(fn (string $name) => mb_strtolower($name));
+
+        return $assignedVenues->intersect($requestedVenues)->isNotEmpty();
     }
 
     private function managesAssignedResource(User $user, FacilityRequest $facilityRequest): bool

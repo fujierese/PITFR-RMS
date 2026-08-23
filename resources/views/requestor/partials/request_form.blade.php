@@ -1,5 +1,9 @@
 @php
     $currentUser = Auth::user();
+    $colleges = $colleges ?? collect();
+    $departments = $departments ?? collect();
+    $profileCollegeId = $profileCollegeId ?? null;
+    $profileDepartmentId = $profileDepartmentId ?? null;
     $requestClassification = 'Standard Request';
     $classificationTone = 'emerald';
     $urgentRequested = old('is_emergency') ? true : false;
@@ -20,6 +24,12 @@
     $isExternal = ($currentUser?->requestor_type ?? null) === 'outsider';
     $selectedCollegeId = old('college_id', $profileCollegeId ?? null);
     $selectedDepartmentId = old('department_id', $profileDepartmentId ?? null);
+    $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Other'];
+    $savedPosition = old('requested_by_position', $currentUser?->position);
+    $selectedPosition = in_array($savedPosition, $positionOptions, true) ? $savedPosition : ($savedPosition ? 'Other' : '');
+    $otherPosition = old('requested_by_position_other', $selectedPosition === 'Other' ? $savedPosition : '');
+    $profileCollege = $colleges->firstWhere('id', $profileCollegeId);
+    $profileDepartment = $departments->firstWhere('id', $profileDepartmentId);
 @endphp
 <form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-show-loading="true" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
     @csrf
@@ -123,31 +133,17 @@
                             </div>
                         @else
                             <div class="space-y-3">
-                                <label for="college_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">College <span class="text-red-500">*</span></label>
-                                <select id="college_id" name="college_id" required {{ ($profileCollegeId ?? null) ? 'disabled' : '' }} class="w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('college_id') border-red-300 bg-red-50 @enderror">
-                                    <option value="">Select college</option>
-                                    @foreach ($colleges as $college)
-                                        <option value="{{ $college->id }}" {{ (string) $selectedCollegeId === (string) $college->id ? 'selected' : '' }}>{{ $college->name }}</option>
-                                    @endforeach
-                                </select>
-                                @if ($profileCollegeId)
-                                    <input type="hidden" name="college_id" value="{{ $profileCollegeId }}">
-                                @endif
+                                <p class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">College</p>
+                                <div class="rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-600" aria-readonly="true">{{ $profileCollege?->name ?? 'College not provided' }}</div>
+                                <input type="hidden" name="college_id" value="{{ $profileCollegeId }}">
                                 @error('college_id')
                                     <p class="text-xs font-medium text-red-600">{{ $message }}</p>
                                 @enderror
                             </div>
                             <div class="space-y-3">
-                                <label for="department_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Department / Requisitioning Office <span class="text-red-500">*</span></label>
-                                <select id="department_id" name="department_id" required {{ ($profileDepartmentId ?? null) ? 'disabled' : '' }} data-selected="{{ $selectedDepartmentId }}" class="w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('department_id') border-red-300 bg-red-50 @enderror">
-                                    <option value="">Select department</option>
-                                    @foreach ($departments as $departmentOption)
-                                        <option value="{{ $departmentOption->id }}" data-college-id="{{ $departmentOption->college_id }}" {{ (string) $selectedDepartmentId === (string) $departmentOption->id ? 'selected' : '' }}>{{ $departmentOption->name }}</option>
-                                    @endforeach
-                                </select>
-                                @if ($profileDepartmentId)
-                                    <input type="hidden" name="department_id" value="{{ $profileDepartmentId }}">
-                                @endif
+                                <p class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Department / Requisitioning Office</p>
+                                <div class="rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-600" aria-readonly="true">{{ $profileDepartment?->name ?? $currentUser?->department ?? 'Department not provided' }}</div>
+                                <input type="hidden" name="department_id" value="{{ $profileDepartmentId }}">
                                 @error('department_id')
                                     <p class="text-xs font-medium text-red-600">{{ $message }}</p>
                                 @enderror
@@ -221,10 +217,10 @@
                                 <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
                                     <input type="radio" name="reservation_duration" value="whole_day">
                                     <span>Whole Day</span>
-                                    <span class="text-xs text-slate-500">08:00 AM – 12:00 AM</span>
+                                    <span class="text-xs text-slate-500">12:00 AM – 11:59 PM</span>
                                 </label>
                             </div>
-                            <p class="reservation-duration-helper mt-3 text-xs text-emerald-700" aria-live="polite">Whole Day uses 8:00 AM–12:00 AM for each selected date.</p>
+                            <p class="reservation-duration-helper mt-3 text-xs text-emerald-700" aria-live="polite">Whole Day uses 12:00 AM–11:59 PM for each selected date.</p>
                         </div>
                         <div class="grid gap-4 md:grid-cols-2 md:gap-5">
                             <div>
@@ -376,8 +372,20 @@
                             <input type="text" value="{{ $currentUser?->name ?? old('name', '') }}" readonly class="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 cursor-not-allowed">
                         </div>
                         <div>
-                            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Position</p>
-                            <input type="text" name="requested_by_position" required value="{{ old('requested_by_position', $currentUser?->position) }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white">
+                            <label for="requested_by_position" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Position <span class="text-red-500">*</span></label>
+                            <select id="requested_by_position" name="requested_by_position" required class="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('requested_by_position') border-red-300 bg-red-50 @enderror">
+                                <option value="">Select position</option>
+                                @foreach ($positionOptions as $positionOption)
+                                    <option value="{{ $positionOption }}" {{ $selectedPosition === $positionOption ? 'selected' : '' }}>{{ $positionOption }}</option>
+                                @endforeach
+                            </select>
+                            <input id="requested_by_position_other" type="text" name="requested_by_position_other" value="{{ $otherPosition }}" placeholder="Enter your position" class="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white {{ $selectedPosition === 'Other' ? '' : 'hidden' }}" {{ $selectedPosition === 'Other' ? '' : 'disabled' }}>
+                            @error('requested_by_position_other')
+                                <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
+                            @enderror
+                            @error('requested_by_position')
+                                <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
+                            @enderror
                         </div>
                     </div>
                 </section>
@@ -440,7 +448,7 @@
                             {{-- Activity Proposal for Student/Faculty --}}
                             <div>
                                 <label for="activity_proposal_file" class="mb-3 block text-sm font-semibold text-slate-700">
-                                    Activity Proposal @if (!($currentUser->is_emergency ?? false))<span class="text-red-500">*</span>@endif
+                                    Activity Proposal <span class="text-red-500">*</span>
                                 </label>
                                 <p class="mb-3 text-xs text-slate-500">Required document: Comprehensive proposal describing the activity objectives, expected outcomes, and how facilities/equipment support the activity goals.</p>
                                 <div class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition hover:border-emerald-400">
@@ -459,7 +467,7 @@
                                     </div>
                                 </div>
                                 <div id="activity-proposal-preview" class="mt-3 hidden">
-                                    <p class="text-sm text-slate-600">Selected file: <span id="activity-proposal-name" class="font-medium"></span></p>
+                                    <p class="flex items-center justify-between gap-3 text-sm text-slate-600">Selected file: <span id="activity-proposal-name" class="font-medium"></span><button type="button" data-remove-file="activity_proposal_file" class="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700" aria-label="Remove activity proposal">Remove</button></p>
                                 </div>
                                 @error('activity_proposal_file')
                                     <p class="mt-2 text-sm text-red-500">{{ $message }}</p>
@@ -488,7 +496,7 @@
                                     </div>
                                 </div>
                                 <div id="igp-receipt-preview" class="mt-3 hidden">
-                                    <p class="text-sm text-slate-600">Selected file: <span id="igp-receipt-name" class="font-medium"></span></p>
+                                    <p class="flex items-center justify-between gap-3 text-sm text-slate-600">Selected file: <span id="igp-receipt-name" class="font-medium"></span><button type="button" data-remove-file="igp_receipt_file" class="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700" aria-label="Remove IGP receipt">Remove</button></p>
                                 </div>
                                 @error('igp_receipt_file')
                                     <p class="mt-2 text-sm text-red-500">{{ $message }}</p>
@@ -523,7 +531,7 @@
                                 </div>
                             </div>
                             <div id="e-signature-preview" class="mt-3 hidden">
-                                <p class="text-sm text-slate-600">Selected file: <span id="e-signature-name" class="font-medium"></span></p>
+                                <p class="flex items-center justify-between gap-3 text-sm text-slate-600">Selected file: <span id="e-signature-name" class="font-medium"></span><button type="button" data-remove-file="e_signature_file" class="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700" aria-label="Remove e-signature">Remove</button></p>
                             </div>
                             @error('e_signature_file')
                                 <p class="mt-2 text-sm text-red-500">{{ $message }}</p>
@@ -583,6 +591,20 @@
         const form = document.getElementById('request-form');
         if (!form) return;
 
+        const positionSelect = document.getElementById('requested_by_position');
+        const otherPositionInput = document.getElementById('requested_by_position_other');
+        if (positionSelect && otherPositionInput) {
+            const updateOtherPosition = () => {
+                const isOther = positionSelect.value === 'Other';
+                otherPositionInput.classList.toggle('hidden', !isOther);
+                otherPositionInput.disabled = !isOther;
+                otherPositionInput.required = isOther;
+            };
+
+            positionSelect.addEventListener('change', updateOtherPosition);
+            updateOtherPosition();
+        }
+
         const collegeSelect = document.getElementById('college_id');
         const departmentSelect = document.getElementById('department_id');
         if (collegeSelect && departmentSelect) {
@@ -623,10 +645,13 @@
             if (input) {
                 input.addEventListener('change', function() {
                     const allowedExtensions = id === 'e_signature_file' ? ['jpg', 'jpeg', 'png'] : ['pdf', 'jpg', 'jpeg', 'png'];
-                    const extension = this.files[0]?.name.split('.').pop()?.toLowerCase();
-                    if (extension && !allowedExtensions.includes(extension)) {
+                    const allowedMimeTypes = id === 'e_signature_file' ? ['image/jpeg', 'image/png'] : ['application/pdf', 'image/jpeg', 'image/png'];
+                    const file = this.files[0];
+                    const extension = file?.name.split('.').pop()?.toLowerCase();
+                    if (file && (!allowedExtensions.includes(extension) || (file.type && !allowedMimeTypes.includes(file.type)))) {
                         this.value = '';
                         window.alert(`Invalid file type. Allowed formats: ${allowedExtensions.join(', ')}`);
+                        updateChecklistState();
                         return;
                     }
                     const preview = document.getElementById(previewId);
@@ -641,22 +666,20 @@
             }
         });
 
-        const durationInputs = document.querySelectorAll('input[name="reservation_duration"]');
-                    </a>
-                    <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-[20px] bg-emerald-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 md:w-auto md:px-8">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Submit Request
-                    </button>
-                </div>
-                </div>
-            </div>
-        </div>
-    </section>
-</div>
-</form>
-<script>
+        form.querySelectorAll('[data-remove-file]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const input = document.getElementById(button.dataset.removeFile);
+                const preview = input ? document.getElementById(fileInputs.find((item) => item.id === input.id)?.previewId) : null;
+                if (input) {
+                    input.value = '';
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                if (preview) preview.classList.add('hidden');
+            });
+        });
+
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('request-form');
         if (!form) return;
@@ -673,8 +696,8 @@
                 endTimeInput.readOnly = isWholeDay;
 
                 if (isWholeDay) {
-                    startTimeInput.value = '08:00';
-                    endTimeInput.value = '00:00';
+                    startTimeInput.value = '00:00';
+                    endTimeInput.value = '23:59';
                 }
             };
 
@@ -720,7 +743,7 @@
             if (summaryDetails.venue) summaryDetails.venue.textContent = venueText;
             const isWholeDay = form.querySelector('[name="reservation_duration"]:checked')?.value === 'whole_day';
             if (summaryDetails.date) summaryDetails.date.textContent = startDate && endDate ? `${formatDisplayDate(startDate)}${startDate === endDate ? '' : ` – ${formatDisplayDate(endDate)}`}` : 'Not selected';
-            if (summaryDetails.time) summaryDetails.time.textContent = isWholeDay ? 'Whole day (8:00 AM – 12:00 AM)' : (startTime && endTime ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}` : 'Not selected');
+            if (summaryDetails.time) summaryDetails.time.textContent = isWholeDay ? 'Whole day (12:00 AM – 11:59 PM)' : (startTime && endTime ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}` : 'Not selected');
 
             const selectedEquipment = [...form.querySelectorAll('.equipment-row')].filter((row) => {
                 const checkbox = row.querySelector('.equipment-checkbox');
@@ -770,6 +793,8 @@
 
         const updateChecklistState = () => {
             const requestorType = form.dataset.requestorType;
+            const positionSelect = form.querySelector('[name="requested_by_position"]');
+            const otherPositionInput = form.querySelector('[name="requested_by_position_other"]');
             const requiredFields = [
                 requestorType === 'outsider' ? form.querySelector('[name="organization_name"]') : form.querySelector('[name="college_id"]'),
                 requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
@@ -781,6 +806,7 @@
                 form.querySelector('[name="start_time"]'),
                 form.querySelector('[name="end_time"]'),
                 form.querySelector('[name="requested_by_position"]'),
+                positionSelect?.value === 'Other' ? otherPositionInput : null,
                 form.querySelector('[name="venue"]:checked')
             ];
 
@@ -793,7 +819,11 @@
             });
 
             const selectedVenue = form.querySelector('[name="venue"]:checked');
-            const hasEquipmentSelected = form.querySelectorAll('.equipment-checkbox:checked').length > 0;
+            const hasAvailableEquipmentSelected = [...form.querySelectorAll('.equipment-row')].some((row) => {
+                const checkbox = row.querySelector('.equipment-checkbox');
+                const quantity = row.querySelector('input[type="number"]');
+                return checkbox?.checked && Number(row.dataset.available || 0) >= Number(quantity?.value || 0);
+            });
             
             // Check for appropriate document file based on requestor type
             const isStudent = form.dataset.isStudent === '1';
@@ -813,7 +843,7 @@
             }
 
             if (checklistVenueAvailability) {
-                checklistVenueAvailability.checked = Boolean(selectedVenue) && (hasEquipmentSelected || !selectedVenue || selectedVenue.value !== '');
+                checklistVenueAvailability.checked = Boolean(selectedVenue) && hasAvailableEquipmentSelected;
             }
 
             if (checklistDocumentUpload) {

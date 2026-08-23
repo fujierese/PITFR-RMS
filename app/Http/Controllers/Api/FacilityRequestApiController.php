@@ -45,7 +45,7 @@ class FacilityRequestApiController extends Controller
                 });
             } elseif ($user->isCustodianEquipment()) {
                 $query->where(function ($q) use ($user) {
-                    foreach (Equipment::where('custodian_id', $user->id)->pluck('name') as $equipmentName) {
+                    foreach (Equipment::where('custodian_id', $user->id)->where('is_active', true)->pluck('name') as $equipmentName) {
                         $q->orWhere(fn ($subQuery) => $subQuery->matchesEquipment($equipmentName));
                     }
                     $q->orWhere(function ($pendingQuery) {
@@ -74,8 +74,8 @@ class FacilityRequestApiController extends Controller
         $reservationDuration = strtolower((string) $request->input('reservation_duration', 'specific_time'));
         if (in_array($reservationDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
             $request->merge([
-                'start_time' => '08:00',
-                'end_time' => '00:00',
+                'start_time' => '00:00',
+                'end_time' => '23:59',
             ]);
         }
 
@@ -308,8 +308,10 @@ class FacilityRequestApiController extends Controller
 
         $user = Auth::user();
         $approvalType = $request->validate([
-            'type' => ['nullable', 'in:venue,equipment'],
-        ])['type'] ?? 'venue';
+            'type' => ['required', 'in:venue,equipment'],
+        ])['type'];
+
+        $this->authorize('approve' . ucfirst($approvalType), $facilityRequest);
 
         DB::beginTransaction();
 
@@ -330,12 +332,15 @@ class FacilityRequestApiController extends Controller
 
             if ($approvalType === 'venue') {
                 $facilityRequest->venue_status = 'approved';
+                $facilityRequest->recordApprovalSignature('venue', $user);
             } elseif ($approvalType === 'equipment') {
-                $facilityRequest->equipment_status = 'approved';
+                $facilityRequest->setCustodianEquipmentStatus($user->id, 'approved');
+                $facilityRequest->recomputeEquipmentStatus();
+                $facilityRequest->recordApprovalSignature('equipment', $user);
 
                 // Reserve equipment quantities
                 $quantities = $facilityRequest->getEquipmentQuantities();
-                if (!empty($quantities)) {
+                if ($facilityRequest->equipment_status === 'approved' && !empty($quantities)) {
                     foreach ($quantities as $itemName => $qty) {
                         $eq = Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])
                             ->lockForUpdate()
@@ -352,27 +357,6 @@ class FacilityRequestApiController extends Controller
                         $eq->decrement('quantity_available', $qty);
                     }
                 }
-            }
-
-            // Generate an HMAC approval signature for auditability
-            $payload = json_encode(['request_id' => $facilityRequest->id ?? null, 'approver_id' => $user->id, 'type' => $approvalType, 'time' => now()->toISOString()]);
-            $signature = hash_hmac('sha256', $payload, config('app.key'));
-            if ($approvalType === 'venue') {
-                $facilityRequest->venue_approval_signature = $signature;
-            } else {
-                $facilityRequest->equipment_approval_signature = $signature;
-            }
-
-            $meta = $facilityRequest->approval_signature_meta ?? [];
-            $meta[$approvalType] = $payload;
-            $facilityRequest->approval_signature_meta = $meta;
-
-            // Check if fully approved
-            if ($facilityRequest->venue_status === 'approved' && $facilityRequest->equipment_status === 'approved') {
-                $facilityRequest->status = 'approved';
-                $facilityRequest->approved_by_id = $user->id;
-                $facilityRequest->approved_by = $user->name;
-                $facilityRequest->approved_date = now();
             }
 
             $facilityRequest->save();
@@ -407,7 +391,12 @@ class FacilityRequestApiController extends Controller
 
         $user = Auth::user();
         $reason = $request->input('reason', '');
-        $rejectionType = $request->input('type', 'venue');
+        $rejectionType = $request->validate([
+            'type' => ['required', 'in:venue,equipment'],
+            'reason' => ['nullable', 'string'],
+        ])['type'];
+
+        $this->authorize('reject' . ucfirst($rejectionType), $facilityRequest);
 
         DB::beginTransaction();
 
@@ -540,7 +529,7 @@ class FacilityRequestApiController extends Controller
         $date = $request->input('date');
         $venue = $request->input('venue', []);
 
-        $equipment = Equipment::all();
+        $equipment = Equipment::where('is_active', true)->get();
 
         $result = [];
         foreach ($equipment as $eq) {
@@ -597,7 +586,7 @@ class FacilityRequestApiController extends Controller
             return response()->json(['error' => 'Date and time required'], 400);
         }
 
-        $venues = Venue::all();
+        $venues = Venue::where('is_active', true)->get();
         $result = [];
 
         foreach ($venues as $venue) {

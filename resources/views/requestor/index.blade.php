@@ -104,6 +104,7 @@
     $rejectedCount = $requests->where('status', 'rejected')->count();
     $completedCount = $requests->where('status', 'completed')->count();
     $upcomingCount = $upcomingReservations->count();
+    $firstName = explode(' ', trim((string) Auth::user()->name))[0] ?? '';
 @endphp
 
 <div class="space-y-4 md:space-y-6">
@@ -119,7 +120,6 @@
             <div class="flex flex-wrap gap-2">
                 <a href="{{ route('requestor.index', ['tab' => 'dashboard']) }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Dashboard</a>
                 <a href="{{ route('requestor.index', ['tab' => 'requests']) }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">My Requests</a>
-                <a href="{{ route('requestor.index', ['tab' => 'create']) }}" class="inline-flex items-center justify-center rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700">Create Request</a>
             </div>
         </div>
     </section>
@@ -135,9 +135,6 @@
                     <p class="text-sm font-semibold uppercase tracking-[0.3em] text-emerald-600">Reservation management</p>
                     <h2 class="mt-3 text-2xl font-semibold text-slate-950 sm:text-3xl">My Requests</h2>
                     <p class="mt-3 text-sm leading-6 text-slate-600">View, monitor, and manage all reservation requests submitted under your account.</p>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    <a href="{{ route('requestor.index', ['tab' => 'create']) }}" class="inline-flex w-full items-center justify-center rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 md:w-auto">Create Request</a>
                 </div>
             </div>
 
@@ -252,7 +249,6 @@
                                             || $requestItem->venue_status === 'needs_reschedule'
                                             || $requestItem->equipment_status === 'needs_reschedule';
                                         $canCancel = $statusKey === 'pending';
-                                        $canDownload = in_array($statusKey, ['approved', 'completed'], true);
                                         $progressLabels = match ($statusKey) {
                                             'rejected' => ['Submitted', 'Under Review', 'Rejected'],
                                             'cancelled' => ['Submitted', 'Cancelled'],
@@ -269,7 +265,7 @@
                                             default => 2,
                                         };
                                     @endphp
-                                    <tr class="transition hover:bg-slate-50">
+                                    <tr class="cursor-pointer transition hover:bg-slate-50 focus:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500" data-request-url="{{ route('request.show', $requestItem->id) }}" role="link" tabindex="0" aria-label="Open request details for {{ $requestItem->control_number ?? 'request' }}">
                                         <td class="whitespace-nowrap px-4 py-4 font-semibold text-slate-900">{{ $requestItem->control_number ?? '-' }}</td>
                                         <td class="px-4 py-4">
                                             <div class="font-semibold text-slate-900">{{ $requestItem->name_of_activity ?? '-' }}</div>
@@ -301,7 +297,6 @@
                                         </td>
                                         <td class="px-4 py-4">
                                             <div class="flex flex-wrap gap-2">
-                                                <a href="{{ route('request.show', $requestItem->id) }}" class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">View Details</a>
                                                 @if ($canEdit)
                                                     <a href="{{ route('requestor.edit', $requestItem->id) }}" class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Edit</a>
                                                 @endif
@@ -310,9 +305,6 @@
                                                         @csrf
                                                         <button type="submit" class="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">Cancel</button>
                                                     </form>
-                                                @endif
-                                                @if ($canDownload)
-                                                    <a href="{{ route('request.print', $requestItem->id) }}" target="_blank" rel="noopener" class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">Download PDF</a>
                                                 @endif
                                             </div>
                                         </td>
@@ -340,9 +332,8 @@
                                 || $requestItem->venue_status === 'needs_reschedule'
                                 || $requestItem->equipment_status === 'needs_reschedule';
                             $canCancel = $statusKey === 'pending';
-                            $canDownload = in_array($statusKey, ['approved', 'completed'], true);
                         @endphp
-                        <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                        <div class="cursor-pointer rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/40 focus:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500" data-request-url="{{ route('request.show', $requestItem->id) }}" role="link" tabindex="0" aria-label="Open request details for {{ $requestItem->control_number ?? 'request' }}">
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{{ $requestItem->control_number ?? '-' }}</p>
@@ -359,7 +350,6 @@
                                 @endif
                             </div>
                             <div class="mt-4 flex flex-wrap gap-2">
-                                <a href="{{ route('request.show', $requestItem->id) }}" class="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">View Details</a>
                                 @if ($canEdit)
                                     <a href="{{ route('requestor.edit', $requestItem->id) }}" class="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Edit</a>
                                 @endif
@@ -368,9 +358,6 @@
                                         @csrf
                                         <button type="submit" class="w-full rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">Cancel</button>
                                     </form>
-                                @endif
-                                @if ($canDownload)
-                                    <a href="{{ route('request.print', $requestItem->id) }}" target="_blank" rel="noopener" class="inline-flex flex-1 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">Download PDF</a>
                                 @endif
                             </div>
                         </div>
@@ -383,7 +370,7 @@
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div class="max-w-2xl">
                     <p class="text-sm font-semibold uppercase tracking-[0.3em] text-emerald-600">Overview</p>
-                    <h2 class="mt-3 text-2xl font-semibold text-slate-950 sm:text-3xl">Welcome back, {{ Auth::user()->name }}</h2>
+                    <h2 class="mt-3 text-2xl font-semibold text-slate-950 sm:text-3xl">Welcome, {{ $firstName }}</h2>
                     <p class="mt-3 text-sm leading-6 text-slate-600">Monitor your reservation requests and upcoming bookings from one centralized workspace.</p>
                 </div>
                 <div class="flex flex-wrap gap-3">
@@ -434,7 +421,6 @@
                             <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Upcoming reservations</p>
                             <h3 class="mt-2 text-xl font-semibold text-slate-900">Next upcoming bookings</h3>
                         </div>
-                        <a href="{{ route('requestor.index', ['tab' => 'requests']) }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">View All Requests</a>
                     </div>
 
                     @if ($upcomingReservations->isEmpty())
@@ -469,5 +455,20 @@
         </section>
     @endif
 </div>
+
+<script>
+    document.querySelectorAll('[data-request-url]').forEach((requestTarget) => {
+        requestTarget.addEventListener('click', (event) => {
+            if (event.target.closest('a, button, form, input, select, textarea')) return;
+            window.location.href = requestTarget.dataset.requestUrl;
+        });
+
+        requestTarget.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            window.location.href = requestTarget.dataset.requestUrl;
+        });
+    });
+</script>
 
 @endsection

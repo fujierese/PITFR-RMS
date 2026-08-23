@@ -100,12 +100,21 @@
 
                         <form method="POST" action="{{ route('register.post') }}" class="space-y-8">
                             @csrf
-                            <input type="hidden" id="requestor_type" name="requestor_type" value="{{ old('requestor_type', 'student') }}" />
+                            @php($selectedRegistrationType = old('requestor_type', $googleType ?? 'student'))
+                            <input type="hidden" id="requestor_type" name="requestor_type" value="{{ $selectedRegistrationType }}" />
 
-                            <div class="grid gap-6 sm:grid-cols-3">
+                            <a id="google-registration-link" href="{{ route('google.redirect', ['type' => $selectedRegistrationType]) }}" class="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-500">
+                                <span class="text-base font-bold text-red-500">G</span>
+                                Continue with Google
+                            </a>
+                            @if($googleProfile)
+                                <p class="text-sm text-emerald-700">Google account connected: {{ $googleProfile['email'] }}. Complete the required PITFR profile fields below.</p>
+                            @endif
+
+                            <div class="grid gap-6 sm:grid-cols-3" id="student-name-group">
                                 <div class="space-y-3">
                                     <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">First name</label>
-                                    <input type="text" name="first_name" value="{{ old('first_name') }}" required placeholder="Daniel" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                    <input type="text" name="first_name" value="{{ old('first_name', $googleProfile['first_name'] ?? '') }}" required placeholder="Daniel" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
                                     @error('first_name')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                                 </div>
                                 <div class="space-y-3">
@@ -115,9 +124,15 @@
                                 </div>
                                 <div class="space-y-3">
                                     <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Last name</label>
-                                    <input type="text" name="last_name" value="{{ old('last_name') }}" required placeholder="Barro" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                    <input type="text" name="last_name" value="{{ old('last_name', $googleProfile['last_name'] ?? '') }}" required placeholder="Barro" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
                                     @error('last_name')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                                 </div>
+                            </div>
+
+                            <div class="space-y-3 hidden" id="contact-person-group">
+                                <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Contact person</label>
+                                <input type="text" name="contact_person" value="{{ old('contact_person', $googleProfile['name'] ?? '') }}" placeholder="Contact person name" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                @error('contact_person')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                             </div>
 
                             <div class="grid gap-6 sm:grid-cols-2">
@@ -128,7 +143,8 @@
                                 </div>
                                 <div class="space-y-3">
                                     <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Email address</label>
-                                    <input type="email" name="username" value="{{ old('username') }}" required placeholder="you@example.com" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                    <input type="email" name="username" value="{{ old('username', $googleProfile['email'] ?? '') }}" required @disabled($googleProfile) placeholder="you@example.com" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                    @if($googleProfile)<input type="hidden" name="username" value="{{ $googleProfile['email'] }}">@endif
                                     @error('username')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                                 </div>
                             </div>
@@ -138,12 +154,15 @@
                                     <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">College</label>
                                     <select id="collegeSelect" name="college_id" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                                         <option value="">Select College</option>
+                                        @foreach($colleges as $college)
+                                            <option value="{{ $college->id }}" @selected(old('college_id') == $college->id)>{{ $college->name }}</option>
+                                        @endforeach
                                     </select>
                                     @error('college_id')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                                 </div>
                                 <div class="space-y-4" id="department-group">
                                     <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Department</label>
-                                    <select id="departmentSelect" name="department_id" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                                    <select id="departmentSelect" name="department_id" data-selected="{{ old('department_id') }}" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                                         <option value="">Select Department</option>
                                     </select>
                                     @error('department_id')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
@@ -161,7 +180,7 @@
                                 <div class="space-y-4">
                                     <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Password</label>
                                     <div class="relative password-toggle-wrapper">
-                                        <input type="password" name="password" id="register_password" required placeholder="At least 6 characters" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 pr-12 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                        <input type="password" name="password" id="register_password" @required(!$googleProfile) placeholder="{{ $googleProfile ? 'Optional for Google accounts' : 'At least 6 characters' }}" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 pr-12 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
                                         <button type="button" data-password-toggle-target="#register_password" aria-label="Show password" class="password-toggle absolute inset-y-0 right-4 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-50">
                                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -174,7 +193,7 @@
                                 <div class="space-y-4">
                                     <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Confirm password</label>
                                     <div class="relative password-toggle-wrapper">
-                                        <input type="password" name="password_confirmation" id="register_password_confirmation" required placeholder="Re-enter password" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 pr-12 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                        <input type="password" name="password_confirmation" id="register_password_confirmation" @required(!$googleProfile) placeholder="{{ $googleProfile ? 'Optional for Google accounts' : 'Re-enter password' }}" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 pr-12 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
                                         <button type="button" data-password-toggle-target="#register_password_confirmation" aria-label="Show password" class="password-toggle absolute inset-y-0 right-4 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-50">
                                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -186,8 +205,8 @@
                             </div>
 
                             <div class="space-y-4 hidden" id="office-org-group">
-                                <label id="officeOrgLabel" class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Office / organization</label>
-                                <input type="text" id="officeOrgInput" name="office_or_organization" value="{{ old('office_or_organization') }}" placeholder="External partner or individual" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                <label id="officeOrgLabel" class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Organization name</label>
+                                <input type="text" id="officeOrgInput" name="office_or_organization" value="{{ old('office_or_organization') }}" required placeholder="Organization name" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
                                 @error('office_or_organization')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                                 <p class="text-xs text-slate-400">Leave blank or type “Individual / Personal” if booking as an external guest.</p>
                             </div>
@@ -205,28 +224,12 @@
     </div>
 </div>
 
-@php
-    $collegesData = \App\Models\College::with('departments')
-        ->get()
-        ->map(function ($college) {
-            return [
-                'id' => $college->id,
-                'name' => $college->name,
-                'departments' => $college->departments
-                    ->map(function ($department) {
-                        return ['id' => $department->id, 'name' => $department->name];
-                    })
-                    ->values()
-                    ->all(),
-            ];
-        })
-        ->all();
-@endphp
-
 <script>
-    const collegesData = @json($collegesData);
-
     const typeField = document.getElementById('requestor_type');
+    const googleRegistrationLink = document.getElementById('google-registration-link');
+    const studentNameGroup = document.getElementById('student-name-group');
+    const contactPersonGroup = document.getElementById('contact-person-group');
+    const contactPersonInput = document.querySelector('[name="contact_person"]');
     const schoolIdGroup = document.getElementById('school-id-group');
     const officeOrgGroup = document.getElementById('office-org-group');
     const officeOrgLabel = document.getElementById('officeOrgLabel');
@@ -237,38 +240,25 @@
     const departmentSelect = document.getElementById('departmentSelect');
     const studentIdInput = document.getElementById('studentIdInput');
 
-    // Initialize colleges dropdown
-    function initializeColleges() {
-        collegeSelect.innerHTML = '<option value="">Select College</option>';
-        collegesData.forEach(college => {
-            const option = document.createElement('option');
-            option.value = college.id;
-            option.textContent = college.name;
-            collegeSelect.appendChild(option);
+    async function loadDepartments(collegeId, selectedDepartment = '') {
+        departmentSelect.innerHTML = '<option value="">Select Department</option>';
+        if (!collegeId) return;
+        const response = await fetch(`/register/departments/${collegeId}`);
+        if (!response.ok) return;
+        const departments = await response.json();
+        departments.forEach(department => {
+            const option = new Option(department.name, department.id, false, String(department.id) === String(selectedDepartment));
+            departmentSelect.appendChild(option);
         });
-        if (collegeSelect.value === '' && collegesData.length > 0) {
-            collegeSelect.value = collegesData[0].id;
-        }
     }
 
-    // Update departments based on selected college
     collegeSelect.addEventListener('change', function() {
-        const selectedCollegeId = parseInt(this.value);
-        const selectedCollege = collegesData.find(c => c.id === selectedCollegeId);
-        
-        departmentSelect.innerHTML = '<option value="">Select Department</option>';
-        if (selectedCollege) {
-            selectedCollege.departments.forEach(dept => {
-                const option = document.createElement('option');
-                option.value = dept.id;
-                option.textContent = dept.name;
-                departmentSelect.appendChild(option);
-            });
-            if (departmentSelect.options.length > 1) {
-                departmentSelect.value = selectedCollege.departments[0]?.id || '';
-            }
-        }
+        loadDepartments(this.value);
     });
+
+    if (collegeSelect.value) {
+        loadDepartments(collegeSelect.value, departmentSelect.dataset.selected);
+    }
 
     // Validate Student ID format: XX-XXXX-XXX
     function validateStudentId(id) {
@@ -291,6 +281,14 @@
         
         // Show/hide college and department for students only
         const showCollege = selected === 'student';
+        studentNameGroup.classList.toggle('hidden', !showCollege);
+        contactPersonGroup.classList.toggle('hidden', showCollege);
+        contactPersonInput.disabled = showCollege;
+        document.querySelector('[name="first_name"]').disabled = !showCollege;
+        document.querySelector('[name="middle_name"]').disabled = !showCollege;
+        document.querySelector('[name="last_name"]').disabled = !showCollege;
+        document.querySelector('[name="first_name"]').required = showCollege;
+        document.querySelector('[name="last_name"]').required = showCollege;
         collegeGroup.classList.toggle('hidden', !showCollege);
         departmentGroup.classList.toggle('hidden', !showCollege);
         collegeSelect.disabled = !showCollege;
@@ -303,10 +301,12 @@
         // Show/hide office/organization for external users only
         const showOffice = selected === 'outsider';
         officeOrgGroup.classList.toggle('hidden', !showOffice);
+        officeOrgInput.disabled = !showOffice;
+        officeOrgInput.required = showOffice;
 
         if (showOffice) {
-            officeOrgLabel.textContent = 'Organization / Purpose of use (e.g. external partner)';
-            officeOrgInput.placeholder = "Enter organization name, or type 'Individual / Personal' if booking as an external guest";
+            officeOrgLabel.textContent = 'Organization name';
+            officeOrgInput.placeholder = 'Organization name';
         } else {
             officeOrgLabel.textContent = 'Office / organization';
             officeOrgInput.placeholder = 'External partner or individual';
@@ -315,6 +315,7 @@
 
     function selectRequestorType(type) {
         typeField.value = type;
+        googleRegistrationLink.href = `{{ route('google.redirect') }}?type=${encodeURIComponent(type)}`;
         document.querySelectorAll('.requestor-type-button').forEach(button => {
             const isActive = button.dataset.type === type;
             button.classList.toggle('bg-emerald-50', isActive);
@@ -330,7 +331,5 @@
         button.addEventListener('click', () => selectRequestorType(button.dataset.type));
     });
 
-    // Initialize
-    initializeColleges();
     selectRequestorType(typeField.value || 'student');
 </script>

@@ -72,6 +72,26 @@ class RequestStatusChangedTest extends TestCase
         $this->assertStringContainsString('Institutional urgency', $mail->render());
     }
 
+    public function test_mail_payload_covers_approval_rejection_and_revision_statuses(): void
+    {
+        $requester = User::factory()->create();
+        $request = new FacilityRequest([
+            'control_number' => 'FER-2026-073',
+            'name_of_activity' => 'Status Mail Test',
+            'start_date' => '2026-01-01',
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'venue' => [],
+        ]);
+
+        foreach (['approved' => 'Approved', 'rejected' => 'Rejected', 'needs_reschedule' => 'Rescheduling'] as $status => $label) {
+            $mail = (new RequestStatusChanged($request, $status))->toMail($requester);
+
+            $this->assertStringContainsString($label, $mail->subject);
+            $this->assertStringContainsString($request->control_number, $mail->render());
+        }
+    }
+
     public function test_broadcast_payload_includes_notification_context(): void
     {
         $requester = User::factory()->create();

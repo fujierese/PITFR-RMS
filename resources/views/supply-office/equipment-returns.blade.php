@@ -15,7 +15,7 @@
 
     <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/50">
         <form method="GET" action="{{ route('supply-office.requests.returns') }}" class="mb-6 grid gap-3 md:grid-cols-4">
-            <input type="text" name="search" value="{{ $searchQuery }}" placeholder="Search request" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
+            <input type="search" name="search" value="{{ $searchQuery }}" placeholder="Search request number, activity, organization, venue, equipment..." class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
             <input type="text" name="department" value="{{ $departmentFilter }}" placeholder="Department" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
             <input type="text" name="venue" value="{{ $venueFilter }}" placeholder="Venue" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
             <select name="priority" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
@@ -25,8 +25,8 @@
             </select>
             <input type="date" name="date_from" value="{{ $dateFrom }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
             <input type="date" name="date_to" value="{{ $dateTo }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <button type="submit" class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Apply Filters</button>
-            <a href="{{ route('supply-office.requests.returns') }}" class="rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Reset</a>
+            <button type="submit" class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Advanced Filters</button>
+            <a href="{{ route('supply-office.requests.returns') }}" class="rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Clear</a>
         </form>
 
         <div class="grid gap-4 lg:grid-cols-2">
@@ -41,7 +41,8 @@
                     <h2 class="text-lg font-semibold text-slate-900">{{ $section['label'] }}</h2>
                     <div class="mt-4 space-y-3">
                         @forelse($section['items'] as $request)
-                            <div class="rounded-xl border border-slate-200 bg-white p-3">
+                            <div class="group rounded-xl border border-slate-200 bg-white p-3 transition hover:border-sky-300 hover:bg-sky-50 focus-within:ring-2 focus-within:ring-sky-500">
+                                <a href="{{ route('request.show', $request->id) }}" class="block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600" aria-label="Open Request Details for {{ $request->control_number }}">
                                 <div class="flex items-start justify-between gap-2">
                                     <div>
                                         <p class="font-semibold text-slate-900">{{ $request->control_number }}</p>
@@ -53,9 +54,7 @@
                                     <p>Venue: {{ implode(', ', $request->getVenueNames()) ?: '—' }}</p>
                                     <p>Equipment: {{ implode(', ', $request->getEquipmentItems()) ?: '—' }}</p>
                                 </div>
-                                <div class="mt-3 flex flex-wrap gap-2">
-                                    <a href="{{ route('request.show', $request->id) }}" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">View</a>
-                                </div>
+                                </a>
                             </div>
                         @empty
                             <p class="text-sm text-slate-500">No requests in this category.</p>
