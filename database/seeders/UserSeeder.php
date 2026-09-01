@@ -1,6 +1,7 @@
 <?php
 namespace Database\Seeders;
 
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -10,10 +11,6 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        DB::table('users')->truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
-        
         $users = [
             ['username' => 'student1@gmail.com',   'name' => 'BITS ORG',               'role' => 'requestor',             'requestor_type' => 'student', 'password' => Hash::make('password')],
             ['username' => 'faculty1@gmail.com',   'name' => 'IT Department',           'role' => 'requestor',             'requestor_type' => 'faculty', 'password' => Hash::make('password')],
@@ -30,16 +27,15 @@ class UserSeeder extends Seeder
         $columns = Schema::getColumnListing('users');
 
         foreach ($users as $user) {
-            $payload = array_merge($user, [
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
+            $payload = $user;
             if (!in_array('requestor_type', $columns, true)) {
                 unset($payload['requestor_type']);
             }
 
-            DB::table('users')->insert($payload);
+            User::updateOrCreate(
+                ['username' => $user['username']],
+                $payload,
+            );
         }
     }
 }

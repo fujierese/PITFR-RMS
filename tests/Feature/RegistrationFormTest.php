@@ -25,17 +25,16 @@ class RegistrationFormTest extends TestCase
         Mail::fake();
     }
 
-    /**
-     * Test registration page displays without Faculty option
-     */
-    public function test_registration_page_shows_only_student_and_external(): void
+    public function test_registration_page_is_for_outsiders_only(): void
     {
         $response = $this->get(route('register'));
 
         $response->assertOk()
-            ->assertSee('Student')
-            ->assertSee('External / Org')
-            ->assertDontSee('Faculty');
+            ->assertSee('Outsider registration')
+            ->assertSee('Students and Faculty should obtain accounts through the authorized PIT administrator')
+            ->assertDontSee('data-type="student"')
+            ->assertDontSee('data-type="faculty"')
+            ->assertDontSee('data-type="student_organization"');
     }
 
     /**
@@ -68,13 +67,14 @@ class RegistrationFormTest extends TestCase
     /**
      * Test student registration with valid data
      */
-    public function test_student_can_register_with_valid_student_id_format(): void
+    public function test_public_student_registration_is_rejected(): void
     {
+        $username = 'johndoe' . uniqid() . '@test.com';
         $response = $this->post(route('register.post'), [
             'first_name' => 'John',
             'middle_name' => 'Michael',
             'last_name' => 'Doe',
-            'username' => 'johndoe' . uniqid() . '@test.com',
+            'username' => $username,
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'requestor_type' => 'student',
@@ -84,15 +84,14 @@ class RegistrationFormTest extends TestCase
             'contact_number' => '09171234567',
         ]);
 
-        $response->assertRedirect(route('register.verify'));
-        $this->assertGuest();
-        Mail::assertSent(RegistrationOtp::class);
+        $response->assertSessionHasErrors('requestor_type');
+        $this->assertDatabaseMissing('users', ['username' => $username]);
     }
 
     /**
      * Test student registration fails with invalid student ID format
      */
-    public function test_student_registration_fails_with_invalid_student_id_format(): void
+    public function test_public_student_registration_is_rejected_before_student_field_validation(): void
     {
         $response = $this->post(route('register.post'), [
             'first_name' => 'John',
@@ -108,7 +107,7 @@ class RegistrationFormTest extends TestCase
             'contact_number' => '09171234567',
         ]);
 
-        $response->assertSessionHasErrors('school_id_number');
+        $response->assertSessionHasErrors('requestor_type');
     }
 
     /**
@@ -136,7 +135,7 @@ class RegistrationFormTest extends TestCase
     /**
      * Test student registration requires college and department
      */
-    public function test_student_registration_requires_college_and_department(): void
+    public function test_public_student_registration_cannot_probe_student_requirements(): void
     {
         $response = $this->post(route('register.post'), [
             'first_name' => 'John',
@@ -150,17 +149,52 @@ class RegistrationFormTest extends TestCase
             'contact_number' => '09171234567',
         ]);
 
-        $response->assertSessionHasErrors(['college_id', 'department_id']);
+        $response->assertSessionHasErrors('requestor_type');
     }
 
-    /**
-     * Test Faculty type is not allowed in registration
-     */
-    public function test_faculty_type_is_rejected_in_registration(): void
+    public function test_public_faculty_registration_is_rejected(): void
     {
+        $username = 'faculty' . uniqid() . '@test.com';
+        $facultyId = 'FAC-' . uniqid();
         $response = $this->post(route('register.post'), [
             'first_name' => 'Faculty',
             'middle_name' => '',
+            'last_name' => 'Member',
+            'username' => $username,
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'requestor_type' => 'faculty',
+            'college_id' => 1,
+            'department_id' => 1,
+            'faculty_id' => $facultyId,
+            'position' => 'Department Chair',
+            'contact_number' => '09171234567',
+        ]);
+
+        $response->assertSessionHasErrors('requestor_type');
+        $this->assertDatabaseMissing('users', ['username' => $username]);
+    }
+
+    public function test_public_student_organization_registration_is_rejected(): void
+    {
+        $username = 'organization' . uniqid() . '@test.com';
+        $response = $this->post(route('register.post'), [
+            'username' => $username,
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'requestor_type' => 'student_organization',
+            'contact_person' => 'Organization Account',
+            'office_or_organization' => 'PIT Student Council',
+        ]);
+
+        $response->assertSessionHasErrors('requestor_type');
+        $this->assertDatabaseMissing('users', ['username' => $username]);
+    }
+
+    public function test_forged_faculty_registration_is_rejected_before_field_validation(): void
+    {
+        $this->post(route('register.post'), [
+            'first_name' => 'Faculty',
             'last_name' => 'Member',
             'username' => 'faculty' . uniqid() . '@test.com',
             'password' => 'password123',
@@ -168,25 +202,15 @@ class RegistrationFormTest extends TestCase
             'requestor_type' => 'faculty',
             'college_id' => 1,
             'department_id' => 1,
-            'contact_number' => '09171234567',
-        ]);
-
-        $response->assertSessionHasErrors('requestor_type');
+        ])->assertSessionHasErrors('requestor_type');
     }
 
-    public function test_student_organization_type_is_rejected_in_registration(): void
+    public function test_google_redirect_accepts_clinic_type(): void
     {
-        $response = $this->post(route('register.post'), [
-            'first_name' => 'Organization',
-            'last_name' => 'Account',
-            'username' => 'organization' . uniqid() . '@test.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
-            'requestor_type' => 'student_organization',
-            'office_or_organization' => 'PIT Student Council',
-        ]);
+        $response = $this->get(route('google.redirect', ['type' => 'clinic']));
 
-        $response->assertSessionHasErrors('requestor_type');
+        $response->assertRedirect();
+        $this->assertStringStartsWith('https://accounts.google.com/o/oauth2/auth', $response->getTargetUrl());
     }
 
     public function test_valid_otp_verifies_account_and_logs_user_in(): void
@@ -275,16 +299,12 @@ class RegistrationFormTest extends TestCase
     private function studentData(): array
     {
         return [
-            'first_name' => 'Test',
-            'middle_name' => 'Student',
-            'last_name' => 'Account',
+            'contact_person' => 'Test Outsider',
+            'office_or_organization' => 'Test Organization',
             'username' => 'otp' . uniqid() . '@test.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
-            'requestor_type' => 'student',
-            'college_id' => 1,
-            'department_id' => 1,
-            'school_id_number' => '23-0098-635',
+            'requestor_type' => 'outsider',
         ];
     }
 }

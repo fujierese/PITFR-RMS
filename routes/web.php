@@ -87,7 +87,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('supply-office')->group(functi
     Route::get('/requests/needs-reschedule', [SupplyOfficeController::class, 'needsRescheduleRequests'])->name('supply-office.requests.needs-reschedule');
     Route::get('/requests/returns', [SupplyOfficeController::class, 'equipmentReturns'])->name('supply-office.requests.returns');
     Route::get('/final-approval', [SupplyOfficeController::class, 'finalApprovalRequests'])->name('supply-office.final-approval');
-    Route::middleware('role:system_admin')->group(function (): void {
+    Route::middleware('role:admin')->group(function (): void {
         Route::get('/users', [AdminController::class, 'users'])->name('supply-office.users');
         Route::post('/users', [AdminController::class, 'storeUser'])->name('supply-office.users.store');
         Route::get('/reports', [AdminController::class, 'reports'])->name('supply-office.usage-reports');
@@ -97,16 +97,23 @@ Route::middleware(['auth', 'role:admin'])->prefix('supply-office')->group(functi
     Route::post('/settings/password', [AdminController::class, 'updatePassword'])->name('supply-office.settings.password');
     Route::post('/settings/notifications', [AdminController::class, 'updateNotificationPreferences'])->name('supply-office.settings.notifications');
     Route::get('/calendar', [CalendarController::class, 'index'])->name('supply-office.calendar');
-    Route::middleware('role:system_admin')->group(function (): void {
+    Route::middleware('role:admin')->group(function (): void {
+        Route::get('/organizations', [AdminController::class, 'organizations'])->name('supply-office.organizations');
+        Route::post('/organizations', [AdminController::class, 'storeOrganization'])->name('supply-office.organizations.store');
+        Route::put('/organizations/{organization}', [AdminController::class, 'updateOrganization'])->name('supply-office.organizations.update');
+        Route::post('/organizations/{organization}/memberships', [AdminController::class, 'storeOrganizationMembership'])->name('supply-office.organizations.memberships.store');
+        Route::put('/organization-memberships/{membership}', [AdminController::class, 'updateOrganizationMembership'])->name('supply-office.organizations.memberships.update');
         Route::get('/audit-logs', [AdminController::class, 'auditLogs'])->name('supply-office.audit-logs');
         Route::put('/users/{user}', [AdminController::class, 'updateUser'])->name('supply-office.users.update');
         Route::delete('/users/{user}', [AdminController::class, 'destroyUser'])->name('supply-office.users.destroy');
+        Route::post('/users/{user}/reactivate', [AdminController::class, 'reactivateUser'])->name('supply-office.users.reactivate');
         Route::get('/export',  [AdminController::class, 'export'])->name('supply-office.export');
     });
     Route::get('/usage-reports', [SupplyOfficeController::class, 'usageReports'])->name('supply-office.usage-reports');
     Route::get('/calendar', [CalendarController::class, 'index'])->name('supply-office.calendar');
     Route::post('/update',  [SupplyOfficeController::class, 'update'])->name('supply-office.update');
     Route::post('/requests/needs-revision', [SupplyOfficeController::class, 'needsRevision'])->name('supply-office.requests.needs-revision');
+    Route::post('/requests/revise', [SupplyOfficeController::class, 'reviseReservation'])->name('supply-office.requests.revise');
     Route::get('/priority-override/confirm', [SupplyOfficeController::class, 'confirmPriorityOverride'])->name('supply-office.priority-override.confirm');
     Route::post('/priority-override/confirm', [SupplyOfficeController::class, 'submitPriorityOverride'])->name('supply-office.priority-override.submit');
     Route::post('/delete',  [SupplyOfficeController::class, 'destroy'])->name('supply-office.destroy');
@@ -128,11 +135,12 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     Route::get('/audit-logs', [AdminController::class, 'auditLogs'])->name('admin.audit-logs');
     Route::post('/update', [AdminController::class, 'update'])->name('admin.update');
     Route::post('/delete', [AdminController::class, 'destroy'])->name('admin.destroy');
-    Route::middleware('role:system_admin')->group(function (): void {
+    Route::middleware('role:admin')->group(function (): void {
         Route::get('/users', [AdminController::class, 'users'])->name('admin.users');
         Route::post('/users', [AdminController::class, 'storeUser'])->name('admin.users.store');
         Route::put('/users/{user}', [AdminController::class, 'updateUser'])->name('admin.users.update');
         Route::delete('/users/{user}', [AdminController::class, 'destroyUser'])->name('admin.users.destroy');
+        Route::post('/users/{user}/reactivate', [AdminController::class, 'reactivateUser'])->name('admin.users.reactivate');
     });
     Route::get('/export', [AdminController::class, 'export'])->name('admin.export');
 });
@@ -142,6 +150,8 @@ Route::middleware(['auth', 'role:custodian'])->prefix('custodian')->group(functi
     Route::get('/',        fn () => redirect()->route('custodian.index'));
     Route::get('/dashboard',        [CustodianController::class, 'index'])->name('custodian.index');
     Route::get('/assignments', [CustodianController::class, 'assignments'])->name('custodian.assignments');
+    Route::get('/venue', [CustodianController::class, 'venueManagement'])->name('custodian.venue');
+    Route::get('/equipment', [CustodianController::class, 'equipmentManagement'])->name('custodian.equipment');
     Route::get('/settings', [CustodianController::class, 'settings'])->name('custodian.settings');
     Route::post('/settings/profile', [CustodianController::class, 'updateProfile'])->name('custodian.settings.profile');
     Route::post('/settings/password', [CustodianController::class, 'updatePassword'])->name('custodian.settings.password');
@@ -156,6 +166,8 @@ Route::middleware(['auth', 'role:custodian'])->prefix('custodian')->group(functi
     Route::post('/equipment', [CustodianController::class, 'storeEquipment'])->name('custodian.equipment.store');
     Route::put('/equipment/{equipment}', [CustodianController::class, 'updateEquipment'])->name('custodian.equipment.update');
     Route::patch('/equipment/{equipment}/toggle', [CustodianController::class, 'toggleEquipment'])->name('custodian.equipment.toggle');
+    Route::post('/equipment/{equipment}/report-issue', [CustodianController::class, 'reportEquipmentIssue'])->name('custodian.equipment.report-issue');
+    Route::post('/equipment/{equipment}/return', [CustodianController::class, 'submitEquipmentReturn'])->name('custodian.equipment.return');
 });
 
 // Notifications
@@ -164,11 +176,13 @@ Route::middleware('auth')->group(function () {
          ->name('notifications.index');
     Route::post('/notifications/{id}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead'])
          ->name('notifications.read');
+    Route::get('/user/{user}/signature', [RequestorController::class, 'accountSignature'])->name('user.signature');
     Route::get('/request/{id}', [RequestorController::class, 'show'])->name('request.show');
     Route::get('/request/{id}/print', [RequestorController::class, 'print'])->name('request.print');
     Route::get('/request/{id}/proposal', [RequestorController::class, 'proposal'])->name('request.proposal');
     Route::get('/request/{id}/proposal/download', [RequestorController::class, 'proposalDownload'])->name('request.proposal.download');
     Route::get('/request/{id}/signature', [RequestorController::class, 'signature'])->name('request.signature');
+    Route::get('/request/{facilityRequest}/approval-signature/{type}', [RequestorController::class, 'approvalSignature'])->name('request.approval.signature');
     Route::post('/request/{facilityRequest}/cancel', [RequestActionController::class, 'cancel'])->name('request.cancel');
     Route::post('/request/{facilityRequest}/custodian/verify', [RequestActionController::class, 'custodianVerify'])->name('request.custodian.verify');
     Route::post('/request/{facilityRequest}/custodian/revision', [RequestActionController::class, 'custodianRequestRevision'])->name('request.custodian.revision');
@@ -183,5 +197,7 @@ Route::middleware('auth')->group(function() {
     Route::post('/calendar/return/{id}', [CustodianController::class, 'returnEquipment'])->name('calendar.return');
     Route::post('/calendar/approve/{id}', [CalendarController::class, 'approveRequest'])->name('calendar.approve');
     Route::post('/calendar/reject/{facility_request}', [FacilityRequestApiController::class, 'reject'])->name('calendar.reject');
-    Route::post('/calendar/check-conflicts', [CalendarController::class, 'checkConflicts'])->name('calendar.check-conflicts');
+    Route::post('/calendar/check-conflicts', [CalendarController::class, 'checkConflicts'])
+        ->middleware('role:admin')
+        ->name('calendar.check-conflicts');
 });

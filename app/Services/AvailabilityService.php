@@ -12,6 +12,34 @@ use Illuminate\Support\Collection;
 
 class AvailabilityService
 {
+    public function checkFacilityRequest(FacilityRequest $facilityRequest, ?int $excludeRequestId = null): ?string
+    {
+        $requestedStart = $facilityRequest->getRequestedStartDateTime();
+        $requestedEnd = $facilityRequest->getRequestedEndDateTime();
+
+        foreach ($facilityRequest->getVenueNames() as $venueName) {
+            $availability = $this->checkVenueAvailability($venueName, $requestedStart, $requestedEnd, $excludeRequestId);
+            if (!$availability['available']) {
+                return $availability['message'] ?? 'Venue booking conflict detected.';
+            }
+        }
+
+        foreach ($facilityRequest->getEquipmentQuantities() as $itemName => $quantity) {
+            $availability = $this->checkEquipmentAvailability(
+                $itemName,
+                (int) $quantity,
+                $requestedStart,
+                $requestedEnd,
+                $excludeRequestId
+            );
+            if (!$availability['available']) {
+                return $availability['message'] ?? 'Requested equipment is not available.';
+            }
+        }
+
+        return null;
+    }
+
     public function getVenueCapacity(string $venueName): ?int
     {
         $venue = Venue::where('name', $venueName)->first();
@@ -20,19 +48,10 @@ class AvailabilityService
             return (int) $venue->capacity;
         }
 
-        $defaultCapacities = [
-            'Conference Hall & Interaction Center (CHIC)' => 150,
-            'Gymnasium' => 500,
-            'Balay Alumni' => 200,
-            'Covered Court' => 300,
-            'Oval Grounds' => 1000,
-            'Volleyball Court' => 100,
-        ];
-
-        return $defaultCapacities[$venueName] ?? null;
+        return null;
     }
 
-    public function checkEquipmentAvailability(string $itemName, int $quantity, ?Carbon $requestedStart = null, ?Carbon $requestedEnd = null): array
+    public function checkEquipmentAvailability(string $itemName, int $quantity, ?Carbon $requestedStart = null, ?Carbon $requestedEnd = null, ?int $excludeRequestId = null): array
     {
         $equipment = Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])->first();
 
@@ -47,7 +66,7 @@ class AvailabilityService
         $requestedStart = $requestedStart ?? now();
         $requestedEnd = $requestedEnd ?? $requestedStart->copy()->addHour();
 
-        $outstanding = $this->getOutstandingEquipmentQuantity($itemName, $requestedStart, $requestedEnd);
+        $outstanding = $this->getOutstandingEquipmentQuantity($itemName, $requestedStart, $requestedEnd, $excludeRequestId);
         $available = max(0, (int) $equipment->quantity - $outstanding);
 
         return [
@@ -58,7 +77,7 @@ class AvailabilityService
         ];
     }
 
-    public function checkVenueAvailability(string $venueName, Carbon $requestedStart, Carbon $requestedEnd): array
+    public function checkVenueAvailability(string $venueName, Carbon $requestedStart, Carbon $requestedEnd, ?int $excludeRequestId = null): array
     {
         $venue = Venue::where('name', $venueName)->first();
         $venueRecord = $venue ?: null;
@@ -68,20 +87,17 @@ class AvailabilityService
             return ['available' => false, 'message' => 'The selected venue is unavailable.', 'capacity' => $venueRecord->capacity];
         }
 
-        $requests = FacilityRequest::with(['requestVenues', 'reservationSchedule'])->get();
+        $requests = FacilityRequest::with(['requestVenues', 'reservationSchedule'])
+            ->when($excludeRequestId !== null, fn ($query) => $query->whereKeyNot($excludeRequestId))
+            ->get();
 
         $conflicts = $requests->contains(function (FacilityRequest $request) use ($venueName, $requestedStart, $requestedEnd): bool {
-                $isActiveApproved = $request->status === 'approved' && $request->equipment_returned_status !== 'returned' && $request->equipment_returned_status !== 'overdue';
-                $isActivePending = $request->status === 'pending'
-                    && $request->venue_status !== 'rejected'
-                    && $request->equipment_status !== 'rejected';
-
-                if (!$isActiveApproved && !$isActivePending) {
+                if ($request->status !== 'approved') {
                     return false;
                 }
                 $venueNames = array_map('strtolower', $request->getVenueNames());
                 $matchesVenue = collect($venueNames)->contains(function (string $name) use ($venueName): bool {
-                    return str_contains($name, strtolower($venueName));
+                    return trim($name) === strtolower(trim($venueName));
                 });
 
                 return $matchesVenue && $request->overlapsTimeRange($requestedStart, $requestedEnd);
@@ -108,18 +124,15 @@ class AvailabilityService
         ];
     }
 
-    public function getOutstandingEquipmentQuantity(string $itemName, Carbon $requestedStart, Carbon $requestedEnd): int
+    public function getOutstandingEquipmentQuantity(string $itemName, Carbon $requestedStart, Carbon $requestedEnd, ?int $excludeRequestId = null): int
     {
-        $requests = FacilityRequest::with(['requestEquipment', 'reservationSchedule'])->get();
+        $requests = FacilityRequest::with(['requestEquipment', 'reservationSchedule'])
+            ->when($excludeRequestId !== null, fn ($query) => $query->whereKeyNot($excludeRequestId))
+            ->get();
 
         $outstanding = 0;
         foreach ($requests as $request) {
-            $isActiveApproved = $request->status === 'approved' && $request->equipment_returned_status !== 'returned' && $request->equipment_returned_status !== 'overdue';
-            $isActivePending = $request->status === 'pending'
-                && $request->venue_status !== 'rejected'
-                && $request->equipment_status !== 'rejected';
-
-            if (!$isActiveApproved && !$isActivePending) {
+            if ($request->status !== 'approved' || in_array($request->equipment_returned_status, ['returned', 'fulfilled'], true)) {
                 continue;
             }
 

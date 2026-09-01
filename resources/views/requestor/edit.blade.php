@@ -120,12 +120,10 @@
                                 } else {
                                     $equipmentItems = collect([
                                         ['name' => 'Sound System', 'quantity' => 1, 'quantity_available' => 1],
-                                        ['name' => 'Microphones', 'quantity' => 2, 'quantity_available' => 2],
                                         ['name' => 'Canopies', 'quantity' => 3, 'quantity_available' => 3],
                                         ['name' => 'Industrial Fans', 'quantity' => 4, 'quantity_available' => 4],
                                         ['name' => 'Iwata Cooler Fans', 'quantity' => 2, 'quantity_available' => 2],
                                         ['name' => 'Tables', 'quantity' => 10, 'quantity_available' => 10],
-                                        ['name' => 'Monobloc chairs', 'quantity' => 50, 'quantity_available' => 50],
                                     ]);
                                 }
                             @endphp

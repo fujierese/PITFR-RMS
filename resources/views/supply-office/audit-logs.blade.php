@@ -64,6 +64,7 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Request</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Changes</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
@@ -82,6 +83,7 @@
                                         @elseif(str_contains($log->action, 'submitted')) bg-blue-100 text-blue-800
                                         @elseif(str_contains($log->action, 'returned')) bg-purple-100 text-purple-800
                                         @elseif(str_contains($log->action, 'cancelled')) bg-gray-100 text-gray-800
+                                        @elseif(str_contains($log->action, 'user_')) bg-orange-100 text-orange-800
                                         @else bg-gray-100 text-gray-800
                                         @endif">
                                         {{ ucfirst(str_replace('_', ' ', $log->action)) }}
@@ -99,10 +101,37 @@
                                 <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
                                     {{ $log->detail ?? '-' }}
                                 </td>
+                                <td class="px-6 py-4 text-sm">
+                                    @if(isset($log->old_values) && is_array($log->old_values) && !empty($log->old_values))
+                                        <button type="button" class="text-blue-600 hover:text-blue-800 font-medium" 
+                                                onclick="toggleChanges(this, event)"
+                                                data-changes="{{ htmlspecialchars(json_encode(['old' => $log->old_values, 'new' => $log->new_values ?? []])) }}">
+                                            View Changes
+                                        </button>
+                                        <div class="hidden mt-2 pt-2 border-t border-gray-200 changes-detail">
+                                            @foreach($log->old_values as $field => $oldValue)
+                                                @php
+                                                    $newValue = $log->new_values[$field] ?? null;
+                                                @endphp
+                                                @if($oldValue !== $newValue)
+                                                    <div class="text-xs mb-2">
+                                                        <span class="font-semibold text-gray-700">{{ ucfirst(str_replace('_', ' ', $field)) }}:</span>
+                                                        <br>
+                                                        <span class="text-red-600">← {{ json_encode($oldValue) }}</span>
+                                                        <br>
+                                                        <span class="text-green-600">→ {{ json_encode($newValue) }}</span>
+                                                    </div>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <span class="text-gray-400">-</span>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                                <td colspan="6" class="px-6 py-4 text-center text-gray-500">
                                     No audit logs found matching the current filters.
                                 </td>
                             </tr>
@@ -120,4 +149,22 @@
         </div>
     </div>
 </div>
+
+<script>
+function toggleChanges(button, event) {
+    event.preventDefault();
+    const detail = button.nextElementSibling;
+    const isHidden = detail.classList.contains('hidden');
+    
+    if (isHidden) {
+        detail.classList.remove('hidden');
+        button.textContent = 'Hide Changes';
+        button.classList.add('text-blue-800', 'font-bold');
+    } else {
+        detail.classList.add('hidden');
+        button.textContent = 'View Changes';
+        button.classList.remove('text-blue-800', 'font-bold');
+    }
+}
+</script>
 @endsection

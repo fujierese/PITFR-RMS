@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use App\Models\Department;
 use App\Models\Equipment;
 use App\Models\FacilityRequest;
+use App\Models\User;
 use App\Models\Venue;
 use App\Notifications\RequestStatusChanged;
 use Illuminate\Database\Eloquent\Builder;
@@ -334,6 +335,233 @@ class SupplyOfficeController extends Controller
         return redirect()->route('supply-office.index')->with('success', 'Request marked as Needs Revision.');
     }
 
+    /**
+     * Admin/Supply Office directly revises a reservation
+     * Checks availability, detects conflicts, and allows override
+     */
+    public function reviseReservation(Request $request)
+    {
+        $this->ensureAdminAccess();
+
+        $validated = $request->validate([
+            'facility_request_id' => ['required', 'integer', 'exists:facility_requests,id'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'start_time' => ['required', 'string', 'regex:/^\d{2}:\d{2}$/'],
+            'end_time' => ['required', 'string', 'regex:/^\d{2}:\d{2}$/'],
+            'venue' => ['required', 'array', 'min:1', 'max:1'],
+            'venue.*' => ['string'],
+            'equipment' => ['nullable', 'array'],
+            'equipment.*' => ['string'],
+            'equipment_quantities' => ['nullable', 'array'],
+            'revision_reason' => ['required', 'string', 'min:10', 'max:1000'],
+            'override_conflict' => ['nullable', 'boolean'],
+            'override_reason' => ['required_if:override_conflict,true', 'nullable', 'string', 'max:500'],
+        ]);
+
+        $facilityRequest = FacilityRequest::findOrFail($validated['facility_request_id']);
+
+        // Check if revision is allowed
+        if (!$facilityRequest->canBeRevised()) {
+            return redirect()->back()->withErrors([
+                'revision' => $facilityRequest->getRevisionLockReason() ?? 'Cannot revise this reservation.',
+            ]);
+        }
+
+        $user = Auth::user();
+
+        // Capture old state
+        $oldState = $facilityRequest->getCurrentState();
+
+        // Prepare new state
+        $newState = [
+            'start_date' => $validated['start_date'],
+            'end_date' => $validated['end_date'],
+            'start_time' => $validated['start_time'],
+            'end_time' => $validated['end_time'],
+            'venue' => $validated['venue'],
+            'equipment' => $validated['equipment'] ?? [],
+            'equipment_quantities' => $validated['equipment_quantities'] ?? [],
+        ];
+
+        // Check availability for new schedule
+        $availabilityService = app(\App\Services\AvailabilityService::class);
+        $conflictDetected = false;
+        $conflictDetails = '';
+
+        // Check venue availability
+        $range = FacilityRequest::normalizeScheduleRange(
+            $validated['start_date'],
+            $validated['start_time'],
+            $validated['end_date'],
+            $validated['end_time']
+        );
+
+        $venueConflict = !$availabilityService->checkVenueAvailability(
+            $validated['venue'][0] ?? '',
+            $range['start'],
+            $range['end'],
+            $facilityRequest->id
+        )['available'];
+
+        // Check equipment availability
+        $equipmentConflict = false;
+        foreach (($validated['equipment'] ?? []) as $equipment) {
+            $qty = (int) ($validated['equipment_quantities'][$equipment] ?? 1);
+            if (!$availabilityService->checkEquipmentAvailability($equipment, $qty, $range['start'], $range['end'], $facilityRequest->id)['available']) {
+                $equipmentConflict = true;
+                break;
+            }
+        }
+
+        if ($venueConflict || $equipmentConflict) {
+            $conflictDetected = true;
+            $parts = [];
+            if ($venueConflict) $parts[] = 'Venue conflict detected';
+            if ($equipmentConflict) $parts[] = 'Equipment availability issue';
+            $conflictDetails = implode('; ', $parts);
+
+            // If not overriding, reject the revision
+            if (!($validated['override_conflict'] ?? false)) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors([
+                        'conflict' => "Scheduling conflict detected: $conflictDetails. Provide an override reason to proceed.",
+                    ])
+                    ->with('conflict_detected', true);
+            }
+        }
+
+        try {
+            DB::transaction(function () use (
+                $facilityRequest,
+                $oldState,
+                $newState,
+                $validated,
+                $user,
+                $conflictDetected,
+                $conflictDetails,
+                $range
+            ): void {
+                // Create revision history record
+                $revision = $facilityRequest->revisionHistories()->create([
+                    'revised_by_id' => $user->id,
+                    'old_start_date' => $oldState['start_date'],
+                    'old_end_date' => $oldState['end_date'],
+                    'old_start_time' => $oldState['start_time'],
+                    'old_end_time' => $oldState['end_time'],
+                    'old_venue' => $oldState['venue'],
+                    'old_equipment' => $oldState['equipment'],
+                    'old_equipment_quantities' => $oldState['equipment_quantities'],
+                    'new_start_date' => $newState['start_date'],
+                    'new_end_date' => $newState['end_date'],
+                    'new_start_time' => $newState['start_time'],
+                    'new_end_time' => $newState['end_time'],
+                    'new_venue' => $newState['venue'],
+                    'new_equipment' => $newState['equipment'],
+                    'new_equipment_quantities' => $newState['equipment_quantities'],
+                    'revision_reason' => $validated['revision_reason'],
+                    'conflict_detected' => $conflictDetected,
+                    'conflict_details' => $conflictDetails,
+                    'override_conflict' => $validated['override_conflict'] ?? false,
+                    'override_reason' => $validated['override_reason'] ?? null,
+                ]);
+
+                // Update facility request with new schedule
+                $facilityRequest->update([
+                    'start_date' => $newState['start_date'],
+                    'end_date' => $newState['end_date'],
+                    'start_time' => $newState['start_time'],
+                    'end_time' => $newState['end_time'],
+                    'venue' => $newState['venue'],
+                    'equipment' => $newState['equipment'],
+                    'equipment_quantities' => $newState['equipment_quantities'],
+                ]);
+
+                // Update reservation schedule
+                $facilityRequest->reservationSchedule()->delete();
+                $facilityRequest->reservationSchedule()->create([
+                    'start_datetime' => $range['start'],
+                    'end_datetime' => $range['end'],
+                ]);
+
+                // Add to request history
+                $facilityRequest->addHistory(
+                    'revision_applied',
+                    "Reservation revised by {$user->name}. {$revision->getSummary()}",
+                    $user->id
+                );
+
+                // Notify requestor with revision details
+                $requestor = $facilityRequest->requester;
+                if ($requestor) {
+                    $requestor->notify(new \App\Notifications\ReservationRevised(
+                        $facilityRequest,
+                        $oldState,
+                        $newState,
+                        $validated['revision_reason'],
+                        $user->name,
+                        $conflictDetected,
+                        $validated['override_conflict'] ?? false,
+                        $conflictDetails
+                    ));
+                    $revision->markRequestorNotified();
+                }
+
+                // Notify custodians with revision details
+                $notifiedCustodians = [];
+
+                // Notify venue custodians
+                foreach ($facilityRequest->requestVenues as $requestVenue) {
+                    if ($requestVenue->venue && $requestVenue->venue->custodian) {
+                        $custodian = $requestVenue->venue->custodian;
+                        if (!in_array($custodian->id, $notifiedCustodians)) {
+                            $custodian->notify(new \App\Notifications\ReservationRevised(
+                                $facilityRequest,
+                                $oldState,
+                                $newState,
+                                $validated['revision_reason'],
+                                $user->name,
+                                $conflictDetected,
+                                $validated['override_conflict'] ?? false,
+                                $conflictDetails
+                            ));
+                            $notifiedCustodians[] = $custodian->id;
+                        }
+                    }
+                }
+
+                // Notify equipment custodians
+                foreach ($facilityRequest->getAssignedEquipmentCustodianIds() as $custodianId) {
+                    $custodian = User::find($custodianId);
+                    if ($custodian && !in_array($custodianId, $notifiedCustodians)) {
+                        $custodian->notify(new \App\Notifications\ReservationRevised(
+                            $facilityRequest,
+                            $oldState,
+                            $newState,
+                            $validated['revision_reason'],
+                            $user->name,
+                            $conflictDetected,
+                            $validated['override_conflict'] ?? false,
+                            $conflictDetails
+                        ));
+                        $notifiedCustodians[] = $custodianId;
+                    }
+                }
+
+                $revision->markCustodianNotified();
+            });
+
+            return redirect()->route('supply-office.index')
+                ->with('success', 'Reservation revised successfully. Requestor and custodians have been notified.');
+        } catch (\Exception $e) {
+            Log::error('Revision failed', ['error' => $e->getMessage()]);
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['revision' => 'Failed to revise reservation. Please try again.']);
+        }
+    }
+
     public function storeVenue(Request $request)
     {
         $validated = $request->validate([
@@ -432,7 +660,11 @@ class SupplyOfficeController extends Controller
         DB::beginTransaction();
 
         try {
-            $fr = FacilityRequest::whereKey($validated['id'])->lockForUpdate()->firstOrFail();
+            $fr = FacilityRequest::whereKey($validated['id'])->first();
+            if (! $fr) {
+                DB::rollBack();
+                return redirect()->back()->withErrors(['id' => 'Request not found.']);
+            }
 
             $alreadyApproved = $fr->status === 'approved' || ($fr->approved_by_id || $fr->approved_by);
             if ($alreadyApproved && $validated['action'] === 'approve') {
@@ -451,10 +683,9 @@ class SupplyOfficeController extends Controller
             }
 
             $conflictingRequest = null;
+            $isOverrideEligible = ($fr->priority === 'institutional') || (!empty($fr->is_emergency) && (bool) $fr->is_emergency);
 
             if ($validated['action'] === 'approve') {
-                $isOverrideEligible = ($fr->priority === 'institutional') || (!empty($fr->is_emergency) && (bool) $fr->is_emergency);
-
             if ($isOverrideEligible) {
                 $requestedVenueNames = $fr->getVenueNames();
                 if (!empty($requestedVenueNames)) {
@@ -494,6 +725,15 @@ class SupplyOfficeController extends Controller
                 'time' => $fr->start_time ? $fr->start_time : '',
                 'priority' => $fr->priority ?? 'regular',
             ]);
+        }
+
+        if ($validated['action'] === 'approve' && !$isOverrideEligible) {
+            $availabilityMessage = app(\App\Services\AvailabilityService::class)
+                ->checkFacilityRequest($fr, $fr->id);
+            if ($availabilityMessage) {
+                DB::rollBack();
+                return back()->withErrors(['action' => $availabilityMessage]);
+            }
         }
 
         $originalStatus = $fr->status;
@@ -587,6 +827,10 @@ class SupplyOfficeController extends Controller
 
         if (!$conflictingRequest) {
             return redirect()->route('supply-office.index')->withErrors(['conflicting_request_id' => 'The conflicting request could not be found.']);
+        }
+
+        if ($urgentRequest->priority !== 'institutional' && !$urgentRequest->is_emergency) {
+            return redirect()->route('supply-office.index')->withErrors(['urgent_request_id' => 'This request is not eligible for priority override.']);
         }
 
         if ($conflictingRequest->status !== 'approved' || $conflictingRequest->venue_status !== 'approved' || $conflictingRequest->equipment_status !== 'approved') {
@@ -735,8 +979,8 @@ class SupplyOfficeController extends Controller
 
     public function destroy(Request $request)
     {
-        FacilityRequest::findOrFail($request->input('id'))->delete();
-        return redirect()->route('supply-office.index')->with('success', 'Request deleted successfully.');
+        return redirect()->route('supply-office.index')
+            ->withErrors(['id' => 'Requests cannot be permanently deleted. Use Cancel Request where applicable.']);
     }
 
     private function ensureAdminAccess(): void

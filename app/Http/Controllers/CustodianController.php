@@ -152,7 +152,11 @@ class CustodianController extends Controller
         DB::beginTransaction();
 
         try {
-            $fr = FacilityRequest::whereKey($validated['id'])->lockForUpdate()->firstOrFail();
+            $fr = FacilityRequest::whereKey($validated['id'])->lockForUpdate()->first();
+            if (! $fr) {
+                DB::rollBack();
+                return redirect()->back()->withErrors(['id' => 'Request not found.']);
+            }
 
             // ─── RETURN ACTION ───────────────────────────────────────────────
             if ($validated['action'] === 'return') {
@@ -164,31 +168,66 @@ class CustodianController extends Controller
                 }
 
                 $custodianEquipment = $fr->equipmentForCustodian($user->id);
-
                 if (empty($custodianEquipment)) {
                     DB::rollBack();
                     return back()->withErrors(['error' => 'You are not assigned to any equipment in this request.']);
                 }
 
-                $fr->markEquipmentReturned($user->id, $custodianEquipment, $validated['notes'] ?? null);
-                $fr->addHistory('equipment_returned', 'Equipment returned by custodian ' . $user->name, $user->id);
+                $returnEquipmentPayload = $request->input('equipment', []);
+                $damagePayload = $request->input('damaged_quantity', []);
+                $missingPayload = $request->input('missing_quantity', []);
+                $damageRemarks = $request->input('damage_remarks', []);
+                $missingRemarks = $request->input('missing_remarks', []);
+
+                $fr->markEquipmentReturned(
+                    $user->id,
+                    $returnEquipmentPayload,
+                    $validated['notes'] ?? null,
+                    $damagePayload,
+                    $missingPayload,
+                    $damageRemarks,
+                    $missingRemarks
+                );
 
                 DB::commit();
 
-                // Fire Laravel event for broadcasting (include custodians)
+                $frId = $fr->id;
+                $frControlNumber = $fr->control_number;
+                $frRequestedById = $fr->requested_by_id;
+                $frVenue = $fr->venue ?? [];
+
                 $equipmentCustodianIds = $fr->getAssignedEquipmentCustodianIds();
-                $venueCustodianIds = \App\Models\Venue::whereIn('name', $fr->venue ?? [])->pluck('custodian_id')->filter()->unique()->toArray();
+                $venueCustodianIds = \App\Models\Venue::whereIn('name', $frVenue)->pluck('custodian_id')->filter()->unique()->toArray();
                 $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
 
-                \App\Events\EquipmentReturned::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, $custodianIds);
+                \App\Events\EquipmentReturned::dispatch($frId, $frControlNumber, $user->name, $frRequestedById, $custodianIds);
 
-                $requester = \App\Models\User::find($fr->requested_by_id);
-                if ($requester) {
-                    $requester->notify(new \App\Notifications\RequestStatusChanged(
-                        $fr,
-                        'equipment_returned',
-                        $validated['notes'] ?? 'Equipment has been returned and inventory updated.'
-                    ));
+                try {
+                    $refreshedFr = FacilityRequest::find($frId);
+                    if ($refreshedFr) {
+                        $notifiedUsers = collect();
+                        $requester = \App\Models\User::find($frRequestedById);
+                        if ($requester) {
+                            $notifiedUsers->push($requester);
+                        }
+
+                        foreach (array_unique(array_filter(array_merge($equipmentCustodianIds, $venueCustodianIds))) as $custodianId) {
+                            $custodianUser = \App\Models\User::find($custodianId);
+                            if ($custodianUser) {
+                                $notifiedUsers->push($custodianUser);
+                            }
+                        }
+
+                        foreach ($notifiedUsers->unique('id')->values() as $targetUser) {
+                            $targetUser->notify(new \App\Notifications\RequestStatusChanged(
+                                $refreshedFr,
+                                'equipment_returned',
+                                $validated['notes'] ?? 'Equipment return recorded and inventory adjusted.'
+                            ));
+                        }
+                    }
+                } catch (\Throwable $notificationError) {
+                    Log::warning('Equipment return notification failed for request ' . $frId . ': ' . $notificationError->getMessage());
                 }
 
                 return redirect()->route('custodian.index')
@@ -394,6 +433,12 @@ class CustodianController extends Controller
         $validated = $request->validate([
             'equipment' => 'required|array',
             'equipment.*' => 'nullable|integer|min:0',
+            'damaged_quantity' => 'nullable|array',
+            'damaged_quantity.*' => 'nullable|integer|min:0',
+            'missing_quantity' => 'nullable|array',
+            'missing_quantity.*' => 'nullable|integer|min:0',
+            'damage_remarks' => 'nullable|array',
+            'missing_remarks' => 'nullable|array',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -401,7 +446,11 @@ class CustodianController extends Controller
             $facilityRequest->markEquipmentReturned(
                 $user->id,
                 $validated['equipment'],
-                $validated['notes'] ?? null
+                $validated['notes'] ?? null,
+                $validated['damaged_quantity'] ?? [],
+                $validated['missing_quantity'] ?? [],
+                $validated['damage_remarks'] ?? [],
+                $validated['missing_remarks'] ?? []
             );
 
             return back()->with('success', 'Equipment returned successfully.');
@@ -409,6 +458,50 @@ class CustodianController extends Controller
             Log::error('Equipment return failed for request ' . $facilityRequest->id . ': ' . $e->getMessage(), ['exception' => $e]);
             return back()->with('error', 'Unable to return equipment at this time.');
         }
+    }
+
+    /**
+     * Display venue management page for Venue Custodians.
+     * 
+     * Shows only venues assigned to this custodian.
+     * Allows add, edit, enable/disable operations on own venues only.
+     */
+    public function venueManagement()
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        // Load only venues assigned to this custodian
+        $venues = \App\Models\Venue::where('custodian_id', $user->id)
+            ->orderBy('name')
+            ->get();
+
+        return view('custodian.venue', [
+            'user' => $user,
+            'venues' => $venues,
+        ]);
+    }
+
+    /**
+     * Display equipment management page for Equipment Custodians.
+     * 
+     * Shows only equipment assigned to this custodian.
+     * Allows add, edit, enable/disable operations on own equipment only.
+     */
+    public function equipmentManagement()
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        // Load only equipment assigned to this custodian
+        $equipment = \App\Models\Equipment::where('custodian_id', $user->id)
+            ->orderBy('name')
+            ->get();
+
+        return view('custodian.equipment', [
+            'user' => $user,
+            'equipment' => $equipment,
+        ]);
     }
 
     public function assignments()
@@ -440,14 +533,15 @@ class CustodianController extends Controller
     public function storeVenue(Request $request)
     {
         $user = Auth::user();
-        abort_unless($user->isCustodianVenue(), 403);
+        // Custodians cannot create venues (spec section 6)
+        abort(403, 'Custodians cannot create venues. Venues are created and assigned by administrators.');
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
             'capacity' => ['nullable', 'integer', 'min:1'],
         ]);
         Venue::create($validated + ['custodian_id' => $user->id, 'is_active' => true]);
 
-        return redirect()->route('custodian.assignments')->with('success', 'Venue added successfully.');
+        return redirect()->route('custodian.venue')->with('success', 'Venue added successfully.');
     }
 
     public function updateVenue(Request $request, Venue $venue)
@@ -460,22 +554,51 @@ class CustodianController extends Controller
         ]);
         $venue->update($validated);
 
-        return redirect()->route('custodian.assignments')->with('success', 'Venue updated successfully.');
+        return redirect()->route('custodian.venue')->with('success', 'Venue updated successfully.');
     }
 
     public function toggleVenue(Venue $venue)
     {
         $user = Auth::user();
         abort_unless($user->isCustodianVenue() && $venue->custodian_id === $user->id, 403);
+        
+        $wasActive = $venue->is_active;
         $venue->update(['is_active' => ! $venue->is_active]);
 
-        return redirect()->route('custodian.assignments')->with('success', 'Venue availability updated.');
+        // Notify affected users (requestors with pending/approved requests using this venue)
+        try {
+            $affectedRequestors = \App\Models\FacilityRequest::where(function ($query) use ($venue) {
+                $query->orWhere(fn ($subQuery) => $subQuery->matchesVenue($venue->name));
+            })
+            ->whereIn('status', ['pending', 'approved'])
+            ->distinct()
+            ->pluck('requested_by_id')
+            ->filter()
+            ->unique();
+
+            foreach ($affectedRequestors as $requestorId) {
+                $requestor = \App\Models\User::find($requestorId);
+                if ($requestor) {
+                    $requestor->notify(new \App\Notifications\ResourceStatusChanged(
+                        $venue,
+                        $venue->is_active ? 'enabled' : 'disabled',
+                        'venue',
+                        $user->name
+                    ));
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Failed to notify users of venue status change: ' . $e->getMessage());
+        }
+
+        return redirect()->route('custodian.venue')->with('success', 'Venue availability updated.');
     }
 
     public function storeEquipment(Request $request)
     {
         $user = Auth::user();
-        abort_unless($user->isCustodianEquipment(), 403);
+        // Custodians cannot create equipment (spec section 12)
+        abort(403, 'Custodians cannot create equipment. Equipment is created and assigned by administrators.');
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
             'quantity' => ['required', 'integer', 'min:1'],
@@ -484,7 +607,7 @@ class CustodianController extends Controller
         $validated['quantity_available'] = min($validated['quantity'], $validated['quantity_available'] ?? $validated['quantity']);
         Equipment::create($validated + ['custodian_id' => $user->id, 'is_active' => true]);
 
-        return redirect()->route('custodian.assignments')->with('success', 'Equipment added successfully.');
+        return redirect()->route('custodian.equipment')->with('success', 'Equipment added successfully.');
     }
 
     public function updateEquipment(Request $request, Equipment $equipment)
@@ -499,15 +622,161 @@ class CustodianController extends Controller
         $validated['quantity_available'] = min($validated['quantity'], $validated['quantity_available']);
         $equipment->update($validated);
 
-        return redirect()->route('custodian.assignments')->with('success', 'Equipment updated successfully.');
+        return redirect()->route('custodian.equipment')->with('success', 'Equipment updated successfully.');
     }
 
     public function toggleEquipment(Equipment $equipment)
     {
         $user = Auth::user();
         abort_unless($user->isCustodianEquipment() && $equipment->custodian_id === $user->id, 403);
+        
         $equipment->update(['is_active' => ! $equipment->is_active]);
 
-        return redirect()->route('custodian.assignments')->with('success', 'Equipment availability updated.');
+        // Notify affected users (requestors with pending/approved requests using this equipment)
+        try {
+            $affectedRequestors = \App\Models\FacilityRequest::where(function ($query) use ($equipment) {
+                $query->orWhere(fn ($subQuery) => $subQuery->matchesEquipment($equipment->name));
+            })
+            ->whereIn('status', ['pending', 'approved'])
+            ->distinct()
+            ->pluck('requested_by_id')
+            ->filter()
+            ->unique();
+
+            foreach ($affectedRequestors as $requestorId) {
+                $requestor = \App\Models\User::find($requestorId);
+                if ($requestor) {
+                    $requestor->notify(new \App\Notifications\ResourceStatusChanged(
+                        $equipment,
+                        $equipment->is_active ? 'enabled' : 'disabled',
+                        'equipment',
+                        $user->name
+                    ));
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Failed to notify users of equipment status change: ' . $e->getMessage());
+        }
+
+        return redirect()->route('custodian.equipment')->with('success', 'Equipment availability updated.');
+    }
+
+    /**
+     * Report an equipment issue (damage, loss, malfunction).
+     * Equipment Custodian can report problems with assigned equipment.
+     * Report is stored in audit logs for Admin review.
+     */
+    public function reportEquipmentIssue(Request $request, Equipment $equipment)
+    {
+        $user = Auth::user();
+        
+        // Authorization: verify equipment custodian role and ownership
+        abort_unless(
+            $user->isCustodianEquipment() && $equipment->custodian_id === $user->id,
+            403
+        );
+
+        // Validate report submission
+        $validated = $request->validate([
+            'issue_type' => ['required', 'in:damaged,lost,non_functional,other'],
+            'quantity_affected' => ['required', 'integer', 'min:1', 'max:' . $equipment->quantity],
+            'description' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        // Store the report in audit logs
+        \App\Models\AuditLog::create([
+            'actor_id' => $user->id,
+            'action' => 'equipment_issue_reported',
+            'details' => "Equipment '{$equipment->name}' issue reported by Custodian {$user->name}",
+            'new_values' => [
+                'equipment_id' => $equipment->id,
+                'equipment_name' => $equipment->name,
+                'issue_type' => $validated['issue_type'],
+                'quantity_affected' => $validated['quantity_affected'],
+                'description' => $validated['description'] ?? null,
+                'custodian_id' => $user->id,
+                'custodian_name' => $user->name,
+            ],
+        ]);
+
+        // Send notification to admin/supply office (using existing notification system)
+        try {
+            $adminUsers = \App\Models\User::whereIn('role', ['admin', 'supply-office'])
+                ->where('is_active', true)
+                ->get();
+            
+            foreach ($adminUsers as $admin) {
+                $admin->notify(new \App\Notifications\EquipmentIssueReported(
+                    $equipment,
+                    $validated['issue_type'],
+                    $validated['quantity_affected'],
+                    $validated['description'] ?? '',
+                    $user->name
+                ));
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Failed to notify admin of equipment issue: ' . $e->getMessage());
+            // Continue even if notification fails
+        }
+
+        return redirect()->route('custodian.equipment')
+                       ->with('success', "Equipment issue reported successfully. Administrators have been notified.");
+    }
+
+    /**
+     * Handle equipment return from custodian
+     * Validates quantity returned, condition, and records in audit log
+     * Sends notifications to admin users
+     */
+    public function submitEquipmentReturn(Request $request, Equipment $equipment)
+    {
+        $user = Auth::user();
+        
+        // Verify authorization: user must be equipment custodian AND equipment must be assigned to user
+        abort_unless($user->isCustodianEquipment() && $equipment->custodian_id === $user->id, 403);
+
+        // Validate return data
+        $validated = $request->validate([
+            'quantity_returned' => ['required', 'integer', 'min:1', 'max:' . ($equipment->quantity - $equipment->quantity_available)],
+            'condition' => ['required', 'in:good,acceptable,poor'],
+            'remarks' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        // Update equipment quantity available
+        $old_quantity_available = $equipment->quantity_available;
+        $equipment->quantity_available += $validated['quantity_returned'];
+        $equipment->save();
+
+        // Record return in audit log
+        \App\Models\AuditLog::create([
+            'actor_id' => $user->id,
+            'action' => 'equipment_returned',
+            'details' => "Equipment '{$equipment->name}' returned by Custodian {$user->name}",
+            'new_values' => [
+                'equipment_id' => $equipment->id,
+                'equipment_name' => $equipment->name,
+                'quantity_returned' => $validated['quantity_returned'],
+                'condition' => $validated['condition'],
+                'remarks' => $validated['remarks'] ?? null,
+                'quantity_available_before' => $old_quantity_available,
+                'quantity_available_after' => $equipment->quantity_available,
+            ],
+        ]);
+
+        // Send notifications to admin/supply office users
+        $adminUsers = \App\Models\User::whereIn('role', ['admin', 'supply-office'])->get();
+        foreach ($adminUsers as $admin) {
+            $admin->notify(new \App\Notifications\EquipmentReturned(
+                $equipment,
+                $user,
+                $validated['quantity_returned'],
+                $validated['condition'],
+                $validated['remarks'] ?? null
+            ));
+        }
+
+        return redirect()->route('custodian.equipment')
+                       ->with('success', "Equipment returned successfully. Quantity available updated.");
     }
 }
+

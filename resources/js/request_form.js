@@ -30,7 +30,7 @@ const initializeReservationDurationToggles = function () {
                 field.classList.toggle('opacity-60', isWholeDay);
                 field.classList.toggle('cursor-not-allowed', isWholeDay);
                 if (isWholeDay) {
-                    field.value = field.name === 'start_time' ? '08:00' : '00:00';
+                    field.value = field.name === 'start_time' ? '08:00' : '23:59';
                 }
             });
         };
@@ -213,7 +213,7 @@ const initializeRequestForm = function () {
         const documentChecklist = document.getElementById('checklist-document-upload');
         const signatureChecklist = document.getElementById('checklist-e-signature');
         if (requiredChecklist) requiredChecklist.checked = allRequiredComplete;
-        if (venueChecklist) venueChecklist.checked = Boolean(selectedVenue) && equipmentSelected;
+        if (venueChecklist) venueChecklist.checked = Boolean(selectedVenue);
         if (documentChecklist) documentChecklist.checked = supportingDocumentSelected;
         if (signatureChecklist) signatureChecklist.checked = eSignatureSelected;
     };
@@ -236,7 +236,7 @@ const initializeRequestForm = function () {
             ? `${formatDisplayDate(startDate)}${startDate === endDate ? '' : ` - ${formatDisplayDate(endDate)}`}`
             : 'Not selected';
         if (summaryDetails.time) summaryDetails.time.textContent = isWholeDay
-            ? 'Whole day (12:00 AM - 11:59 PM)'
+            ? 'Whole day (08:00 AM - 11:59 PM)'
             : startTime && endTime ? `${formatDisplayTime(startTime)} - ${formatDisplayTime(endTime)}` : 'Not selected';
         if (summaryDetails.equipment) {
             summaryDetails.equipment.innerHTML = selectedEquipment.length
@@ -363,9 +363,51 @@ const initializeRequestForm = function () {
         });
     };
 
+    const readFileAsDraftData = function (file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = function () {
+                resolve({
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    data: typeof reader.result === 'string' ? reader.result : ''
+                });
+            };
+            reader.onerror = function () {
+                reject(new Error('Unable to read draft attachment.'));
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const createFileFromDraftData = function (metadata) {
+        if (!metadata || !metadata.name || !metadata.data) {
+            return null;
+        }
+
+        try {
+            const [header, encoded] = metadata.data.split(',');
+            if (!encoded) {
+                return null;
+            }
+            const binary = atob(encoded);
+            const bytes = new Uint8Array(binary.length);
+            for (let index = 0; index < binary.length; index += 1) {
+                bytes[index] = binary.charCodeAt(index);
+            }
+            const blob = new Blob([bytes], { type: metadata.type || 'application/octet-stream' });
+            return new File([blob], metadata.name, { type: metadata.type || 'application/octet-stream', lastModified: Date.now() });
+        } catch (error) {
+            console.warn('Draft file restore failed', error);
+            return null;
+        }
+    };
+
     const saveDraft = function () {
         const formData = new FormData(form);
         const draft = {};
+        const fileMetadata = {};
 
         formData.forEach((value, key) => {
             const field = form.querySelector(`[name="${key}"]`);
@@ -375,22 +417,37 @@ const initializeRequestForm = function () {
             draft[key] = value;
         });
 
-        draft.equipment = Array.from(equipmentCheckboxes)
-            .filter(checkbox => checkbox.checked)
-            .map(checkbox => checkbox.value);
-
-        draft.venue = Array.from(venueRadioInputs)
-            .find(radio => radio.checked)?.value || '';
-
-        try {
-            localStorage.setItem('pitfr-request-draft', JSON.stringify(draft));
-            sessionStorage.setItem('pitfr-request-draft', JSON.stringify(draft));
-            if (draftStatus) {
-                draftStatus.textContent = 'Draft saved just now';
+        const fileInputs = Array.from(form.querySelectorAll('input[type="file"]'));
+        const readFiles = fileInputs.map(function (input) {
+            if (!input.files || !input.files.length) {
+                return Promise.resolve();
             }
-        } catch (error) {
-            console.warn('Draft autosave failed', error);
-        }
+            return readFileAsDraftData(input.files[0]).then(function (metadata) {
+                fileMetadata[input.name] = metadata;
+            }).catch(function (error) {
+                console.warn('Draft autosave could not read file', error);
+            });
+        });
+
+        Promise.all(readFiles).then(function () {
+            draft.fileMetadata = fileMetadata;
+            draft.equipment = Array.from(equipmentCheckboxes)
+                .filter(checkbox => checkbox.checked)
+                .map(checkbox => checkbox.value);
+
+            draft.venue = Array.from(venueRadioInputs)
+                .find(radio => radio.checked)?.value || '';
+
+            try {
+                localStorage.setItem('pitfr-request-draft', JSON.stringify(draft));
+                sessionStorage.setItem('pitfr-request-draft', JSON.stringify(draft));
+                if (draftStatus) {
+                    draftStatus.textContent = 'Draft saved just now';
+                }
+            } catch (error) {
+                console.warn('Draft autosave failed', error);
+            }
+        });
     };
 
     const restoreDraft = function () {
@@ -421,6 +478,35 @@ const initializeRequestForm = function () {
                 if (key === 'venue') {
                     venueRadioInputs.forEach(radio => {
                         radio.checked = radio.value === value;
+                    });
+                    return;
+                }
+
+                if (key === 'fileMetadata') {
+                    Object.entries(value || {}).forEach(([fileName, metadata]) => {
+                        const targetInput = form.querySelector(`[name="${fileName}"]`);
+                        const restoredFile = createFileFromDraftData(metadata);
+                        if (targetInput && restoredFile) {
+                            const dataTransfer = new DataTransfer();
+                            dataTransfer.items.add(restoredFile);
+                            targetInput.files = dataTransfer.files;
+                        }
+                        const previewId = fileName === 'activity_proposal_file' ? 'activity-proposal-name'
+                            : fileName === 'igp_receipt_file' ? 'igp-receipt-name'
+                            : fileName === 'e_signature_file' ? 'e-signature-name'
+                            : null;
+                        const preview = previewId ? document.getElementById(previewId) : null;
+                        const displayName = metadata?.name || targetInput?.dataset?.restoredFileName || '';
+                        if (preview && displayName) {
+                            preview.textContent = displayName;
+                            const wrapper = preview.closest('p,div') || preview.parentElement;
+                            if (wrapper) {
+                                wrapper.classList.remove('hidden');
+                            }
+                        }
+                        if (targetInput && displayName) {
+                            targetInput.dataset.restoredFileName = displayName;
+                        }
                     });
                     return;
                 }
@@ -1003,22 +1089,12 @@ const initializeRequestForm = function () {
                     : '<div class="font-semibold mb-2">⚠️ Scheduling conflict detected for this venue:</div>';
                 conflictHtml += '<div class="text-sm space-y-2">';
                 if (isUrgent) {
-                    conflictHtml += '<div class="text-sm">This venue already has an approved reservation. Because this request is marked as an Institute Urgent Activity, the reservation may proceed for administrative review.</div>';
+                    conflictHtml += '<div class="text-sm">This venue already has an existing reservation. Because this request is marked as an Institute Urgent Activity, it may proceed for administrative review.</div>';
                 }
                 conflictEntries.forEach(conflict => {
-                    const priorityLabel = (conflict.priority || 'regular').toString().toUpperCase();
-                    const priorityTone = priorityLabel === 'URGENT' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700';
                     conflictHtml += `<div class="rounded-xl border border-white/70 bg-white/70 p-3 text-xs">
-                        <div class="font-semibold text-slate-800">Current Reservation</div>
-                        <div class="mt-1">Request No: ${escapeHtml(conflict.control_number)}</div>
-                        <div>Activity: ${escapeHtml(conflict.activity)}</div>
-                        <div>Requester: ${escapeHtml(conflict.requestor)}</div>
-                        <div class="mt-1 flex items-center gap-2">
-                            <span class="font-medium text-slate-500">Priority:</span>
-                            <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset ${priorityTone}">${escapeHtml(priorityLabel)}</span>
-                        </div>
+                        <div class="font-semibold text-slate-800">Existing reservation</div>
                         <div>Schedule: ${escapeHtml(conflict.start_date)}${conflict.end_date ? ' to ' + escapeHtml(conflict.end_date) : ''} at ${escapeHtml(conflict.time)}</div>
-                        <div>Status: ${escapeHtml(conflict.status)}</div>
                     </div>`;
                 });
                 conflictHtml += '</div>';
@@ -1130,9 +1206,79 @@ const initializeRequestForm = function () {
         });
     };
 
+    const applyVenueSpecificEquipmentRules = function () {
+        // Get selected venues
+        const selectedVenues = Array.from(form.querySelectorAll('input[name="venue"]:checked'))
+            .map(input => input.value);
+        
+        // Venue/Equipment mapping for automatic selection
+        const venuesRequiringSoundSystem = [
+            'Conference Hall & Interaction Center (CHIC)',
+            'Balay Alumni Hall',
+            'Gymnasium'
+        ];
+        
+        // Equipment incompatible with Balay Alumni Hall
+        const balayIncompatibleEquipment = [
+            'Canopies',
+            'Industrial Fans',
+            'Iwata Cooler Fans',
+            'Monobloc Chairs',
+            'Wireless Microphones',
+            'Non-Wireless Microphones'
+        ];
+        
+        const soundSystemCheckbox = form.querySelector('input[name="equipment[]"][value="Sound System"]');
+        const equipmentRows = form.querySelectorAll('.equipment-row');
+        
+        let shouldAutoSelectSoundSystem = false;
+        let isBalaySelected = false;
+        
+        // Check if any selected venue requires Sound System
+        selectedVenues.forEach(venue => {
+            if (venuesRequiringSoundSystem.includes(venue)) {
+                shouldAutoSelectSoundSystem = true;
+            }
+            if (venue === 'Balay Alumni Hall') {
+                isBalaySelected = true;
+            }
+        });
+        
+        // Auto-check Sound System if needed
+        if (shouldAutoSelectSoundSystem && soundSystemCheckbox) {
+            soundSystemCheckbox.checked = true;
+            soundSystemCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        // Handle Balay-incompatible equipment
+        equipmentRows.forEach(row => {
+            const checkbox = row.querySelector('input[name="equipment[]"]');
+            const itemName = checkbox ? checkbox.value : '';
+            const isIncompatible = balayIncompatibleEquipment.includes(itemName);
+            
+            if (isBalaySelected && isIncompatible) {
+                // Disable and uncheck incompatible equipment for Balay
+                row.style.opacity = '0.5';
+                row.style.pointerEvents = 'none';
+                if (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.disabled = true;
+                }
+            } else {
+                // Re-enable if not incompatible
+                row.style.opacity = '1';
+                row.style.pointerEvents = 'auto';
+                if (checkbox) {
+                    checkbox.disabled = false;
+                }
+            }
+        });
+    };
+
     const attachSelectionListeners = function () {
         venueRadioInputs.forEach(radio => {
             const handleVenueSelection = function () {
+                applyVenueSpecificEquipmentRules();
                 updateOtherVenueVisibility();
                 updateSelectedItemsSummary();
                 updateCapacityWarning();
@@ -1148,6 +1294,7 @@ const initializeRequestForm = function () {
 
         if (venueSelect) {
             venueSelect.addEventListener('change', function () {
+                applyVenueSpecificEquipmentRules();
                 updateOtherVenueVisibility();
                 updateSelectedItemsSummary();
                 updateCapacityWarning();

@@ -7,7 +7,7 @@
     @if (app()->runningUnitTests())
         {{-- Skip Vite asset loading in tests when the manifest may not exist. --}}
     @else
-        @vite(['resources/css/app.css'])
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
     @endif
 </head>
 <body class="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-2 text-slate-100 sm:p-4">
@@ -91,16 +91,13 @@
                 <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-xl shadow-slate-950/5 sm:p-6 md:rounded-[28px] md:p-8 lg:p-10">
                     <div class="space-y-10">
                         <div class="space-y-6">
-                            <p class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">I am a…</p>
-                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                <button type="button" data-type="student" class="requestor-type-button rounded-[18px] border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-400">🎓 Student</button>
-                                <button type="button" data-type="outsider" class="requestor-type-button rounded-[18px] border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-400">🏢 External / Org</button>
-                            </div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Outsider registration</p>
+                            <p class="text-sm leading-6 text-slate-600">This page is for users who are not registered as PIT students or faculty members. Students and Faculty should obtain accounts through the authorized PIT administrator or future MIS provisioning.</p>
                         </div>
 
                         <form method="POST" action="{{ route('register.post') }}" class="space-y-8">
                             @csrf
-                            @php($selectedRegistrationType = old('requestor_type', $googleType ?? 'student'))
+                            @php($selectedRegistrationType = 'outsider')
                             <input type="hidden" id="requestor_type" name="requestor_type" value="{{ $selectedRegistrationType }}" />
 
                             <a id="google-registration-link" href="{{ route('google.redirect', ['type' => $selectedRegistrationType]) }}" class="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-500">
@@ -111,7 +108,7 @@
                                 <p class="text-sm text-emerald-700">Google account connected: {{ $googleProfile['email'] }}. Complete the required PITFR profile fields below.</p>
                             @endif
 
-                            <div class="grid gap-6 sm:grid-cols-3" id="student-name-group">
+                            <div class="hidden" id="student-name-group">
                                 <div class="space-y-3">
                                     <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">First name</label>
                                     <input type="text" name="first_name" value="{{ old('first_name', $googleProfile['first_name'] ?? '') }}" required placeholder="Daniel" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
@@ -176,29 +173,22 @@
                                 @error('school_id_number')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                             </div>
 
+
                             <div class="grid gap-6 sm:grid-cols-2">
                                 <div class="space-y-4">
                                     <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Password</label>
-                                    <div class="relative password-toggle-wrapper">
-                                        <input type="password" name="password" id="register_password" @required(!$googleProfile) placeholder="{{ $googleProfile ? 'Optional for Google accounts' : 'At least 6 characters' }}" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 pr-12 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                        <button type="button" data-password-toggle-target="#register_password" aria-label="Show password" class="password-toggle absolute inset-y-0 right-4 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-50">
-                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                            </svg>
+                                    <div class="pitfr-password-wrapper">
+                                        <input type="password" name="password" id="register_password" @required(!$googleProfile) placeholder="{{ $googleProfile ? 'Optional for Google accounts' : 'At least 6 characters' }}" class="pitfr-password-input w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                        <button type="button" data-password-toggle-target="#register_password" aria-label="Show password" class="password-toggle pitfr-password-toggle">
                                         </button>
                                     </div>
                                     @error('password')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
                                 </div>
                                 <div class="space-y-4">
                                     <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Confirm password</label>
-                                    <div class="relative password-toggle-wrapper">
-                                        <input type="password" name="password_confirmation" id="register_password_confirmation" @required(!$googleProfile) placeholder="{{ $googleProfile ? 'Optional for Google accounts' : 'Re-enter password' }}" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 pr-12 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                        <button type="button" data-password-toggle-target="#register_password_confirmation" aria-label="Show password" class="password-toggle absolute inset-y-0 right-4 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-50">
-                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                            </svg>
+                                    <div class="pitfr-password-wrapper">
+                                        <input type="password" name="password_confirmation" id="register_password_confirmation" @required(!$googleProfile) placeholder="{{ $googleProfile ? 'Optional for Google accounts' : 'Re-enter password' }}" class="pitfr-password-input w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                                        <button type="button" data-password-toggle-target="#register_password_confirmation" aria-label="Show password" class="password-toggle pitfr-password-toggle">
                                         </button>
                                     </div>
                                 </div>
@@ -280,15 +270,16 @@
         const selected = typeField.value;
         
         // Show/hide college and department for students only
-        const showCollege = selected === 'student';
+        const showCollege = false;
+        const showNamedPerson = false;
         studentNameGroup.classList.toggle('hidden', !showCollege);
-        contactPersonGroup.classList.toggle('hidden', showCollege);
-        contactPersonInput.disabled = showCollege;
-        document.querySelector('[name="first_name"]').disabled = !showCollege;
-        document.querySelector('[name="middle_name"]').disabled = !showCollege;
-        document.querySelector('[name="last_name"]').disabled = !showCollege;
-        document.querySelector('[name="first_name"]').required = showCollege;
-        document.querySelector('[name="last_name"]').required = showCollege;
+        contactPersonGroup.classList.toggle('hidden', showNamedPerson);
+        contactPersonInput.disabled = showNamedPerson;
+        document.querySelector('[name="first_name"]').disabled = !showNamedPerson;
+        document.querySelector('[name="middle_name"]').disabled = !showNamedPerson;
+        document.querySelector('[name="last_name"]').disabled = !showNamedPerson;
+        document.querySelector('[name="first_name"]').required = showNamedPerson;
+        document.querySelector('[name="last_name"]').required = showNamedPerson;
         collegeGroup.classList.toggle('hidden', !showCollege);
         departmentGroup.classList.toggle('hidden', !showCollege);
         collegeSelect.disabled = !showCollege;
@@ -297,9 +288,9 @@
         // Show/hide student ID for students only (required)
         schoolIdGroup.classList.toggle('hidden', selected !== 'student');
         studentIdInput.required = selected === 'student';
-        
+
         // Show/hide office/organization for external users only
-        const showOffice = selected === 'outsider';
+        const showOffice = true;
         officeOrgGroup.classList.toggle('hidden', !showOffice);
         officeOrgInput.disabled = !showOffice;
         officeOrgInput.required = showOffice;

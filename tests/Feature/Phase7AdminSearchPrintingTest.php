@@ -77,13 +77,14 @@ class Phase7AdminSearchPrintingTest extends TestCase
     }
 
     /** @test */
-    public function student_cannot_print_facility_request(): void
+    public function student_can_print_approved_owned_request(): void
     {
         $this->actingAs($this->student);
 
         $response = $this->get(route('request.print', $this->approvedRequest->id));
 
-        $response->assertStatus(403);
+        $response->assertStatus(200);
+        $response->assertViewIs('request.print');
     }
 
     /** @test */
@@ -97,6 +98,14 @@ class Phase7AdminSearchPrintingTest extends TestCase
     }
 
     /** @test */
+    public function requestor_cannot_print_unapproved_owned_request(): void
+    {
+        $this->actingAs($this->faculty)
+            ->get(route('request.print', $this->pendingRequest->id))
+            ->assertForbidden();
+    }
+
+    /** @test */
     public function custodian_cannot_print_facility_request(): void
     {
         $custodian = User::factory()->create(['role' => 'custodian-venue']);
@@ -104,6 +113,19 @@ class Phase7AdminSearchPrintingTest extends TestCase
         $this->actingAs($custodian)
             ->get(route('request.print', $this->approvedRequest->id))
             ->assertStatus(403);
+    }
+
+    /** @test */
+    public function assigned_custodian_can_print_approved_request(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+        $venueName = $this->approvedRequest->getVenueNames()[0] ?? 'Gymnasium';
+        Venue::create(['name' => $venueName, 'custodian_id' => $custodian->id]);
+
+        $this->actingAs($custodian)
+            ->get(route('request.print', $this->approvedRequest->id))
+            ->assertOk()
+            ->assertViewIs('request.print');
     }
 
     /** @test */
@@ -145,6 +167,11 @@ class Phase7AdminSearchPrintingTest extends TestCase
     public function print_form_displays_blank_signature_line_when_no_e_signature(): void
     {
         $this->actingAs($this->admin);
+        $this->pendingRequest->update([
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
 
         $response = $this->get(route('request.print', $this->pendingRequest->id));
 

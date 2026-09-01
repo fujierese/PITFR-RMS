@@ -30,51 +30,116 @@ class RequestStatusChanged extends Notification
     /**
      * Build the consolidated notification message
      */
-    private function buildConsolidatedMessage(): string
+    private function buildConsolidatedMessage($notifiable = null): string
     {
         $message = '';
-        
+        $recipientType = $this->determineRecipientType($notifiable);
+
         if ($this->status === 'approved') {
-            // Format: "{Venue}, {Equipment1}, {Equipment2}, and {Admin} approve your request"
-            $actors = [];
-            
-            if ($this->venueCustodian) {
-                $actors[] = $this->venueCustodian;
-            }
-            
-            $actors = array_merge($actors, $this->equipmentCustodians);
-            
-            if ($this->supplyOffice) {
-                $actors[] = $this->supplyOffice;
-            }
-            
-            if (empty($actors)) {
-                $message = "Your request has been approved";
-            } elseif (count($actors) === 1) {
-                $message = "{$actors[0]} approves your request";
+            if ($recipientType === 'requestor') {
+                $message = 'Your request has been approved.';
+            } elseif ($recipientType === 'venue_custodian') {
+                $message = 'The venue portion of this request has been approved.';
+            } elseif ($recipientType === 'equipment_custodian') {
+                $message = 'The equipment portion of this request has been approved.';
             } else {
-                $lastActor = array_pop($actors);
-                $message = implode(', ', $actors) . ", and {$lastActor} approve your request";
+                $actors = [];
+
+                if ($this->venueCustodian) {
+                    $actors[] = $this->venueCustodian;
+                }
+
+                $actors = array_merge($actors, $this->equipmentCustodians);
+
+                if ($this->supplyOffice) {
+                    $actors[] = $this->supplyOffice;
+                }
+
+                if (empty($actors)) {
+                    $message = 'Your request has been approved.';
+                } elseif (count($actors) === 1) {
+                    $message = "{$actors[0]} approves this request.";
+                } else {
+                    $lastActor = array_pop($actors);
+                    $message = implode(', ', $actors) . ", and {$lastActor} approve this request.";
+                }
             }
-            
-            $message .= ". Control No: {$this->facilityRequest->control_number}";
+
+            $message .= " Control No: {$this->facilityRequest->control_number}";
             if ($this->supplyOffice) {
                 $message .= ' Your approved request is ready for pickup from the Supply Office.';
             }
         } elseif ($this->status === 'rejected') {
-            // Format: "{Venue Custodian} rejected your request"
             $rejecter = $this->venueCustodian ?? $this->supplyOffice ?? 'The system';
-            $message = "{$rejecter} rejected your request. Control No: {$this->facilityRequest->control_number}";
+            $message = $recipientType === 'requestor'
+                ? "Your request was rejected by {$rejecter}. Control No: {$this->facilityRequest->control_number}"
+                : "This request was rejected by {$rejecter}. Control No: {$this->facilityRequest->control_number}";
         } elseif ($this->status === 'needs_reschedule') {
-            // Format: "{Supply Office} rescheduling your reservation due to {reason}"
             $admin = $this->supplyOffice ?? 'Supply Office';
             $reason = $this->conflictReason ?? 'scheduling conflict';
-            $message = "{$admin} rescheduling your reservation due to {$reason}. Control No: {$this->facilityRequest->control_number}";
+            $message = $recipientType === 'requestor'
+                ? "Your reservation needs to be rescheduled due to {$reason}. Control No: {$this->facilityRequest->control_number}"
+                : "This reservation needs to be rescheduled due to {$reason}. Control No: {$this->facilityRequest->control_number}";
+        } elseif ($this->status === 'equipment_returned') {
+            $returnStatus = $this->facilityRequest->equipment_returned_status === 'fulfilled'
+                ? 'All equipment has been accounted for and the return is complete.'
+                : 'A partial equipment return has been recorded.';
+
+            $returnedQty = (int) ($this->facilityRequest->equipment_returned_items ? array_sum(array_map(function ($custodianItems) {
+                return array_sum((array) ($custodianItems['equipment'] ?? []));
+            }, (array) $this->facilityRequest->equipment_returned_items)) : 0);
+            $damagedQty = (int) ($this->facilityRequest->equipment_return_damaged_quantity ?? 0);
+            $missingQty = (int) ($this->facilityRequest->equipment_return_missing_quantity ?? 0);
+
+            $message = $returnStatus . " Returned: {$returnedQty}; Damaged: {$damagedQty}; Missing: {$missingQty}. Control No: {$this->facilityRequest->control_number}";
+            if ($damagedQty > 0 || $missingQty > 0) {
+                $message .= ' Additional review may be required.';
+            }
         } else {
             $message = "Your request status has been updated to " . ucfirst($this->status) . ". Control No: {$this->facilityRequest->control_number}";
         }
-        
+
         return $message;
+    }
+
+    private function getRequestRouteFor($notifiable): string
+    {
+        $requestId = $this->facilityRequest->id;
+
+        if (! $notifiable) {
+            return route('request.show', ['id' => $requestId]);
+        }
+
+        if ($notifiable->id === $this->facilityRequest->requested_by_id) {
+            return route('request.show', ['id' => $requestId]);
+        }
+
+        if (($notifiable->isAdmin() || $notifiable->isCustodian()) && $notifiable->can('view', $this->facilityRequest)) {
+            return route('request.show', ['id' => $requestId]);
+        }
+
+        return route('request.show', ['id' => $requestId]);
+    }
+
+    private function determineRecipientType($notifiable): string
+    {
+        if (! $notifiable) {
+            return 'requestor';
+        }
+
+        if ($notifiable->id === $this->facilityRequest->requested_by_id) {
+            return 'requestor';
+        }
+
+        if ($notifiable->isCustodianVenue()) {
+            return 'venue_custodian';
+        }
+
+        if ($notifiable->isCustodianEquipment()) {
+            return 'equipment_custodian';
+        }
+
+        return 'admin';
     }
 
     public function toBroadcast($notifiable): BroadcastMessage
@@ -84,7 +149,8 @@ class RequestStatusChanged extends Notification
             'control_number' => $this->facilityRequest->control_number,
             'activity' => $this->facilityRequest->name_of_activity,
             'status' => $this->status,
-            'message' => $this->buildConsolidatedMessage(),
+            'message' => $this->buildConsolidatedMessage($notifiable),
+            'route' => $this->getRequestRouteFor($notifiable),
             'notes' => $this->notes,
             'actors' => [
                 'venue_custodian' => $this->venueCustodian,
@@ -109,13 +175,13 @@ class RequestStatusChanged extends Notification
         $mail = (new MailMessage)
             ->subject("{$statusLabel} — {$this->facilityRequest->control_number}")
             ->greeting("Hello {$notifiable->name}!")
-            ->line($this->buildConsolidatedMessage())
+            ->line($this->buildConsolidatedMessage($notifiable))
             ->line("**Activity:** {$this->facilityRequest->name_of_activity}")
             ->line("**Control No:** {$this->facilityRequest->control_number}")
             ->line("**Date:** {$this->facilityRequest->formatDateForDisplay($this->facilityRequest->start_date)}")
             ->line("**Time:** {$this->facilityRequest->formatTimeForDisplay($this->facilityRequest->start_time)}" . ($this->facilityRequest->end_time ? ' - ' . $this->facilityRequest->formatTimeForDisplay($this->facilityRequest->end_time) : ''))
             ->line("**Venue:** " . implode(', ', $this->facilityRequest->getVenueNames()))
-            ->action('View My Requests', url('/requestor?tab=myRequests'));
+            ->action('View Request', $this->getRequestRouteFor($notifiable));
 
         if ($this->notes) {
             $mail->line("**Notes:** {$this->notes}");
@@ -131,13 +197,17 @@ class RequestStatusChanged extends Notification
             'control_number' => $this->facilityRequest->control_number,
             'activity'       => $this->facilityRequest->name_of_activity,
             'status'         => $this->status,
-            'message'        => $this->buildConsolidatedMessage(),
+            'message'        => $this->buildConsolidatedMessage($notifiable),
+            'route'          => $this->getRequestRouteFor($notifiable),
             'notes'          => $this->notes,
             'actors' => [
                 'venue_custodian' => $this->venueCustodian,
                 'equipment_custodians' => $this->equipmentCustodians,
                 'supply_office' => $this->supplyOffice,
             ],
+            'return_status' => $this->facilityRequest->equipment_returned_status,
+            'damaged_quantity' => (int) ($this->facilityRequest->equipment_return_damaged_quantity ?? 0),
+            'missing_quantity' => (int) ($this->facilityRequest->equipment_return_missing_quantity ?? 0),
         ];
     }
 }

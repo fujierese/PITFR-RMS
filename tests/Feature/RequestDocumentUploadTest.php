@@ -37,6 +37,8 @@ class RequestDocumentUploadTest extends TestCase
         Equipment::factory()->create([
             'name' => 'Microphones',
             'custodian_id' => $custodian->id,
+            'quantity' => 10,
+            'quantity_available' => 10,
         ]);
         Equipment::factory()->create([
             'name' => 'Canopies',
@@ -70,11 +72,16 @@ class RequestDocumentUploadTest extends TestCase
         $this->facultyUser = User::factory()->create([
             'requestor_type' => 'faculty',
             'role' => 'faculty',
+            'position' => 'Department Chair',
         ]);
 
         $this->externalUser = User::factory()->create([
             'requestor_type' => 'outsider',
             'role' => 'requestor',  // Must be 'requestor' role to be able to submit requests
+        ]);
+
+        $this->studentUser->update([
+            'office_or_organization' => null,
         ]);
     }
 
@@ -217,6 +224,35 @@ class RequestDocumentUploadTest extends TestCase
         $this->assertNull($request->igp_receipt_file);
     }
 
+    public function test_requestor_submitted_priority_is_ignored_and_final_classification_stays_regular(): void
+    {
+        $this->actingAs($this->studentUser);
+
+        $this->post(route('requestor.store'), [
+            'priority' => 'institutional',
+            'requested_priority' => 'institutional',
+            'department' => 'Computer Science',
+            'name_of_activity' => 'Classification Security Check',
+            'expected_participants' => 10,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+            'venue' => 'Conference Hall & Interaction Center (CHIC)',
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => 1],
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $request = FacilityRequest::where('requested_by_id', $this->studentUser->id)
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame('regular', $request->priority);
+        $this->assertNull($request->requested_priority);
+    }
+
     public function test_external_can_submit_with_igp_receipt_and_e_signature(): void
     {
         $this->actingAs($this->externalUser);
@@ -246,6 +282,35 @@ class RequestDocumentUploadTest extends TestCase
         $this->assertNull($request->activity_proposal_file);
     }
 
+    public function test_student_can_request_for_an_organization(): void
+    {
+        $this->actingAs($this->studentUser);
+
+        $response = $this->post(route('requestor.store'), [
+            'organization_name' => 'PIT Student Council',
+            'department' => 'Computer Science',
+            'name_of_activity' => 'Organization Assembly',
+            'expected_participants' => 30,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '14:00',
+            'end_time' => '16:00',
+            'venue' => 'Gymnasium',
+            'equipment' => ['Tables'],
+            'equipment_quantities' => ['Tables' => 5],
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'e_signature_file' => UploadedFile::fake()->create('signature.jpg', 100),
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+        $request = FacilityRequest::where('requested_by_id', $this->studentUser->id)->first();
+        $this->assertNotNull($request);
+        $this->assertSame('PIT Student Council', $request->organization_name);
+        $this->assertNotNull($request->activity_proposal_file);
+        $this->assertNull($request->igp_receipt_file);
+    }
+
     public function test_faculty_requires_activity_proposal(): void
     {
         $this->actingAs($this->facultyUser);
@@ -266,6 +331,29 @@ class RequestDocumentUploadTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('activity_proposal_file');
+    }
+
+    public function test_request_uses_persisted_faculty_position_when_not_resubmitted(): void
+    {
+        $this->actingAs($this->facultyUser);
+
+        $this->post(route('requestor.store'), [
+            'department' => 'Engineering',
+            'name_of_activity' => 'Faculty Seminar',
+            'expected_participants' => 20,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '10:00',
+            'end_time' => '11:30',
+            'venue' => 'Conference Hall & Interaction Center (CHIC)',
+            'equipment' => ['Microphones'],
+            'equipment_quantities' => ['Microphones' => 2],
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $request = FacilityRequest::where('requested_by_id', $this->facultyUser->id)->firstOrFail();
+        $this->assertSame('Department Chair', $request->requested_by_position);
     }
 
     public function test_emergency_request_still_requires_activity_proposal(): void

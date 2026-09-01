@@ -6,6 +6,7 @@ use App\Models\Equipment;
 use App\Models\FacilityRequest;
 use App\Models\User;
 use App\Notifications\RequestStatusChanged;
+use App\Services\AvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,10 @@ use Illuminate\Support\Facades\Log;
 
 class RequestActionController extends Controller
 {
+    public function __construct(private readonly AvailabilityService $availabilityService)
+    {
+    }
+
     public function cancel($facilityRequest, Request $request)
     {
         $facilityRequest = $this->resolveFacilityRequest($facilityRequest);
@@ -44,7 +49,11 @@ class RequestActionController extends Controller
             }
 
             $facilityRequest->addHistory('cancelled', 'Request cancelled by requester ' . $user->name, $user->id);
-            $facilityRequest->delete();
+            $facilityRequest->update([
+                'status' => 'cancelled',
+                'venue_status' => 'cancelled',
+                'equipment_status' => 'cancelled',
+            ]);
 
             DB::commit();
 
@@ -311,108 +320,7 @@ class RequestActionController extends Controller
 
     private function checkHybridResources(FacilityRequest $facilityRequest): ?string
     {
-        $venueConflict = $this->detectVenueConflict($facilityRequest);
-        if ($venueConflict) {
-            return $venueConflict;
-        }
-
-        $equipmentMessage = $this->detectEquipmentShortage($facilityRequest);
-        if ($equipmentMessage) {
-            return $equipmentMessage;
-        }
-
-        return null;
-    }
-
-    private function detectVenueConflict(FacilityRequest $facilityRequest): ?string
-    {
-        $requestedVenueNames = $facilityRequest->getVenueNames();
-        if (empty($requestedVenueNames)) {
-            return null;
-        }
-
-        $requestedStart = $facilityRequest->getRequestedStartDateTime();
-        $requestedEnd = $facilityRequest->getRequestedEndDateTime();
-
-        $conflictingRequests = FacilityRequest::where('id', '!=', $facilityRequest->id)
-            ->where('status', 'approved')
-            ->where('venue_status', 'approved')
-            ->where(function ($query) use ($requestedVenueNames) {
-                foreach ($requestedVenueNames as $venueName) {
-                    $query->orWhere(fn ($subQuery) => $subQuery->matchesVenue($venueName));
-                }
-            })
-            ->get();
-
-        foreach ($conflictingRequests as $conflict) {
-            if ($conflict->overlapsRequest($facilityRequest)) {
-                return 'Venue booking conflict detected with request ' . $conflict->control_number . '. Please resolve scheduling overlap before approving.';
-            }
-        }
-
-        return null;
-    }
-
-    private function detectEquipmentShortage(FacilityRequest $facilityRequest): ?string
-    {
-        $requests = $this->getRequestedEquipmentQuantities($facilityRequest);
-        if (empty($requests)) {
-            return null;
-        }
-
-        foreach ($requests as $itemName => $qty) {
-            $equipment = Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])->first();
-            if (! $equipment) {
-                return 'Requested equipment "' . $itemName . '" is not available in inventory.';
-            }
-
-            $reserved = $this->calculateReservedEquipmentQuantity($itemName, $facilityRequest->id);
-            $available = max(0, $equipment->quantity - $reserved);
-
-            if ($qty > $available) {
-                return 'Not enough stock for "' . $itemName . '". Only ' . $available . ' remaining for this date range.';
-            }
-        }
-
-        return null;
-    }
-
-    private function getRequestedEquipmentQuantities(FacilityRequest $facilityRequest): array
-    {
-        $quantities = $facilityRequest->getEquipmentQuantities();
-        if (!empty($quantities)) {
-            return $quantities;
-        }
-
-        if (!empty($facilityRequest->getEquipmentItems())) {
-            return array_count_values($facilityRequest->getEquipmentItems());
-        }
-
-        return [];
-    }
-
-    private function calculateReservedEquipmentQuantity(string $itemName, int $excludeRequestId = null): int
-    {
-        $approvedRequests = FacilityRequest::where('status', 'approved')
-            ->where('id', '!=', $excludeRequestId)
-            ->where(fn ($query) => $query->matchesEquipment($itemName))
-            ->where(function ($query) {
-                $query->where('equipment_returned_status', '!=', 'returned')
-                      ->orWhereNull('equipment_returned_status');
-            })
-            ->get();
-
-        $total = 0;
-        foreach ($approvedRequests as $request) {
-            $quantities = $request->getEquipmentQuantities();
-            if (!empty($quantities)) {
-                $total += (int) ($quantities[$itemName] ?? 0);
-            } elseif (!empty($request->getEquipmentItems())) {
-                $total += in_array($itemName, $request->getEquipmentItems(), true) ? 1 : 0;
-            }
-        }
-
-        return $total;
+        return $this->availabilityService->checkFacilityRequest($facilityRequest, $facilityRequest->id);
     }
 
     private function parseRequestDateTime($date, $time)

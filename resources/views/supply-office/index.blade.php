@@ -88,7 +88,7 @@
                         $accountInfo = match ($requester?->requestor_type ?? null) {
                             'student' => $requester->department ?: null,
                             'faculty' => $requester->department ?: null,
-                            'outsider' => $requester->office_or_organization ?: 'External Requestor',
+                            'outsider' => $requester->office_or_organization ?: 'Outsider',
                             default => $requester?->department ?: '—',
                         };
                     @endphp

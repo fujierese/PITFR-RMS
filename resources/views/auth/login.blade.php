@@ -21,18 +21,18 @@
     @if (app()->runningUnitTests())
         {{-- Skip Vite asset loading in tests when the manifest may not exist. --}}
     @else
-        @vite(['resources/css/app.css'])
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
     @endif
 </head>
 
 <body class="min-h-screen overflow-x-hidden bg-slate-100 text-slate-100 lg:h-screen lg:overflow-hidden">
 
-    <div class="relative min-h-screen w-full lg:grid lg:h-screen lg:grid-cols-2">
+    <div class="relative min-h-screen w-full lg:grid lg:h-screen lg:grid-cols-[1.12fr_0.88fr] lg:overflow-hidden">
 
         <!-- =========================
              LEFT SIDE — IMAGES / BRAND
         ========================== -->
-        <section class="login-panel-reveal relative hidden min-h-screen overflow-x-hidden overflow-y-auto bg-slate-950 lg:flex lg:h-screen lg:flex-col lg:justify-start lg:pt-12 lg:pl-6 lg:pr-10 xl:pl-8 xl:pr-16">
+        <section class="login-panel-reveal relative hidden min-h-screen overflow-hidden bg-slate-950 lg:flex lg:h-screen lg:min-h-0 lg:flex-col lg:justify-start lg:pt-12 lg:pl-6 lg:pr-10 xl:pl-8 xl:pr-16">
 
             <!-- Background effects -->
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%)]"></div>
@@ -128,8 +128,8 @@
 
 
                 <!-- Login Heading -->
-                <div class="relative mb-8 -ml-8">
-                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">
+                <div class="mb-8 max-w-full">
+                    <p class="break-words text-xs font-semibold uppercase tracking-[0.25em] text-emerald-600 sm:text-[11px]">
                         Log in to PITFR-RMS
                     </p>
                 </div>
@@ -176,17 +176,11 @@
                 <form
                     method="POST"
                     action="{{ route('login') }}"
-                    class="space-y-6"
+                    class="space-y-5"
                     id="loginForm"
                 >
 
                     @csrf
-
-                    <a href="{{ route('google.redirect', ['type' => 'student']) }}" class="mb-6 flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-500">
-                        <span class="text-base font-bold text-red-500">G</span>
-                        Continue with Google
-                    </a>
-
 
                     <!-- Email -->
                     <div>
@@ -237,7 +231,7 @@
                             Password
                         </label>
 
-                        <div class="relative password-toggle-wrapper">
+                        <div class="pitfr-password-wrapper">
 
                             <span class="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400">
 
@@ -263,39 +257,15 @@
                                 id="password"
                                 required
                                 placeholder="Enter your password"
-                                class="w-full border-0 border-b-2 border-slate-300 bg-transparent px-4 py-3 pl-12 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-0"
+                                class="pitfr-password-input w-full border-0 border-b-2 border-slate-300 bg-transparent px-4 py-3 pl-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-0"
                             >
 
                             <button
                                 type="button"
                                 data-password-toggle-target="#password"
                                 aria-label="Show password"
-                                class="password-toggle absolute inset-y-0 right-2 inline-flex h-10 w-10 items-center justify-center text-slate-400 transition hover:text-slate-900 focus:outline-none"
-                            >
-
-                                <svg
-                                    class="h-5 w-5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                    />
-
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                    />
-
-                                </svg>
-
-                            </button>
+                                class="password-toggle pitfr-password-toggle"
+                            ></button>
 
                         </div>
 
@@ -330,6 +300,18 @@
                     >
                         Sign In
                     </button>
+
+                    <div class="relative my-2">
+                        <div class="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-slate-200"></div>
+                        <div class="relative mx-auto w-fit bg-slate-100 px-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">
+                            or
+                        </div>
+                    </div>
+
+                    <a href="{{ route('google.redirect', ['type' => 'student']) }}" class="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-500">
+                        <span class="text-base font-bold text-red-500">G</span>
+                        Continue with Google
+                    </a>
 
                 </form>
 
@@ -380,33 +362,7 @@
 
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            function getEyeIcon(isHidden) {
-                return isHidden
-                    ? '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>'
-                    : '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.269-2.943-9.543-7a10.05 10.05 0 012.293-3.926m2.946-2.947A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18"/></svg>';
-            }
 
-            document.querySelectorAll('.password-toggle').forEach(function (button) {
-                button.addEventListener('click', function () {
-                    var targetSelector = button.dataset.passwordToggleTarget;
-                    if (!targetSelector) {
-                        return;
-                    }
-                    var input = document.querySelector(targetSelector);
-                    if (!input) {
-                        return;
-                    }
-
-                    var isHidden = input.type === 'password';
-                    input.type = isHidden ? 'text' : 'password';
-                    button.innerHTML = getEyeIcon(!isHidden);
-                    button.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
-                });
-            });
-        });
-    </script>
 </body>
 </html>
 ```

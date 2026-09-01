@@ -162,7 +162,7 @@ class SystemConsistencyTest extends TestCase
         $this->assertSame($requester->id, $request->requested_by_id);
     }
 
-    public function test_requestor_cancellation_is_deleted_audited_and_removed_from_calendar(): void
+    public function test_requestor_cancellation_is_retained_audited_and_removed_from_calendar(): void
     {
         $request = $this->makeRequest();
         $requester = User::findOrFail($request->requested_by_id);
@@ -171,9 +171,10 @@ class SystemConsistencyTest extends TestCase
             ->post(route('request.cancel', $request))
             ->assertRedirect();
 
-        $deleted = FacilityRequest::withTrashed()->findOrFail($request->id);
-        $this->assertNotNull($deleted->deleted_at);
-        $this->assertSame('cancelled', $deleted->histories()->latest('occurred_at')->value('action'));
+        $cancelled = FacilityRequest::findOrFail($request->id);
+        $this->assertNull($cancelled->deleted_at);
+        $this->assertSame('cancelled', $cancelled->status);
+        $this->assertSame('cancelled', $cancelled->histories()->latest('occurred_at')->value('action'));
         $this->assertFalse(collect($this->getJson(route('calendar.events'))->json())->pluck('id')->contains($request->id));
     }
 

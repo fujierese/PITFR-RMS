@@ -79,13 +79,14 @@ class FacilityRequestPolicy
 
     public function returnEquipment(User $user, FacilityRequest $facilityRequest): bool
     {
-        return $user->isAdmin()
-            || ($user->isCustodianEquipment() && ! empty($facilityRequest->getAssignedEquipmentForCustodian($user->id)));
+        return $user->isCustodianEquipment()
+            && ! empty($facilityRequest->getAssignedEquipmentForCustodian($user->id));
     }
 
     public function print(User $user, FacilityRequest $facilityRequest): bool
     {
-        return $user->isAdmin();
+        return $facilityRequest->status === 'approved'
+            && $this->view($user, $facilityRequest);
     }
 
     private function managesAssignedVenue(User $user, FacilityRequest $facilityRequest): bool

@@ -59,7 +59,7 @@ class ResourceManagementAuthorizationTest extends TestCase
         $this->assertFalse(app(AvailabilityService::class)->checkEquipmentAvailability('Projector', 1)['available']);
     }
 
-    public function test_supply_office_cannot_access_resource_master_management_or_system_admin_pages(): void
+    public function test_supply_office_has_admin_user_access_but_not_custodian_resource_routes(): void
     {
         $supplyOffice = User::factory()->create(['role' => 'supply_office']);
 
@@ -69,6 +69,6 @@ class ResourceManagementAuthorizationTest extends TestCase
 
         $this->actingAs($supplyOffice)
             ->get(route('supply-office.users'))
-            ->assertForbidden();
+            ->assertOk();
     }
 }

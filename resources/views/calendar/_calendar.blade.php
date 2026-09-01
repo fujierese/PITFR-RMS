@@ -1440,6 +1440,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     var calendarEl = document.getElementById('calendar');
     var currentRole = '{{ $role }}';
+    var isPublicCalendar = @json(!auth()->check());
 
     function normalizeVenueName(value) {
         return String(value || '').toLowerCase().trim();
@@ -1571,8 +1572,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Visible time range only. This must not alter the actual reservation start/end time.
             slotMinTime: '08:00',
             slotMaxTime: '24:00',
-            // Keep a single continuous timed grid; no all-day section.
-            allDaySlot: false,
+            // Keep whole-day reservations visible while preserving timed ranges.
+            allDaySlot: true,
             windowResizeDelay: 100,
             windowResize: function() {
                 var nextView = getInitialCalendarView();
@@ -1660,21 +1661,24 @@ document.addEventListener('DOMContentLoaded', function() {
                             var startTime = formatTime(canonicalStart);
                             var endTime = formatTime(canonicalEnd);
                             var timeText = startTime && endTime ? startTime + ' – ' + endTime : (startTime || endTime);
-                            var venueText = event.extendedProps && event.extendedProps.venue ? __esc(event.extendedProps.venue) : '';
+                            var venue = event.venue || (event.extendedProps && event.extendedProps.venue) || '';
+                            var venueText = venue ? __esc(venue) : '';
 
                             tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Activity:</strong> ' + __esc(displayTitle) + '</div>';
-                            tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Status:</strong> ' + statusText + '</div>';
+                            if (!isPublicCalendar) {
+                                tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Status:</strong> ' + statusText + '</div>';
+                            }
                             if (dateText) tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Date:</strong> ' + __esc(dateText) + '</div>';
                             if (timeText) tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Time:</strong> ' + __esc(timeText) + '</div>';
                             if (venueText) tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Venue:</strong> ' + venueText + '</div>';
 
-                            if (event.extendedProps && event.extendedProps.requestor) {
+                            if (!isPublicCalendar && event.extendedProps && event.extendedProps.requestor) {
                                 tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Requestor:</strong> ' + __esc(event.extendedProps.requestor) + '</div>';
                             }
-                            if (event.extendedProps && event.extendedProps.priority) {
+                            if (!isPublicCalendar && event.extendedProps && event.extendedProps.priority) {
                                 tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Priority:</strong> ' + __esc(event.extendedProps.priority) + '</div>';
                             }
-                            if (event.extendedProps && event.extendedProps.isUrgent) {
+                            if (!isPublicCalendar && event.extendedProps && event.extendedProps.isUrgent) {
                                 tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Urgent:</strong> Yes</div>';
                             }
                             tooltipContent += '</div>';
@@ -1684,6 +1688,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Helper function to create a single FC event object
                         function createFcEvent(event, startDatetime, endDatetime, isSegment) {
                             var status = event.extendedProps && event.extendedProps.status ? event.extendedProps.status : event.status || '';
+                            var venue = event.venue || (event.extendedProps && event.extendedProps.venue) || '';
                             var statusPalette = getStatusColorInfo(status);
                             var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
 
@@ -1692,16 +1697,19 @@ document.addEventListener('DOMContentLoaded', function() {
                                 title: displayTitle,
                                 start: startDatetime,
                                 end: endDatetime,
-                                allDay: false,
+                                allDay: !!event.allDay,
                                 backgroundColor: statusPalette.bg,
                                 borderColor: statusPalette.border,
                                 textColor: statusPalette.text,
                                 classNames: ['status-event', 'status-' + String(status || 'neutral').toLowerCase().replace(/\s+/g, '-')],
                                 extendedProps: Object.assign({}, event.extendedProps, {
                                     tooltipContent: createTooltipContent(event, status),
+                                    venue: venue,
                                     venueClass: 'status-indicator',
                                     venueDotColor: statusPalette.bg,
-                                    participants: event.extendedProps.expected_participants || 0,
+                                    participants: !isPublicCalendar && event.extendedProps && event.extendedProps.expected_participants
+                                        ? event.extendedProps.expected_participants
+                                        : 0,
                                     statusClass: String(status || 'neutral').toLowerCase(),
                                     displayStatus: status,
                                     isSegment: !!isSegment
@@ -1821,7 +1829,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 var title = info.event.title || '';
-                var status = info.event.extendedProps.displayStatus || info.event.extendedProps.status || info.event.status || '';
+                var eventProps = info.event.extendedProps || {};
+                var status = eventProps.displayStatus || eventProps.status || info.event.status || '';
                 var statusTone = getStatusBadgeTone(status);
                 var statusText = normalizeStatusLabel(status);
                 var statusLabel = statusText ? '<span class="event-status-badge ' + __esc(statusTone) + '">' + __esc(statusText) + '</span>' : '';
@@ -1835,8 +1844,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     metaItems.push('<span class="fc-event-meta-item">' + __esc(formatTimeTo12Hour(startStr) + '–' + formatTimeTo12Hour(endStr)) + '</span>');
                 }
 
-                if (info.event.extendedProps && info.event.extendedProps.venue) {
-                    var venueItems = String(info.event.extendedProps.venue).split(',').map(function(venueName) {
+                if (eventProps.venue) {
+                    var venueItems = String(eventProps.venue).split(',').map(function(venueName) {
                         var trimmedVenue = venueName.trim();
                         return '<span class="fc-event-meta-item venue-marquee-viewport"><span class="venue-name ' + getVenueClass(trimmedVenue) + '">' + __esc(trimmedVenue) + '</span></span>';
                     });
@@ -1848,6 +1857,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 return { html: '<div class="fc-event-compact">' + dot + '<div class="fc-event-body"><div class="fc-event-line">' + label + statusLabel + '</div>' + metaLine + '</div></div>' };
             },
             eventClick: function(info) {
+                if (isPublicCalendar) {
+                    return;
+                }
+
                 let requestId = info.event.id || info.event.extendedProps.facilityRequestId;
 
                 if (requestId) {

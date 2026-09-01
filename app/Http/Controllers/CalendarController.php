@@ -35,7 +35,11 @@ class CalendarController extends Controller
             $requests = $query->whereIn('status', ['approved', 'pending'])->get();
         }
 
-        $events = $requests->map(function($req) use ($role) {
+        $events = $requests->map(function($req) use ($role, $user) {
+            if (! $user) {
+                return $this->toPublicCalendarEvent($req);
+            }
+
             $schedule = $req->reservationSchedule;
             $startDateTime = $schedule ? $schedule->start_datetime : \Illuminate\Support\Carbon::parse($req->start_date . ' ' . ($req->start_time ?? '00:00'));
             $endDateTime = $schedule ? $schedule->end_datetime : \Illuminate\Support\Carbon::parse(($req->end_date ?? $req->start_date) . ' ' . ($req->end_time ?? $req->start_time ?? '00:00'));
@@ -75,7 +79,7 @@ class CalendarController extends Controller
             $eventColor = $this->getEventColor($req, $role);
 
             if ($isAllDay && $eventEnd) {
-                $eventEnd = $endDateTime->copy()->addDay()->format('Y-m-d\TH:i:s');
+                $eventEnd = $endDateTime->copy()->addDay()->startOfDay()->format('Y-m-d\TH:i:s');
             }
 
             return [
@@ -117,6 +121,39 @@ class CalendarController extends Controller
 
 
         return response()->json($events);
+    }
+
+    private function toPublicCalendarEvent(FacilityRequest $request): array
+    {
+        $schedule = $request->reservationSchedule;
+        $startDateTime = $schedule
+            ? $schedule->start_datetime
+            : \Illuminate\Support\Carbon::parse($request->start_date . ' ' . ($request->start_time ?? '00:00'));
+        $endDateTime = $schedule
+            ? $schedule->end_datetime
+            : \Illuminate\Support\Carbon::parse(($request->end_date ?? $request->start_date) . ' ' . ($request->end_time ?? $request->start_time ?? '00:00'));
+
+        $startDateTime = $startDateTime instanceof \Illuminate\Support\Carbon
+            ? $startDateTime
+            : \Illuminate\Support\Carbon::parse($startDateTime);
+        $endDateTime = $endDateTime instanceof \Illuminate\Support\Carbon
+            ? $endDateTime
+            : \Illuminate\Support\Carbon::parse($endDateTime);
+
+        $isAllDay = in_array(strtolower((string) ($request->reservation_duration ?? '')), ['whole_day', 'whole-day', 'whole day'], true);
+        $eventEnd = $isAllDay ? $endDateTime->copy()->addDay()->startOfDay() : $endDateTime;
+
+        return [
+            'id' => 'public-' . hash_hmac('sha256', (string) $request->getKey(), config('app.key')),
+            'title' => (string) $request->name_of_activity,
+            'start' => $startDateTime->format('Y-m-d\TH:i:s'),
+            'end' => $eventEnd->format('Y-m-d\TH:i:s'),
+            'allDay' => $isAllDay,
+            'venue' => implode(', ', $request->getVenueNames()),
+            'backgroundColor' => '#6B7280',
+            'borderColor' => '#4B5563',
+            'textColor' => '#FFFFFF',
+        ];
     }
 
     private function getEventColor($request, $role = null)
@@ -374,7 +411,6 @@ class CalendarController extends Controller
                     $query->whereBetween('start_date', [$startDate, $endDate])
                           ->orWhereBetween('end_date', [$startDate, $endDate]);
                 })
-                ->with('user')
                 ->get()
                 ->filter(function($conflict) use ($requestedStart, $requestedEnd) {
                     return $conflict->overlapsTimeRange($requestedStart, $requestedEnd);
@@ -383,14 +419,6 @@ class CalendarController extends Controller
             if ($venueConflicts->count() > 0) {
                 $conflicts[$venue] = $venueConflicts->map(function($conflict) {
                     return [
-                        'id' => $conflict->id,
-                        'control_number' => $conflict->control_number,
-                        'activity' => $conflict->name_of_activity,
-                        'requestor' => $conflict->user ? $conflict->user->name : 'Unknown',
-                        'status' => $conflict->status,
-                        'venue_status' => $conflict->venue_status,
-                           'priority' => $conflict->priority ?? 'regular',
-                           'control_number' => $conflict->control_number ?? null,
                         'start_date' => $conflict->start_date->format('M d, Y'),
                         'end_date' => $conflict->end_date ? $conflict->end_date->format('M d, Y') : null,
                         'time' => $conflict->start_time,

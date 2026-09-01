@@ -20,21 +20,35 @@
             </div>
 
             <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Assigned Venues</p>
-                    <p class="mt-3 text-3xl font-semibold text-white">{{ $venues->count() }}</p>
-                    <p class="mt-2 text-sm text-slate-300">{{ $venues->count() === 1 ? 'venue assigned' : 'venues assigned' }}</p>
-                </div>
-                <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Assigned Equipment</p>
-                    <p class="mt-3 text-3xl font-semibold text-white">{{ $equipment->count() }}</p>
-                    <p class="mt-2 text-sm text-slate-300">{{ $equipment->count() === 1 ? 'item assigned' : 'items assigned' }}</p>
-                </div>
-                <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Total Assignments</p>
-                    <p class="mt-3 text-3xl font-semibold text-white">{{ $venues->count() + $equipment->count() }}</p>
-                    <p class="mt-2 text-sm text-slate-300">All active custodian resources</p>
-                </div>
+                @if($custodianType === 'venue')
+                    <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Assigned Venues</p>
+                        <p class="mt-3 text-3xl font-semibold text-white">{{ $venues->count() }}</p>
+                        <p class="mt-2 text-sm text-slate-300">{{ $venues->count() === 1 ? 'venue assigned' : 'venues assigned' }}</p>
+                    </div>
+                @elseif($custodianType === 'equipment')
+                    <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Assigned Equipment</p>
+                        <p class="mt-3 text-3xl font-semibold text-white">{{ $equipment->count() }}</p>
+                        <p class="mt-2 text-sm text-slate-300">{{ $equipment->count() === 1 ? 'item assigned' : 'items assigned' }}</p>
+                    </div>
+                @else
+                    <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Assigned Venues</p>
+                        <p class="mt-3 text-3xl font-semibold text-white">{{ $venues->count() }}</p>
+                        <p class="mt-2 text-sm text-slate-300">{{ $venues->count() === 1 ? 'venue assigned' : 'venues assigned' }}</p>
+                    </div>
+                    <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Assigned Equipment</p>
+                        <p class="mt-3 text-3xl font-semibold text-white">{{ $equipment->count() }}</p>
+                        <p class="mt-2 text-sm text-slate-300">{{ $equipment->count() === 1 ? 'item assigned' : 'items assigned' }}</p>
+                    </div>
+                    <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Total Assignments</p>
+                        <p class="mt-3 text-3xl font-semibold text-white">{{ $venues->count() + $equipment->count() }}</p>
+                        <p class="mt-2 text-sm text-slate-300">All active custodian resources</p>
+                    </div>
+                @endif
             </div>
 
             <div class="mt-6 rounded-3xl bg-slate-950/40 p-4 ring-1 ring-white/10">

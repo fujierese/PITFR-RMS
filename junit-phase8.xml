@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="Tests\Feature\AdminUserManagementTest" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" tests="1" assertions="3" errors="0" failures="0" skipped="0" time="6.713813">
+    <testcase name="test_student_requestor_source_of_truth_uses_registered_organization_in_request_flow" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="160" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="3" time="6.713813"/>
+  </testsuite>
+</testsuites>

@@ -1,36 +1,84 @@
 <?php
 namespace Database\Seeders;
 
+use App\Models\Equipment;
+use App\Models\User;
+use App\Models\Venue;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class VenueAndEquipmentSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        DB::table('venues')->truncate();
-        DB::table('equipment')->truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        $custodians = User::query()->whereIn('username', [
+            'asala@gmail.com',
+            'ctado@gmail.com',
+            'mmercado@gmail.com',
+            'rguillemer@gmail.com',
+            'lalmerino@gmail.com',
+            'jrvillas@gmail.com',
+            'jsuralta@gmail.com',
+        ])->pluck('id', 'username');
 
-        
-        DB::table('venues')->insert([
-            ['name' => 'Conference Hall & Interaction Center (CHIC)', 'capacity' => 200, 'custodian_id' => 4, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Gymnasium',                                   'capacity' => 500, 'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Balay Alumni',                                'capacity' => 300, 'custodian_id' => 3, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Oval Grounds',                                'capacity' => 1000, 'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Covered Court',                               'capacity' => 150, 'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Volleyball Court',                            'capacity' => 100, 'custodian_id' => 5, 'created_at' => now(), 'updated_at' => now()],
-        ]);
+        $this->upsertVenue('Conference Hall & Interaction Center (CHIC)', null, $custodians['asala@gmail.com']);
+        $this->upsertVenue('Gymnasium', 1000, $custodians['ctado@gmail.com']);
+        $this->upsertVenue('Balay Alumni Hall', 50, $custodians['mmercado@gmail.com'], ['Balay Alumni']);
+        $this->upsertVenue('Oval Grounds', null, $custodians['ctado@gmail.com']);
+        $this->upsertVenue('Covered Court', null, $custodians['ctado@gmail.com']);
+        $this->upsertVenue('Volleyball Court', null, $custodians['ctado@gmail.com']);
 
-        DB::table('equipment')->insert([
-            ['name' => 'Sound System',      'quantity' => 2,   'quantity_available' => 2,   'custodian_id' => 6, 'authorized_custodian_ids' => json_encode([]), 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Microphones',       'quantity' => 10,  'quantity_available' => 10,  'custodian_id' => 7, 'authorized_custodian_ids' => json_encode([]), 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Canopies',          'quantity' => 5,   'quantity_available' => 5,   'custodian_id' => 7, 'authorized_custodian_ids' => json_encode([]), 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Industrial Fans',   'quantity' => 8,   'quantity_available' => 8,   'custodian_id' => 8, 'authorized_custodian_ids' => json_encode([9]), 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Iwata Cooler Fans', 'quantity' => 4,   'quantity_available' => 4,   'custodian_id' => 8, 'authorized_custodian_ids' => json_encode([9]), 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Tables',            'quantity' => 30,  'quantity_available' => 30,  'custodian_id' => 7, 'authorized_custodian_ids' => json_encode([]), 'created_at' => now(), 'updated_at' => now()],
-            ['name' => 'Monobloc chairs',   'quantity' => 1000, 'quantity_available' => 1000, 'custodian_id' => 7, 'authorized_custodian_ids' => json_encode([]), 'created_at' => now(), 'updated_at' => now()],
+        $fanAlternate = [$custodians['jrvillas@gmail.com']];
+        $this->upsertEquipment('Sound System', 1, $custodians['rguillemer@gmail.com']);
+        $this->upsertEquipment('Wireless Microphones', 1, $custodians['rguillemer@gmail.com'], [], ['Wireless Microphone']);
+        $this->upsertEquipment('Non-Wireless Microphones', 1, $custodians['rguillemer@gmail.com'], [], ['Non-wireless Microphone']);
+        $this->upsertEquipment('Canopies', 10, $custodians['jsuralta@gmail.com']);
+        $this->upsertEquipment('Industrial Fans', 6, $custodians['lalmerino@gmail.com'], $fanAlternate);
+        $this->upsertEquipment('Iwata Cooler Fans', 4, $custodians['lalmerino@gmail.com'], $fanAlternate);
+        $this->upsertEquipment('Tables', 10, $custodians['jsuralta@gmail.com']);
+        $this->upsertEquipment('Monobloc Chairs', 600, $custodians['jsuralta@gmail.com'], [], ['Chairs', 'Monobloc chairs']);
+    }
+
+    private function upsertVenue(string $name, ?int $capacity, int $custodianId, array $aliases = []): void
+    {
+        $venue = Venue::query()->where('name', $name)->first()
+            ?? Venue::query()->whereIn('name', $aliases)->first();
+        if (! $venue) {
+            $venue = new Venue([
+                'name' => $name,
+                'custodian_id' => $custodianId,
+            ]);
+        } elseif ($venue->name !== $name && $venue->requestVenues()->exists()) {
+            $name = $venue->name;
+        }
+
+        $venue->fill([
+            'name' => $name,
         ]);
+        if ($capacity !== null) {
+            $venue->capacity = $capacity;
+        }
+        $venue->is_active = true;
+        $venue->save();
+    }
+
+    private function upsertEquipment(string $name, int $quantity, int $custodianId, array $alternateIds = [], array $aliases = []): void
+    {
+        $equipment = Equipment::query()->where('name', $name)->first()
+            ?? Equipment::query()->whereIn('name', $aliases)->first();
+        if (! $equipment) {
+            $equipment = new Equipment(['name' => $name]);
+        } elseif ($equipment->name !== $name && $equipment->requestEquipment()->exists()) {
+            $name = $equipment->name;
+        }
+
+        $equipment->fill([
+            'name' => $name,
+            'quantity' => $quantity,
+            'quantity_available' => $quantity,
+            'custodian_id' => $custodianId,
+            'authorized_custodian_ids' => $alternateIds,
+            'is_active' => true,
+        ]);
+        $equipment->save();
     }
 }

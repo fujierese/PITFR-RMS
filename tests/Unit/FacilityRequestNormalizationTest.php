@@ -132,13 +132,13 @@ class FacilityRequestNormalizationTest extends TestCase
         $this->assertSame('2026-08-22 17:00:00', $range['end']->format('Y-m-d H:i:s'));
     }
 
-    public function test_whole_day_duration_uses_midnight_to_1159_pm(): void
+    public function test_whole_day_duration_uses_8_am_to_1159_pm(): void
     {
         $range = FacilityRequest::resolveReservationDuration('whole_day', '2026-08-20', '00:00', '2026-08-20', '23:59');
 
-        $this->assertSame('2026-08-20 00:00:00', $range['start']->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-20 08:00:00', $range['start']->format('Y-m-d H:i:s'));
         $this->assertSame('2026-08-20 23:59:00', $range['end']->format('Y-m-d H:i:s'));
-        $this->assertSame('00:00', $range['start']->format('H:i'));
+        $this->assertSame('08:00', $range['start']->format('H:i'));
         $this->assertSame('23:59', $range['end']->format('H:i'));
     }
 
@@ -146,7 +146,7 @@ class FacilityRequestNormalizationTest extends TestCase
     {
         $range = FacilityRequest::resolveReservationDuration('whole_day', '2026-08-20', '00:00', '2026-08-22', '23:59');
 
-        $this->assertSame('2026-08-20 00:00:00', $range['start']->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-20 08:00:00', $range['start']->format('Y-m-d H:i:s'));
         $this->assertSame('2026-08-22 23:59:00', $range['end']->format('Y-m-d H:i:s'));
     }
 
@@ -162,9 +162,9 @@ class FacilityRequestNormalizationTest extends TestCase
     {
         $range = FacilityRequest::resolveReservationDuration('whole_day', '2026-08-21', '00:00', '2026-08-21', '23:59');
 
-        $this->assertSame('2026-08-21 00:00:00', $range['start']->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-21 08:00:00', $range['start']->format('Y-m-d H:i:s'));
         $this->assertSame('2026-08-21 23:59:00', $range['end']->format('Y-m-d H:i:s'));
-        $this->assertSame('00:00', $range['start']->format('H:i'));
+        $this->assertSame('08:00', $range['start']->format('H:i'));
         $this->assertSame('23:59', $range['end']->format('H:i'));
     }
 

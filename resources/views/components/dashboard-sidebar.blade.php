@@ -131,6 +131,11 @@
         }
 
         if ($user->isCustodian()) {
+            // Overview section
+            $navigation[] = [
+                'section' => 'Overview',
+                'type' => 'section-header',
+            ];
             $navigation[] = [
                 'key' => 'dashboard',
                 'label' => 'Dashboard',
@@ -138,12 +143,94 @@
                 'route_name' => 'custodian.index',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l9-9 9 9v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9z"/></svg>',
             ];
+
+            // Resources section - show resource-specific link based on custodian type
+            // CRITICAL: Never show both Venue and Equipment for a single custodian (Spec §9)
+            // For role-specific custodians (custodian-venue/custodian-equipment): show only their type
+            // For generic custodians: prioritize Equipment if assigned, else Venue if assigned, else show neither
+            $custodianType = $user->custodianType();
+            
+            $navigation[] = [
+                'section' => 'Resources',
+                'type' => 'section-header',
+            ];
+            
+            if ($custodianType === 'venue') {
+                // Venue Custodian (role='custodian-venue') - show Venue ONLY
+                $navigation[] = [
+                    'key' => 'venue',
+                    'label' => 'Venue',
+                    'route' => route('custodian.venue'),
+                    'route_name' => 'custodian.venue',
+                    'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/></svg>',
+                ];
+            } elseif ($custodianType === 'equipment') {
+                // Equipment Custodian (role='custodian-equipment') - show Equipment ONLY
+                $navigation[] = [
+                    'key' => 'equipment',
+                    'label' => 'Equipment',
+                    'route' => route('custodian.equipment'),
+                    'route_name' => 'custodian.equipment',
+                    'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m0 0V3m0 2V5m0 0h2m-6 0h2m0 0h-2m0 2h2m0 0h2m0 0h-2"/></svg>',
+                ];
+            } else {
+                // Generic custodian (role='custodian') - show ONE resource type only
+                // Priority: Equipment > Venue (Equipment has more complex operations)
+                // SPEC §10: Do NOT infer type from resource existence, but for generic roles
+                // we must determine which resource to show operationally
+                if ($user->equipmentItems()->exists()) {
+                    // Has equipment assigned - show Equipment ONLY
+                    $navigation[] = [
+                        'key' => 'equipment',
+                        'label' => 'Equipment',
+                        'route' => route('custodian.equipment'),
+                        'route_name' => 'custodian.equipment',
+                        'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m0 0V3m0 2V5m0 0h2m-6 0h2m0 0h-2m0 2h2m0 0h2m0 0h-2"/></svg>',
+                    ];
+                } elseif ($user->venues()->exists()) {
+                    // No equipment, but has venues - show Venue ONLY
+                    $navigation[] = [
+                        'key' => 'venue',
+                        'label' => 'Venue',
+                        'route' => route('custodian.venue'),
+                        'route_name' => 'custodian.venue',
+                        'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/></svg>',
+                    ];
+                }
+                // If no resources assigned at all, show neither (don't show "for discovery")
+            }
+
+            // Scheduling section
+            $navigation[] = [
+                'section' => 'Scheduling',
+                'type' => 'section-header',
+            ];
             $navigation[] = [
                 'key' => 'calendar',
                 'label' => 'Calendar',
                 'route' => $calendarRoute,
                 'route_name' => $calendarRouteName,
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+            ];
+
+            // Notifications section
+            $navigation[] = [
+                'section' => 'Notifications',
+                'type' => 'section-header',
+            ];
+            $navigation[] = [
+                'key' => 'notifications',
+                'label' => 'Notifications',
+                'route' => route('notifications.index'),
+                'route_name' => 'notifications.index',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>',
+                'badge' => $notificationCount > 0 ? $notificationCount : null,
+            ];
+
+            // Account section
+            $navigation[] = [
+                'section' => 'Account',
+                'type' => 'section-header',
             ];
             $navigation[] = [
                 'key' => 'settings',
@@ -227,6 +314,12 @@
         $activeKey = 'settings';
     } elseif ($currentRoute === 'custodian.index') {
         $activeKey = 'dashboard';
+    } elseif ($currentRoute === 'custodian.venue') {
+        $activeKey = 'venue';
+    } elseif ($currentRoute === 'custodian.equipment') {
+        $activeKey = 'equipment';
+    } elseif ($currentRoute === 'custodian.assignments') {
+        $activeKey = 'assignments';
     } elseif ($currentRoute === 'custodian.settings') {
         $activeKey = 'settings';
     }

@@ -410,33 +410,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    function getEyeIcon(isHidden) {
-        return isHidden
-            ? '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>'
-            : '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.269-2.943-9.543-7a10.05 10.05 0 012.293-3.926m2.946-2.947A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18"/></svg>';
-    }
-
-    document.querySelectorAll('.password-toggle').forEach(function(button) {
-        button.addEventListener('click', function() {
-            var targetSelector = button.dataset.passwordToggleTarget;
-            if (!targetSelector) {
-                return;
-            }
-            var targetInput = document.querySelector(targetSelector);
-            if (!targetInput || (targetInput.type !== 'password' && targetInput.type !== 'text')) {
-                return;
-            }
-
-            var isHidden = targetInput.type === 'password';
-            targetInput.type = isHidden ? 'text' : 'password';
-            button.innerHTML = getEyeIcon(!isHidden);
-            button.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
-        });
-    });
-});
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
     var sidebar = document.getElementById('dashboard-sidebar');
     var toggle = document.getElementById('sidebar-toggle');
     var backdrop = document.getElementById('sidebar-backdrop');

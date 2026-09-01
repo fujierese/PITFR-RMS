@@ -174,6 +174,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const calendarEl = document.getElementById('calendar');
+    const isPublicCalendar = @json(!auth()->check());
 
     const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
@@ -221,6 +222,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         },
         eventClick: function(info) {
+            if (isPublicCalendar) {
+                return;
+            }
+
             const requestId = info.event.id || info.event.extendedProps.facilityRequestId;
             if (requestId) {
                 window.location.href = '{{ url("/request") }}/' + requestId;

@@ -46,7 +46,8 @@ class CalendarEventPayloadTest extends TestCase
             'end_datetime' => '2026-01-15 11:00:00',
         ]);
 
-        $response = $this->getJson(route('calendar.events'));
+        $admin = User::factory()->create(['role' => 'admin']);
+        $response = $this->actingAs($admin)->getJson(route('calendar.events'));
 
         $response->assertOk();
 
@@ -102,7 +103,8 @@ class CalendarEventPayloadTest extends TestCase
             'end_datetime' => '2026-08-12 17:00:00',
         ]);
 
-        $response = $this->getJson(route('calendar.events'));
+        $admin = User::factory()->create(['role' => 'admin']);
+        $response = $this->actingAs($admin)->getJson(route('calendar.events'));
 
         $response->assertOk();
 
@@ -150,7 +152,8 @@ class CalendarEventPayloadTest extends TestCase
             'end_datetime' => '2026-08-16 17:00:00',
         ]);
 
-        $response = $this->getJson(route('calendar.events'));
+        $admin = User::factory()->create(['role' => 'admin']);
+        $response = $this->actingAs($admin)->getJson(route('calendar.events'));
         $response->assertOk();
 
         $event = collect($response->json())->firstWhere('id', $request->id);
@@ -197,11 +200,64 @@ class CalendarEventPayloadTest extends TestCase
         $response->assertOk();
 
         $payload = collect($response->json());
-        $event = $payload->firstWhere('id', $request->id);
+        $event = $payload->firstWhere('title', 'Private Activity');
 
         $this->assertNotNull($event);
-        $this->assertArrayNotHasKey('requestorContact', $event['extendedProps']);
-        $this->assertArrayNotHasKey('requestorEmail', $event['extendedProps']);
+        $this->assertSame('Private Activity', $event['title']);
+        $this->assertSame('2026-09-01T10:00:00', $event['start']);
+        $this->assertSame('2026-09-01T12:00:00', $event['end']);
+        $this->assertSame([
+            'id', 'title', 'start', 'end', 'allDay', 'venue',
+            'backgroundColor', 'borderColor', 'textColor',
+        ], array_keys($event));
+        $serializedEvent = json_encode($event);
+        $this->assertStringNotContainsString($requestor->name, $serializedEvent);
+        $this->assertStringNotContainsString($request->control_number, $serializedEvent);
+        $this->assertStringNotContainsString('/request/', $serializedEvent);
+
+        $this->get(route('request.show', $request))->assertRedirect(route('login'));
+
+        $apiEvent = collect($this->getJson('/api/reservations')->json())
+            ->firstWhere('title', 'Private Activity');
+        $this->assertSame($event, $apiEvent);
+    }
+
+    public function test_public_calendar_preserves_whole_day_as_8_am_to_exclusive_midnight(): void
+    {
+        $requestor = User::factory()->create([
+            'name' => 'Whole Day Requestor',
+            'username' => 'whole-day-requestor',
+            'role' => 'requestor',
+        ]);
+
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-2026-WHOLE-DAY',
+            'date_requested' => now()->toDateString(),
+            'department' => 'BSIT',
+            'name_of_activity' => 'Whole Day Reservation',
+            'expected_participants' => 20,
+            'start_date' => '2026-09-10',
+            'end_date' => '2026-09-10',
+            'start_time' => '08:00',
+            'end_time' => '23:59',
+            'reservation_duration' => 'whole_day',
+            'venue' => ['Gymnasium'],
+            'requested_by_id' => $requestor->id,
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
+
+        $response = $this->getJson(route('calendar.events'));
+        $response->assertOk();
+
+        $event = collect($response->json())->firstWhere('title', 'Whole Day Reservation');
+
+        $this->assertNotNull($event);
+        $this->assertSame('2026-09-10T08:00:00', $event['start']);
+        $this->assertSame('2026-09-11T00:00:00', $event['end']);
+        $this->assertTrue($event['allDay']);
+        $this->assertSame('Gymnasium', $event['venue']);
     }
 
     public function test_authorized_users_can_view_requestor_contact_on_request_detail(): void
@@ -242,5 +298,68 @@ class CalendarEventPayloadTest extends TestCase
         $response->assertOk();
         $response->assertSee('Contact Number');
         $response->assertSee($requestor->contact_number);
+    }
+
+    public function test_conflict_check_does_not_return_private_request_details(): void
+    {
+        $requestor = User::factory()->create([
+            'name' => 'Conflict Requestor',
+            'username' => 'conflict-requestor',
+            'role' => 'requestor',
+        ]);
+        $conflictDate = now()->toDateString();
+
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-2026-CONFLICT',
+            'date_requested' => now()->toDateString(),
+            'department' => 'Private Department',
+            'name_of_activity' => 'Private Conflict Activity',
+            'expected_participants' => 80,
+            'start_date' => $conflictDate,
+            'end_date' => $conflictDate,
+            'start_time' => '10:00',
+            'end_time' => '12:00',
+            'venue' => ['Gymnasium'],
+            'requested_by_id' => $requestor->id,
+            'status' => 'pending',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+            'equipment_returned_status' => 'pending',
+            'priority' => 'institutional',
+        ]);
+        $request->requestVenues()->create(['name' => 'Gymnasium']);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $response = $this->actingAs($admin)->postJson(route('calendar.check-conflicts'), [
+            'venues' => ['Gymnasium'],
+            'start_date' => $conflictDate,
+            'start_time' => '10:00',
+            'end_date' => $conflictDate,
+            'end_time' => '12:00',
+        ]);
+
+        $response->assertOk();
+        $this->assertIsArray($response->json('conflicts'));
+        $serializedResponse = $response->getContent();
+        $this->assertStringNotContainsString($requestor->name, $serializedResponse);
+        $this->assertStringNotContainsString($request->control_number, $serializedResponse);
+        $this->assertStringNotContainsString($request->name_of_activity, $serializedResponse);
+        $this->assertStringNotContainsString('Private Department', $serializedResponse);
+        $this->assertStringNotContainsString('institutional', $serializedResponse);
+    }
+
+    public function test_requestor_cannot_use_admin_conflict_check(): void
+    {
+        $requestor = User::factory()->create(['role' => 'requestor']);
+
+        $this->actingAs($requestor)
+            ->postJson(route('calendar.check-conflicts'), [
+                'venues' => ['Gymnasium'],
+                'start_date' => now()->toDateString(),
+                'start_time' => '10:00',
+                'end_date' => now()->toDateString(),
+                'end_time' => '12:00',
+            ])
+            ->assertForbidden();
     }
 }

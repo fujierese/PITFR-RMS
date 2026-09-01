@@ -39,7 +39,11 @@ class AuthController extends Controller
         }
 
         $user = Auth::user();
-        if ($user->role === 'requestor' && in_array($user->requestor_type, ['student', 'outsider'], true) && !$user->email_verified_at) {
+        if ($user->is_active === false) {
+            Auth::logout();
+            return back()->withErrors(['email' => 'This account is deactivated. Contact an administrator.']);
+        }
+        if ($user->role === 'requestor' && in_array($user->requestor_type, ['student', 'faculty', 'student_organization', 'outsider'], true) && !$user->email_verified_at) {
             Auth::logout();
             $request->session()->put('registration_user_id', $user->id);
             return redirect()->route('register.verify');
@@ -69,8 +73,11 @@ class AuthController extends Controller
             ]);
         }
 
-        $type = $request->validate(['type' => ['nullable', 'in:student,outsider']])['type'] ?? 'student';
-        $request->session()->put('google_registration_type', $type);
+        $requestedType = strtolower((string) ($request->input('type', 'outsider')));
+        $allowedTypes = ['student', 'faculty', 'outsider', 'clinic'];
+
+        $request->validate(['type' => ['nullable', 'in:' . implode(',', $allowedTypes)]]);
+        $request->session()->put('google_registration_type', in_array($requestedType, $allowedTypes, true) ? $requestedType : 'outsider');
 
         return Socialite::driver('google')->redirect();
     }
@@ -163,32 +170,27 @@ class AuthController extends Controller
         $googleProfile = $request->session()->get('google_registration_profile');
         $isGoogleRegistration = is_array($googleProfile);
         $data = $request->validate([
-            'requestor_type' => ['required', 'in:student,outsider'],
-            'first_name' => ['required_if:requestor_type,student', 'nullable', 'string', 'max:100'],
+            'requestor_type' => ['required', 'in:outsider'],
+            'first_name' => ['nullable', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
-            'last_name' => ['required_if:requestor_type,student', 'nullable', 'string', 'max:100'],
-            'contact_person' => ['required_if:requestor_type,outsider', 'nullable', 'string', 'max:100'],
+            'last_name' => ['nullable', 'string', 'max:100'],
+            'contact_person' => ['required', 'string', 'max:100'],
             'username' => ['required', 'email', 'max:255', 'unique:users,username'],
             'password' => [$isGoogleRegistration ? 'nullable' : 'required', 'string', 'min:6', 'confirmed'],
-            'college_id' => ['required_if:requestor_type,student', 'nullable', 'exists:colleges,id'],
-            'department_id' => ['required_if:requestor_type,student', 'nullable', 'exists:departments,id'],
-            'school_id_number' => ['required_if:requestor_type,student', 'nullable', 'string', 'regex:/^\d{2}-\d{4}-\d{3}$/'],
-            'office_or_organization' => ['required_if:requestor_type,outsider', 'nullable', 'string', 'max:191'],
+            'office_or_organization' => ['required', 'string', 'max:191'],
             'contact_number' => ['nullable', 'string', 'max:50'],
         ], [
             'school_id_number.regex' => 'Student ID must be in format: 23-0098-635 (2 digits - 4 digits - 3 digits)',
             'college_id.required_if' => 'College is required for student registration',
             'department_id.required_if' => 'Department is required for student registration',
-            'office_or_organization.required_if' => 'Organization name is required for external registration',
+            'office_or_organization.required_if' => 'Organization name is required for this account type.',
         ]);
 
         if ($isGoogleRegistration) {
             $data['username'] = $googleProfile['email'];
         }
 
-        $fullName = $data['requestor_type'] === 'outsider'
-            ? trim($data['contact_person'])
-            : trim(implode(' ', array_filter([$data['first_name'], $data['middle_name'] ?? null, $data['last_name']])));
+        $fullName = trim($data['contact_person']);
 
         // Normalize organization / purpose: treat common 'Individual' markers and empty strings as null
         $org = $data['office_or_organization'] ?? null;
@@ -219,7 +221,7 @@ class AuthController extends Controller
             'role' => 'requestor',
             'requestor_type' => $data['requestor_type'],
             'school_id_number' => $data['school_id_number'] ?? null,
-            'office_or_organization' => $data['requestor_type'] === 'outsider' ? $org : null,
+            'office_or_organization' => $org,
             'contact_number' => $data['contact_number'] ?? null,
             'department' => $departmentName,
             'college_id' => $data['college_id'] ?? null,

@@ -15,15 +15,18 @@ class FacilityRequest extends Model
     protected $table = 'facility_requests';
 
     protected $fillable = [
-        'control_number', 'date_requested', 'department', 'name_of_activity',
+        'control_number', 'date_requested', 'department', 'organization_name', 'request_context', 'student_organization_id', 'name_of_activity',
         'expected_participants', 'start_date', 'end_date', 'start_time', 'end_time', 'venue', 'equipment', 'purpose',
         'equipment_quantities', 'other_venue', 'equipment_custodian_statuses',
         'requested_by_id', 'status', 'venue_status', 'equipment_status',
         'venue_approval_signature', 'equipment_approval_signature', 'approval_signature_meta',
         'approved_by', 'approved_by_id', 'approved_date', 'notes', 'venue_notes', 'equipment_notes',
         'equipment_returned_status', 'equipment_returned_by', 'equipment_returned_date', 'equipment_return_notes',
-        'equipment_returned_items', 'priority', 'is_emergency', 'proposal_file',
+        'equipment_returned_items', 'equipment_return_damaged_quantity', 'equipment_return_missing_quantity',
+        'equipment_return_damage_remarks', 'equipment_return_missing_remarks', 'priority', 'requested_priority', 'requested_is_emergency', 'is_emergency', 'emergency_justification', 'proposal_file',
         'activity_proposal_file', 'igp_receipt_file', 'e_signature_file', 'document_metadata',
+        'venue_approval_signature_file', 'equipment_approval_signature_file', 'final_approval_signature_file',
+        'final_approval_signature',
     ];
 
     protected static function booted(): void
@@ -52,6 +55,7 @@ class FacilityRequest extends Model
         'equipment_custodian_statuses' => 'array',
         'equipment_returned_items'     => 'array',
         'is_emergency'                 => 'boolean',
+        'requested_is_emergency'       => 'boolean',
         'approval_signature_meta'      => 'array',
         'document_metadata'            => 'array',
     ];
@@ -111,6 +115,11 @@ class FacilityRequest extends Model
         return $this->belongsTo(User::class, 'requested_by_id');
     }
 
+    public function studentOrganization()
+    {
+        return $this->belongsTo(StudentOrganization::class);
+    }
+
     public function histories()
     {
         return $this->hasMany(RequestHistory::class);
@@ -141,6 +150,11 @@ class FacilityRequest extends Model
         return $this->hasMany(RequestStatusHistory::class);
     }
 
+    public function revisionHistories()
+    {
+        return $this->hasMany(RevisionHistory::class)->orderByDesc('created_at');
+    }
+
     public function addHistory(string $action, ?string $detail = null, ?int $userId = null)
     {
         return $this->histories()->create([
@@ -163,6 +177,7 @@ class FacilityRequest extends Model
 
         $this->{$approvalType . '_approval_signature'} = hash_hmac('sha256', $payload, config('app.key'));
         $meta = $this->approval_signature_meta ?? [];
+
         if ($approvalType === 'equipment') {
             $equipmentMeta = $meta[$approvalType] ?? [];
             if (! is_array($equipmentMeta) || array_is_list($equipmentMeta) === false) {
@@ -173,7 +188,44 @@ class FacilityRequest extends Model
         } else {
             $meta[$approvalType] = $payload;
         }
+
+        if ($approvalType === 'final') {
+            $this->final_approval_signature = $this->{$approvalType . '_approval_signature'};
+            $meta['final'] = $payload;
+            $signedFile = $this->snapshotSignatureForRecord($approver, 'final');
+            if ($signedFile) {
+                $this->final_approval_signature_file = $signedFile;
+            }
+        } else {
+            $signedFile = $this->snapshotSignatureForRecord($approver, $approvalType);
+            if ($signedFile) {
+                $this->{$approvalType . '_approval_signature_file'} = $signedFile;
+            }
+        }
+
         $this->approval_signature_meta = $meta;
+        $this->save();
+    }
+
+    public function snapshotSignatureForRecord(User $user, string $recordType): ?string
+    {
+        if (! $user->e_signature_file) {
+            return null;
+        }
+
+        $sourcePath = 'documents/e_signature/users/' . $user->e_signature_file;
+        if (! \Illuminate\Support\Facades\Storage::disk('local')->exists($sourcePath)) {
+            return null;
+        }
+
+        $extension = pathinfo($user->e_signature_file, PATHINFO_EXTENSION) ?: 'png';
+        $targetDirectory = $recordType === 'requestor' ? 'documents/e_signature/requests' : 'documents/e_signature/approvals';
+        $targetFilename = $recordType . '_' . $this->id . '_' . now()->format('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . strtolower($extension);
+
+        \Illuminate\Support\Facades\Storage::disk('local')->makeDirectory($targetDirectory);
+        \Illuminate\Support\Facades\Storage::disk('local')->copy($sourcePath, $targetDirectory . '/' . $targetFilename);
+
+        return $targetFilename;
     }
 
     public function getStageApproverName(string $stage): ?string
@@ -660,7 +712,7 @@ class FacilityRequest extends Model
         if (in_array($normalizedDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
             return self::normalizeScheduleRange(
                 $effectiveStartDate,
-                '00:00',
+                '08:00',
                 $effectiveEndDate,
                 '23:59'
             );
@@ -949,7 +1001,7 @@ class FacilityRequest extends Model
     }
 
     // ─── MARK EQUIPMENT AS RETURNED ──────────────────────────────────────────
-    public function markEquipmentReturned(int $custodianId, array $returnedEquipment, ?string $notes = null): void
+    public function markEquipmentReturned(int $custodianId, array $returnedEquipment, ?string $notes = null, array $damageDetails = [], array $missingDetails = [], array $damageRemarks = [], array $missingRemarks = []): void
     {
         // ❗ Ensure event is finished, defaulting to end_date when start_date is not set
         $eventEndDate = $this->end_date ?? $this->start_date;
@@ -957,23 +1009,41 @@ class FacilityRequest extends Model
             throw new \Exception('Event is not yet finished.');
         }
 
-        $requestedQuantities = $this->resolvedQuantities();
+        if ($this->equipment_returned_status === 'fulfilled') {
+            throw new \Exception('Equipment has already been recorded as fulfilled for this request.');
+        }
 
-        $returnedItems       = $this->equipment_returned_items ?? [];
+        $requestedQuantities = $this->resolvedQuantities();
+        $returnedItems = $this->equipment_returned_items ?? [];
         $prevCustodianReturn = $returnedItems[$custodianId]['equipment'] ?? [];
 
-        // Initialize custodian entry
         $returnedItems[$custodianId] = [
             'equipment'   => [],
             'returned_at' => now()->toISOString(),
             'notes'       => $notes,
         ];
 
+        $damagedTotals = [];
+        $missingTotals = [];
+        $damagedTotal = 0;
+        $missingTotal = 0;
+
+        foreach ($damageDetails as $itemName => $qty) {
+            $damagedTotals[$itemName] = max(0, (int) $qty);
+        }
+
+        foreach ($missingDetails as $itemName => $qty) {
+            $missingTotals[$itemName] = max(0, (int) $qty);
+        }
+
+        $damagedTotal = array_sum($damagedTotals);
+        $missingTotal = array_sum($missingTotals);
+        $shouldRestoreInventory = $damagedTotal === 0 && $missingTotal === 0;
+
         foreach ($returnedEquipment as $itemName => $qty) {
             $qty = (int) $qty;
             if ($qty <= 0) continue;
 
-            // ❗ Ensure this equipment belongs to this custodian
             $eq = $this->findEquipmentForCustodian($itemName, $custodianId);
             if (!$eq) continue;
 
@@ -987,55 +1057,46 @@ class FacilityRequest extends Model
 
             $requestedQty = (int) ($requestedQuantities[$itemName] ?? 0);
 
-            // ❗ Compute total returned across ALL custodians
             $totalReturnedSoFar = 0;
             foreach ($returnedItems as $cId => $custodianData) {
                 if ($cId == $custodianId) continue;
-
                 $totalReturnedSoFar += (int) ($custodianData['equipment'][$itemName] ?? 0);
             }
 
             $totalReturnedSoFar += $alreadyReturnedByCustodian;
-
-            // Remaining needed
             $remainingNeeded = max(0, $requestedQty - $totalReturnedSoFar);
-
-            // Final quantity to release
             $toRelease = min($delta, $remainingNeeded);
-
-            // New total for this custodian
             $newTotalByCustodian = $alreadyReturnedByCustodian + $toRelease;
 
             $returnedItems[$custodianId]['equipment'][$itemName] = $newTotalByCustodian;
 
-            // Release stock
-            if ($toRelease > 0) {
-                // Lock equipment row and cap quantity_available to equipment quantity
+            if ($toRelease > 0 && $shouldRestoreInventory) {
                 $locked = \App\Models\Equipment::whereKey($eq->id)->lockForUpdate()->first();
                 if ($locked) {
-                    $locked->quantity_available = min(
-                        $locked->quantity,
-                        $locked->quantity_available + $toRelease
-                    );
+                    $locked->quantity_available = min($locked->quantity, $locked->quantity_available + $toRelease);
                     $locked->save();
                 }
             }
         }
 
-        // Check if all returned
         $allReturned = $this->isAllEquipmentReturned($returnedItems);
+        $damageRemarkText = $this->flattenReturnRemarks($damageRemarks);
+        $missingRemarkText = $this->flattenReturnRemarks($missingRemarks);
 
         $this->update([
-            'equipment_returned_items'  => $returnedItems,
-            'equipment_returned_status' => $allReturned ? 'returned' : 'partial',
-            'equipment_returned_date'   => $allReturned ? now() : $this->equipment_returned_date,
-            'equipment_return_notes'    => $notes,
+            'equipment_returned_items' => $returnedItems,
+            'equipment_returned_status' => $allReturned ? 'fulfilled' : 'partial',
+            'equipment_returned_date' => $allReturned ? now() : $this->equipment_returned_date,
+            'equipment_return_notes' => $notes,
+            'equipment_return_damaged_quantity' => $damagedTotal,
+            'equipment_return_missing_quantity' => $missingTotal,
+            'equipment_return_damage_remarks' => $damageRemarkText,
+            'equipment_return_missing_remarks' => $missingRemarkText,
         ]);
 
-        // Optional: add history log
         $this->addHistory(
             'equipment_returned',
-            'Equipment marked as returned by custodian ID: ' . $custodianId,
+            'Equipment recorded as returned by custodian ID: ' . $custodianId . ($damagedTotal > 0 ? ' Damaged units: ' . $damagedTotal : '') . ($missingTotal > 0 ? ' Missing units: ' . $missingTotal : ''),
             $custodianId
         );
     }
@@ -1061,6 +1122,30 @@ class FacilityRequest extends Model
         }
 
         return true;
+    }
+
+    private function flattenReturnRemarks(array $remarks): ?string
+    {
+        if (empty($remarks)) {
+            return null;
+        }
+
+        $values = [];
+        foreach ($remarks as $itemName => $remark) {
+            if (is_array($remark)) {
+                $values[] = implode('; ', array_filter(array_map('strval', $remark)));
+                continue;
+            }
+
+            $text = trim((string) $remark);
+            if ($text !== '') {
+                $values[] = $text;
+            }
+        }
+
+        $combined = implode('; ', array_filter($values, fn ($value) => $value !== ''));
+
+        return $combined !== '' ? $combined : null;
     }
 
     public function isOverdue(): bool
@@ -1110,6 +1195,48 @@ class FacilityRequest extends Model
             'venue_custodian' => $venueCustodian,
             'equipment_custodians' => array_values(array_filter($equipmentCustodians)),
             'supply_office' => $supplyOffice,
+        ];
+    }
+
+    /**
+     * Check if this request can be revised (not locked by equipment return)
+     */
+    public function canBeRevised(): bool
+    {
+        // Locked if equipment return has started (partial or fully returned)
+        if (in_array($this->equipment_returned_status, ['partial', 'returned', 'fulfilled', 'overdue'], true)) {
+            return false;
+        }
+
+        // Can revise if status is approved, pending, or needs_reschedule
+        return in_array($this->status, ['approved', 'pending', 'needs_reschedule'], true);
+    }
+
+    /**
+     * Get reason why revision is locked
+     */
+    public function getRevisionLockReason(): ?string
+    {
+        if (in_array($this->equipment_returned_status, ['partial', 'returned', 'fulfilled', 'overdue'], true)) {
+            return 'Equipment fulfillment has started. Cannot revise reservation.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Capture current state for revision history
+     */
+    public function getCurrentState(): array
+    {
+        return [
+            'start_date' => $this->start_date,
+            'end_date' => $this->end_date,
+            'start_time' => $this->start_time,
+            'end_time' => $this->end_time,
+            'venue' => $this->getVenueNames(),
+            'equipment' => $this->getEquipmentItems(),
+            'equipment_quantities' => $this->getEquipmentQuantities(),
         ];
     }
 }

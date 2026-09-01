@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Models\User;
 use App\Models\Venue;
 use App\Services\AvailabilityService;
+use App\Services\VenueEquipmentPolicy;
 use App\Http\Controllers\Concerns\ManagesAccountSettings;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -42,10 +43,48 @@ class RequestorController extends Controller
         'Oval Grounds', 'Covered Court', 'Volleyball Court',
     ];
     private const EQUIPMENT_OPTIONS = [
-        'Sound System', 'Microphones', 'Canopies', 'Industrial Fans',
-        'Iwata Cooler Fans', 'Tables', 'Monobloc chairs',
+        'Sound System', 'Canopies', 'Industrial Fans',
+        'Iwata Cooler Fans', 'Tables', 'Wireless Microphones', 'Non-Wireless Microphones', 'Monobloc Chairs',
     ];
- 
+
+    private static function canonicalizeEquipmentName(string $name): string
+    {
+        $normalized = trim((string) $name);
+        if ($normalized === '') {
+            return '';
+        }
+
+        $lookup = [
+            'wireless microphone' => 'Wireless Microphones',
+            'wireless microphones' => 'Wireless Microphones',
+            'non-wireless microphone' => 'Non-Wireless Microphones',
+            'non-wireless microphones' => 'Non-Wireless Microphones',
+            'non wireless microphone' => 'Non-Wireless Microphones',
+            'non wireless microphones' => 'Non-Wireless Microphones',
+            'microphones' => 'Wireless Microphones',
+            'chairs' => 'Monobloc Chairs',
+            'monobloc chairs' => 'Monobloc Chairs',
+            'monobloc chair' => 'Monobloc Chairs',
+        ];
+
+        $lower = mb_strtolower($normalized);
+        return $lookup[$lower] ?? $normalized;
+    }
+
+    private static function normalizeEquipmentSelection(array $items): array
+    {
+        $normalized = [];
+        foreach ($items as $item) {
+            $expanded = self::canonicalizeEquipmentName((string) $item);
+            if ($expanded === '') {
+                continue;
+            }
+            $normalized[] = $expanded;
+        }
+
+        return array_values(array_unique($normalized));
+    }
+
     public function index(Request $request)
     {
         $user = $this->currentUser();
@@ -110,7 +149,7 @@ class RequestorController extends Controller
             ->orderBy($sort === 'oldest' ? 'created_at' : 'created_at', $sort === 'oldest' ? 'asc' : 'desc');
 
         $requests = $query->get();
-        $equipment = \App\Models\Equipment::where('is_active', true)->get();
+        $equipment = \App\Models\Equipment::where('is_active', true)->whereNotIn('id', [2, 10])->get();
 
         // Separate by future/past dates and approval status
         $today = now()->toDateString();
@@ -191,6 +230,9 @@ class RequestorController extends Controller
             'departments'       => $departments,
             'profileCollegeId'  => $profileCollegeId,
             'profileDepartmentId' => $profileDepartmentId,
+            'studentOrganizations' => $user->isStudent()
+                ? $user->studentOrganizations()->orderBy('name')->get()
+                : collect(),
             'equipOptions'      => self::EQUIPMENT_OPTIONS,
             'controlNumber'     => FacilityRequest::generateControlNumber(),
             'equipment'         => $equipment,
@@ -205,6 +247,7 @@ class RequestorController extends Controller
         return view('requestor.settings', [
             'user' => $user,
             'profileMeta' => $this->buildProfileMeta($user),
+            'colleges' => \App\Models\College::with('departments')->orderBy('name')->get(),
         ]);
     }
 
@@ -212,17 +255,43 @@ class RequestorController extends Controller
     {
         $user = $this->currentUser();
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'surname' => ['nullable', 'string', 'max:100'],
+            'first_name' => ['nullable', 'string', 'max:100'],
+            'middle_name' => ['nullable', 'string', 'max:100'],
+            'suffix' => ['nullable', 'string', 'max:50'],
             'contact_number' => ['nullable', 'string', 'max:255'],
         ]);
 
-        if ($user->isOutsider()) {
+        if ($user->isStudent()) {
+            $validated = array_merge($validated, $request->validate([
+                    'school_id_number' => ['sometimes', 'nullable', 'string', 'regex:/^\d{2}-\d{4}-\d{3}$/'],
+                    'college_id' => ['sometimes', 'nullable', 'exists:colleges,id'],
+                    'department_id' => ['sometimes', 'nullable', 'exists:departments,id'],
+            ]));
+        } elseif ($user->isFaculty()) {
+            $validated = array_merge($validated, $request->validate([
+                'faculty_id' => ['sometimes', 'nullable', 'string', 'max:50', 'unique:users,faculty_id,' . $user->id],
+                'position' => ['sometimes', 'nullable', 'string', 'max:100'],
+                'college_id' => ['sometimes', 'nullable', 'exists:colleges,id'],
+                'department_id' => ['sometimes', 'nullable', 'exists:departments,id'],
+            ]));
+        }
+
+        if ($user->isOutsider() || $user->isStudentOrganization()) {
             $validated['office_or_organization'] = $request->validate([
                 'office_or_organization' => ['nullable', 'string', 'max:255'],
             ])['office_or_organization'];
         }
 
         $user->fill($validated);
+        $user->name = User::formatFullName($validated['surname'] ?? $user->surname, $validated['first_name'] ?? $user->first_name, $validated['middle_name'] ?? $user->middle_name, $validated['suffix'] ?? $user->suffix);
+        if (isset($validated['department_id']) && isset($validated['college_id'])) {
+            $department = \App\Models\Department::find($validated['department_id']);
+            if ($department && (int) $department->college_id !== (int) $validated['college_id']) {
+                return back()->withErrors(['department_id' => 'Please select a department under the selected college.'])->withInput();
+            }
+            $user->department = $department?->name;
+        }
         $user->save();
 
         return redirect()->route('requestor.settings')->with('success', 'Profile updated successfully.');
@@ -256,6 +325,51 @@ class RequestorController extends Controller
         return $this->saveSignature($request, 'requestor.settings');
     }
 
+    public function accountSignature(?User $user = null)
+    {
+        $targetUser = $user ?? Auth::user();
+
+        if (! $targetUser instanceof User || ! $targetUser->e_signature_file) {
+            abort(404);
+        }
+
+        if (Auth::id() !== $targetUser->id && ! Auth::user()?->isAdmin()) {
+            abort(403);
+        }
+
+        $path = 'documents/e_signature/users/' . $targetUser->e_signature_file;
+
+        if (! Storage::disk('local')->exists($path)) {
+            abort(404);
+        }
+
+        return response()->file(Storage::disk('local')->path($path));
+    }
+
+    public function approvalSignature(FacilityRequest $facilityRequest, string $type)
+    {
+        $this->authorize('view', $facilityRequest);
+
+        $field = match ($type) {
+            'venue' => 'venue_approval_signature_file',
+            'equipment' => 'equipment_approval_signature_file',
+            'final' => 'final_approval_signature_file',
+            default => null,
+        };
+
+        if (! $field || ! $facilityRequest->{$field}) {
+            abort(404);
+        }
+
+        $path = 'documents/e_signature/approvals/' . $facilityRequest->{$field};
+
+        if (! Storage::disk('local')->exists($path)) {
+            abort(404);
+        }
+
+        return response()->file(Storage::disk('local')->path($path));
+    }
+
     public function edit(FacilityRequest $facilityRequest)
     {
         $user = $this->currentUser();
@@ -283,7 +397,7 @@ class RequestorController extends Controller
             'venueOptions' => self::VENUE_OPTIONS,
             'equipmentOptions' => self::EQUIPMENT_OPTIONS,
             'controlNumber' => $facilityRequest->control_number,
-            'equipment' => \App\Models\Equipment::where('is_active', true)->get(),
+            'equipment' => \App\Models\Equipment::where('is_active', true)->whereNotIn('id', [2, 10])->get(),
             'equipmentQuantityLimits' => $equipmentQuantityLimits,
             'venueCapacityMap' => $venueCapacityMap,
         ]);
@@ -309,7 +423,7 @@ class RequestorController extends Controller
         $reservationDuration = strtolower((string) $request->input('reservation_duration', 'specific_time'));
         if (in_array($reservationDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
             $request->merge([
-                'start_time' => '00:00',
+                'start_time' => '08:00',
                 'end_time' => '23:59',
             ]);
         }
@@ -350,6 +464,32 @@ class RequestorController extends Controller
         $selectedEquipment = array_values(array_filter($validated['equipment'] ?? [], fn($item) => !empty($item)));
         $selectedQuantities = $validated['equipment_quantities'] ?? [];
         $quantities = [];
+
+        // Apply venue-specific equipment rules during edit
+        $selectedVenues = (array) ($validated['venue'] ?? []);
+        if (is_string($selectedVenues)) {
+            $selectedVenues = [$selectedVenues];
+        }
+        
+        if (!empty($selectedVenues)) {
+            $venueName = $selectedVenues[0];
+            
+            // Add default equipment required for this venue if not already selected
+            $defaultEquipment = VenueEquipmentPolicy::getDefaultEquipment($venueName);
+            foreach ($defaultEquipment as $requiredItem) {
+                if (!in_array($requiredItem, $selectedEquipment)) {
+                    $selectedEquipment[] = $requiredItem;
+                }
+            }
+            
+            // Check for incompatible equipment
+            $incompatible = VenueEquipmentPolicy::getIncompatibleEquipment($venueName);
+            $requestedIncompatible = array_intersect($selectedEquipment, $incompatible);
+            if (!empty($requestedIncompatible)) {
+                $incompatibleList = implode(', ', $requestedIncompatible);
+                return back()->withErrors(['equipment' => "{$venueName} does not support the following equipment: {$incompatibleList}. Please select a different venue or remove these items."])->withInput();
+            }
+        }
 
         foreach ($selectedEquipment as $itemName) {
             $quantity = (int) ($selectedQuantities[$itemName] ?? 0);
@@ -479,96 +619,32 @@ class RequestorController extends Controller
 
     private function checkEquipmentAvailabilityForEdit(string $itemName, int $quantity, Carbon $requestedStart, Carbon $requestedEnd, int $excludeRequestId): array
     {
-        $equipment = \App\Models\Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])->first();
-        $existingRequest = FacilityRequest::find($excludeRequestId);
-        $existingQuantity = (int) ($existingRequest?->getEquipmentQuantities()[$itemName] ?? 0);
-
-        if (!$equipment) {
+        if (!\App\Models\Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])->exists()) {
             return [
-                'available' => $existingQuantity >= $quantity,
-                'message' => $existingQuantity >= $quantity ? null : "Equipment '{$itemName}' not found.",
-                'available_qty' => max($existingQuantity, $quantity),
-                'total' => max($existingQuantity, $quantity),
+                'available' => true,
+                'message' => null,
+                'available_qty' => $quantity,
+                'total' => $quantity,
             ];
         }
 
-        if (! $equipment->is_active) {
-            return [
-                'available' => false,
-                'message' => "Equipment '{$itemName}' is currently unavailable.",
-                'available_qty' => 0,
-                'total' => (int) $equipment->quantity,
-            ];
-        }
-
-        $outstanding = 0;
-        $requests = FacilityRequest::where(function ($query) {
-            $query->where('status', 'approved')->orWhere(function ($pendingQuery) {
-                $pendingQuery->where('status', 'pending')
-                    ->where('venue_status', '!=', 'rejected')
-                    ->where('equipment_status', '!=', 'rejected');
-            });
-        })
-            ->where('id', '!=', $excludeRequestId)
-            ->where(function ($query) {
-                $query->where('equipment_returned_status', '!=', 'returned')
-                    ->where('equipment_returned_status', '!=', 'overdue');
-            })
-            ->whereHas('reservationSchedule', function ($query) use ($requestedStart, $requestedEnd) {
-                $query->where('start_datetime', '<', $requestedEnd)
-                    ->where('end_datetime', '>', $requestedStart);
-            })
-            ->get();
-
-        foreach ($requests as $request) {
-            $quantities = $request->getEquipmentQuantities();
-            if (isset($quantities[$itemName])) {
-                $outstanding += (int) $quantities[$itemName];
-            }
-        }
-
-        $available = max(0, (int) $equipment->quantity - $outstanding);
-
-        return [
-            'available' => $available >= $quantity,
-            'message' => $available >= $quantity ? null : "Sorry, only {$available} unit(s) of '{$itemName}' available for the selected window.",
-            'available_qty' => $available,
-            'total' => (int) $equipment->quantity,
-        ];
+        return $this->availabilityService->checkEquipmentAvailability(
+            $itemName,
+            $quantity,
+            $requestedStart,
+            $requestedEnd,
+            $excludeRequestId
+        );
     }
 
     private function checkVenueAvailabilityForEdit(string $venueName, Carbon $requestedStart, Carbon $requestedEnd, int $excludeRequestId): array
     {
-        $venue = \App\Models\Venue::where('name', $venueName)->first();
-        $venueRecord = $venue ?: null;
-
-        if ($venueRecord && (! $venueRecord->is_active || ($venueRecord->capacity !== null && $venueRecord->capacity <= 0))) {
-            return ['available' => false, 'message' => 'The selected venue is unavailable.', 'capacity' => $venueRecord->capacity];
-        }
-
-        $conflicts = FacilityRequest::where(fn ($query) => $query->matchesVenue($venueName))
-            ->where('id', '!=', $excludeRequestId)
-            ->where(function ($query) {
-                $query->where(function ($approvedQuery) {
-                    $approvedQuery->where('status', 'approved')
-                        ->where('equipment_returned_status', '!=', 'returned');
-                })->orWhere(function ($pendingQuery) {
-                    $pendingQuery->where('status', 'pending')
-                        ->where('venue_status', '!=', 'rejected')
-                        ->where('equipment_status', '!=', 'rejected');
-                });
-            })
-            ->whereHas('reservationSchedule', function ($query) use ($requestedStart, $requestedEnd) {
-                $query->where('start_datetime', '<', $requestedEnd)
-                    ->where('end_datetime', '>', $requestedStart);
-            })
-            ->exists();
-
-        return [
-            'available' => !$conflicts,
-            'message' => $conflicts ? 'The selected venue conflicts with an existing reservation.' : null,
-            'capacity' => $venueRecord?->capacity,
-        ];
+        return $this->availabilityService->checkVenueAvailability(
+            $venueName,
+            $requestedStart,
+            $requestedEnd,
+            $excludeRequestId
+        );
     }
 
     private function getEditableEquipmentQuantityLimit(FacilityRequest $facilityRequest, string $itemName): int
@@ -644,6 +720,10 @@ class RequestorController extends Controller
     {
         // Server-side guard: only registered requestors may submit requests
         $user = $this->currentUser();
+        if ($user && $user->is_active === false) {
+            Auth::logout();
+            return redirect()->route('login')->withErrors(['authorization' => 'This account is deactivated. Contact an administrator.']);
+        }
         if (!$user || !$user->isRequestee()) {
             return redirect()->route('login')->withErrors(['authorization' => 'Only registered requestors may submit facility/equipment requests.']);
         }
@@ -651,13 +731,17 @@ class RequestorController extends Controller
         // Build validation rules
         $hasDepartmentDirectory = College::query()->exists() && Department::query()->exists();
         $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Other'];
+        $hasSavedSignature = (bool) ($user->e_signature_file && Storage::disk('local')->exists('documents/e_signature/users/' . $user->e_signature_file));
+
         $rules = [
             'reservation_duration'  => ['nullable', 'in:specific_time,whole_day,whole-day,whole day'],
             'college_id'            => ['nullable', 'exists:colleges,id'],
             'department_id'         => ['nullable', 'exists:departments,id'],
             'department'            => ['nullable', 'string', 'max:100'],
             'organization_name'     => ['nullable', 'string', 'max:191'],
-            'requested_by_position' => ['required', 'in:' . implode(',', $positionOptions)],
+            'request_context'       => ['nullable', 'in:personal,student_organization,outside_organization'],
+            'student_organization_id' => ['nullable', 'integer', 'exists:student_organizations,id'],
+            'requested_by_position' => ['nullable', 'in:' . implode(',', $positionOptions)],
             'requested_by_position_other' => ['nullable', 'string', 'max:100', 'required_if:requested_by_position,Other'],
             'name_of_activity'      => 'required|string|max:200',
             'purpose'               => ['nullable', 'string', 'max:2000'],
@@ -667,14 +751,14 @@ class RequestorController extends Controller
             'start_time'            => 'required|date_format:H:i',
             'end_time'              => 'required|date_format:H:i',
             'venue'                 => ['required', 'string'],
-            'equipment'             => 'required|array|min:1',
+            'equipment'             => 'nullable|array',
             'equipment_quantities'  => 'nullable|array',
             'other_venue'           => 'nullable|string|max:200',
             'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
-            'priority'              => 'nullable|in:regular,institutional',
             'is_emergency'          => 'nullable|boolean',
-            // E-signature is required for all requestors
-            'e_signature_file'      => 'required|file|mimes:jpeg,jpg,png|max:10240',
+            'e_signature_file'      => $hasSavedSignature
+                ? 'nullable|file|mimes:jpeg,jpg,png|max:10240'
+                : 'required|file|mimes:jpeg,jpg,png|max:10240',
         ];
 
         if (in_array($user->requestor_type, ['student', 'faculty'], true)) {
@@ -685,17 +769,30 @@ class RequestorController extends Controller
                 $rules['college_id'][] = 'required_without:department';
                 $rules['department_id'][] = 'required_without:department';
             }
-        } elseif ($user->requestor_type === 'outsider') {
+        } elseif (in_array($user->requestor_type, ['outsider', 'student_organization'], true)) {
             $rules['organization_name'][] = $hasDepartmentDirectory ? 'required' : 'required_without:department';
         }
 
-        // Conditional document requirements based on requestor type
-        if (in_array($user->requestor_type, ['student', 'faculty'], true)) {
-            // Student and Faculty always require Activity Proposal
+        $hasExplicitRequestContext = $request->filled('request_context');
+        $requestContext = $request->input('request_context') ?: match ($user->requestor_type) {
+            'student', 'faculty' => 'personal',
+            default => 'outside_organization',
+        };
+        $request->merge(['request_context' => $requestContext]);
+        $rules['request_context'] = match ($user->requestor_type) {
+            'student' => ['required', 'in:personal,student_organization'],
+            'faculty' => ['required', 'in:personal'],
+            default => ['required', 'in:personal,outside_organization'],
+        };
+        if ($user->isStudent() && $requestContext === 'student_organization') {
+            $rules['student_organization_id'][] = 'required';
+        }
+
+        // Students and faculty personal requests use proposal documents; outside/organizational requests use receipts.
+        if (($user->isStudent() && $requestContext !== 'outside_organization') || ($user->isFaculty() && $requestContext === 'personal')) {
             $rules['activity_proposal_file'] = 'required|file|mimes:pdf,jpeg,jpg,png|max:10240';
             $rules['igp_receipt_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
-        } elseif ($user->requestor_type === 'outsider') {
-            // External/Organization requires IGP Receipt
+        } else {
             $rules['igp_receipt_file'] = 'required|file|mimes:pdf,jpeg,jpg,png|max:10240';
             $rules['activity_proposal_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
         }
@@ -709,17 +806,56 @@ class RequestorController extends Controller
         $reservationDuration = strtolower((string) $request->input('reservation_duration', 'specific_time'));
         if (in_array($reservationDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
             $request->merge([
-                'start_time' => '00:00',
+                'start_time' => '08:00',
                 'end_time' => '23:59',
             ]);
         }
 
         $validated = $request->validate($rules);
-        $validated['requested_by_position'] = $validated['requested_by_position'] === 'Other'
-            ? trim((string) ($validated['requested_by_position_other'] ?? ''))
-            : $validated['requested_by_position'];
-        if ($validated['requested_by_position'] === '') {
-            return back()->withErrors(['requested_by_position_other' => 'Please enter your position.'])->withInput();
+
+        $hasSavedSignature = (bool) ($user->e_signature_file && Storage::disk('local')->exists('documents/e_signature/users/' . $user->e_signature_file));
+        if (! $request->hasFile('e_signature_file') && ! $hasSavedSignature) {
+            return back()->withErrors(['e_signature_file' => 'The e signature file field is required.'])->withInput();
+        }
+
+        if ($user->isStudent()) {
+            $trustedStudentOrganization = $user->studentOrganizations()
+                ->whereKey($validated['student_organization_id'] ?? null)
+                ->first();
+
+            if (! $trustedStudentOrganization) {
+                $trustedStudentOrganization = $user->studentOrganizations()->first();
+            }
+
+            if ($validated['request_context'] === 'student_organization' && ! $trustedStudentOrganization) {
+                return back()->withErrors(['student_organization_id' => 'You may request only for an active organization membership.'])->withInput();
+            }
+
+            if ($trustedStudentOrganization) {
+                $validated['student_organization_id'] = $trustedStudentOrganization->id;
+                $validated['organization_name'] = $trustedStudentOrganization->name;
+            }
+        }
+        // Position must come from the authenticated user account only, not from user input.
+        // If a custom profile value is stored, normalize it to a supported request position and keep the custom text as the "Other" detail.
+        $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Other'];
+        $profilePosition = trim((string) ($user->position ?? ''));
+        $trustedPosition = $profilePosition !== '' && in_array($profilePosition, $positionOptions, true)
+            ? $profilePosition
+            : (
+                $profilePosition !== ''
+                    ? 'Other'
+                    : match ($user->requestor_type) {
+                        'student' => 'Student',
+                        'faculty' => 'Faculty',
+                        'student_organization' => 'Student Organization',
+                        'outsider' => 'External Partner',
+                        default => 'Requestor',
+                    }
+            );
+        $validated['requested_by_position'] = $trustedPosition;
+        if ($trustedPosition === 'Other' && $profilePosition !== '') {
+            $validated['requested_by_position_other'] = $profilePosition;
         }
         $validated['purpose'] = trim((string) ($validated['purpose'] ?? $validated['name_of_activity']));
 
@@ -740,10 +876,20 @@ class RequestorController extends Controller
             if ($selectedDepartment) {
                 $validated['department'] = $selectedDepartment->name;
             }
-        } elseif ($user->requestor_type === 'outsider') {
-            $validated['department'] = trim((string) ($validated['organization_name'] ?? $validated['department'] ?? ''));
-            if ($validated['department'] === '') {
-                return back()->withErrors(['organization_name' => 'Please enter your organization name.'])->withInput();
+        } elseif (in_array($user->requestor_type, ['outsider', 'student_organization'], true)) {
+            $trustedOrganization = trim((string) ($user->office_or_organization ?? ''));
+            if ($trustedOrganization === '') {
+                return back()->withErrors(['organization_name' => 'Please update your profile organization/office before submitting this request.'])->withInput();
+            }
+            $validated['department'] = $trustedOrganization;
+            $validated['organization_name'] = $trustedOrganization;
+        }
+
+        if ($user->requestor_type === 'student') {
+            $trustedStudentOrganization = $user->studentOrganizations()->first();
+            $validated['organization_name'] = $trustedStudentOrganization?->name ?? trim((string) ($validated['organization_name'] ?? $validated['department'] ?? ''));
+            if ($trustedStudentOrganization) {
+                $validated['student_organization_id'] = $trustedStudentOrganization->id;
             }
         }
 
@@ -764,10 +910,6 @@ class RequestorController extends Controller
 
         if (empty($request->input('venue'))) {
             return back()->withErrors(['venue' => 'Please select a venue.'])->withInput();
-        }
-
-        if (empty($request->input('equipment', []))) {
-            return back()->withErrors(['equipment' => 'Please select at least one equipment item.'])->withInput();
         }
 
         $selectedQuantities = $request->input('equipment_quantities', []);
@@ -792,8 +934,33 @@ class RequestorController extends Controller
         $submittedVenue = trim((string) $submittedVenue);
         $allowedVenues = array_merge(self::VENUE_OPTIONS, ['Others (specify)']);
         $venue = in_array($submittedVenue, $allowedVenues, true) ? [$submittedVenue] : [];
-        $equipment = array_values(array_filter($request->input('equipment', []),
-                        fn($e) => in_array($e, self::EQUIPMENT_OPTIONS)));
+        
+        // Get equipment from request and filter against the canonical Phase 8 names while keeping legacy aliases supported.
+        $requestedEquipment = self::normalizeEquipmentSelection(array_values(array_filter($request->input('equipment', []), fn($e) => is_string($e) && trim($e) !== '')));
+        $requestedEquipment = array_values(array_filter($requestedEquipment, fn ($item) => in_array($item, self::EQUIPMENT_OPTIONS, true)));
+
+        // Apply venue-specific equipment rules
+        if (!empty($venue)) {
+            $venueName = $venue[0];
+            
+            // Add default equipment required for this venue if not already selected
+            $defaultEquipment = VenueEquipmentPolicy::getDefaultEquipment($venueName);
+            foreach ($defaultEquipment as $requiredItem) {
+                if (!in_array($requiredItem, $requestedEquipment)) {
+                    $requestedEquipment[] = $requiredItem;
+                }
+            }
+            
+            // Check for incompatible equipment
+            $incompatible = VenueEquipmentPolicy::getIncompatibleEquipment($venueName);
+            $requestedIncompatible = array_intersect($requestedEquipment, $incompatible);
+            if (!empty($requestedIncompatible)) {
+                $incompatibleList = implode(', ', $requestedIncompatible);
+                return back()->withErrors(['equipment' => "{$venueName} does not support the following equipment: {$incompatibleList}. Please select a different venue or remove these items."])->withInput();
+            }
+        }
+        
+        $equipment = $requestedEquipment;
  
         $validated['reservation_duration'] = strtolower((string) ($validated['reservation_duration'] ?? 'specific_time'));
         $scheduleRange = FacilityRequest::resolveReservationDuration(
@@ -830,7 +997,7 @@ class RequestorController extends Controller
             $qty = (int) ($request->input('equipment_quantities')[$item] ?? 1);
             $quantities[$item] = $qty;
         }
- 
+
         // ✅ CHECK AVAILABILITY ONLY — do NOT reserve yet (deduct upon approval)
         foreach ($quantities as $itemName => $qty) {
             $availability = $this->availabilityService->checkEquipmentAvailability($itemName, $qty, $startDateTime, $endDateTime);
@@ -862,15 +1029,6 @@ class RequestorController extends Controller
             $selectedVenues = array_values($venue);
             $venueCapacityMap = [];
             $hasUnknownCapacity = false;
-            $defaultCapacities = [
-                'Conference Hall & Interaction Center (CHIC)' => 150,
-                'Gymnasium' => 500,
-                'Balay Alumni' => 200,
-                'Covered Court' => 300,
-                'Oval Grounds' => 1000,
-                'Volleyball Court' => 100,
-            ];
-
             foreach ($selectedVenues as $venueName) {
                 if ($venueName === 'Others (specify)') {
                     $hasUnknownCapacity = true;
@@ -880,10 +1038,8 @@ class RequestorController extends Controller
                 $venueRecord = \App\Models\Venue::where('name', $venueName)->first();
                 $capacity = null;
 
-                if ($venueRecord && $venueRecord->capacity) {
+                if ($venueRecord && $venueRecord->capacity !== null) {
                     $capacity = (int) $venueRecord->capacity;
-                } elseif (isset($defaultCapacities[$venueName])) {
-                    $capacity = $defaultCapacities[$venueName];
                 }
 
                 if ($capacity === null) {
@@ -900,21 +1056,6 @@ class RequestorController extends Controller
                     $capacityWarning = "The combined capacity of your selected venues is {$totalCapacity}, which is insufficient for {$participants} participants. The request will still be submitted for review.";
                 }
 
-                arsort($venueCapacityMap);
-                $runningCapacity = 0;
-                $minimumVenuesRequired = 0;
-
-                foreach ($venueCapacityMap as $capacity) {
-                    $runningCapacity += $capacity;
-                    $minimumVenuesRequired++;
-                    if ($runningCapacity >= $participants) {
-                        break;
-                    }
-                }
-
-                if ($minimumVenuesRequired < count($selectedVenues) && $capacityWarning === null) {
-                    $capacityWarning = 'You are attempting to reserve multiple venues, but your anticipated participants fit into fewer locations. The request will still be submitted for review.';
-                }
             }
         }
  
@@ -983,7 +1124,7 @@ class RequestorController extends Controller
             }
         }
 
-        // Handle e-signature upload (Required for all)
+        // Handle e-signature upload or private snapshot from the saved account signature.
         if ($request->hasFile('e_signature_file')) {
             $file = $request->file('e_signature_file');
             $result = $documentUploadService->uploadDocument($file, 'e_signature', $controlNumber);
@@ -992,9 +1133,25 @@ class RequestorController extends Controller
                 $documentMetadata['e_signature'] = [
                     'uploaded_at' => now()->toDateTimeString(),
                     'original_name' => $file->getClientOriginalName(),
+                    'source' => 'request_upload',
                 ];
             } else {
                 return back()->withErrors(['e_signature_file' => $result['error']])->withInput();
+            }
+        } elseif ($user->e_signature_file) {
+            $savedSignaturePath = 'documents/e_signature/users/' . $user->e_signature_file;
+            if (Storage::disk('local')->exists($savedSignaturePath)) {
+                $sourcePath = Storage::disk('local')->path($savedSignaturePath);
+                $extension = strtolower(pathinfo($user->e_signature_file, PATHINFO_EXTENSION) ?: 'png');
+                $snapshotFilename = $controlNumber . '_request_signature_' . now()->format('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
+                Storage::disk('local')->makeDirectory('documents/e_signature');
+                Storage::disk('local')->put('documents/e_signature/' . $snapshotFilename, file_get_contents($sourcePath));
+                $eSignatureFileName = $snapshotFilename;
+                $documentMetadata['e_signature'] = [
+                    'uploaded_at' => now()->toDateTimeString(),
+                    'original_name' => $user->e_signature_file,
+                    'source' => 'saved_account_signature',
+                ];
             }
         }
 
@@ -1004,6 +1161,9 @@ class RequestorController extends Controller
             'control_number'           => $controlNumber,
             'date_requested'           => now()->toDateString(),
             'department'               => $validated['department'],
+            'organization_name'        => $validated['organization_name'] ?? null,
+            'request_context'          => $validated['request_context'],
+            'student_organization_id'  => $validated['student_organization_id'] ?? null,
             'requested_by_position'    => $validated['requested_by_position'],
             'name_of_activity'         => $validated['name_of_activity'],
             'purpose'                  => $validated['purpose'],
@@ -1021,8 +1181,11 @@ class RequestorController extends Controller
             'status'                   => 'pending',
             'venue_status'             => 'pending',
             'equipment_status'         => 'pending',
-            'priority'                 => $validated['priority'] ?? 'regular',
+            'priority'                 => 'regular',
+            'requested_priority'       => null,
+            'requested_is_emergency'   => $validated['is_emergency'] ?? false,
             'is_emergency'             => $validated['is_emergency'] ?? false,
+            'emergency_justification'  => $validated['emergency_justification'] ?? null,
             'proposal_file'            => $proposalFileName,
             'activity_proposal_file'   => $activityProposalFileName,
             'igp_receipt_file'         => $igpReceiptFileName,
@@ -1138,7 +1301,11 @@ class RequestorController extends Controller
             // Fire Laravel event for broadcasting (include custodians)
             \App\Events\RequestCancelled::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, $custodianIds);
 
-            $fr->delete();
+            $fr->update([
+                'status' => 'cancelled',
+                'venue_status' => 'cancelled',
+                'equipment_status' => 'cancelled',
+            ]);
 
             DB::commit();
 
@@ -1154,7 +1321,7 @@ class RequestorController extends Controller
     {
         $request   = FacilityRequest::with(['requestVenues', 'requestEquipment', 'reservationSchedule'])->findOrFail($id);
         $this->authorize('view', $request);
-        $equipment = \App\Models\Equipment::where('is_active', true)->get();
+        $equipment = \App\Models\Equipment::where('is_active', true)->whereNotIn('id', [2, 10])->get();
         $assignedCustodians = \App\Models\User::whereIn('id', $request->getAssignedEquipmentCustodianIds())->get();
         $custodianStatuses = $request->equipment_custodian_statuses ?? [];
         /** @var \App\Models\User|null $currentUser */

@@ -54,6 +54,77 @@ class SecurityHardeningTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_admin_cannot_record_equipment_return(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $custodian = User::factory()->create(['role' => 'custodian-equipment']);
+        $requester = User::factory()->create(['role' => 'requestor']);
+
+        Equipment::create([
+            'name' => 'Sound System',
+            'custodian_id' => $custodian->id,
+            'quantity' => 2,
+            'quantity_available' => 2,
+        ]);
+
+        $request = $this->facilityRequest($requester, [], ['Sound System' => 1], [
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+            'start_date' => now()->subDay()->toDateString(),
+            'end_date' => now()->subDay()->toDateString(),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('custodian.return', $request), [
+                'equipment' => ['Sound System' => 1],
+                'damaged_quantity' => ['Sound System' => 0],
+                'missing_quantity' => ['Sound System' => 0],
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_equipment_return_records_damaged_missing_and_marks_fulfilled(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-equipment']);
+        $requester = User::factory()->create(['role' => 'requestor']);
+        $equipment = Equipment::create([
+            'name' => 'Sound System',
+            'custodian_id' => $custodian->id,
+            'quantity' => 3,
+            'quantity_available' => 2,
+        ]);
+
+        $request = $this->facilityRequest($requester, [], ['Sound System' => 2], [
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+            'start_date' => now()->subDay()->toDateString(),
+            'end_date' => now()->subDay()->toDateString(),
+        ]);
+
+        $this->actingAs($custodian)
+            ->post(route('custodian.update'), [
+                'id' => $request->id,
+                'action' => 'return',
+                'equipment' => ['Sound System' => 2],
+                'damaged_quantity' => ['Sound System' => 1],
+                'missing_quantity' => ['Sound System' => 0],
+                'damage_remarks' => ['Sound System' => 'Broken cable'],
+                'notes' => 'Returned for final checking',
+            ])
+            ->assertRedirect();
+
+        $request->refresh();
+        $equipment->refresh();
+
+        $this->assertSame('fulfilled', $request->equipment_returned_status);
+        $this->assertSame(1, $request->equipment_return_damaged_quantity ?? 0);
+        $this->assertSame('Broken cable', $request->equipment_return_damage_remarks ?? '');
+        $this->assertSame(0, $request->equipment_return_missing_quantity ?? 0);
+        $this->assertSame(2, $equipment->quantity_available);
+    }
+
     public function test_requestor_cannot_view_another_requestors_request_or_printout(): void
     {
         $owner = User::factory()->create(['role' => 'requestor']);
@@ -85,7 +156,7 @@ class SecurityHardeningTest extends TestCase
             ->assertSee('COPY 2');
     }
 
-    public function test_duplicate_api_equipment_approval_does_not_reserve_inventory_twice(): void
+    public function test_equipment_custodian_approves_before_admin_final_approval(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $custodian = User::factory()->create(['role' => 'custodian-equipment']);
@@ -95,14 +166,20 @@ class SecurityHardeningTest extends TestCase
             'quantity' => 2,
             'quantity_available' => 2,
         ]);
-        $request = $this->facilityRequest(User::factory()->create(['role' => 'requestor']), [], ['Sound System' => 1]);
+        $request = $this->facilityRequest(User::factory()->create(['role' => 'requestor']), [], ['Sound System' => 1], [
+            'venue_status' => 'approved',
+        ]);
 
-        Sanctum::actingAs($admin);
+        Sanctum::actingAs($custodian);
 
         $this->postJson("/api/facility-requests/{$request->id}/approve", ['type' => 'equipment'])
             ->assertOk();
         $this->postJson("/api/facility-requests/{$request->id}/approve", ['type' => 'equipment'])
             ->assertStatus(409);
+
+        $this->actingAs($admin)
+            ->post(route('request.supply.final-approval', $request))
+            ->assertRedirect();
 
         $this->assertSame(1, $equipment->fresh()->quantity_available);
         $this->assertSame(1, $request->fresh()->histories()->where('action', 'approved')->count());
@@ -110,7 +187,6 @@ class SecurityHardeningTest extends TestCase
 
     public function test_duplicate_api_equipment_return_does_not_restore_inventory_twice(): void
     {
-        $admin = User::factory()->create(['role' => 'admin']);
         $custodian = User::factory()->create(['role' => 'custodian-equipment']);
         $equipment = Equipment::create([
             'name' => 'Sound System',
@@ -124,7 +200,7 @@ class SecurityHardeningTest extends TestCase
             'equipment_status' => 'approved',
         ]);
 
-        Sanctum::actingAs($admin);
+        Sanctum::actingAs($custodian);
 
         $this->postJson("/api/facility-requests/{$request->id}/return-equipment", ['returned_items' => ['Sound System' => 1]])
             ->assertOk();
@@ -136,6 +212,24 @@ class SecurityHardeningTest extends TestCase
 
         $this->assertSame(1, $equipment->fresh()->quantity_available);
         $this->assertSame(1, $request->fresh()->histories()->where('action', 'equipment_returned')->count());
+    }
+
+    public function test_api_delete_retains_request_as_cancelled(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor']);
+        $request = $this->facilityRequest($requester, [], []);
+
+        Sanctum::actingAs($requester);
+
+        $this->deleteJson("/api/facility-requests/{$request->id}")
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('facility_requests', [
+            'id' => $request->id,
+            'status' => 'cancelled',
+        ]);
+        $this->assertNull($request->fresh()->deleted_at);
     }
 
     private function facilityRequest(User $requester, array $venues, array $equipment, array $overrides = []): FacilityRequest

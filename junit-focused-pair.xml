@@ -1,0 +1,982 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="CLI Arguments" tests="16" assertions="26" errors="2" failures="12" skipped="0" time="5.303005">
+    <testsuite name="Tests\Feature\AdminUserManagementTest" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" tests="14" assertions="17" errors="2" failures="11" skipped="0" time="5.216789">
+      <testcase name="test_combined_admin_role_can_access_user_management" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="22" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="2" time="3.645627">
+        <error type="Illuminate\Database\QueryException">Tests\Feature\AdminUserManagementTest::test_combined_admin_role_can_access_user_management&#13;
+Illuminate\Database\QueryException: SQLSTATE[01000]: Warning: 1265 Data truncated for column 'role' at row 1 (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: pitfr, SQL: insert into `users` (`name`, `username`, `password`, `role`, `requestor_type`, `department`, `updated_at`, `created_at`) values (Jensen Baumbach, eichmann.jessy, $2y$12$RWtkkABvkJs8Cga7q3GzA.8oWPJ2zREDVJg3xkkIYc2TaU30TQ7.K, supply_office, student, quo, 2026-08-30 22:59:23, 2026-08-30 22:59:23))
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:42
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Query\Processors\MySqlProcessor.php:35
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Query\Builder.php:4170
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:2237
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1436
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1401
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1240
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:370
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Collections\Traits\EnumeratesValues.php:275
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:365
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:321
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:315
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:257
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:34</error>
+      </testcase>
+      <testcase name="test_admin_can_update_and_delete_a_user" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="47" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="1" time="0.578739">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\AdminUserManagementTest::test_admin_can_update_and_delete_a_user&#13;
+Expected response status code [201, 301, 302, 303, 307, 308] but received 419.
+Failed asserting that false is true.
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:200
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:79</failure>
+      </testcase>
+      <testcase name="test_admin_can_create_all_supported_account_types" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="92" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="1" time="0.074817">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\AdminUserManagementTest::test_admin_can_create_all_supported_account_types&#13;
+Expected response status code [201, 301, 302, 303, 307, 308] but received 419.
+Failed asserting that false is true.
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:200
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:111</failure>
+      </testcase>
+      <testcase name="test_admin_can_create_student_requestor_with_position_and_organization_membership" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="123" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="2" time="0.106497">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\AdminUserManagementTest::test_admin_can_create_student_requestor_with_position_and_organization_membership&#13;
+Failed asserting that two strings are equal.&#13;
+&#13;
+The following errors occurred during the last request:
+
+The selected college id is invalid.&#13;
+The selected department id is invalid.&#13;
+
+--- Expected
++++ Actual
+@@ @@
+-'http://127.0.0.1:8000/admin/users'
++'http://127.0.0.1:8000'
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:432
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:206
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:149</failure>
+      </testcase>
+      <testcase name="test_student_requestor_source_of_truth_uses_registered_organization_in_request_flow" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="160" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="0" time="0.062505">
+        <error type="Illuminate\Database\QueryException">Tests\Feature\AdminUserManagementTest::test_student_requestor_source_of_truth_uses_registered_organization_in_request_flow&#13;
+Illuminate\Database\QueryException: SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`pitfr`.`users`, CONSTRAINT `users_college_id_foreign` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`id`) ON DELETE SET NULL) (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: pitfr, SQL: insert into `users` (`name`, `username`, `password`, `role`, `requestor_type`, `department`, `position`, `department_id`, `college_id`, `updated_at`, `created_at`) values (Student Org Member, marilie.kilback, $2y$12$RWtkkABvkJs8Cga7q3GzA.8oWPJ2zREDVJg3xkkIYc2TaU30TQ7.K, requestor, student, aut, Student Council Officer, 1, 1, 2026-08-30 22:59:24, 2026-08-30 22:59:24))
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:42
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Query\Processors\MySqlProcessor.php:35
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Query\Builder.php:4170
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Builder.php:2237
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1436
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1401
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Model.php:1240
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:370
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Collections\Traits\EnumeratesValues.php:275
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:365
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:321
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:315
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Database\Eloquent\Factories\Factory.php:257
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:163</error>
+      </testcase>
+      <testcase name="test_non_admin_roles_cannot_create_accounts" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="193" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="1" time="0.059372">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\AdminUserManagementTest::test_non_admin_roles_cannot_create_accounts&#13;
+Expected response status code [403] but received 419.
+Failed asserting that 419 is identical to 403.
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:175
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\Concerns\AssertsStatusCodes.php:141
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:208</failure>
+      </testcase>
+      <testcase name="test_duplicate_email_is_rejected" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="212" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="1" time="0.084460">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\AdminUserManagementTest::test_duplicate_email_is_rejected&#13;
+Session is missing expected key [errors].
+Failed asserting that false is true.
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:1547
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:1634
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:224</failure>
+      </testcase>
+      <testcase name="test_faculty_creation_requires_faculty_id" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="227" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="1" time="0.070009">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\AdminUserManagementTest::test_faculty_creation_requires_faculty_id&#13;
+Session is missing expected key [errors].
+Failed asserting that false is true.
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:1547
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:1634
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:240</failure>
+      </testcase>
+      <testcase name="test_admin_cannot_provision_student_organization_account_type" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="243" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="1" time="0.065814">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\AdminUserManagementTest::test_admin_cannot_provision_student_organization_account_type&#13;
+Session is missing expected key [errors].
+Failed asserting that false is true.
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:1547
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:1634
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:256</failure>
+      </testcase>
+      <testcase name="test_admin_cannot_deactivate_or_demote_themselves" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="259" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="1" time="0.067925">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\AdminUserManagementTest::test_admin_cannot_deactivate_or_demote_themselves&#13;
+Expected response status code [201, 301, 302, 303, 307, 308] but received 419.
+Failed asserting that false is true.
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:200
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:277</failure>
+      </testcase>
+      <testcase name="test_admin_cannot_promote_anyone_to_admin_role" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="289" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="1" time="0.066550">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\AdminUserManagementTest::test_admin_cannot_promote_anyone_to_admin_role&#13;
+Expected response status code [201, 301, 302, 303, 307, 308] but received 419.
+Failed asserting that false is true.
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:200
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:306</failure>
+      </testcase>
+      <testcase name="test_user_management_actions_are_logged_for_admin_audit" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="312" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="1" time="0.151983">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\AdminUserManagementTest::test_user_management_actions_are_logged_for_admin_audit&#13;
+Failed asserting that a row in the table [audit_logs] matches the attributes {
+    "actor_id": 15,
+    "target_user_id": 16,
+    "action": "user_updated"
+}.
+
+The table is empty.
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithDatabase.php:43
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:330</failure>
+      </testcase>
+      <testcase name="test_admin_can_reactivate_deactivated_user" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="337" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="1" time="0.097742">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\AdminUserManagementTest::test_admin_can_reactivate_deactivated_user&#13;
+Expected response status code [201, 301, 302, 303, 307, 308] but received 419.
+Failed asserting that false is true.
+&#13;
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponseAssert.php:45
+C:\xampp\htdocs\pitfr\vendor\laravel\framework\src\Illuminate\Testing\TestResponse.php:200
+C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php:349</failure>
+      </testcase>
+      <testcase name="test_admin_user_search_filters_by_name_only" file="C:\xampp\htdocs\pitfr\tests\Feature\AdminUserManagementTest.php" line="354" class="Tests\Feature\AdminUserManagementTest" classname="Tests.Feature.AdminUserManagementTest" assertions="3" time="0.084749"/>
+    </testsuite>
+    <testsuite name="Tests\Feature\RequestFormFeedbackTest" file="C:\xampp\htdocs\pitfr\tests\Feature\RequestFormFeedbackTest.php" tests="2" assertions="9" errors="0" failures="1" skipped="0" time="0.086217">
+      <testcase name="test_request_form_shows_outside_organization_guidance_and_summary" file="C:\xampp\htdocs\pitfr\tests\Feature\RequestFormFeedbackTest.php" line="10" class="Tests\Feature\RequestFormFeedbackTest" classname="Tests.Feature.RequestFormFeedbackTest" assertions="7" time="0.050756"/>
+      <testcase name="test_request_form_shows_default_equipment_options_when_database_is_empty" file="C:\xampp\htdocs\pitfr\tests\Feature\RequestFormFeedbackTest.php" line="37" class="Tests\Feature\RequestFormFeedbackTest" classname="Tests.Feature.RequestFormFeedbackTest" assertions="2" time="0.035460">
+        <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\RequestFormFeedbackTest::test_request_form_shows_default_equipment_options_when_database_is_empty&#13;
+Failed asserting that '&lt;form method="POST" action="http://127.0.0.1:8000/requestor/store" id="request-form" enctype="multipart/form-data" data-show-loading="true" data-equipment-availability-url="http://127.0.0.1:8000/requestor/equipment/availability" data-conflict-check-url="http://127.0.0.1:8000/calendar/check-conflicts" data-is-student="0" data-requestor-type="" data-venue-capacities="[]"&gt;\n
+    &lt;input type="hidden" name="_token" value="" autocomplete="off"&gt;\n
+&lt;div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]"&gt;\n
+    &lt;section class="bg-white p-4 sm:p-6 lg:p-8"&gt;\n
+        &lt;div class="mx-auto w-full max-w-none md:max-w-6xl"&gt;\n
+            &lt;div class="mb-6 flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-5 shadow-sm sm:flex-row sm:items-start sm:justify-between sm:px-6 md:mb-8 lg:px-8"&gt;\n
+                &lt;div class="max-w-3xl"&gt;\n
+                    &lt;p class="text-xs font-semibold uppercase tracking-[0.32em] text-emerald-600"&gt;Official request form&lt;/p&gt;\n
+                    &lt;h2 class="mt-2 text-2xl font-semibold text-slate-950"&gt;Request for the Use of Facility and Equipment&lt;/h2&gt;\n
+                    &lt;p class="mt-3 text-sm leading-6 text-slate-600"&gt;Please complete all required fields before submitting your request. Fields marked with (*) are required.&lt;/p&gt;\n
+                &lt;/div&gt;\n
+                &lt;div class="flex items-center sm:justify-end"&gt;\n
+                    &lt;span id="draft-status" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm"&gt;\n
+                        &lt;span class="h-2 w-2 rounded-full bg-amber-400 animate-pulse"&gt;&lt;/span&gt;\n
+                        Draft autosave\n
+                    &lt;/span&gt;\n
+                &lt;/div&gt;\n
+            &lt;/div&gt;\n
+\n
+            &lt;div class="mb-6"&gt;\n
+                &lt;p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 mb-3"&gt;Request Progress&lt;/p&gt;\n
+                &lt;div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"&gt;\n
+                    &lt;div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3"&gt;\n
+                        &lt;p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700"&gt;Step 1&lt;/p&gt;\n
+                        &lt;p class="mt-1 text-sm font-semibold text-slate-900"&gt;Request Details&lt;/p&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"&gt;\n
+                        &lt;p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500"&gt;Step 2&lt;/p&gt;\n
+                        &lt;p class="mt-1 text-sm font-semibold text-slate-900"&gt;Venue &amp; Schedule&lt;/p&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"&gt;\n
+                        &lt;p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500"&gt;Step 3&lt;/p&gt;\n
+                        &lt;p class="mt-1 text-sm font-semibold text-slate-900"&gt;Equipment&lt;/p&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"&gt;\n
+                        &lt;p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500"&gt;Step 4&lt;/p&gt;\n
+                        &lt;p class="mt-1 text-sm font-semibold text-slate-900"&gt;Review &amp; Submit&lt;/p&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/div&gt;\n
+            &lt;/div&gt;\n
+\n
+            &lt;div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-6 md:rounded-[28px] md:p-8 lg:p-10"&gt;\n
+                &lt;div class="space-y-8"&gt;\n
+\n
+                    \n
+            &lt;div class="space-y-9"&gt;\n
+                &lt;section class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-6 md:rounded-[44px] md:p-8 lg:p-10"&gt;\n
+                    &lt;div class="grid gap-4 grid-cols-1 md:grid-cols-3 md:gap-6"&gt;\n
+                        &lt;div class="flex items-center justify-center rounded-[24px] border border-slate-200 bg-white p-4"&gt;\n
+                            &lt;img src="http://127.0.0.1:8000/images/PIT-LOGO.png" alt="PIT Logo" class="h-20 w-20 rounded-full border border-slate-200 bg-slate-100 object-cover p-1 shadow-sm"&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div class="space-y-2 rounded-[24px] border border-slate-200 bg-white p-4 text-center"&gt;\n
+                            &lt;p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500"&gt;Official Request Form&lt;/p&gt;\n
+                            &lt;p class="mt-1 text-base font-bold uppercase tracking-[0.06em] text-slate-800"&gt;Palompon Institute of Technology&lt;/p&gt;\n
+                            &lt;p class="text-[11px] uppercase tracking-[0.16em] text-slate-500"&gt;Quality Management System&lt;/p&gt;\n
+                            &lt;p class="mt-2 border-t border-slate-200 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700"&gt;Request for the Use of Facility/Equipment&lt;/p&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div class="space-y-3 rounded-[24px] border border-slate-200 bg-white p-4 text-xs text-slate-600"&gt;\n
+                            &lt;p&gt;Ref. Code: &lt;span class="font-semibold text-slate-800"&gt;PIT-PSMO-F-05-3.7-08&lt;/span&gt;&lt;/p&gt;\n
+                            &lt;p&gt;Rev. No: &lt;span class="font-semibold text-slate-800"&gt;00&lt;/span&gt;&lt;/p&gt;\n
+                            &lt;div class="mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 text-center text-xs shadow-sm"&gt;\n
+                                &lt;p class="font-semibold text-slate-800"&gt;TUV NORD&lt;/p&gt;\n
+                                &lt;p class="text-slate-500"&gt;ISO 9001:2015 Certified&lt;/p&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/section&gt;\n
+\n
+                &lt;section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm"&gt;\n
+                    &lt;div class="mb-5 border-b border-slate-200 pb-4"&gt;\n
+                        &lt;p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500"&gt;Section I. Requestor Information&lt;/p&gt;\n
+                        &lt;p class="mt-1 text-sm text-slate-500"&gt;Provide the requesting office and the reference details for this submission.&lt;/p&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6"&gt;\n
+                                                    &lt;div class="space-y-3"&gt;\n
+                                &lt;label for="organization_name" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Organization Name &lt;span class="text-red-500"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+                                &lt;input id="organization_name" type="text" name="organization_name" value="" readonly required class="w-full rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white "&gt;\n
+                                                            &lt;/div&gt;\n
+                                                &lt;div class="grid gap-4 sm:grid-cols-2 sm:gap-5"&gt;\n
+                            &lt;div class="space-y-3"&gt;\n
+                                &lt;p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Control Number&lt;/p&gt;\n
+                                &lt;input type="text" value="FER-2026-001" readonly class="w-full rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-600 cursor-not-allowed"&gt;\n
+                            &lt;/div&gt;\n
+                            &lt;div class="space-y-3"&gt;\n
+                                &lt;p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Date Requested&lt;/p&gt;\n
+                                &lt;input type="text" value="08/30/2026" readonly class="w-full rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-600 cursor-not-allowed"&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/section&gt;\n
+\n
+                &lt;section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm"&gt;\n
+                    &lt;div class="mb-5 border-b border-slate-200 pb-4"&gt;\n
+                        &lt;p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500"&gt;Section II. Activity Details&lt;/p&gt;\n
+                        &lt;p class="mt-1 text-sm text-slate-500"&gt;State the purpose of the activity, expected attendance, and requested dates and times.&lt;/p&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="space-y-4 md:space-y-6"&gt;\n
+                        &lt;div&gt;\n
+                            &lt;label for="name_of_activity" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Activity Name &lt;span class="text-red-500"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+                            &lt;input id="name_of_activity" type="text" name="name_of_activity" required value="" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white " aria-invalid="false"&gt;\n
+                                                    &lt;/div&gt;\n
+                        &lt;div&gt;\n
+                            &lt;label for="purpose" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Purpose &lt;span class="text-red-500"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+                            &lt;textarea id="purpose" name="purpose" rows="3" required class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white "&gt;&lt;/textarea&gt;\n
+                                                    &lt;/div&gt;\n
+                        &lt;div class="grid gap-4 md:grid-cols-3 md:gap-5"&gt;\n
+                            &lt;div&gt;\n
+                                &lt;label for="start_date" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Start Date &lt;span class="text-red-500"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+                                &lt;input id="start_date" type="date" name="start_date" required min="2026-08-30" value="" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white " aria-invalid="false"&gt;\n
+                                                            &lt;/div&gt;\n
+                            &lt;div&gt;\n
+                                &lt;label for="end_date" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;End Date (inclusive) &lt;span class="text-red-500"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+                                &lt;input id="end_date" type="date" name="end_date" required min="2026-08-30" value="" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white " aria-invalid="false"&gt;\n
+                                                                &lt;p id="overnight-hint" class="mt-2 text-xs text-emerald-600 hidden"&gt;Overnight booking detected: end date auto-updated to the next day.&lt;/p&gt;\n
+                            &lt;/div&gt;\n
+                            &lt;div&gt;\n
+                                &lt;label for="expected_participants" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Expected No. of Participants &lt;span class="text-red-500"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+                                &lt;input id="expected_participants" type="number" name="expected_participants" required min="1" value="" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white " aria-invalid="false"&gt;\n
+                                                                &lt;div id="capacity-warning-banner" role="status" aria-live="polite" class="mt-3 hidden rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900"&gt;&lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div class="reservation-duration-group mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4"&gt;\n
+                            &lt;p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Reservation Duration&lt;/p&gt;\n
+                            &lt;div class="mt-3 flex flex-col gap-3 sm:flex-row"&gt;\n
+                                &lt;label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-emerald-500 bg-emerald-50 px-3 py-2 text-sm font-medium text-slate-900 shadow-sm"&gt;\n
+                                    &lt;input type="radio" name="reservation_duration" value="specific_time" checked&gt;\n
+                                    &lt;span&gt;Specific Time&lt;/span&gt;\n
+                                &lt;/label&gt;\n
+                                &lt;label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"&gt;\n
+                                    &lt;input type="radio" name="reservation_duration" value="whole_day"&gt;\n
+                                    &lt;span&gt;Whole Day&lt;/span&gt;\n
+                                    &lt;span class="text-xs text-slate-500"&gt;08:00 AM – 11:59 PM&lt;/span&gt;\n
+                                &lt;/label&gt;\n
+                            &lt;/div&gt;\n
+                            &lt;p class="reservation-duration-helper mt-3 text-xs text-emerald-700" aria-live="polite"&gt;Whole Day uses 08:00 AM–11:59 PM for each selected date.&lt;/p&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div class="grid gap-4 md:grid-cols-2 md:gap-5"&gt;\n
+                            &lt;div&gt;\n
+                                &lt;label for="start_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Start Time &lt;span class="text-red-500"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+                                &lt;input id="start_time" type="time" name="start_time" required value="" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white " aria-invalid="false"&gt;\n
+                                                            &lt;/div&gt;\n
+                            &lt;div&gt;\n
+                                &lt;label for="end_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;End Time &lt;span class="text-red-500"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+                                &lt;input id="end_time" type="time" name="end_time" required value="" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white " aria-invalid="false"&gt;\n
+                                                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/section&gt;\n
+\n
+                &lt;section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm"&gt;\n
+                    &lt;div class="mb-5 border-b border-slate-200 pb-4"&gt;\n
+                        &lt;div class="flex items-center justify-between gap-4"&gt;\n
+                            &lt;div&gt;\n
+                                &lt;p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500"&gt;Section III. Venue and Schedule&lt;/p&gt;\n
+                                &lt;p class="mt-1 text-sm text-slate-500"&gt;Select the facility / venue requested for the activity.&lt;/p&gt;\n
+                            &lt;/div&gt;\n
+                            &lt;p class="text-xs text-slate-500"&gt;Choose one&lt;/p&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                                                            &lt;div class="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600"&gt;\n
+                                    &lt;p class="font-semibold text-slate-800"&gt;Outsider Guidance&lt;/p&gt;\n
+                                    &lt;p class="mt-1"&gt;Applicable rental fees and payment procedures&lt;/p&gt;\n
+                                &lt;/div&gt;\n
+                                                &lt;div class="mt-4 space-y-3"&gt;\n
+                        &lt;div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"&gt;\n
+                                                            &lt;label class="venue-option flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 "&gt;\n
+                                    &lt;input type="radio" name="venue" value="Gymnasium"\n
+                                           \n
+                                           required\n
+                                           class="mt-0.5 h-4 w-4 rounded-full border-slate-300 text-emerald-600 focus:ring-emerald-500"&gt;\n
+                                    &lt;span class="flex-1 text-sm font-medium text-slate-700"&gt;Gymnasium&lt;/span&gt;\n
+                                    &lt;span class="hidden text-emerald-600"&gt;✓&lt;/span&gt;\n
+                                &lt;/label&gt;\n
+                                                        &lt;label class="venue-option flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 "&gt;\n
+                                &lt;input type="radio" name="venue" value="Others (specify)"\n
+                                       \n
+                                       required\n
+                                       class="mt-0.5 h-4 w-4 rounded-full border-slate-300 text-emerald-600 focus:ring-emerald-500"&gt;\n
+                                &lt;span class="flex-1 text-sm font-medium text-slate-700"&gt;Others (specify)&lt;/span&gt;\n
+                                &lt;span class="hidden text-emerald-600"&gt;✓&lt;/span&gt;\n
+                            &lt;/label&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div id="venue-other-wrap" class="mt-4 none"&gt;\n
+                            &lt;label for="venue-other" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Specify Other Venue &lt;span class="text-red-500"&gt;*&lt;/span&gt;&lt;/label&gt;\n
+                            &lt;input id="venue-other" type="text" name="other_venue" value="" placeholder="Enter the name of the venue" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white "  disabled &gt;\n
+                                                    &lt;/div&gt;\n
+                                                &lt;div id="venue-conflict-alert-wrap" class="mt-4"&gt;&lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/section&gt;\n
+\n
+                &lt;section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm"&gt;\n
+                    &lt;div class="mb-5 border-b border-slate-200 pb-4"&gt;\n
+                        &lt;div class="flex items-center justify-between gap-4"&gt;\n
+                            &lt;div&gt;\n
+                                &lt;p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500"&gt;Equipment Selection&lt;/p&gt;\n
+                                &lt;p class="mt-1 text-sm text-slate-500"&gt;Indicate any equipment required for the activity and review availability.&lt;/p&gt;\n
+                            &lt;/div&gt;\n
+                            &lt;p class="text-xs text-slate-500"&gt;Real-time availability&lt;/p&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="mt-4 space-y-3"&gt;\n
+                                                                                                &lt;div class="equipment-row flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between hover:border-purple-400 hover:bg-purple-50/70 " data-available="1" data-total="1" data-name="Sound System" data-index="0"&gt;\n
+                            &lt;label class="flex flex-1 cursor-pointer items-center gap-3"&gt;\n
+                                &lt;input type="checkbox" name="equipment[]" value="Sound System"   class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="Sound System"&gt;\n
+                                &lt;span class="text-sm font-medium text-slate-700"&gt;Sound System&lt;/span&gt;\n
+                            &lt;/label&gt;\n
+                            &lt;div class="flex flex-col items-start gap-2 sm:items-end sm:text-right"&gt;\n
+                                &lt;span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-700"&gt;1 / 1 available&lt;/span&gt;\n
+                                &lt;div class="quantity-input-wrap hidden" id="qty-wrap-0"&gt;\n
+                                    &lt;label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Qty&lt;/label&gt;\n
+                                    &lt;input type="number" name="equipment_quantities[Sound System]" min="1" max="1" value="" disabled class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-16" placeholder="Enter quantity"&gt;\n
+                                &lt;/div&gt;\n
+                                &lt;div class="equipment-utilization-card mt-2 hidden w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 sm:min-w-[220px]"&gt;&lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                                                                        &lt;div class="equipment-row flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between hover:border-purple-400 hover:bg-purple-50/70 " data-available="3" data-total="3" data-name="Canopies" data-index="1"&gt;\n
+                            &lt;label class="flex flex-1 cursor-pointer items-center gap-3"&gt;\n
+                                &lt;input type="checkbox" name="equipment[]" value="Canopies"   class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="Canopies"&gt;\n
+                                &lt;span class="text-sm font-medium text-slate-700"&gt;Canopies&lt;/span&gt;\n
+                            &lt;/label&gt;\n
+                            &lt;div class="flex flex-col items-start gap-2 sm:items-end sm:text-right"&gt;\n
+                                &lt;span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-700"&gt;3 / 3 available&lt;/span&gt;\n
+                                &lt;div class="quantity-input-wrap hidden" id="qty-wrap-1"&gt;\n
+                                    &lt;label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Qty&lt;/label&gt;\n
+                                    &lt;input type="number" name="equipment_quantities[Canopies]" min="1" max="3" value="" disabled class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-16" placeholder="Enter quantity"&gt;\n
+                                &lt;/div&gt;\n
+                                &lt;div class="equipment-utilization-card mt-2 hidden w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 sm:min-w-[220px]"&gt;&lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                                                                        &lt;div class="equipment-row flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between hover:border-purple-400 hover:bg-purple-50/70 " data-available="4" data-total="4" data-name="Industrial Fans" data-index="2"&gt;\n
+                            &lt;label class="flex flex-1 cursor-pointer items-center gap-3"&gt;\n
+                                &lt;input type="checkbox" name="equipment[]" value="Industrial Fans"   class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="Industrial Fans"&gt;\n
+                                &lt;span class="text-sm font-medium text-slate-700"&gt;Industrial Fans&lt;/span&gt;\n
+                            &lt;/label&gt;\n
+                            &lt;div class="flex flex-col items-start gap-2 sm:items-end sm:text-right"&gt;\n
+                                &lt;span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-700"&gt;4 / 4 available&lt;/span&gt;\n
+                                &lt;div class="quantity-input-wrap hidden" id="qty-wrap-2"&gt;\n
+                                    &lt;label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Qty&lt;/label&gt;\n
+                                    &lt;input type="number" name="equipment_quantities[Industrial Fans]" min="1" max="4" value="" disabled class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-16" placeholder="Enter quantity"&gt;\n
+                                &lt;/div&gt;\n
+                                &lt;div class="equipment-utilization-card mt-2 hidden w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 sm:min-w-[220px]"&gt;&lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                                                                        &lt;div class="equipment-row flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between hover:border-purple-400 hover:bg-purple-50/70 " data-available="2" data-total="2" data-name="Iwata Cooler Fans" data-index="3"&gt;\n
+                            &lt;label class="flex flex-1 cursor-pointer items-center gap-3"&gt;\n
+                                &lt;input type="checkbox" name="equipment[]" value="Iwata Cooler Fans"   class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="Iwata Cooler Fans"&gt;\n
+                                &lt;span class="text-sm font-medium text-slate-700"&gt;Iwata Cooler Fans&lt;/span&gt;\n
+                            &lt;/label&gt;\n
+                            &lt;div class="flex flex-col items-start gap-2 sm:items-end sm:text-right"&gt;\n
+                                &lt;span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-700"&gt;2 / 2 available&lt;/span&gt;\n
+                                &lt;div class="quantity-input-wrap hidden" id="qty-wrap-3"&gt;\n
+                                    &lt;label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Qty&lt;/label&gt;\n
+                                    &lt;input type="number" name="equipment_quantities[Iwata Cooler Fans]" min="1" max="2" value="" disabled class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-16" placeholder="Enter quantity"&gt;\n
+                                &lt;/div&gt;\n
+                                &lt;div class="equipment-utilization-card mt-2 hidden w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 sm:min-w-[220px]"&gt;&lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                                                                        &lt;div class="equipment-row flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between hover:border-purple-400 hover:bg-purple-50/70 " data-available="10" data-total="10" data-name="Tables" data-index="4"&gt;\n
+                            &lt;label class="flex flex-1 cursor-pointer items-center gap-3"&gt;\n
+                                &lt;input type="checkbox" name="equipment[]" value="Tables"   class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="Tables"&gt;\n
+                                &lt;span class="text-sm font-medium text-slate-700"&gt;Tables&lt;/span&gt;\n
+                            &lt;/label&gt;\n
+                            &lt;div class="flex flex-col items-start gap-2 sm:items-end sm:text-right"&gt;\n
+                                &lt;span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-700"&gt;10 / 10 available&lt;/span&gt;\n
+                                &lt;div class="quantity-input-wrap hidden" id="qty-wrap-4"&gt;\n
+                                    &lt;label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Qty&lt;/label&gt;\n
+                                    &lt;input type="number" name="equipment_quantities[Tables]" min="1" max="10" value="" disabled class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-16" placeholder="Enter quantity"&gt;\n
+                                &lt;/div&gt;\n
+                                &lt;div class="equipment-utilization-card mt-2 hidden w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 sm:min-w-[220px]"&gt;&lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                                            &lt;/div&gt;\n
+                &lt;/section&gt;\n
+\n
+                &lt;section class="rounded-[32px] border border-slate-200 bg-slate-50 p-7 shadow-sm"&gt;\n
+                    &lt;div class="mb-5 flex items-center justify-between gap-4 border-b border-slate-200 pb-4"&gt;\n
+                        &lt;div&gt;\n
+                            &lt;p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500"&gt;Selected Items Summary&lt;/p&gt;\n
+                            &lt;p class="mt-1 text-sm text-slate-500"&gt;Review your selections before submitting.&lt;/p&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700"&gt;Live&lt;/span&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"&gt;\n
+                        &lt;div class="rounded-2xl border border-slate-200 bg-white p-4"&gt;\n
+                            &lt;p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500"&gt;Activity&lt;/p&gt;\n
+                            &lt;p id="summary-activity" class="mt-2 text-sm font-semibold text-slate-800"&gt;Not specified&lt;/p&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div class="rounded-2xl border border-slate-200 bg-white p-4"&gt;\n
+                            &lt;p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500"&gt;Venue&lt;/p&gt;\n
+                            &lt;p id="summary-venue" class="mt-2 text-sm font-semibold text-slate-800"&gt;Not selected&lt;/p&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div class="rounded-2xl border border-slate-200 bg-white p-4"&gt;\n
+                            &lt;p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500"&gt;Date&lt;/p&gt;\n
+                            &lt;p id="summary-date" class="mt-2 text-sm font-semibold text-slate-800"&gt;Not selected&lt;/p&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div class="rounded-2xl border border-slate-200 bg-white p-4"&gt;\n
+                            &lt;p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500"&gt;Time&lt;/p&gt;\n
+                            &lt;p id="summary-time" class="mt-2 text-sm font-semibold text-slate-800"&gt;Not selected&lt;/p&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4"&gt;\n
+                        &lt;p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500"&gt;Equipment&lt;/p&gt;\n
+                        &lt;ul id="summary-equipment" class="mt-2 space-y-1 text-sm text-slate-700"&gt;\n
+                            &lt;li class="text-slate-500"&gt;No equipment selected&lt;/li&gt;\n
+                        &lt;/ul&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/section&gt;\n
+\n
+                &lt;section class="rounded-[32px] border border-slate-200 bg-slate-50 p-7 shadow-sm"&gt;\n
+                    &lt;div class="grid grid-cols-1 gap-4 md:grid-cols-2"&gt;\n
+                        &lt;div&gt;\n
+                            &lt;p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Name&lt;/p&gt;\n
+                            &lt;input type="text" value="" readonly class="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 cursor-not-allowed"&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div&gt;\n
+                            &lt;p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"&gt;Position&lt;/p&gt;\n
+                            &lt;input type="text" value="Position not provided" readonly class="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 cursor-not-allowed"&gt;\n
+                            &lt;input type="hidden" name="requested_by_position" value=""&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/section&gt;\n
+\n
+                &lt;section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm"&gt;\n
+                    &lt;div class="mb-5 border-b border-slate-200 pb-4"&gt;\n
+                        &lt;p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500"&gt;Section VI. Request Classification&lt;/p&gt;\n
+                        &lt;p class="mt-1 text-sm text-slate-500"&gt;Priority classification is determined during approval by the Custodian or Administrator. Requestors may only request urgent processing.&lt;/p&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="grid grid-cols-1 gap-5 lg:grid-cols-[1.2fr_0.8fr]"&gt;\n
+                        &lt;div class="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm"&gt;\n
+                            &lt;p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600"&gt;Request Classification&lt;/p&gt;\n
+                            &lt;div class="mt-4 flex items-center gap-3"&gt;\n
+                                &lt;div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"&gt;\n
+                                                                            &lt;span class="text-lg"&gt;🟢&lt;/span&gt;\n
+                                                                    &lt;/div&gt;\n
+                                &lt;div&gt;\n
+                                    &lt;p class="text-sm font-semibold text-slate-900"&gt;Priority Level:&lt;/p&gt;\n
+                                    &lt;p class="mt-1 text-sm font-semibold text-slate-700"&gt;Standard Request&lt;/p&gt;\n
+                                &lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                            &lt;div id="urgent-request-indicator" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 hidden"&gt;\n
+                                &lt;span class="font-semibold"&gt;🔴 Urgent Processing Requested&lt;/span&gt;\n
+                                &lt;p class="mt-1 text-xs text-red-600"&gt;This is an indicator only and does not automatically change the request priority.&lt;/p&gt;\n
+                            &lt;/div&gt;\n
+                            &lt;p class="mt-4 text-xs leading-5 text-slate-500"&gt;The final priority status remains under the authority of the Custodian or Administrator during the approval process.&lt;/p&gt;\n
+                            &lt;label for="requested-priority" class="mt-5 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-600"&gt;Requested Importance&lt;/label&gt;\n
+                            &lt;select name="priority" id="requested-priority" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"&gt;\n
+                                &lt;option value="regular" selected&gt;Regular&lt;/option&gt;\n
+                                &lt;option value="institutional" &gt;Institutional&lt;/option&gt;\n
+                            &lt;/select&gt;\n
+                            &lt;p class="mt-2 text-xs leading-5 text-slate-500"&gt;This is a request for consideration. Supply Office/Admin makes the final decision.&lt;/p&gt;\n
+                        &lt;/div&gt;\n
+                        &lt;div class="rounded-3xl border border-amber-200 bg-amber-50/80 p-5 shadow-sm"&gt;\n
+                            &lt;p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700"&gt;Urgent Request&lt;/p&gt;\n
+                            &lt;p class="mt-3 text-xs leading-5 text-slate-600"&gt;If your request requires immediate attention, you may request urgent processing. Final approval and priority classification remain subject to the Custodian or Administrator.&lt;/p&gt;\n
+                            &lt;label class="mt-4 flex items-start gap-3 cursor-pointer"&gt;\n
+                                &lt;input type="checkbox" name="is_emergency" id="urgent-processing-checkbox" value="1"  class="mt-1 h-4 w-4 rounded border-amber-300 text-amber-600"&gt;\n
+                                &lt;span class="text-sm font-semibold text-amber-800"&gt;Request Urgent Processing&lt;/span&gt;\n
+                            &lt;/label&gt;\n
+                            &lt;div id="urgent-justification-wrap" class="mt-4 hidden rounded-3xl border border-amber-200 bg-white p-3"&gt;\n
+                                &lt;label for="emergency-justification" class="text-xs font-semibold text-amber-700"&gt;Reason for Urgent Processing&lt;/label&gt;\n
+                                &lt;textarea name="emergency_justification" id="emergency-justification" rows="3" class="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" placeholder="Describe why this request requires urgent processing" disabled&gt;&lt;/textarea&gt;\n
+                                                            &lt;/div&gt;\n
+                        &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/section&gt;\n
+\n
+                &lt;section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm"&gt;\n
+                    &lt;div class="mb-5 border-b border-slate-200 pb-4"&gt;\n
+                        &lt;p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500"&gt;Section IV. Required Documents&lt;/p&gt;\n
+                        &lt;p class="mt-1 text-sm text-slate-500"&gt;Upload the required supporting documents for this request.&lt;/p&gt;\n
+                    &lt;/div&gt;\n
+\n
+                    &lt;div class="space-y-6"&gt;\n
+                                                    \n
+                            &lt;div&gt;\n
+                                &lt;label for="igp_receipt_file" class="mb-3 block text-sm font-semibold text-slate-700"&gt;\n
+                                    IGP Receipt &lt;span class="text-red-500"&gt;*&lt;/span&gt;\n
+                                &lt;/label&gt;\n
+                                &lt;p class="mb-3 text-xs text-slate-500"&gt;Required document: Inter-agency Collaborative Agreement (IGP) receipt or approval document for external organizations.&lt;/p&gt;\n
+                                &lt;div class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition hover:border-emerald-400"&gt;\n
+                                    &lt;div class="space-y-3 text-center"&gt;\n
+                                        &lt;svg class="mx-auto h-14 w-14 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"&gt;\n
+                                            &lt;path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /&gt;\n
+                                        &lt;/svg&gt;\n
+                                        &lt;div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center"&gt;\n
+                                            &lt;label for="igp_receipt_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500"&gt;\n
+                                                &lt;span&gt;Upload a file&lt;/span&gt;\n
+                                                &lt;input id="igp_receipt_file" name="igp_receipt_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only"&gt;\n
+                                            &lt;/label&gt;\n
+                                            &lt;span&gt;or drag and drop&lt;/span&gt;\n
+                                        &lt;/div&gt;\n
+                                        &lt;p class="text-xs text-slate-500"&gt;PDF, JPEG, PNG up to 10MB&lt;/p&gt;\n
+                                    &lt;/div&gt;\n
+                                &lt;/div&gt;\n
+                                &lt;div id="igp-receipt-preview" class="mt-3 hidden"&gt;\n
+                                    &lt;p class="flex items-center justify-between gap-3 text-sm text-slate-600"&gt;Selected file: &lt;span id="igp-receipt-name" class="font-medium"&gt;&lt;/span&gt;&lt;button type="button" data-remove-file="igp_receipt_file" class="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700" aria-label="Remove IGP receipt"&gt;Remove&lt;/button&gt;&lt;/p&gt;\n
+                                &lt;/div&gt;\n
+                                                            &lt;/div&gt;\n
+                        \n
+                        \n
+                        &lt;div class="rounded-[24px] border border-emerald-200 bg-emerald-50 p-4"&gt;\n
+                            &lt;div class="mb-4 border-b border-emerald-200 pb-3"&gt;\n
+                                &lt;p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700"&gt;Section V. E-Signature&lt;/p&gt;\n
+                                &lt;p class="mt-2 text-sm font-semibold text-emerald-800"&gt;Upload E-Signature &lt;span class="text-red-500"&gt;*&lt;/span&gt;&lt;/p&gt;\n
+                                &lt;p class="mt-1 text-xs text-emerald-700"&gt;Required for all requestors. Your e-signature will appear on the official request form for administrative records.&lt;/p&gt;\n
+                            &lt;/div&gt;\n
+                            &lt;label for="e_signature_file" class="mb-3 block text-sm font-semibold text-slate-700"&gt;\n
+                                Upload your e-signature\n
+                            &lt;/label&gt;\n
+                            &lt;p class="mb-3 text-xs text-slate-500"&gt;Upload a PNG or JPG image of your digital signature. If your saved account signature is already available, it will be used automatically.&lt;/p&gt;\n
+                                                        &lt;div class="rounded-[32px] border-2 border-dashed border-emerald-300 bg-white px-8 pb-8 pt-8 transition hover:border-emerald-400"&gt;\n
+                                &lt;div class="space-y-3 text-center"&gt;\n
+                                    &lt;svg class="mx-auto h-14 w-14 text-emerald-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"&gt;\n
+                                        &lt;path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /&gt;\n
+                                    &lt;/svg&gt;\n
+                                    &lt;div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center"&gt;\n
+                                        &lt;label for="e_signature_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500"&gt;\n
+                                            &lt;span&gt;Upload a file&lt;/span&gt;\n
+                                            &lt;input id="e_signature_file" name="e_signature_file" type="file" accept=".jpeg,.jpg,.png" class="sr-only"&gt;\n
+                                        &lt;/label&gt;\n
+                                        &lt;span&gt;or drag and drop&lt;/span&gt;\n
+                                    &lt;/div&gt;\n
+                                    &lt;p class="text-xs text-slate-500"&gt;JPEG or PNG up to 10MB&lt;/p&gt;\n
+                                &lt;/div&gt;\n
+                            &lt;/div&gt;\n
+                            &lt;div id="e-signature-preview" class="mt-3 hidden"&gt;\n
+                                &lt;p class="flex items-center justify-between gap-3 text-sm text-slate-600"&gt;Selected file: &lt;span id="e-signature-name" class="font-medium"&gt;&lt;/span&gt;&lt;button type="button" data-remove-file="e_signature_file" class="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700" aria-label="Remove e-signature"&gt;Remove&lt;/button&gt;&lt;/p&gt;\n
+                            &lt;/div&gt;\n
+                                                    &lt;/div&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/section&gt;\n
+\n
+                &lt;section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm"&gt;\n
+                    &lt;div class="mb-5 border-b border-slate-200 pb-4"&gt;\n
+                        &lt;p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500"&gt;Submission checklist&lt;/p&gt;\n
+                        &lt;p class="mt-1 text-sm text-slate-500"&gt;Please review the following before submitting your request.&lt;/p&gt;\n
+                    &lt;/div&gt;\n
+                    &lt;div class="space-y-3"&gt;\n
+                        &lt;label class="flex items-start gap-3"&gt;\n
+                            &lt;input id="checklist-required-fields" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600"&gt;\n
+                            &lt;span class="text-sm text-slate-700"&gt;All required fields are completed&lt;/span&gt;\n
+                        &lt;/label&gt;\n
+                        &lt;label class="flex items-start gap-3"&gt;\n
+                            &lt;input id="checklist-venue-availability" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600"&gt;\n
+                            &lt;span class="text-sm text-slate-700"&gt;Venue and equipment availability confirmed&lt;/span&gt;\n
+                        &lt;/label&gt;\n
+                        &lt;label class="flex items-start gap-3"&gt;\n
+                            &lt;input id="checklist-document-upload" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600"&gt;\n
+                            &lt;span class="text-sm text-slate-700" id="checklist-document-label"&gt;Supporting documents uploaded&lt;/span&gt;\n
+                        &lt;/label&gt;\n
+                        &lt;label class="flex items-start gap-3"&gt;\n
+                            &lt;input id="checklist-e-signature" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600"&gt;\n
+                            &lt;span class="text-sm text-slate-700"&gt;E-signature uploaded&lt;/span&gt;\n
+                        &lt;/label&gt;\n
+                    &lt;/div&gt;\n
+                &lt;/section&gt;\n
+\n
+                &lt;div class="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5"&gt;\n
+                    &lt;p class="text-sm leading-6 text-slate-600"&gt;I certify that the information provided is true, complete, and accurate. I understand that approval is subject to institutional policies, facility availability, and administrative review.&lt;/p&gt;\n
+                &lt;/div&gt;\n
+\n
+                &lt;div class="flex flex-col-reverse gap-3 pt-2 md:flex-row md:items-center md:justify-end md:pt-4"&gt;\n
+                    &lt;a href="http://127.0.0.1:8000/requestor/dashboard?tab=dashboard" class="inline-flex items-center justify-center rounded-[20px] border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"&gt;\n
+                        Cancel\n
+                    &lt;/a&gt;\n
+                    &lt;button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-[20px] bg-emerald-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 md:w-auto md:px-8"&gt;\n
+                        &lt;svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;\n
+                            &lt;path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /&gt;\n
+                        &lt;/svg&gt;\n
+                        Submit Request\n
+                    &lt;/button&gt;\n
+                &lt;/div&gt;\n
+                &lt;/div&gt;\n
+            &lt;/div&gt;\n
+        &lt;/div&gt;\n
+    &lt;/section&gt;\n
+&lt;/div&gt;\n
+&lt;/form&gt;\n
+&lt;script&gt;\n
+    document.addEventListener('DOMContentLoaded', function () {\n
+        const form = document.getElementById('request-form');\n
+        if (!form) return;\n
+        const requestContext = form.querySelector('[name="request_context"]');\n
+        const organizationSelect = form.querySelector('[name="student_organization_id"]');\n
+        const organizationGroup = document.getElementById('student-organization-group');\n
+        const studentPersonalGuidance = document.getElementById('student-personal-guidance');\n
+        const syncOrganizationVisibility = () =&gt; {\n
+            if (organizationGroup &amp;&amp; requestContext) {\n
+                organizationGroup.classList.toggle('hidden', requestContext.value !== 'student_organization');\n
+                if (requestContext.value !== 'student_organization' &amp;&amp; organizationSelect) organizationSelect.value = '';\n
+            }\n
+            if (studentPersonalGuidance &amp;&amp; requestContext) {\n
+                studentPersonalGuidance.classList.toggle('hidden', requestContext.value === 'student_organization');\n
+            }\n
+        };\n
+        requestContext?.addEventListener('change', syncOrganizationVisibility);\n
+        organizationSelect?.addEventListener('change', function () {\n
+            if (requestContext) requestContext.value = this.value ? 'student_organization' : 'personal';\n
+            syncOrganizationVisibility();\n
+        });\n
+        syncOrganizationVisibility();\n
+\n
+        const positionSelect = document.getElementById('requested_by_position');\n
+        const otherPositionInput = document.getElementById('requested_by_position_other');\n
+        if (positionSelect &amp;&amp; otherPositionInput) {\n
+            const updateOtherPosition = () =&gt; {\n
+                const isOther = positionSelect.value === 'Other';\n
+                otherPositionInput.classList.toggle('hidden', !isOther);\n
+                otherPositionInput.disabled = !isOther;\n
+                otherPositionInput.required = isOther;\n
+            };\n
+\n
+            positionSelect.addEventListener('change', updateOtherPosition);\n
+            updateOtherPosition();\n
+        }\n
+\n
+        const collegeSelect = document.getElementById('college_id');\n
+        const departmentSelect = document.getElementById('department_id');\n
+        if (collegeSelect &amp;&amp; departmentSelect) {\n
+            const departmentOptions = Array.from(departmentSelect.options).map((option) =&gt; ({\n
+                value: option.value,\n
+                label: option.textContent,\n
+                collegeId: option.dataset.collegeId || '',\n
+            }));\n
+            const selectedDepartment = departmentSelect.dataset.selected || departmentSelect.value;\n
+\n
+            const filterDepartments = () =&gt; {\n
+                const collegeId = collegeSelect.value;\n
+                departmentSelect.innerHTML = '';\n
+                departmentSelect.add(new Option('Select department', ''));\n
+                departmentOptions\n
+                    .filter((option) =&gt; option.value === '' || option.collegeId === collegeId)\n
+                    .forEach((option) =&gt; departmentSelect.add(new Option(option.label, option.value)));\n
+\n
+                const matchingOption = Array.from(departmentSelect.options).find((option) =&gt; option.value === selectedDepartment);\n
+                departmentSelect.value = matchingOption ? selectedDepartment : '';\n
+                departmentSelect.disabled = !collegeId || departmentSelect.dataset.profileLocked === '1';\n
+            };\n
+\n
+            departmentSelect.dataset.profileLocked = departmentSelect.disabled ? '1' : '0';\n
+            collegeSelect.addEventListener('change', filterDepartments);\n
+            filterDepartments();\n
+        }\n
+\n
+        // File input change handlers for preview\n
+        const fileInputs = [\n
+            { id: 'activity_proposal_file', previewId: 'activity-proposal-preview', nameId: 'activity-proposal-name' },\n
+            { id: 'igp_receipt_file', previewId: 'igp-receipt-preview', nameId: 'igp-receipt-name' },\n
+            { id: 'e_signature_file', previewId: 'e-signature-preview', nameId: 'e-signature-name' }\n
+        ];\n
+\n
+        fileInputs.forEach(({ id, previewId, nameId }) =&gt; {\n
+            const input = document.getElementById(id);\n
+            if (input) {\n
+                input.addEventListener('change', function() {\n
+                    const allowedExtensions = id === 'e_signature_file' ? ['jpg', 'jpeg', 'png'] : ['pdf', 'jpg', 'jpeg', 'png'];\n
+                    const allowedMimeTypes = id === 'e_signature_file' ? ['image/jpeg', 'image/png'] : ['application/pdf', 'image/jpeg', 'image/png'];\n
+                    const file = this.files[0];\n
+                    const extension = file?.name.split('.').pop()?.toLowerCase();\n
+                    if (file &amp;&amp; (!allowedExtensions.includes(extension) || (file.type &amp;&amp; !allowedMimeTypes.includes(file.type)))) {\n
+                        this.value = '';\n
+                        window.alert(`Invalid file type. Allowed formats: ${allowedExtensions.join(', ')}`);\n
+                        updateChecklistState();\n
+                        return;\n
+                    }\n
+                    const preview = document.getElementById(previewId);\n
+                    const name = document.getElementById(nameId);\n
+                    if (this.files.length &gt; 0) {\n
+                        if (name) name.textContent = this.files[0].name;\n
+                        if (preview) preview.classList.remove('hidden');\n
+                    } else {\n
+                        if (preview) preview.classList.add('hidden');\n
+                    }\n
+                });\n
+            }\n
+        });\n
+\n
+        form.querySelectorAll('[data-remove-file]').forEach((button) =&gt; {\n
+            button.addEventListener('click', () =&gt; {\n
+                const input = document.getElementById(button.dataset.removeFile);\n
+                const preview = input ? document.getElementById(fileInputs.find((item) =&gt; item.id === input.id)?.previewId) : null;\n
+                if (input) {\n
+                    input.value = '';\n
+                    input.dispatchEvent(new Event('change', { bubbles: true }));\n
+                }\n
+                if (preview) preview.classList.add('hidden');\n
+            });\n
+        });\n
+\n
+    });\n
+\n
+    document.addEventListener('DOMContentLoaded', function () {\n
+        const form = document.getElementById('request-form');\n
+        if (!form) return;\n
+\n
+        const durationInputs = document.querySelectorAll('input[name="reservation_duration"]');\n
+        const startTimeInput = document.querySelector('input[name="start_time"]');\n
+        const endTimeInput = document.querySelector('input[name="end_time"]');\n
+\n
+        if (durationInputs.length &amp;&amp; startTimeInput &amp;&amp; endTimeInput) {\n
+            const applyDurationState = () =&gt; {\n
+                const duration = document.querySelector('input[name="reservation_duration"]:checked')?.value ?? 'specific_time';\n
+                const isWholeDay = duration === 'whole_day';\n
+                startTimeInput.readOnly = isWholeDay;\n
+                endTimeInput.readOnly = isWholeDay;\n
+\n
+                if (isWholeDay) {\n
+                    startTimeInput.value = '08:00';\n
+                    endTimeInput.value = '23:59';\n
+                }\n
+            };\n
+\n
+            durationInputs.forEach((input) =&gt; input.addEventListener('change', applyDurationState));\n
+            applyDurationState();\n
+        }\n
+\n
+        const summaryDetails = {\n
+            activity: document.getElementById('summary-activity'),\n
+            venue: document.getElementById('summary-venue'),\n
+            date: document.getElementById('summary-date'),\n
+            time: document.getElementById('summary-time'),\n
+            equipment: document.getElementById('summary-equipment')\n
+        };\n
+\n
+        function formatDisplayDate(value) {\n
+            if (!value) return 'Not selected';\n
+            const date = new Date(`${value}T00:00:00`);\n
+            if (Number.isNaN(date.getTime())) return value;\n
+            return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);\n
+        }\n
+\n
+        function formatDisplayTime(value) {\n
+            if (!value) return 'Not selected';\n
+            const [hours, minutes] = value.split(':').map(Number);\n
+            const safeHours = Number.isFinite(hours) ? hours : 0;\n
+            const safeMinutes = Number.isFinite(minutes) ? minutes : 0;\n
+            const date = new Date();\n
+            date.setHours(safeHours, safeMinutes, 0, 0);\n
+            return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date);\n
+        }\n
+\n
+        function updateSummary() {\n
+            const activityInput = form.querySelector('[name="name_of_activity"]');\n
+            const selectedVenue = form.querySelector('input[name="venue"]:checked');\n
+            const venueText = selectedVenue ? (selectedVenue.value === 'Others (specify)' ? (document.getElementById('venue-other')?.value.trim() || 'Other venue') : selectedVenue.value) : 'Not selected';\n
+            const startDate = form.querySelector('[name="start_date"]')?.value;\n
+            const endDate = form.querySelector('[name="end_date"]')?.value;\n
+            const startTime = form.querySelector('[name="start_time"]')?.value;\n
+            const endTime = form.querySelector('[name="end_time"]')?.value;\n
+\n
+            if (summaryDetails.activity) summaryDetails.activity.textContent = activityInput?.value.trim() || 'Not specified';\n
+            if (summaryDetails.venue) summaryDetails.venue.textContent = venueText;\n
+            const isWholeDay = form.querySelector('[name="reservation_duration"]:checked')?.value === 'whole_day';\n
+            if (summaryDetails.date) summaryDetails.date.textContent = startDate &amp;&amp; endDate ? `${formatDisplayDate(startDate)}${startDate === endDate ? '' : ` – ${formatDisplayDate(endDate)}`}` : 'Not selected';\n
+            if (summaryDetails.time) summaryDetails.time.textContent = isWholeDay ? 'Whole day (12:00 AM – 11:59 PM)' : (startTime &amp;&amp; endTime ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}` : 'Not selected');\n
+\n
+            const selectedEquipment = [...form.querySelectorAll('.equipment-row')].filter((row) =&gt; {\n
+                const checkbox = row.querySelector('.equipment-checkbox');\n
+                return checkbox &amp;&amp; checkbox.checked;\n
+            }).map((row) =&gt; {\n
+                const name = row.dataset.name || 'Equipment';\n
+                const qtyInput = row.querySelector('input[type="number"]');\n
+                const qty = qtyInput &amp;&amp; qtyInput.value ? Number(qtyInput.value) : 1;\n
+                return `${name} × ${qty}`;\n
+            });\n
+\n
+            if (summaryDetails.equipment) {\n
+                if (selectedEquipment.length) {\n
+                    summaryDetails.equipment.innerHTML = selectedEquipment.map((item) =&gt; `&lt;li class="text-sm text-slate-700"&gt;${item}&lt;/li&gt;`).join('');\n
+                } else {\n
+                    summaryDetails.equipment.innerHTML = '&lt;li class="text-sm text-slate-500"&gt;No equipment selected&lt;/li&gt;';\n
+                }\n
+            }\n
+\n
+            // Update checklist state\n
+            updateChecklistState();\n
+        }\n
+\n
+        const venueInputs = form.querySelectorAll('input[name="venue"]');\n
+        venueInputs.forEach((input) =&gt; input.addEventListener('change', function () {\n
+            const otherWrap = document.getElementById('venue-other-wrap');\n
+            if (otherWrap) {\n
+                otherWrap.style.display = input.value === 'Others (specify)' &amp;&amp; input.checked ? 'block' : 'none';\n
+            }\n
+            updateSummary();\n
+        }));\n
+\n
+        const otherVenueInput = document.getElementById('venue-other');\n
+        if (otherVenueInput) {\n
+            otherVenueInput.addEventListener('input', updateSummary);\n
+        }\n
+\n
+        form.querySelectorAll('input, textarea, select').forEach((field) =&gt; {\n
+            field.addEventListener('input', updateSummary);\n
+            field.addEventListener('change', updateSummary);\n
+        });\n
+\n
+        const checklistRequiredFields = document.getElementById('checklist-required-fields');\n
+        const checklistVenueAvailability = document.getElementById('checklist-venue-availability');\n
+        const checklistDocumentUpload = document.getElementById('checklist-document-upload');\n
+        const checklistESignature = document.getElementById('checklist-e-signature');\n
+\n
+        const updateChecklistState = () =&gt; {\n
+            const requestorType = form.dataset.requestorType;\n
+            const positionSelect = form.querySelector('[name="requested_by_position"]');\n
+            const otherPositionInput = form.querySelector('[name="requested_by_position_other"]');\n
+            const requiredFields = [\n
+                requestorType === 'outsider' ? form.querySelector('[name="organization_name"]') : form.querySelector('[name="college_id"]'),\n
+                requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),\n
+                form.querySelector('[name="name_of_activity"]'),\n
+                form.querySelector('[name="purpose"]'),\n
+                form.querySelector('[name="start_date"]'),\n
+                form.querySelector('[name="end_date"]'),\n
+                form.querySelector('[name="expected_participants"]'),\n
+                form.querySelector('[name="start_time"]'),\n
+                form.querySelector('[name="end_time"]'),\n
+                form.querySelector('[name="requested_by_position"]'),\n
+                positionSelect?.value === 'Other' ? otherPositionInput : null,\n
+                form.querySelector('[name="venue"]:checked')\n
+            ];\n
+\n
+            const allRequiredComplete = requiredFields.every((field) =&gt; {\n
+                if (!field) return true;\n
+                if (field.type === 'radio' || field.type === 'checkbox') {\n
+                    return field.checked;\n
+                }\n
+                return String(field.value).trim() !== '';\n
+            });\n
+\n
+            const selectedVenue = form.querySelector('[name="venue"]:checked');\n
+            const hasAvailableEquipmentSelected = [...form.querySelectorAll('.equipment-row')].some((row) =&gt; {\n
+                const checkbox = row.querySelector('.equipment-checkbox');\n
+                const quantity = row.querySelector('input[type="number"]');\n
+                return checkbox?.checked &amp;&amp; Number(row.dataset.available || 0) &gt;= Number(quantity?.value || 0);\n
+            });\n
+            const hasEquipmentSelection = form.querySelectorAll('.equipment-row .equipment-checkbox:checked').length &gt; 0;\n
+            \n
+            // Check for appropriate document file based on requestor type\n
+            const isStudent = form.dataset.isStudent === '1';\n
+            const isFaculty = requestorType === 'faculty';\n
+            const activityProposalFile = form.querySelector('[name="activity_proposal_file"]')?.files?.length &gt; 0;\n
+            const igpReceiptFile = form.querySelector('[name="igp_receipt_file"]')?.files?.length &gt; 0;\n
+            const eSignatureFile = form.querySelector('[name="e_signature_file"]')?.files?.length &gt; 0;\n
+            \n
+            // For backward compatibility, also check proposal_file\n
+            const proposalFile = form.querySelector('[name="proposal_file"]')?.files?.length &gt; 0;\n
+            \n
+            // Has required supporting document based on type\n
+            const requestContext = form.querySelector('[name="request_context"]')?.value;\n
+            const hasSupportingDocument = isStudent &amp;&amp; requestContext === 'student_organization'\n
+                ? (activityProposalFile || proposalFile)\n
+                : (isStudent || isFaculty) &amp;&amp; !requestContext\n
+                    ? (activityProposalFile || proposalFile)\n
+                    : igpReceiptFile;\n
+\n
+            if (checklistRequiredFields) {\n
+                checklistRequiredFields.checked = allRequiredComplete;\n
+            }\n
+\n
+            if (checklistVenueAvailability) {\n
+                checklistVenueAvailability.checked = Boolean(selectedVenue) &amp;&amp; (!hasEquipmentSelection || hasAvailableEquipmentSelected);\n
+            }\n
+\n
+            if (checklistDocumentUpload) {\n
+                checklistDocumentUpload.checked = hasSupportingDocument;\n
+            }\n
+\n
+            if (checklistESignature) {\n
+                checklistESignature.checked = eSignatureFile;\n
+            }\n
+        };\n
+\n
+        const venueSelectionState = () =&gt; {\n
+            venueInputs.forEach((input) =&gt; {\n
+                const label = input.closest('.venue-option');\n
+                if (!label) return;\n
+                const isSelected = input.checked;\n
+                label.classList.toggle('border-emerald-500', isSelected);\n
+                label.classList.toggle('bg-emerald-50', isSelected);\n
+                label.classList.toggle('shadow-sm', isSelected);\n
+                const checkmark = label.querySelector('span:last-child');\n
+                if (checkmark) {\n
+                    checkmark.classList.toggle('hidden', !isSelected);\n
+                    checkmark.classList.toggle('inline', isSelected);\n
+                }\n
+            });\n
+        };\n
+\n
+        form.querySelectorAll('input, textarea, select').forEach((field) =&gt; {\n
+            field.addEventListener('input', () =&gt; {\n
+                updateSummary();\n
+                updateChecklistState();\n
+            });\n
+            field.addEventListener('change', () =&gt; {\n
+                updateSummary();\n
+                updateChecklistState();\n
+            });\n
+        });\n
+\n
+        venueInputs.forEach((input) =&gt; input.addEventListener('change', venueSelectionState));\n
+        venueSelectionState();\n
+        updateSummary();\n
+        updateChecklistState();\n
+    });\n
+&lt;/script&gt;\n
+' [UTF-8](length: 65132) contains "Wireless Microphones" [ASCII](length: 20).
+&#13;
+C:\xampp\htdocs\pitfr\tests\Feature\RequestFormFeedbackTest.php:48</failure>
+      </testcase>
+    </testsuite>
+  </testsuite>
+</testsuites>

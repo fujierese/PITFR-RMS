@@ -287,7 +287,6 @@ class FacilityRequestWorkflowTest extends TestCase
 
     public function test_full_request_workflow()
     {
-        // Create users
         /** @var User $requester */
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         /** @var User $venueCustodian */
@@ -297,21 +296,18 @@ class FacilityRequestWorkflowTest extends TestCase
         /** @var User $admin */
         $admin = User::factory()->create(['role' => 'admin']);
 
-        // Create venue
-        $venue = Venue::create([
+        Venue::create([
             'name' => 'Conference Hall & Interaction Center (CHIC)',
             'custodian_id' => $venueCustodian->id,
         ]);
 
-        // Create equipment
-        $equipment = Equipment::factory()->create([
+        Equipment::factory()->create([
             'name' => 'Sound System',
             'custodian_id' => $equipmentCustodian->id,
             'quantity' => 5,
             'quantity_available' => 5,
         ]);
 
-        // Step 1: Create request directly
         $facilityRequest = FacilityRequest::create([
             'control_number' => 'TEST-001',
             'date_requested' => now()->toDateString(),
@@ -335,49 +331,49 @@ class FacilityRequestWorkflowTest extends TestCase
         $this->assertEquals('pending', $facilityRequest->status);
         $this->assertEquals('regular', $facilityRequest->priority);
 
-        // Step 2: Venue custodian approves
         $response = $this->actingAs($venueCustodian)
-             ->post(route('custodian.update'), [
-                 'id' => $facilityRequest->id,
-                 'action' => 'approve',
-                 'notes' => 'Approved',
-             ]);
-
+            ->post(route('custodian.update'), [
+                'id' => $facilityRequest->id,
+                'action' => 'approve',
+                'notes' => 'Approved',
+            ]);
+        $response->assertRedirect();
         $facilityRequest->refresh();
-        $this->assertEquals('approved', $facilityRequest->venue_status);
+        $this->assertSame('approved', $facilityRequest->venue_status);
 
-        // Step 3: Equipment custodian approves
-        $this->actingAs($equipmentCustodian)
-             ->post(route('custodian.update'), [
-                 'id' => $facilityRequest->id,
-                 'action' => 'approve',
-                 'notes' => 'Approved',
-             ]);
-
+        $response = $this->actingAs($equipmentCustodian)
+            ->post(route('custodian.update'), [
+                'id' => $facilityRequest->id,
+                'action' => 'approve',
+                'notes' => 'Approved',
+            ]);
+        $response->assertRedirect();
         $facilityRequest->refresh();
-        $this->assertEquals('approved', $facilityRequest->equipment_status);
+        $this->assertSame('approved', $facilityRequest->equipment_status);
 
-        // Step 4: Admin approves (only available after both custodians approve)
-        $this->actingAs($admin)
-             ->post(route('admin.update'), [
-                 'id' => $facilityRequest->id,
-                 'action' => 'approve',
-                 'notes' => 'Final approval',
-             ]);
-
+        $response = $this->actingAs($admin)
+            ->post(route('request.supply.final-approval', $facilityRequest), [
+                'notes' => 'Final approval',
+            ]);
+        $response->assertRedirect();
         $facilityRequest->refresh();
-        $this->assertEquals('approved', $facilityRequest->status);
+        $this->assertSame('approved', $facilityRequest->status);
+        $this->assertSame($admin->name, $facilityRequest->approved_by);
+        $this->assertDatabaseHas('request_histories', [
+            'facility_request_id' => $facilityRequest->id,
+            'action' => 'final_approved',
+            'user_id' => $admin->id,
+        ]);
 
-        // Step 5: Equipment return
-        $this->actingAs($equipmentCustodian)
-             ->post(route('custodian.update'), [
-                 'id' => $facilityRequest->id,
-                 'action' => 'return',
-                 'notes' => 'Returned',
-                 'returned_equipment' => ['Sound System' => 2],
-             ]);
-
+        $response = $this->actingAs($equipmentCustodian)
+            ->post(route('custodian.update'), [
+                'id' => $facilityRequest->id,
+                'action' => 'return',
+                'notes' => 'Returned',
+                'equipment' => ['Sound System' => 2],
+            ]);
+        $response->assertRedirect();
         $facilityRequest->refresh();
-        $this->assertEquals('returned', $facilityRequest->equipment_returned_status);
+        $this->assertSame('fulfilled', $facilityRequest->equipment_returned_status);
     }
 }

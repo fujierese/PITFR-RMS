@@ -87,45 +87,16 @@ class FacilityRequestApiController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i',
-            'venue' => 'nullable|array',
+            'venue' => 'nullable|array|max:1',
             'equipment' => 'nullable|array',
             'equipment_quantities' => 'nullable|array',
             'other_venue' => 'nullable|string|max:200',
             'department' => 'required|string|max:100',
-            'priority' => 'nullable|in:regular,institutional',
             'is_emergency' => 'nullable|boolean',
+            'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
         ]);
 
         $user = Auth::user();
-
-        // Check venue capacity
-        if (!empty($validated['venue'])) {
-            foreach ($validated['venue'] as $venueName) {
-                $venueRecord = Venue::where('name', $venueName)->first();
-                $participants = (int) $validated['expected_participants'];
-
-                if ($venueRecord && $venueRecord->capacity) {
-                    $maxCapacity = (int) $venueRecord->capacity;
-                } else {
-                    $defaultCapacities = [
-                        'Conference Hall & Interaction Center (CHIC)' => 150,
-                        'Gymnasium' => 500,
-                        'Balay Alumni' => 200,
-                        'Covered Court' => 300,
-                        'Oval Grounds' => 1000,
-                        'Volleyball Court' => 100,
-                    ];
-                    $maxCapacity = $defaultCapacities[$venueName] ?? null;
-                }
-
-                if ($maxCapacity !== null && $participants > $maxCapacity) {
-                    return response()->json([
-                        'success' => false,
-                        'error' => "{$venueName} has a maximum capacity of {$maxCapacity} people, but you're expecting {$participants} participants."
-                    ], 422);
-                }
-            }
-        }
 
         $validated['reservation_duration'] = strtolower((string) ($validated['reservation_duration'] ?? 'specific_time'));
         $scheduleRange = FacilityRequest::resolveReservationDuration(
@@ -210,8 +181,11 @@ class FacilityRequestApiController extends Controller
                 'status' => 'pending',
                 'venue_status' => 'pending',
                 'equipment_status' => 'pending',
-                'priority' => $validated['priority'] ?? 'regular',
+                'priority' => 'regular',
+                'requested_priority' => null,
+                'requested_is_emergency' => $validated['is_emergency'] ?? false,
                 'is_emergency' => $validated['is_emergency'] ?? false,
+                'emergency_justification' => $validated['emergency_justification'] ?? null,
             ]);
 
             $fr->addHistory('submitted', 'Request submitted via API by ' . $user->name, $user->id);
@@ -273,33 +247,19 @@ class FacilityRequestApiController extends Controller
 
         $user = Auth::user();
 
-        DB::beginTransaction();
-
-        try {
+        DB::transaction(function () use ($facilityRequest, $user): void {
             $facilityRequest->addHistory('cancelled', 'Request cancelled by ' . $user->name, $user->id);
-            $facilityRequest->delete();
-
-            DB::commit();
-
-            // Determine custodians for this request
-            $equipmentCustodianIds = $facilityRequest->getAssignedEquipmentCustodianIds();
-            $venueCustodianIds = \App\Models\Venue::whereIn('name', $facilityRequest->venue ?? [])->pluck('custodian_id')->filter()->unique()->toArray();
-            $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
-
-            \App\Events\RequestCancelled::dispatch($facilityRequest->id, $facilityRequest->control_number, $user->name, $facilityRequest->requested_by_id, $custodianIds);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Request cancelled successfully.'
+            $facilityRequest->update([
+                'status' => 'cancelled',
+                'venue_status' => 'cancelled',
+                'equipment_status' => 'cancelled',
             ]);
+        });
 
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to cancel request.'
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Request cancelled successfully.',
+        ]);
     }
 
     public function approve(Request $request, FacilityRequest $facilityRequest)
@@ -328,6 +288,16 @@ class FacilityRequestApiController extends Controller
                     'success' => false,
                     'error' => ucfirst($approvalType) . ' has already been processed for this request.',
                 ], 409);
+            }
+
+            $conflictMessage = $this->availabilityService->checkFacilityRequest($facilityRequest, $facilityRequest->id);
+            if ($conflictMessage) {
+                DB::rollBack();
+
+                return response()->json([
+                    'success' => false,
+                    'error' => $conflictMessage,
+                ], 422);
             }
 
             if ($approvalType === 'venue') {
@@ -449,6 +419,10 @@ class FacilityRequestApiController extends Controller
         $user = Auth::user();
         $validated = $request->validate([
             'returned_items' => ['nullable', 'array'],
+            'damaged_quantity' => ['nullable', 'array'],
+            'missing_quantity' => ['nullable', 'array'],
+            'damage_remarks' => ['nullable', 'array'],
+            'missing_remarks' => ['nullable', 'array'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
         $returnedItems = $validated['returned_items'] ?? [];
@@ -460,12 +434,12 @@ class FacilityRequestApiController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($facilityRequest->equipment_returned_status === 'returned') {
+            if (in_array($facilityRequest->equipment_returned_status, ['returned', 'fulfilled'], true)) {
                 DB::rollBack();
 
                 return response()->json([
                     'success' => false,
-                    'error' => 'Equipment has already been returned for this request.',
+                    'error' => 'Equipment has already been recorded as returned for this request.',
                 ], 409);
             }
 
@@ -478,22 +452,34 @@ class FacilityRequestApiController extends Controller
                 ], 422);
             }
 
-            $facilityRequest->equipment_returned_status = 'returned';
+            $damagedQuantity = array_sum(array_map('intval', $validated['damaged_quantity'] ?? []));
+            $missingQuantity = array_sum(array_map('intval', $validated['missing_quantity'] ?? []));
+            $damageRemarkText = ! empty($validated['damage_remarks'] ?? []) ? implode('; ', array_filter(array_map('trim', array_values($validated['damage_remarks'])))) : null;
+            $missingRemarkText = ! empty($validated['missing_remarks'] ?? []) ? implode('; ', array_filter(array_map('trim', array_values($validated['missing_remarks'])))) : null;
+            $shouldRestoreInventory = $damagedQuantity === 0 && $missingQuantity === 0;
+
+            $facilityRequest->equipment_returned_status = 'fulfilled';
             $facilityRequest->equipment_returned_by = $user->id;
             $facilityRequest->equipment_returned_date = now();
             $facilityRequest->equipment_return_notes = $validated['notes'] ?? '';
             $facilityRequest->equipment_returned_items = $returnedItems;
+            $facilityRequest->equipment_return_damaged_quantity = $damagedQuantity;
+            $facilityRequest->equipment_return_missing_quantity = $missingQuantity;
+            $facilityRequest->equipment_return_damage_remarks = $damageRemarkText;
+            $facilityRequest->equipment_return_missing_remarks = $missingRemarkText;
             $facilityRequest->save();
 
-            // Return equipment to inventory
             $quantities = $facilityRequest->getEquipmentQuantities();
-            if (!empty($quantities)) {
+            if ($shouldRestoreInventory && !empty($quantities)) {
                 foreach ($quantities as $itemName => $qty) {
+                    $returnedQty = max(0, (int) ($returnedItems[$itemName] ?? 0));
+                    $restorableQty = max(0, $returnedQty - ($damagedQuantity + $missingQuantity));
+
                     $eq = Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])
                         ->lockForUpdate()
                         ->first();
                     if ($eq) {
-                        $eq->quantity_available = min($eq->quantity, $eq->quantity_available + $qty);
+                        $eq->quantity_available = min($eq->quantity, $eq->quantity_available + $restorableQty);
                         $eq->save();
                     }
                 }
