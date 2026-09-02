@@ -83,6 +83,7 @@ class AccountLifecycleTest extends TestCase
                 'first_name' => 'Updated',
                 'middle_name' => '',
                 'surname' => 'Name',
+                'suffix' => '',
                 'contact_number' => '09170000000',
                 'role' => 'admin',
                 'is_active' => false,
