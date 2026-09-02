@@ -225,7 +225,7 @@ class AdminUserManagementTest extends TestCase
         $response->assertRedirect(route('admin.users'));
 
         $created = User::where('username', $username)->firstOrFail();
-        $this->assertSame('Dela Cruz, Maria Santos Jr.', $created->name);
+        $this->assertSame('Maria Santos Dela Cruz Jr.', $created->name);
         $this->assertSame('Dela Cruz', $created->surname);
         $this->assertSame('Maria', $created->first_name);
         $this->assertSame('Santos', $created->middle_name);
@@ -246,7 +246,8 @@ class AdminUserManagementTest extends TestCase
             ->post(route('admin.users.store'), [
                 '_token' => 'test-token',
                 'account_type' => 'student',
-                'name' => 'Student Officer',
+                'surname' => 'Officer',
+                'first_name' => 'Student',
                 'username' => 'student-officer-' . uniqid() . '@test.com',
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
@@ -260,7 +261,7 @@ class AdminUserManagementTest extends TestCase
 
         $response->assertRedirect(route('admin.users'));
 
-        $created = User::where('name', 'Student Officer')->firstOrFail();
+        $created = User::where('username', 'like', 'student-officer-%@test.com')->firstOrFail();
         $this->assertSame('Student Council Officer', $created->position);
         $this->assertDatabaseHas('student_organization_members', [
             'user_id' => $created->id,
@@ -466,8 +467,20 @@ class AdminUserManagementTest extends TestCase
     public function test_admin_user_search_filters_by_name_only(): void
     {
         $admin = User::factory()->createOne(['role' => 'admin']);
-        User::factory()->createOne(['name' => 'Alice Example', 'username' => 'alice@example.com', 'role' => 'requestor']);
-        User::factory()->createOne(['name' => 'Bob Example', 'username' => 'bob@example.com', 'role' => 'requestor']);
+        User::factory()->createOne([
+            'name' => 'Alice Example',
+            'first_name' => 'Alice',
+            'surname' => 'Example',
+            'username' => 'alice@example.com',
+            'role' => 'requestor',
+        ]);
+        User::factory()->createOne([
+            'name' => 'Bob Example',
+            'first_name' => 'Bob',
+            'surname' => 'Example',
+            'username' => 'bob@example.com',
+            'role' => 'requestor',
+        ]);
 
         $response = $this->actingAs($admin)
             ->get(route('admin.users', ['search' => 'Alice']));

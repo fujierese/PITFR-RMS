@@ -35,7 +35,7 @@ class RequestDocumentUploadTest extends TestCase
             'custodian_id' => $custodian->id,
         ]);
         Equipment::factory()->create([
-            'name' => 'Microphones',
+            'name' => 'Wireless Microphones',
             'custodian_id' => $custodian->id,
             'quantity' => 10,
             'quantity_available' => 10,
@@ -78,6 +78,7 @@ class RequestDocumentUploadTest extends TestCase
         $this->externalUser = User::factory()->create([
             'requestor_type' => 'outsider',
             'role' => 'requestor',  // Must be 'requestor' role to be able to submit requests
+            'office_or_organization' => 'External Partner Organization',
         ]);
 
         $this->studentUser->update([
@@ -324,8 +325,8 @@ class RequestDocumentUploadTest extends TestCase
             'start_time' => '10:00',
             'end_time' => '11:30',
             'venue' => 'Conference Hall & Interaction Center (CHIC)',
-            'equipment' => ['Microphones'],
-            'equipment_quantities' => ['Microphones' => 2],
+            'equipment' => ['Wireless Microphones'],
+            'equipment_quantities' => ['Wireless Microphones' => 2],
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
             // Missing activity_proposal_file
         ]);
@@ -346,8 +347,8 @@ class RequestDocumentUploadTest extends TestCase
             'start_time' => '10:00',
             'end_time' => '11:30',
             'venue' => 'Conference Hall & Interaction Center (CHIC)',
-            'equipment' => ['Microphones'],
-            'equipment_quantities' => ['Microphones' => 2],
+            'equipment' => ['Wireless Microphones'],
+            'equipment_quantities' => ['Wireless Microphones' => 2],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ])->assertRedirect()->assertSessionHasNoErrors();

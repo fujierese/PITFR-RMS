@@ -134,27 +134,25 @@ class User extends Authenticatable implements CanResetPassword
         $middleName = trim((string) ($middleName ?? ''));
         $suffix = trim((string) ($suffix ?? ''));
 
-        $given = array_values(array_filter([$firstName, $middleName], static fn ($part) => $part !== ''));
+        // Build user-friendly format: FirstName MiddleName Surname Suffix
+        $parts = array_filter([
+            $firstName,
+            $middleName,
+            $surname,
+            $suffix,
+        ], static fn ($part) => $part !== '');
 
-        if ($surname !== '') {
-            $combined = implode(' ', $given);
-            $formatted = $combined === ''
-                ? $surname
-                : $surname . ', ' . $combined;
-
-            return $suffix !== '' ? trim($formatted . ' ' . $suffix) : $formatted;
-        }
-
-        $combined = implode(' ', $given);
-        if ($combined === '') {
-            return $suffix !== '' ? $suffix : '';
-        }
-
-        return $suffix !== '' ? trim($combined . ' ' . $suffix) : $combined;
+        return implode(' ', $parts);
     }
 
     public function getNameAttribute(): string
     {
+        // Return stored name if it exists; only format from components if name is empty
+        if (!empty($this->attributes['name'])) {
+            return (string) $this->attributes['name'];
+        }
+
+        // Format from split-name components as fallback
         return self::formatFullName($this->surname, $this->first_name, $this->middle_name, $this->suffix);
     }
 

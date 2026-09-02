@@ -27,13 +27,13 @@ class ReferenceDataSeederTest extends TestCase
 
         foreach ([
             'Sound System' => 1,
-            'Wireless Microphone' => 1,
-            'Non-wireless Microphone' => 1,
+            'Wireless Microphones' => 1,
+            'Non-Wireless Microphones' => 1,
             'Iwata Cooler Fans' => 4,
             'Industrial Fans' => 6,
             'Tables' => 10,
             'Canopies' => 10,
-            'Chairs' => 600,
+            'Monobloc Chairs' => 600,
         ] as $name => $quantity) {
             $this->assertSame(1, Equipment::where('name', $name)->count());
             $this->assertSame($quantity, Equipment::where('name', $name)->value('quantity'));

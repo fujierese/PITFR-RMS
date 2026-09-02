@@ -52,7 +52,10 @@ class SettingsPageTest extends TestCase
         ]);
 
         $response = $this->actingAs($requestor)->post(route('requestor.settings.profile'), [
-            'name' => 'Updated Name',
+            'first_name' => 'Updated',
+            'middle_name' => '',
+            'surname' => 'Name',
+            'suffix' => '',
             'department' => 'Unauthorized Department',
             'contact_number' => '09170000000',
         ]);

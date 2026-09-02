@@ -106,6 +106,11 @@ class RequestStatusChanged extends Notification
     {
         $requestId = $this->facilityRequest->id;
 
+        // Handle unsaved requests gracefully by returning home URL
+        if (! $requestId) {
+            return route('home');
+        }
+
         if (! $notifiable) {
             return route('request.show', ['id' => $requestId]);
         }

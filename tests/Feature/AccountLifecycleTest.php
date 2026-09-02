@@ -80,7 +80,9 @@ class AccountLifecycleTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('requestor.settings.profile'), [
-                'name' => 'Updated Name',
+                'first_name' => 'Updated',
+                'middle_name' => '',
+                'surname' => 'Name',
                 'contact_number' => '09170000000',
                 'role' => 'admin',
                 'is_active' => false,

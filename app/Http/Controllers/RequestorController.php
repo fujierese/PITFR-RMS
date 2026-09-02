@@ -61,7 +61,6 @@ class RequestorController extends Controller
             'non-wireless microphones' => 'Non-Wireless Microphones',
             'non wireless microphone' => 'Non-Wireless Microphones',
             'non wireless microphones' => 'Non-Wireless Microphones',
-            'microphones' => 'Wireless Microphones',
             'chairs' => 'Monobloc Chairs',
             'monobloc chairs' => 'Monobloc Chairs',
             'monobloc chair' => 'Monobloc Chairs',
@@ -820,7 +819,7 @@ class RequestorController extends Controller
 
         if ($user->isStudent()) {
             $trustedStudentOrganization = $user->studentOrganizations()
-                ->whereKey($validated['student_organization_id'] ?? null)
+                ->where('student_organizations.id', $validated['student_organization_id'] ?? null)
                 ->first();
 
             if (! $trustedStudentOrganization) {
@@ -935,8 +934,12 @@ class RequestorController extends Controller
         $allowedVenues = array_merge(self::VENUE_OPTIONS, ['Others (specify)']);
         $venue = in_array($submittedVenue, $allowedVenues, true) ? [$submittedVenue] : [];
         
-        // Get equipment from request and filter against the canonical Phase 8 names while keeping legacy aliases supported.
-        $requestedEquipment = self::normalizeEquipmentSelection(array_values(array_filter($request->input('equipment', []), fn($e) => is_string($e) && trim($e) !== '')));
+        // Normalize explicit canonical names and known legacy variants; reject ambiguous generic microphone input.
+        $rawEquipment = array_values(array_filter($request->input('equipment', []), fn($e) => is_string($e) && trim($e) !== ''));
+        if (in_array('microphones', array_map(static fn (string $item): string => mb_strtolower(trim($item)), $rawEquipment), true)) {
+            return back()->withErrors(['equipment' => 'Please select Wireless Microphones or Non-Wireless Microphones.'])->withInput();
+        }
+        $requestedEquipment = self::normalizeEquipmentSelection($rawEquipment);
         $requestedEquipment = array_values(array_filter($requestedEquipment, fn ($item) => in_array($item, self::EQUIPMENT_OPTIONS, true)));
 
         // Apply venue-specific equipment rules

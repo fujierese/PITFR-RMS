@@ -6,6 +6,7 @@ use App\Models\FacilityRequest;
 use App\Models\StudentOrganization;
 use App\Models\StudentOrganizationMember;
 use App\Models\User;
+use App\Models\Equipment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
@@ -19,6 +20,11 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
     {
         parent::setUp();
         Mail::fake();
+        $custodian = User::factory()->create(['role' => 'admin']);
+        Equipment::factory()->create([
+            'name' => 'Sound System',
+            'custodian_id' => $custodian->id,
+        ]);
     }
 
     public function test_public_registration_rejects_all_institutional_classifications(): void
@@ -134,17 +140,17 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
         ]))->assertSessionHasErrors('student_organization_id');
     }
 
-    public function test_student_personal_request_keeps_student_identity_and_requires_receipt(): void
+    public function test_student_personal_request_keeps_student_identity_and_requires_activity_proposal(): void
     {
         $student = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
 
         $this->actingAs($student)->post(route('requestor.store'), $this->requestPayload([
             'request_context' => 'personal',
-        ]))->assertSessionHasErrors('igp_receipt_file');
+        ]))->assertSessionHasErrors('activity_proposal_file');
 
         $this->actingAs($student)->post(route('requestor.store'), $this->requestPayload([
             'request_context' => 'personal',
-            'igp_receipt_file' => UploadedFile::fake()->create('payment.pdf', 100),
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
         ]))->assertRedirect();
 
         $this->assertSame('student', $student->fresh()->requestor_type);
@@ -155,42 +161,48 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
         ]);
     }
 
-    public function test_venue_only_personal_and_outsider_requests_are_valid(): void
+    public function test_venue_only_personal_request_still_requires_activity_proposal(): void
     {
         $student = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
-        $outsider = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'outsider']);
 
         $this->actingAs($student)->post(route('requestor.store'), $this->requestPayload([
             'request_context' => 'personal',
-            'igp_receipt_file' => UploadedFile::fake()->create('student-payment.pdf', 100),
             'equipment' => [],
             'equipment_quantities' => [],
-        ]))->assertRedirect()->assertSessionHasNoErrors();
-
-        $this->actingAs($outsider)->post(route('requestor.store'), $this->requestPayload([
-            'request_context' => 'personal',
-            'organization_name' => 'Outside Group',
-            'venue' => 'Covered Court',
-            'igp_receipt_file' => UploadedFile::fake()->create('outsider-payment.pdf', 100),
-            'equipment' => [],
-            'equipment_quantities' => [],
-        ]))->assertRedirect()->assertSessionHasNoErrors();
-
-        $this->assertDatabaseCount('facility_requests', 2);
-        $this->assertDatabaseHas('facility_requests', ['requested_by_id' => $student->id, 'equipment' => '[]']);
+        ]))->assertSessionHasErrors('activity_proposal_file');
     }
 
-    public function test_faculty_personal_request_keeps_faculty_identity_and_requires_receipt(): void
+    public function test_external_partner_with_valid_documents_can_submit_request(): void
+    {
+        $outsider = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'outsider',
+            'office_or_organization' => 'External Partner Organization',
+        ]);
+
+        $this->actingAs($outsider)->post(route('requestor.store'), $this->requestPayload([
+            'request_context' => 'outside_organization',
+            'igp_receipt_file' => UploadedFile::fake()->create('receipt.pdf', 100),
+        ]))->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('facility_requests', [
+            'requested_by_id' => $outsider->id,
+            'request_context' => 'outside_organization',
+            'organization_name' => 'External Partner Organization',
+        ]);
+    }
+
+    public function test_faculty_personal_request_keeps_faculty_identity_and_requires_activity_proposal(): void
     {
         $faculty = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'faculty']);
 
         $this->actingAs($faculty)->post(route('requestor.store'), $this->requestPayload([
             'request_context' => 'personal',
-        ]))->assertSessionHasErrors('igp_receipt_file');
+        ]))->assertSessionHasErrors('activity_proposal_file');
 
         $this->actingAs($faculty)->post(route('requestor.store'), $this->requestPayload([
             'request_context' => 'personal',
-            'igp_receipt_file' => UploadedFile::fake()->create('faculty-payment.pdf', 100),
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
         ]))->assertRedirect();
 
         $this->assertSame('faculty', $faculty->fresh()->requestor_type);

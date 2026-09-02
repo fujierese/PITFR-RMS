@@ -94,8 +94,8 @@ class FacilityRequestNormalizationTest extends TestCase
             'start_time' => '09:00',
             'end_time' => '17:00',
             'venue' => ['Conference Hall & Interaction Center (CHIC)'],
-            'equipment' => ['Sound System', 'Microphones'],
-            'equipment_quantities' => ['Sound System' => 2, 'Microphones' => 3],
+            'equipment' => ['Sound System', 'Wireless Microphones'],
+            'equipment_quantities' => ['Sound System' => 2, 'Wireless Microphones' => 3],
             'status' => 'pending',
             'venue_status' => 'pending',
             'equipment_status' => 'pending',
@@ -104,7 +104,7 @@ class FacilityRequestNormalizationTest extends TestCase
         $request->syncRelationalItems();
 
         $this->assertSame(['Conference Hall & Interaction Center (CHIC)'], $request->fresh()->requestVenues()->pluck('name')->all());
-        $this->assertSame(['Sound System', 'Microphones'], $request->fresh()->requestEquipment()->pluck('name')->all());
+        $this->assertSame(['Sound System', 'Wireless Microphones'], $request->fresh()->requestEquipment()->pluck('name')->all());
         $this->assertSame([2, 3], $request->fresh()->requestEquipment()->pluck('quantity')->all());
     }
 

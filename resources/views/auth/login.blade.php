@@ -186,7 +186,7 @@
                     <div>
 
                         <label for="email" class="mb-2 block text-sm font-semibold text-slate-700">
-                            Username or Email Address
+                            Email Address
                         </label>
 
                         <div class="relative">

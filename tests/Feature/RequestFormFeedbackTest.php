@@ -7,11 +7,14 @@ use App\Models\Department;
 use App\Models\StudentOrganization;
 use App\Models\User;
 use Database\Seeders\CollegeDepartmentSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
 
 class RequestFormFeedbackTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_request_form_shows_outside_organization_guidance_and_summary(): void
     {
         $user = new User([

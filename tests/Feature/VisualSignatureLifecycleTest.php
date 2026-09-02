@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\FacilityRequest;
 use App\Models\User;
+use App\Models\Equipment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -17,6 +18,11 @@ class VisualSignatureLifecycleTest extends TestCase
     {
         parent::setUp();
         Storage::fake('local');
+        $custodian = User::factory()->create(['role' => 'admin']);
+        Equipment::factory()->create([
+            'name' => 'Sound System',
+            'custodian_id' => $custodian->id,
+        ]);
     }
 
     /** @test */

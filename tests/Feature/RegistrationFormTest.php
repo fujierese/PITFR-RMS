@@ -9,7 +9,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Auth\Notifications\ResetPassword;
+use App\Notifications\ResetPasswordNotification;
 use App\Mail\RegistrationOtp;
 use Carbon\Carbon;
 
@@ -271,7 +271,7 @@ class RegistrationFormTest extends TestCase
         $this->post(route('password.email'), ['email' => $user->username])
             ->assertSessionHas('status');
 
-        Notification::assertSentTo($user, ResetPassword::class);
+        Notification::assertSentTo($user, ResetPasswordNotification::class);
     }
 
     public function test_password_reset_link_updates_password(): void
@@ -281,7 +281,7 @@ class RegistrationFormTest extends TestCase
         $this->post(route('password.email'), ['email' => $user->username]);
         $token = null;
 
-        Notification::assertSentTo($user, ResetPassword::class, function (ResetPassword $notification) use (&$token): bool {
+        Notification::assertSentTo($user, ResetPasswordNotification::class, function (ResetPasswordNotification $notification) use (&$token): bool {
             $token = $notification->token;
             return true;
         });
