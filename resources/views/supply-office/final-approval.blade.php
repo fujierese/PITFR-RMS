@@ -3,37 +3,12 @@
 
 @section('content')
 <div class="space-y-6">
-    <div class="rounded-3xl bg-gradient-to-r from-amber-600 to-orange-500 p-6 text-white shadow-sm">
-        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-                <h1 class="text-2xl font-semibold">Final Approval Queue</h1>
-                <p class="mt-2 text-sm text-amber-100">Review requests that have completed custodian endorsement and are waiting for final approval.</p>
-            </div>
-            <a href="{{ route('supply-office.index') }}" class="inline-flex items-center rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20">Back to Dashboard</a>
-        </div>
-    </div>
+    <x-page-header eyebrow="Requests" title="Final Approval Queue" description="Review requests that have completed custodian endorsement and are waiting for final approval." accent="amber">
+        <x-slot:actions><a href="{{ route('supply-office.index') }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Back to Dashboard</a></x-slot:actions>
+    </x-page-header>
 
     <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/50">
-        <form method="GET" action="{{ route('supply-office.requests.final-approval') }}" class="mb-6 grid gap-3 md:grid-cols-4">
-            <label class="md:col-span-2">
-                <span class="sr-only">Search requests</span>
-                <input type="search" name="search" value="{{ $searchQuery }}" placeholder="Search request number, activity, organization, venue, equipment..." class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            </label>
-            <div class="md:col-span-2 flex items-center gap-3">
-                <span class="text-sm font-semibold text-slate-700">Advanced Filters</span>
-            </div>
-            <input type="text" name="department" value="{{ $departmentFilter }}" placeholder="Department" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <input type="text" name="venue" value="{{ $venueFilter }}" placeholder="Venue" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <select name="priority" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                <option value="">All priorities</option>
-                <option value="regular" {{ $priorityFilter === 'regular' ? 'selected' : '' }}>Regular</option>
-                <option value="institutional" {{ $priorityFilter === 'institutional' ? 'selected' : '' }}>Institutional</option>
-            </select>
-            <input type="date" name="date_from" value="{{ $dateFrom }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <input type="date" name="date_to" value="{{ $dateTo }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <button type="submit" class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Advanced Filters</button>
-            <a href="{{ route('supply-office.requests.final-approval') }}" class="rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Clear</a>
-        </form>
+        @include('supply-office.partials.request-filters', ['action' => route('supply-office.requests.final-approval')])
 
         @if($requests->isEmpty())
             <div class="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 p-6 text-center shadow-sm sm:p-8">

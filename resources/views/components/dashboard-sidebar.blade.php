@@ -7,6 +7,31 @@
     $calendarRoute = route('calendar.index');
     $calendarRouteName = 'calendar.index';
     $notificationCount = $user ? $user->unreadNotifications()->count() : 0;
+    $meaningfulValue = static function ($value): ?string {
+        $value = trim((string) ($value ?? ''));
+
+        return $value === '' || in_array(strtolower($value), ['n/a', 'na', 'null', 'undefined', 'none'], true)
+            ? null
+            : $value;
+    };
+    $displaySuffix = $meaningfulValue($user?->suffix);
+    $displayNameParts = array_values(array_filter([
+        $meaningfulValue($user?->first_name),
+        $meaningfulValue($user?->middle_name),
+        $meaningfulValue($user?->surname),
+    ]));
+    $displayName = $displayNameParts !== []
+        ? implode(' ', $displayNameParts) . ($displaySuffix ? ' ' . $displaySuffix : '')
+        : trim((string) preg_replace('/\s+(?:n\/a|na|null|undefined|none)$/i', '', (string) ($user?->name ?? 'Guest')));
+    $displayPosition = $meaningfulValue($user?->position);
+    $displayContext = $user?->role_label ?? 'Requestor';
+
+    if ($user && ($user->isStudentOrganization() || $user->studentOrganizations()->exists())) {
+        $displayContext = $meaningfulValue($user->studentOrganizations()->first()?->name) ?? $meaningfulValue($user->office_or_organization) ?? $displayContext;
+    } elseif ($user && ($user->isFaculty() || in_array($user->role, ['faculty', 'staff', 'office_staff'], true))) {
+        $displayContext = $meaningfulValue($user->departmentRecord?->name) ?? $meaningfulValue($user->department) ?? $displayContext;
+    }
+    $displayIdentity = $displayContext . ($displayPosition ? ' — ' . $displayPosition : '');
 
     if ($user?->isAdmin()) {
         $calendarRoute = route('supply-office.calendar');
@@ -39,10 +64,10 @@
             ];
             $navigation[] = [
                 'key' => 'pending-requests',
-                'label' => 'Pending Review',
+                'label' => 'Pending Requests',
                 'route' => route('supply-office.requests.pending'),
                 'route_name' => 'supply-office.requests.pending',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7 12a5 5 0 1110 0 5 5 0 01-10 0z"/></svg>',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
             ];
             $navigation[] = [
                 'key' => 'needs-revision',
@@ -60,17 +85,17 @@
             ];
             $navigation[] = [
                 'key' => 'final-approved-activities',
-                'label' => 'Approved',
+                'label' => 'Approved Requests',
                 'route' => route('supply-office.requests.approved'),
                 'route_name' => 'supply-office.requests.approved',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m7 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
             ];
             $navigation[] = [
                 'key' => 'rejected-requests',
-                'label' => 'Rejected',
+                'label' => 'Rejected Requests',
                 'route' => route('supply-office.requests.rejected'),
                 'route_name' => 'supply-office.requests.rejected',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9l-6 6m0-6l6 6m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
             ];
 
             // Calendar
@@ -144,6 +169,30 @@
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l9-9 9 9v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9z"/></svg>',
             ];
 
+            $navigation[] = [
+                'section' => 'Requests',
+                'type' => 'section-header',
+            ];
+            foreach ([
+                ['key' => 'reservations-all', 'label' => 'All Requests', 'filter' => 'all'],
+                ['key' => 'reservations-pending', 'label' => 'Pending Requests', 'filter' => 'pending'],
+                ['key' => 'reservations-approved', 'label' => 'Approved Requests', 'filter' => 'approved'],
+                ['key' => 'reservations-rejected', 'label' => 'Rejected Requests', 'filter' => 'rejected'],
+            ] as $reservationLink) {
+                $navigation[] = [
+                    'key' => $reservationLink['key'],
+                    'label' => $reservationLink['label'],
+                    'route' => route('custodian.index', ['filter' => $reservationLink['filter']]),
+                    'route_name' => 'custodian.index',
+                    'icon' => match ($reservationLink['filter']) {
+                        'pending' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+                        'approved' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+                        'rejected' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9l-6 6m0-6l6 6m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+                        default => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m-1-2h-2a2 2 0 00-2 2v2h6V5a2 2 0 00-2-2z"/></svg>',
+                    },
+                ];
+            }
+
             // Resources section - show resource-specific link based on custodian type
             // CRITICAL: Never show both Venue and Equipment for a single custodian (Spec §9)
             // For role-specific custodians (custodian-venue/custodian-equipment): show only their type
@@ -158,19 +207,19 @@
             if ($custodianType === 'venue') {
                 // Venue Custodian (role='custodian-venue') - show Venue ONLY
                 $navigation[] = [
-                    'key' => 'venue',
-                    'label' => 'Venue',
-                    'route' => route('custodian.venue'),
-                    'route_name' => 'custodian.venue',
+                    'key' => 'assignments',
+                    'label' => 'My Assignments',
+                    'route' => route('custodian.assignments'),
+                    'route_name' => 'custodian.assignments',
                     'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/></svg>',
                 ];
             } elseif ($custodianType === 'equipment') {
                 // Equipment Custodian (role='custodian-equipment') - show Equipment ONLY
                 $navigation[] = [
-                    'key' => 'equipment',
-                    'label' => 'Equipment',
-                    'route' => route('custodian.equipment'),
-                    'route_name' => 'custodian.equipment',
+                    'key' => 'assignments',
+                    'label' => 'My Assignments',
+                    'route' => route('custodian.assignments'),
+                    'route_name' => 'custodian.assignments',
                     'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m0 0V3m0 2V5m0 0h2m-6 0h2m0 0h-2m0 2h2m0 0h2m0 0h-2"/></svg>',
                 ];
             } else {
@@ -181,19 +230,19 @@
                 if ($user->equipmentItems()->exists()) {
                     // Has equipment assigned - show Equipment ONLY
                     $navigation[] = [
-                        'key' => 'equipment',
-                        'label' => 'Equipment',
-                        'route' => route('custodian.equipment'),
-                        'route_name' => 'custodian.equipment',
+                        'key' => 'assignments',
+                        'label' => 'My Assignments',
+                        'route' => route('custodian.assignments'),
+                        'route_name' => 'custodian.assignments',
                         'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m0 0V3m0 2V5m0 0h2m-6 0h2m0 0h-2m0 2h2m0 0h2m0 0h-2"/></svg>',
                     ];
                 } elseif ($user->venues()->exists()) {
                     // No equipment, but has venues - show Venue ONLY
                     $navigation[] = [
-                        'key' => 'venue',
-                        'label' => 'Venue',
-                        'route' => route('custodian.venue'),
-                        'route_name' => 'custodian.venue',
+                        'key' => 'assignments',
+                        'label' => 'My Assignments',
+                        'route' => route('custodian.assignments'),
+                        'route_name' => 'custodian.assignments',
                         'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/></svg>',
                     ];
                 }
@@ -243,11 +292,19 @@
 
         if (! $user->isAdmin() && ! $user->isCustodian()) {
             $navigation[] = [
+                'section' => 'Overview',
+                'type' => 'section-header',
+            ];
+            $navigation[] = [
                 'key' => 'overview',
                 'label' => 'Dashboard',
                 'route' => route('requestor.index', ['tab' => 'overview']),
                 'route_name' => 'requestor.index',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l9-9 9 9v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9z"/></svg>',
+            ];
+            $navigation[] = [
+                'section' => 'Requests',
+                'type' => 'section-header',
             ];
             $navigation[] = [
                 'key' => 'create-request',
@@ -261,7 +318,11 @@
                 'label' => 'My Requests',
                 'route' => route('requestor.index', ['tab' => 'requests']),
                 'route_name' => 'requestor.index',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m-1-2h-2a2 2 0 00-2 2v2h6V5a2 2 0 00-2-2z"/></svg>',
+            ];
+            $navigation[] = [
+                'section' => 'Notifications',
+                'type' => 'section-header',
             ];
             $navigation[] = [
                 'key' => 'notifications',
@@ -269,6 +330,10 @@
                 'route' => route('notifications.index'),
                 'route_name' => 'notifications.index',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>',
+            ];
+            $navigation[] = [
+                'section' => 'Settings',
+                'type' => 'section-header',
             ];
             $navigation[] = [
                 'key' => 'settings',
@@ -314,10 +379,14 @@
         $activeKey = 'settings';
     } elseif ($currentRoute === 'custodian.index') {
         $activeKey = 'dashboard';
-    } elseif ($currentRoute === 'custodian.venue') {
-        $activeKey = 'venue';
-    } elseif ($currentRoute === 'custodian.equipment') {
-        $activeKey = 'equipment';
+        $activeKey = match (request()->query('filter', 'all')) {
+            'pending' => 'reservations-pending',
+            'approved' => 'reservations-approved',
+            'rejected' => 'reservations-rejected',
+            default => 'reservations-all',
+        };
+    } elseif ($currentRoute === 'custodian.venue' || $currentRoute === 'custodian.equipment') {
+        $activeKey = 'assignments';
     } elseif ($currentRoute === 'custodian.assignments') {
         $activeKey = 'assignments';
     } elseif ($currentRoute === 'custodian.settings') {
@@ -344,15 +413,18 @@
 
         <div class="mt-3 rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/20 via-emerald-500/10 to-slate-800/80 p-2.5">
             <p class="text-[9px] font-semibold uppercase tracking-[0.28em] text-slate-400">Signed in as</p>
-            <p class="mt-1 text-sm font-semibold text-white">{{ $user?->name ?? 'Guest' }}</p>
-            <p class="text-xs text-slate-300">{{ $user?->role_label ?? 'Requestor' }}</p>
+            <p class="mt-1 break-words text-sm font-semibold text-white">{{ $displayName }}</p>
+            <p class="break-words text-xs text-slate-300">{{ $displayIdentity }}</p>
         </div>
     </div>
     <nav class="flex-1 min-h-0 overflow-y-auto px-2.5 py-3">
         <div class="space-y-1">
             @foreach($navigation as $item)
                 @if(($item['type'] ?? null) === 'section-header')
-                    <div class="mt-4 first:mt-0 px-3 py-2">
+                    <div class="mt-4 first:mt-0 flex items-center gap-2 px-3 py-2">
+                        @if(isset($item['icon']))
+                            <span class="inline-flex h-4 w-4 items-center justify-center text-slate-500">{!! $item['icon'] !!}</span>
+                        @endif
                         <p class="text-[10px] font-bold uppercase tracking-[0.32em] text-slate-500">{{ $item['section'] }}</p>
                     </div>
                 @elseif($item['label'] === 'Settings' || $item['label'] === 'Account Settings')
@@ -360,7 +432,7 @@
                         <a href="{{ $item['route'] }}" data-sidebar-close="true"
                            class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition {{ $isActive($item['key']) ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
                             <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg {{ $isActive($item['key']) ? 'bg-white/15 text-white' : 'bg-slate-800 text-slate-400 group-hover:text-white' }}">
-                                {!! $item['icon'] !!}
+                                {!! $item['icon'] ?? '' !!}
                             </span>
                             <span>{{ $item['label'] }}</span>
                         </a>
@@ -379,7 +451,7 @@
                     <a href="{{ $item['route'] }}" data-sidebar-close="true"
                        class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition {{ $isActive($item['key']) ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
                         <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg {{ $isActive($item['key']) ? 'bg-white/15 text-white' : 'bg-slate-800 text-slate-400 group-hover:text-white' }}">
-                            {!! $item['icon'] !!}
+                            {!! $item['icon'] ?? '' !!}
                         </span>
                         <span>{{ $item['label'] }}</span>
                         @if($item['key'] === 'notifications' && $notificationCount > 0)

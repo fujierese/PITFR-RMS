@@ -3,31 +3,12 @@
 
 @section('content')
 <div class="space-y-6">
-    <div class="rounded-3xl bg-gradient-to-r from-emerald-600 to-teal-500 p-6 text-white shadow-sm">
-        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-                <h1 class="text-2xl font-semibold">📋 Final Approved Activities</h1>
-                <p class="mt-2 text-sm text-emerald-100">Documentary record of activities with completed final approval. Use for reference and historical tracking.</p>
-            </div>
-            <a href="{{ route('supply-office.index') }}" class="inline-flex items-center rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20">Back to Dashboard</a>
-        </div>
-    </div>
+    <x-page-header eyebrow="Requests" title="Final Approved Activities" description="Documentary record of activities with completed final approval. Use for reference and historical tracking." accent="emerald">
+        <x-slot:actions><a href="{{ route('supply-office.index') }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Back to Dashboard</a></x-slot:actions>
+    </x-page-header>
 
     <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/50">
-        <form method="GET" action="{{ route('supply-office.requests.approved') }}" class="mb-6 grid gap-3 md:grid-cols-4">
-            <input type="search" name="search" value="{{ $searchQuery }}" placeholder="Search request number, activity, organization, venue, equipment..." class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <input type="text" name="department" value="{{ $departmentFilter }}" placeholder="Department" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <input type="text" name="venue" value="{{ $venueFilter }}" placeholder="Venue" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <select name="priority" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                <option value="">All priorities</option>
-                <option value="regular" {{ $priorityFilter === 'regular' ? 'selected' : '' }}>Regular</option>
-                <option value="institutional" {{ $priorityFilter === 'institutional' ? 'selected' : '' }}>Institutional</option>
-            </select>
-            <input type="date" name="date_from" value="{{ $dateFrom }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <input type="date" name="date_to" value="{{ $dateTo }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <button type="submit" class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Advanced Filters</button>
-            <a href="{{ route('supply-office.requests.approved') }}" class="rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Clear</a>
-        </form>
+        @include('supply-office.partials.request-filters', ['action' => route('supply-office.requests.approved')])
 
         <div class="mb-4 flex flex-wrap gap-2">
             <a href="{{ route('supply-office.export', ['scope' => 'approved', 'search' => $searchQuery, 'department' => $departmentFilter, 'venue' => $venueFilter, 'date_from' => $dateFrom, 'date_to' => $dateTo, 'priority' => $priorityFilter]) }}" class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">Export CSV</a>
@@ -54,7 +35,7 @@
                             <td class="px-4 py-4">{{ $request->department ?? '—' }}</td>
                             <td class="px-4 py-4">{{ implode(', ', $request->getVenueNames()) ?: '—' }}</td>
                             <td class="px-4 py-4">{{ $request->start_date ? \Carbon\Carbon::parse($request->start_date)->format('M d, Y') : '—' }}</td>
-                            <td class="px-4 py-4"><span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Approved</span></td>
+                            <td class="px-4 py-4"><x-status-badge status="approved" label="Approved" /></td>
                             <td class="px-4 py-4 text-right"><a href="{{ route('request.print', $request->id) }}" target="_blank" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Print</a></td>
                         </tr>
                     @empty

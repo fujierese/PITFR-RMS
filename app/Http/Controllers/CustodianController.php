@@ -55,16 +55,64 @@ class CustodianController extends Controller
         });
 
         $filter = $request->get('filter', 'all');
+        $search = trim((string) $request->get('search', ''));
+        $venueFilter = trim((string) $request->get('venue', ''));
+        $sort = $request->get('sort', 'latest') === 'oldest' ? 'oldest' : 'latest';
+        $dateFrom = $request->get('date_from', '');
+        $dateTo = $request->get('date_to', '');
+
+        $requestVenueOptions = $allRequests
+            ->flatMap(fn ($requestItem) => $requestItem->getVenueNames())
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        $requests = $allRequests->filter(function ($requestItem) use ($search, $venueFilter, $dateFrom, $dateTo) {
+            $searchable = collect([
+                $requestItem->control_number,
+                $requestItem->name_of_activity,
+                $requestItem->department,
+                $requestItem->requester?->name,
+                implode(', ', $requestItem->getVenueNames()),
+                implode(', ', $requestItem->getEquipmentItems()),
+            ])->filter()->join(' ');
+
+            if ($search !== '' && stripos($searchable, $search) === false) {
+                return false;
+            }
+
+            $venueNames = implode(', ', $requestItem->getVenueNames());
+            if ($venueFilter !== '' && stripos($venueNames, $venueFilter) === false) {
+                return false;
+            }
+
+            $requestDate = $requestItem->start_date?->toDateString();
+            if ($dateFrom !== '' && (!$requestDate || $requestDate < $dateFrom)) {
+                return false;
+            }
+            if ($dateTo !== '' && (!$requestDate || $requestDate > $dateTo)) {
+                return false;
+            }
+
+            return true;
+        });
 
         if ($custodianType === 'equipment') {
-            $requests = $filter === 'all'
-                ? $allRequests
-                : $allRequests->filter(fn($r) => $r->custodian_status === $filter);
+            if ($filter !== 'all') {
+                $requests = $requests->filter(fn($r) => $r->custodian_status === $filter);
+            }
         } else {
             $statusField = $custodianType . '_status';
-            $requests    = $filter === 'all'
-                ? $allRequests
-                : $allRequests->filter(fn($r) => $r->$statusField === $filter);
+            if ($filter !== 'all') {
+                $requests = $requests->filter(fn($r) => $r->$statusField === $filter);
+            }
+        }
+
+        if ($sort === 'oldest') {
+            $requests = $requests->sortBy(fn ($requestItem) => $requestItem->start_date?->timestamp ?? 0)->values();
+        } else {
+            $requests = $requests->sortByDesc(fn ($requestItem) => $requestItem->start_date?->timestamp ?? 0)->values();
         }
 
         $reviewRequest = $request->has('review')
@@ -81,6 +129,12 @@ class CustodianController extends Controller
             'filter'             => $filter,
             'reviewRequest'      => $reviewRequest,
             'stats'              => $stats,
+            'search'             => $search,
+            'venueFilter'        => $venueFilter,
+            'sort'               => $sort,
+            'dateFrom'           => $dateFrom,
+            'dateTo'             => $dateTo,
+            'requestVenueOptions' => $requestVenueOptions,
         ]);
     }
 

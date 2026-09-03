@@ -5,19 +5,17 @@
 @section('content')
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="space-y-6">
-        <section class="rounded-3xl bg-gradient-to-r from-slate-900 to-indigo-700 p-4 shadow-xl ring-1 ring-slate-200/10 text-white sm:p-6">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                    <span class="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
-                        Custodian Assignments
-                    </span>
-                    <h1 class="mt-3 text-3xl font-semibold tracking-tight">{{ $user->name }}</h1>
-                    <p class="mt-2 max-w-2xl text-sm text-slate-300">A quick overview of the venues and equipment you are responsible for today.</p>
-                </div>
-                <span class="inline-flex items-center rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-slate-100 ring-1 ring-white/10">
-                    Assigned to {{ $user->name }}
-                </span>
-            </div>
+        <x-page-header
+            eyebrow="Resource management"
+            title="My Assignments"
+            :description="'A quick overview of the venues and equipment you are responsible for today.'"
+        >
+            <x-slot:actions>
+                <span class="inline-flex items-center rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">Assigned to {{ $user->name }}</span>
+            </x-slot:actions>
+        </x-page-header>
+
+        <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
 
             <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 @if($custodianType === 'venue')
@@ -83,13 +81,6 @@
                             <span class="text-sm font-medium text-slate-500">{{ $venues->count() }} total</span>
                         </div>
 
-                        <form method="POST" action="{{ route('custodian.venues.store') }}" class="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3">
-                            @csrf
-                            <input type="text" name="name" placeholder="Venue name" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
-                            <input type="number" name="capacity" placeholder="Capacity" min="1" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                            <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Add Venue</button>
-                        </form>
-
                         @if($venues->isEmpty())
                             <p class="mt-4 text-sm text-slate-500">No venues assigned to you.</p>
                         @else
@@ -101,7 +92,7 @@
                                                 <h4 class="text-lg font-semibold text-slate-900">{{ $venue->name }}</h4>
                                                 <p class="mt-2 text-sm text-slate-600">ID: {{ $venue->id }}</p>
                                             </div>
-                                            <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide {{ $venue->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700' }}">{{ $venue->is_active ? 'Enabled' : 'Disabled' }}</span>
+                                            <x-status-badge :status="$venue->is_active ? 'active' : 'inactive'" :label="$venue->is_active ? 'Enabled' : 'Disabled'" />
                                         </div>
                                         @if($venue->description)
                                             <p class="mt-4 text-sm leading-6 text-slate-600">{{ $venue->description }}</p>
@@ -134,14 +125,6 @@
                             <span class="text-sm font-medium text-slate-500">{{ $equipment->count() }} total</span>
                         </div>
 
-                        <form method="POST" action="{{ route('custodian.equipment.store') }}" class="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-4">
-                            @csrf
-                            <input type="text" name="name" placeholder="Equipment name" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
-                            <input type="number" name="quantity" placeholder="Total quantity" min="1" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
-                            <input type="number" name="quantity_available" placeholder="Available quantity" min="0" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                            <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Add Equipment</button>
-                        </form>
-
                         @if($equipment->isEmpty())
                             <p class="mt-4 text-sm text-slate-500">No equipment assigned to you.</p>
                         @else
@@ -153,7 +136,7 @@
                                                 <h4 class="text-lg font-semibold text-slate-900">{{ $item->name }}</h4>
                                                 <p class="mt-2 text-sm text-slate-600">ID: {{ $item->id }}</p>
                                             </div>
-                                            <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide {{ $item->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700' }}">{{ $item->is_active ? 'Enabled' : 'Disabled' }}</span>
+                                            <x-status-badge :status="$item->is_active ? 'active' : 'inactive'" :label="$item->is_active ? 'Enabled' : 'Disabled'" />
                                         </div>
                                         <div class="mt-4 space-y-2 text-sm text-slate-600">
                                             <p>Available: <span class="font-semibold text-slate-900">{{ $item->quantity_available }} / {{ $item->quantity }}</span></p>
