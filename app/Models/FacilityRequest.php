@@ -335,14 +335,30 @@ class FacilityRequest extends Model
 
     public function scopeMatchesVenue(Builder $query, string $venueName): Builder
     {
-        return $query->where(function (Builder $resourceQuery) use ($venueName): void {
-            $resourceQuery->whereHas('requestVenues', function (Builder $venueQuery) use ($venueName): void {
-                $venueQuery->whereHas('venue', function (Builder $venueNameQuery) use ($venueName): void {
-                    $venueNameQuery->whereRaw('LOWER(name) = ?', [strtolower($venueName)]);
-                })->orWhereRaw('LOWER(name) = ?', [strtolower($venueName)]);
-            })->orWhere(function (Builder $legacyQuery) use ($venueName): void {
-                $legacyQuery->whereJsonContains('venue', $venueName)
-                    ->orWhere('venue', 'LIKE', '%' . $venueName . '%');
+        $venueNames = [trim($venueName)];
+        if (mb_strtolower(trim($venueName)) === 'balay alumni') {
+            $venueNames[] = 'Balay Alumni Hall';
+        }
+        $venueNames = array_values(array_unique(array_filter($venueNames)));
+
+        return $query->where(function (Builder $resourceQuery) use ($venueNames): void {
+            $resourceQuery->whereHas('requestVenues', function (Builder $venueQuery) use ($venueNames): void {
+                $venueQuery->whereHas('venue', function (Builder $venueNameQuery) use ($venueNames): void {
+                    $venueNameQuery->where(function (Builder $nameQuery) use ($venueNames): void {
+                        foreach ($venueNames as $name) {
+                            $nameQuery->orWhereRaw('LOWER(name) = ?', [mb_strtolower($name)]);
+                        }
+                    });
+                })->orWhere(function (Builder $nameQuery) use ($venueNames): void {
+                    foreach ($venueNames as $name) {
+                        $nameQuery->orWhereRaw('LOWER(name) = ?', [mb_strtolower($name)]);
+                    }
+                });
+            })->orWhere(function (Builder $legacyQuery) use ($venueNames): void {
+                foreach ($venueNames as $name) {
+                    $legacyQuery->orWhereJsonContains('venue', $name)
+                        ->orWhere('venue', 'LIKE', '%' . $name . '%');
+                }
             });
         });
     }

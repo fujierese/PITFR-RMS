@@ -26,7 +26,7 @@
     $isExternal = in_array($effectiveRequestorType, ['outsider', 'student_organization'], true);
     $selectedCollegeId = old('college_id', $profileCollegeId ?? null);
     $selectedDepartmentId = old('department_id', $profileDepartmentId ?? null);
-    $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Other'];
+    $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
     $savedPosition = old('requested_by_position', $currentUser?->position);
     $selectedPosition = in_array($savedPosition, $positionOptions, true) ? $savedPosition : ($savedPosition ? 'Other' : '');
     $otherPosition = old('requested_by_position_other', $selectedPosition === 'Other' ? $savedPosition : '');
@@ -141,6 +141,7 @@
                                 <div class="rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-600" aria-readonly="true">{{ $trustedOrganizationDisplay }}</div>
                                 <input type="hidden" name="organization_name" value="{{ old('organization_name', $trustedOrganizationDisplay) }}">
                                 <input type="hidden" name="student_organization_id" value="{{ old('student_organization_id', $activeStudentOrganization?->id) }}">
+                                <input type="hidden" name="college_id" value="{{ $profileCollegeId }}">
                                 <input type="hidden" name="department_id" value="{{ $profileDepartmentId }}">
                                 @error('department_id')
                                     <p class="text-xs font-medium text-red-600">{{ $message }}</p>

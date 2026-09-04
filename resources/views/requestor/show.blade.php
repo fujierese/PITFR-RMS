@@ -251,33 +251,43 @@
         @endif
 
         @if(auth()->check() && auth()->user()->isCustodian())
-            @if(!$hasEndorsed && $request->status === 'pending')
+            @if($request->status === 'cancelled')
+                <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900">Custodian Verification</h2>
+                            <p class="text-sm text-slate-500">This request was cancelled by the requester and no custodial action is required.</p>
+                        </div>
+                        <span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                            Cancelled
+                        </span>
+                    </div>
+                </div>
+            @elseif(!$hasEndorsed && $request->status === 'pending')
                 <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
                     <div class="flex flex-col gap-4">
                         <div class="flex items-center justify-between gap-4">
                             <div>
                                 <h2 class="text-lg font-semibold text-slate-900">Custodian Verification</h2>
-                                <p class="text-sm text-slate-500">Verify request details and forward the request for final approval, or ask for a revision if changes are needed.</p>
+                                <p class="text-sm text-slate-500">Verify the request details and endorse it for final approval, or reject it if it cannot proceed.</p>
                             </div>
                             <span class="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">
                                 Action Required
                             </span>
                         </div>
 
-                        <div class="grid gap-3 sm:grid-cols-3">
+                        <div class="grid gap-3 sm:grid-cols-2">
                             <form method="POST" action="{{ route('request.custodian.verify', $request->id) }}" data-swal-confirm data-swal-title="Verify and endorse this request?" data-swal-text="This will forward the request for final approval." data-swal-confirm-text="Yes, endorse it" data-swal-confirm-color="#059669">
                                 @csrf
                                 <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-emerald-700">
-                                    Verify & Endorse
+                                    Verify and Endorse
                                 </button>
                             </form>
 
-                            <form id="custodian-revision-form" method="POST" action="{{ route('request.custodian.revision', $request->id) }}">
+                            <form method="POST" action="{{ route('request.custodian.reject', $request->id) }}" data-swal-confirm data-swal-title="Reject this request?" data-swal-text="This will reject the request and notify the requester." data-swal-confirm-text="Yes, reject it" data-swal-confirm-color="#dc2626">
                                 @csrf
-                                <input type="hidden" name="notes" id="custodian-revision-notes">
-                                <button type="button" id="revision-action-button" onclick="requestRevision()"
-                                        class="w-full inline-flex items-center justify-center rounded-2xl bg-orange-500 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-orange-600">
-                                    Request Revision
+                                <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-red-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-red-700">
+                                    Reject
                                 </button>
                             </form>
                         </div>
@@ -368,15 +378,44 @@
                                 </button>
                             </form>
 
-                            <form method="POST" action="{{ route('supply-office.requests.needs-revision') }}" class="sm:col-span-2 lg:col-span-1">
-                                @csrf
-                                <input type="hidden" name="id" value="{{ $request->id }}">
-                                <input type="hidden" name="notes" value="Needs revision before final approval.">
-                                <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-100">
-                                    Needs Revision
-                                </button>
-                            </form>
+                            <button type="button" id="open-reschedule-form" class="sm:col-span-2 lg:col-span-1 w-full inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-100">
+                                Reschedule Reservation
+                            </button>
                         </div>
+
+                        <form id="reschedule-form" method="POST" action="{{ route('supply-office.requests.revise') }}" class="hidden rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-4">
+                            @csrf
+                            <input type="hidden" name="facility_request_id" value="{{ $request->id }}">
+                            @foreach($venueNames as $venueName)
+                                <input type="hidden" name="venue[]" value="{{ $venueName }}">
+                            @endforeach
+                            @foreach($equipmentItems as $equipmentItem)
+                                <input type="hidden" name="equipment[]" value="{{ $equipmentItem }}">
+                                <input type="hidden" name="equipment_quantities[{{ $equipmentItem }}]" value="{{ $equipmentQuantities[$equipmentItem] ?? 1 }}">
+                            @endforeach
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <label class="text-sm font-medium text-slate-700">New start date
+                                    <input type="date" name="start_date" value="{{ $request->start_date?->format('Y-m-d') }}" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
+                                </label>
+                                <label class="text-sm font-medium text-slate-700">New end date
+                                    <input type="date" name="end_date" value="{{ ($request->end_date ?? $request->start_date)?->format('Y-m-d') }}" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
+                                </label>
+                                <label class="text-sm font-medium text-slate-700">New start time
+                                    <input type="time" name="start_time" value="{{ $request->start_time }}" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
+                                </label>
+                                <label class="text-sm font-medium text-slate-700">New end time
+                                    <input type="time" name="end_time" value="{{ $request->end_time }}" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
+                                </label>
+                            </div>
+                            <label class="block text-sm font-medium text-slate-700">Reason for rescheduling
+                                <textarea name="revision_reason" minlength="10" maxlength="1000" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2" placeholder="Explain why this reservation needs to be rescheduled."></textarea>
+                            </label>
+                            <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                                <button type="button" id="cancel-reschedule-form" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+                                <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Reschedule</button>
+                            </div>
+                            <p id="reschedule-feedback" class="hidden text-sm" role="status"></p>
+                        </form>
                     @elseif($request->status === 'approved')
                         <div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 mb-4">
                             <div class="flex items-center gap-3">
@@ -727,39 +766,55 @@
         }
     });
 
-    async function requestRevision() {
-        const revisionButton = document.getElementById('revision-action-button');
-        const { isConfirmed, value: notes } = await Swal.fire({
-            title: 'Request revision',
-            text: 'Please enter the revision details for the requester:',
-            input: 'textarea',
-            inputPlaceholder: 'Describe the requested changes or missing information...',
-            showCancelButton: true,
-            confirmButtonText: 'Submit Revision',
-            cancelButtonText: 'Cancel',
-            confirmButtonColor: '#059669',
-            cancelButtonColor: '#9CA3AF',
-            reverseButtons: false,
-            inputValidator: (value) => {
-                if (!value || !value.trim()) {
-                    return 'Please enter revision details.';
+    const rescheduleForm = document.getElementById('reschedule-form');
+    const openRescheduleButton = document.getElementById('open-reschedule-form');
+    const cancelRescheduleButton = document.getElementById('cancel-reschedule-form');
+    const rescheduleFeedback = document.getElementById('reschedule-feedback');
+
+    openRescheduleButton?.addEventListener('click', () => {
+        rescheduleForm?.classList.remove('hidden');
+        openRescheduleButton.classList.add('hidden');
+    });
+
+    cancelRescheduleButton?.addEventListener('click', () => {
+        rescheduleForm?.reset();
+        rescheduleForm?.classList.add('hidden');
+        openRescheduleButton?.classList.remove('hidden');
+        rescheduleFeedback?.classList.add('hidden');
+    });
+
+    rescheduleForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submitButton = rescheduleForm.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        submitButton.textContent = 'Saving...';
+        rescheduleFeedback.className = 'hidden text-sm';
+
+        try {
+            const response = await fetch(rescheduleForm.action, {
+                method: 'POST',
+                body: new FormData(rescheduleForm),
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    Accept: 'application/json'
                 }
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(payload.message || 'Unable to reschedule this reservation.');
             }
-        });
 
-        if (!isConfirmed || !notes || !notes.trim()) {
-            return;
+            rescheduleFeedback.textContent = payload.message || 'Reservation rescheduled successfully.';
+            rescheduleFeedback.className = 'text-sm text-emerald-700';
+            setTimeout(() => window.location.reload(), 700);
+        } catch (error) {
+            rescheduleFeedback.textContent = error.message;
+            rescheduleFeedback.className = 'text-sm text-red-700';
+            submitButton.disabled = false;
+            submitButton.textContent = 'Save Reschedule';
         }
-
-        if (revisionButton) {
-            revisionButton.disabled = true;
-            revisionButton.classList.add('opacity-80', 'cursor-not-allowed');
-            revisionButton.innerHTML = '<span class="inline-flex items-center gap-2"><svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>Returning...</span></span>';
-        }
-
-        document.getElementById('custodian-revision-notes').value = notes.trim();
-        document.getElementById('custodian-revision-form').submit();
-    }
+    });
 
     function generateApprovalSlip() {
         Swal.fire({

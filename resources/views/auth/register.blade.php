@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="{{ asset('images/PIT-LOGO.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('images/PIT-LOGO.png') }}">
     <title>Register — PIT Facility Request Portal</title>
     @if (app()->runningUnitTests())
         {{-- Skip Vite asset loading in tests when the manifest may not exist. --}}

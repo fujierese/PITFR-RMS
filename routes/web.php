@@ -185,6 +185,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/request/{facilityRequest}/approval-signature/{type}', [RequestorController::class, 'approvalSignature'])->name('request.approval.signature');
     Route::post('/request/{facilityRequest}/cancel', [RequestActionController::class, 'cancel'])->name('request.cancel');
     Route::post('/request/{facilityRequest}/custodian/verify', [RequestActionController::class, 'custodianVerify'])->name('request.custodian.verify');
+    Route::post('/request/{facilityRequest}/custodian/reject', [RequestActionController::class, 'custodianReject'])->name('request.custodian.reject');
     Route::post('/request/{facilityRequest}/custodian/revision', [RequestActionController::class, 'custodianRequestRevision'])->name('request.custodian.revision');
     Route::post('/request/{facilityRequest}/supply/final-approval', [RequestActionController::class, 'supplyFinalApproval'])->name('request.supply.final-approval');
     Route::post('/request/{facilityRequest}/supply/decline', [RequestActionController::class, 'supplyDecline'])->name('request.supply.decline');

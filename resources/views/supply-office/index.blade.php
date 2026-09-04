@@ -81,82 +81,33 @@
                 <p class="mt-2 text-sm text-slate-600">Requests will appear here when they're ready for your approval.</p>
             </div>
         @else
-            <div class="space-y-4">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-left text-sm text-slate-600">
+                    <thead class="border-b border-slate-200 text-slate-500">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Reference ID</th>
+                            <th class="px-4 py-3 font-medium">Requestor</th>
+                            <th class="px-4 py-3 font-medium">Department</th>
+                            <th class="px-4 py-3 font-medium">Venue</th>
+                            <th class="px-4 py-3 font-medium">Equipment</th>
+                            <th class="px-4 py-3 font-medium">Date</th>
+                            <th class="px-4 py-3 font-medium">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
                 @foreach($finalApprovalQueue as $request)
-                    @php
-                        $requester = $request->requester;
-                        $accountInfo = match ($requester?->requestor_type ?? null) {
-                            'student' => $requester->department ?: null,
-                            'faculty' => $requester->department ?: null,
-                            'outsider' => $requester->office_or_organization ?: 'Outsider',
-                            default => $requester?->department ?: '—',
-                        };
-                    @endphp
-
-                    <div class="group relative rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-amber-300 hover:bg-amber-50 focus-within:ring-2 focus-within:ring-amber-500">
-                        <a href="{{ route('request.show', $request->id) }}" class="block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600" aria-label="Open Request Details for {{ $request->control_number }}">
-                        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                            <div>
-                                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Reference</p>
-                                <p class="mt-1 font-semibold text-slate-900">{{ $request->control_number }}</p>
-                            </div>
-                            <div>
-                                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Requestor</p>
-                                <p class="mt-1 font-semibold text-slate-900">{{ $requester?->name ?? 'Unknown' }}</p>
-                            </div>
-                            <div>
-                                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Department / Organization</p>
-                                <p class="mt-1 font-semibold text-slate-900">{{ $accountInfo }}</p>
-                            </div>
-                            <div>
-                                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Requested Facility</p>
-                                <p class="mt-1 font-semibold text-slate-900">{{ implode(', ', $request->getVenueNames()) ?: '—' }}</p>
-                            </div>
-                            <div>
-                                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Requested Equipment</p>
-                                <p class="mt-1 font-semibold text-slate-900">{{ implode(', ', $request->getEquipmentItems()) ?: '—' }}</p>
-                            </div>
-                            <div>
-                                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Reservation Date</p>
-                                <p class="mt-1 font-semibold text-slate-900">{{ $request->start_date ? \Carbon\Carbon::parse($request->start_date)->format('M d, Y') : '—' }}</p>
-                            </div>
-                            <div>
-                                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Time Schedule</p>
-                                <p class="mt-1 font-semibold text-slate-900">{{ $request->formatTimeForDisplay($request->start_time) }} - {{ $request->formatTimeForDisplay($request->end_time) }}</p>
-                            </div>
-                            <div>
-                                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Purpose</p>
-                                <p class="mt-1 font-semibold text-slate-900">{{ $request->name_of_activity }}</p>
-                            </div>
-                            <div>
-                                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Custodian Review</p>
-                                <p class="mt-1 font-semibold text-slate-900">{{ ucfirst($request->venue_status) }} / {{ ucfirst($request->equipment_status) }}</p>
-                            </div>
-                            @if($request->is_emergency && $request->venue_status === 'approved')
-                                <div class="sm:col-span-2 xl:col-span-4">
-                                    <div class="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200">
-                                        🔴 URGENT CONFLICT
-                                    </div>
-                                    <p class="mt-2 text-sm text-amber-800">This urgent Institute request overlaps an existing approved reservation. If approved, the existing reservation may need administrative rescheduling. The system will not automatically cancel or replace the original reservation.</p>
-                                </div>
-                            @endif
-                        </div>
-                        </a>
-
-                        <div class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                            <form method="POST" action="{{ route('supply-office.update') }}" class="relative z-10 flex flex-col gap-2 md:flex-row md:items-end">
-                                @csrf
-                                <input type="hidden" name="id" value="{{ $request->id }}">
-                                <textarea name="notes" rows="2" placeholder="Add remarks before approving or rejecting" class="w-full md:w-80 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"></textarea>
-                                <div class="flex flex-col gap-2 sm:flex-row">
-                                    <button type="submit" name="action" value="approve" class="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 md:w-auto">Approve Request</button>
-                                    <button type="submit" name="action" value="reject" class="inline-flex w-full items-center justify-center rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 md:w-auto">Reject Request</button>
-                                    <button type="submit" formaction="{{ route('supply-office.requests.needs-revision') }}" name="action" value="needs_revision" class="inline-flex w-full items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100 md:w-auto">Needs Revision</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
+                    <tr class="cursor-pointer transition hover:bg-slate-50 focus:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-amber-500" data-request-url="{{ route('request.show', $request->id) }}" role="link" tabindex="0" aria-label="Open request details for {{ $request->control_number }}">
+                        <td class="px-4 py-4 font-semibold text-slate-900">{{ $request->control_number }}</td>
+                        <td class="px-4 py-4">{{ $request->requester?->name ?? 'Unknown' }}</td>
+                        <td class="px-4 py-4">{{ $request->department ?? '—' }}</td>
+                        <td class="px-4 py-4">{{ implode(', ', $request->getVenueNames()) ?: '—' }}</td>
+                        <td class="px-4 py-4">{{ implode(', ', $request->getEquipmentItems()) ?: '—' }}</td>
+                        <td class="px-4 py-4 whitespace-nowrap">{{ $request->start_date ? \Carbon\Carbon::parse($request->start_date)->format('M d, Y') : '—' }}</td>
+                        <td class="px-4 py-4"><x-request-status-badge :request="$request" /></td>
+                    </tr>
                 @endforeach
+                    </tbody>
+                </table>
             </div>
         @endif
     </div>
@@ -325,4 +276,18 @@
     </div>
     @endif
 </div>
+<script>
+    document.querySelectorAll('[data-request-url]').forEach((requestTarget) => {
+        requestTarget.addEventListener('click', (event) => {
+            if (event.target.closest('a, button, form, input, select, textarea')) return;
+            window.location.href = requestTarget.dataset.requestUrl;
+        });
+
+        requestTarget.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            window.location.href = requestTarget.dataset.requestUrl;
+        });
+    });
+</script>
 @endsection

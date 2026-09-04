@@ -38,7 +38,11 @@
                         </div>
                         <div>
                             <label class="text-sm font-medium text-slate-700">Suffix</label>
-                            <input type="text" name="suffix" value="{{ old('suffix', $user->suffix) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" placeholder="Jr.">
+                            <select name="suffix" class="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                                @foreach(['' => 'None', 'Jr.' => 'Jr.', 'Sr.' => 'Sr.', 'II' => 'II', 'III' => 'III', 'IV' => 'IV', 'V' => 'V'] as $value => $label)
+                                    <option value="{{ $value }}" @selected(old('suffix', $user->suffix) === $value || ($value === '' && in_array(strtolower((string) old('suffix', $user->suffix)), ['n/a', 'na', 'none'], true)))>{{ $label }}</option>
+                                @endforeach
+                            </select>
                         </div>
                     </div>
                     <div>
@@ -96,15 +100,7 @@
                             </select>
                         </div>
                     @endif
-                    @if($showOrganization)
-                        <div>
-                            <label class="text-sm font-medium text-slate-700">Registered College</label>
-                            <input type="text" value="{{ $user->college?->name ?? 'Not assigned' }}" class="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-slate-600" readonly>
-                        </div>
-                        <div>
-                            <label class="text-sm font-medium text-slate-700">Registered Department</label>
-                            <input type="text" value="{{ $user->departmentRecord?->name ?? $user->department ?? 'Not assigned' }}" class="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-slate-600" readonly>
-                    @elseif($user->isCustodian())
+                    @if($user->isCustodian())
                         <div>
                             <label class="text-sm font-medium text-slate-700">Department</label>
                             <input type="text" name="department" value="{{ old('department', $user->department) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">

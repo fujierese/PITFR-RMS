@@ -222,7 +222,7 @@
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Activity</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Venue</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Equipment</th>
-                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Reservation</th>
+                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Date</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Status</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Actions</th>
                                 </tr>
@@ -239,7 +239,10 @@
                                         $venueLabel = implode(', ', $requestItem->getVenueNames()) ?: '-';
                                         $equipmentLabel = implode(', ', $requestItem->getEquipmentItems()) ?: '-';
                                         $reservationDate = $requestItem->start_date ? $requestItem->start_date->format('M d, Y') : '-';
-                                        $reservationTime = $requestItem->start_time ? $requestItem->start_time : '-';
+                                        $reservationTime = $requestItem->start_time
+                                            ? \Carbon\Carbon::parse($requestItem->start_time)->format('g:i A')
+                                                . (!empty($requestItem->end_time) ? ' - ' . \Carbon\Carbon::parse($requestItem->end_time)->format('g:i A') : '')
+                                            : '-';
                                         $canEdit = in_array($statusKey, ['pending', 'needs_reschedule'], true)
                                             || $requestItem->venue_status === 'needs_reschedule'
                                             || $requestItem->equipment_status === 'needs_reschedule';
@@ -274,7 +277,7 @@
                                         </td>
                                         <td class="px-4 py-4">
                                             <div class="flex flex-wrap gap-2">
-                                                <x-status-badge :status="$statusKey" :label="$statusLabel" />
+                                                <x-request-status-badge :request="$requestItem" />
                                                 @if ($priorityLabel)
                                                     <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $priorityBadgeClass }}">{{ $priorityLabel }}</span>
                                                 @endif
@@ -293,7 +296,7 @@
                                         <td class="px-4 py-4">
                                             <div class="flex flex-wrap gap-2">
                                                 @if ($canEdit)
-                                                    <a href="{{ route('requestor.edit', $requestItem->id) }}" class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Edit</a>
+                                                    <button type="button" data-edit-url="{{ route('requestor.edit', $requestItem->id) }}" class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Edit</button>
                                                 @endif
                                                 @if ($canCancel)
                                                     <form method="POST" action="{{ route('request.cancel', $requestItem->id) }}" class="inline-block" data-swal-confirm data-swal-title="Cancel this request?" data-swal-text="This will remove the pending request from the queue." data-swal-confirm-text="Yes, cancel it" data-swal-confirm-color="#dc2626">
@@ -322,7 +325,10 @@
                             $venueLabel = implode(', ', $requestItem->getVenueNames()) ?: '-';
                             $equipmentLabel = implode(', ', $requestItem->getEquipmentItems()) ?: '-';
                             $reservationDate = $requestItem->start_date ? $requestItem->start_date->format('M d, Y') : '-';
-                            $reservationTime = $requestItem->start_time ? $requestItem->start_time : '-';
+                            $reservationTime = $requestItem->start_time
+                                ? \Carbon\Carbon::parse($requestItem->start_time)->format('g:i A')
+                                    . (!empty($requestItem->end_time) ? ' - ' . \Carbon\Carbon::parse($requestItem->end_time)->format('g:i A') : '')
+                                : '-';
                             $canEdit = in_array($statusKey, ['pending', 'needs_reschedule'], true)
                                 || $requestItem->venue_status === 'needs_reschedule'
                                 || $requestItem->equipment_status === 'needs_reschedule';
@@ -334,19 +340,20 @@
                                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{{ $requestItem->control_number ?? '-' }}</p>
                                     <h4 class="mt-2 text-lg font-semibold text-slate-900">{{ $requestItem->name_of_activity ?? '-' }}</h4>
                                 </div>
-                                <x-status-badge :status="$statusKey" :label="$statusLabel" />
+                                <x-request-status-badge :request="$requestItem" />
                             </div>
                             <div class="mt-4 space-y-2 text-sm text-slate-600">
                                 <div><span class="font-semibold text-slate-900">Venue:</span> {{ $venueLabel }}</div>
                                 <div><span class="font-semibold text-slate-900">Equipment:</span> {{ $equipmentLabel }}</div>
-                                <div><span class="font-semibold text-slate-900">Reservation:</span> {{ $reservationDate }} · {{ $reservationTime }}</div>
+                                <div><span class="font-semibold text-slate-900">Date:</span> {{ $reservationDate }}</div>
+                                <div><span class="font-semibold text-slate-900">Time:</span> {{ $reservationTime }}</div>
                                 @if ($priorityLabel)
                                     <div><span class="font-semibold text-slate-900">Priority:</span> <span class="ml-1 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset {{ $priorityBadgeClass }}">{{ $priorityLabel }}</span></div>
                                 @endif
                             </div>
                             <div class="mt-4 flex flex-wrap gap-2">
                                 @if ($canEdit)
-                                    <a href="{{ route('requestor.edit', $requestItem->id) }}" class="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Edit</a>
+                                    <button type="button" data-edit-url="{{ route('requestor.edit', $requestItem->id) }}" class="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Edit</button>
                                 @endif
                                 @if ($canCancel)
                                     <form method="POST" action="{{ route('request.cancel', $requestItem->id) }}" class="flex-1" data-swal-confirm data-swal-title="Cancel this request?" data-swal-text="This will remove the pending request from the queue." data-swal-confirm-text="Yes, cancel it" data-swal-confirm-color="#dc2626">
@@ -452,6 +459,85 @@
 </div>
 
 <script>
+    document.querySelectorAll('[data-edit-url]').forEach((editButton) => {
+        editButton.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            const listItem = editButton.closest('tr, [data-request-url]');
+            if (!listItem || listItem.dataset.editing === '1') return;
+
+            listItem.dataset.editing = '1';
+            editButton.disabled = true;
+            editButton.textContent = 'Loading...';
+
+            const response = await fetch(editButton.dataset.editUrl, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'text/html' }
+            });
+            if (!response.ok) throw new Error(`Unable to load the edit form (${response.status}).`);
+
+            const documentFragment = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const sourceForm = documentFragment.querySelector('#request-form');
+            if (!sourceForm) throw new Error('The edit form could not be loaded.');
+
+            sourceForm.classList.remove('p-3', 'sm:p-6');
+            sourceForm.classList.add('w-full', 'max-w-none', 'p-4', 'sm:p-6', 'lg:p-8');
+            sourceForm.style.width = '100%';
+            sourceForm.style.maxWidth = 'none';
+
+            const editor = listItem.tagName === 'TR' ? document.createElement('tr') : document.createElement('div');
+            editor.className = 'request-inline-editor w-full';
+            if (listItem.tagName === 'TR') {
+                const cell = document.createElement('td');
+                cell.colSpan = listItem.children.length;
+                cell.className = 'w-full bg-slate-50 p-2 sm:p-4';
+                cell.append(sourceForm);
+                editor.append(cell);
+            } else {
+                editor.className += ' mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-2 sm:p-4';
+                editor.append(sourceForm);
+            }
+            listItem.after(editor);
+            editButton.textContent = 'Editing';
+
+            const inlineForm = editor.querySelector('#request-form');
+            window.initializeRequestForm?.();
+            editor.querySelector('[data-inline-cancel]')?.addEventListener('click', (cancelEvent) => {
+                cancelEvent.preventDefault();
+                editor.remove();
+                delete listItem.dataset.editing;
+                editButton.disabled = false;
+                editButton.textContent = 'Edit';
+            });
+            inlineForm?.addEventListener('submit', async (submitEvent) => {
+                submitEvent.preventDefault();
+                const submitButton = inlineForm.querySelector('button[type="submit"]');
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    submitButton.textContent = 'Saving...';
+                }
+
+                const saveResponse = await fetch(inlineForm.action, {
+                    method: 'POST',
+                    body: new FormData(inlineForm),
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' }
+                });
+                if (saveResponse.ok) {
+                    window.location.reload();
+                    return;
+                }
+
+                const errorData = await saveResponse.json().catch(() => null);
+                const errorBox = document.createElement('div');
+                errorBox.className = 'mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800';
+                errorBox.textContent = errorData?.message || 'Please correct the highlighted fields and try again.';
+                inlineForm.prepend(errorBox);
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Save Changes';
+                }
+            });
+        });
+    });
+
     document.querySelectorAll('[data-request-url]').forEach((requestTarget) => {
         requestTarget.addEventListener('click', (event) => {
             if (event.target.closest('a, button, form, input, select, textarea')) return;

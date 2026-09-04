@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use App\Http\Controllers\Concerns\ManagesAccountSettings;
 
@@ -178,7 +179,7 @@ class AdminController extends Controller
             'middle_name' => ['nullable', 'string', 'max:100'],
             'suffix' => ['nullable', 'string', 'max:50'],
             'username' => ['required', 'email', 'max:255', 'unique:users,username'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'password' => ['nullable', 'string', 'min:6', 'confirmed'],
             'college_id' => ['required_if:account_type,student,faculty', 'nullable', 'exists:colleges,id'],
             'department_id' => ['required_if:account_type,student,faculty', 'nullable', 'exists:departments,id'],
             'school_id_number' => ['required_if:account_type,student', 'nullable', 'string', 'regex:/^\d{2}-\d{4}-\d{3}$/'],
@@ -242,7 +243,7 @@ class AdminController extends Controller
 
         $createdUser = User::create([
             'username' => strtolower(trim($validated['username'])),
-            'password' => Hash::make($validated['password']),
+            'password' => Hash::make($validated['password'] ?? bin2hex(random_bytes(24))),
             'name' => $fullName,
             'surname' => trim((string) ($validated['surname'] ?? '')) ?: null,
             'first_name' => trim((string) ($validated['first_name'] ?? '')) ?: null,
@@ -291,7 +292,22 @@ class AdminController extends Controller
             'requestor_type' => $createdUser->requestor_type,
         ]);
 
-        return redirect()->route('admin.users')->with('success', 'User account created successfully.');
+        $redirect = redirect()->route('admin.users')->with('success', 'User account created successfully.');
+
+        try {
+            $setupToken = Password::broker()->createToken($createdUser);
+            $createdUser->notify(new \App\Notifications\WelcomeUserAccountNotification($setupToken));
+            $redirect->with('status', 'A password setup link was sent to the email address.');
+        } catch (\Throwable $e) {
+            Log::warning('Failed to send welcome email for admin-created user.', [
+                'user_id' => $createdUser->id,
+                'username' => $createdUser->username,
+                'exception' => $e->getMessage(),
+            ]);
+            $redirect->with('warning', 'User account created, but the welcome email could not be sent.');
+        }
+
+        return $redirect;
     }
 
     public function updateUser(Request $request, User $user)
@@ -312,6 +328,8 @@ class AdminController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'department' => ['nullable', 'string', 'max:255'],
             'requestor_type' => ['nullable', 'in:student,faculty,outsider'],
+            'college_id' => ['nullable', 'exists:colleges,id'],
+            'department_id' => ['nullable', 'exists:departments,id'],
             'school_id_number' => ['nullable', 'string', 'max:255'],
             'faculty_id' => ['nullable', 'string', 'max:50', 'unique:users,faculty_id,' . $user->id],
             'faculty_adviser' => ['nullable', 'in:yes,no'],
@@ -323,6 +341,10 @@ class AdminController extends Controller
 
         $facultyAdviser = $request->input('faculty_adviser') === 'yes';
         $selectedOrganizationId = (int) ($validated['student_organization_id'] ?? 0);
+        $department = !empty($validated['department_id']) ? Department::find($validated['department_id']) : null;
+        if ($department && !empty($validated['college_id']) && (int) $department->college_id !== (int) $validated['college_id']) {
+            return redirect()->route('admin.users')->withErrors(['department_id' => 'Please select a department under the selected college.'])->withInput();
+        }
         if ($user->isFaculty() && $facultyAdviser && empty($selectedOrganizationId)) {
             $selectedOrganizationId = (int) $this->resolvePreferredStudentOrganizationId($user->college_id, $user->department_id, null) ?: 0;
         }
@@ -383,6 +405,9 @@ class AdminController extends Controller
             'department' => $validated['department'] ?? null,
             'requestor_type' => $validated['requestor_type'] ?? $user->requestor_type,
             'school_id_number' => $validated['school_id_number'] ?? null,
+            'college_id' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($validated['college_id'] ?? null) : null,
+            'department_id' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($validated['department_id'] ?? null) : null,
+            'department' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($department?->name ?? $validated['department'] ?? null) : null,
             'faculty_id' => $validated['faculty_id'] ?? null,
             'position' => $validated['position'] ?? null,
             'office_or_organization' => $validated['office_or_organization'] ?? null,
@@ -520,6 +545,7 @@ class AdminController extends Controller
     {
         $requests = FacilityRequest::where('venue_status', 'approved')
             ->where('equipment_status', 'approved')
+            ->where('status', '!=', 'cancelled')
             ->orderBy('start_date')
             ->get();
 

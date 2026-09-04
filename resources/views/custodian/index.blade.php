@@ -75,7 +75,6 @@
                     <th class="px-4 py-3 font-medium">{{ $custodianType === 'venue' ? 'Venue' : 'Equipment' }}</th>
                     <th class="px-4 py-3 font-medium">Date</th>
                     <th class="px-4 py-3 font-medium">Status</th>
-                    <th class="px-4 py-3 font-medium text-right">Actions</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
@@ -85,9 +84,9 @@
                         $displayStatus = $custodianType === 'equipment' ? ($req->custodian_status ?? 'pending') : $req->$statusField;
                         $resourceNames = $custodianType === 'venue' ? $req->getVenueNames() : $req->getEquipmentItems();
                     @endphp
-                    <tr class="transition hover:bg-slate-50 focus-within:bg-slate-50" data-request-row data-status="{{ $displayStatus }}">
+                    <tr class="cursor-pointer transition hover:bg-slate-50 focus:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500" data-request-row data-request-url="{{ route('request.show', $req->id) }}" data-status="{{ $displayStatus }}" role="link" tabindex="0" aria-label="Open request details for {{ $req->control_number }}">
                         <td class="px-4 py-4 font-medium text-slate-900">
-                            <a href="{{ route('request.show', $req->id) }}" class="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-600">{{ $req->control_number }}</a>
+                            <span class="font-medium text-slate-900">{{ $req->control_number }}</span>
                             <p class="mt-1 max-w-xs text-xs text-slate-500">{{ $req->name_of_activity }}</p>
                         </td>
                         <td class="px-4 py-4">{{ $req->requester?->name ?? $req->requested_by }}</td>
@@ -103,7 +102,7 @@
                             <p class="mt-1 text-xs text-slate-500">{{ \Carbon\Carbon::parse($req->start_time)->format('g:i A') }}@if(!empty($req->end_time)) - {{ \Carbon\Carbon::parse($req->end_time)->format('g:i A') }}@endif</p>
                         </td>
                         <td class="px-4 py-4">
-                            <x-status-badge :status="$displayStatus" />
+                            <x-request-status-badge :request="$req" />
                             @if(!empty($req->is_emergency))
                                 <span class="mt-2 inline-flex rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200">Urgent</span>
                             @endif
@@ -114,47 +113,28 @@
                                 @endif
                             @endif
                         </td>
-                        <td class="px-4 py-4 text-right align-top">
-                            <div class="flex min-w-48 flex-col items-stretch gap-2 sm:min-w-56">
-                                @if($displayStatus === 'pending')
-                                    <input type="text" id="notes-{{ $req->id }}" placeholder="Add notes (optional)" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                                    <div class="flex flex-wrap justify-end gap-2">
-                                        <form method="POST" action="{{ route('custodian.update') }}">
-                                            @csrf
-                                            <input type="hidden" name="id" value="{{ $req->id }}">
-                                            <input type="hidden" name="action" value="approve">
-                                            <input type="hidden" name="notes" id="approve-notes-{{ $req->id }}">
-                                            <button type="submit" onclick="document.getElementById('approve-notes-{{ $req->id }}').value = document.getElementById('notes-{{ $req->id }}').value" class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700">Approve</button>
-                                        </form>
-                                        <form method="POST" action="{{ route('custodian.update') }}">
-                                            @csrf
-                                            <input type="hidden" name="id" value="{{ $req->id }}">
-                                            <input type="hidden" name="action" value="reject">
-                                            <input type="hidden" name="notes" id="reject-notes-{{ $req->id }}">
-                                            <button type="submit" onclick="document.getElementById('reject-notes-{{ $req->id }}').value = document.getElementById('notes-{{ $req->id }}').value" class="inline-flex items-center justify-center rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700">Reject</button>
-                                        </form>
-                                    </div>
-                                @elseif($custodianType === 'equipment' && $req->equipment_status === 'approved' && $req->equipment_returned_status !== 'returned' && $req->start_date <= now()->toDateString())
-                                    <input type="text" id="return-notes-{{ $req->id }}" placeholder="Return notes (optional)" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                                    <form method="POST" action="{{ route('custodian.update') }}">
-                                        @csrf
-                                        <input type="hidden" name="id" value="{{ $req->id }}">
-                                        <input type="hidden" name="action" value="return">
-                                        <input type="hidden" name="notes" id="return-notes-hidden-{{ $req->id }}">
-                                        <button type="submit" onclick="document.getElementById('return-notes-hidden-{{ $req->id }}').value = document.getElementById('return-notes-{{ $req->id }}').value" class="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700">Mark Returned</button>
-                                    </form>
-                                @else
-                                    <a href="{{ route('request.show', $req->id) }}" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">View Details</a>
-                                @endif
-                            </div>
-                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="px-4 py-12 text-center text-sm text-slate-500">No {{ $filter }} requests found.</td></tr>
+                    <tr><td colspan="6" class="px-4 py-12 text-center text-sm text-slate-500">No {{ $filter }} requests found.</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
 </div>
+
+<script>
+    document.querySelectorAll('[data-request-url]').forEach((requestTarget) => {
+        requestTarget.addEventListener('click', (event) => {
+            if (event.target.closest('a, button, form, input, select, textarea')) return;
+            window.location.href = requestTarget.dataset.requestUrl;
+        });
+
+        requestTarget.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            window.location.href = requestTarget.dataset.requestUrl;
+        });
+    });
+</script>
 
 @endsection

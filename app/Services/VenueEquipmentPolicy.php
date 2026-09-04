@@ -12,8 +12,10 @@ class VenueEquipmentPolicy
      */
     public static function getDefaultEquipment(string $venueName): array
     {
-        return match ($venueName) {
-            'Balay Alumni Hall' => ['Sound System'],
+        $normalizedVenue = self::normalizeVenueName($venueName);
+
+        return match ($normalizedVenue) {
+            'Balay Alumni' => ['Sound System'],
             'Conference Hall & Interaction Center (CHIC)' => ['Sound System'],
             'Gymnasium' => ['Sound System'],
             'PIT Multi-Purpose Gymnasium' => ['Sound System'],
@@ -30,8 +32,10 @@ class VenueEquipmentPolicy
      */
     public static function getIncompatibleEquipment(string $venueName): array
     {
-        return match ($venueName) {
-            'Balay Alumni Hall' => [
+        $normalizedVenue = self::normalizeVenueName($venueName);
+
+        return match ($normalizedVenue) {
+            'Balay Alumni' => [
                 'Canopies',
                 'Industrial Fans',
                 'Iwata Cooler Fans',
@@ -62,10 +66,20 @@ class VenueEquipmentPolicy
     public static function getVenuesWithDefaultEquipment(): array
     {
         return [
-            'Balay Alumni Hall',
+            'Balay Alumni',
             'Conference Hall & Interaction Center (CHIC)',
             'Gymnasium',
             'PIT Multi-Purpose Gymnasium',
         ];
+    }
+
+    private static function normalizeVenueName(string $venueName): string
+    {
+        $normalized = trim((string) $venueName);
+
+        return match (mb_strtolower($normalized)) {
+            'balay alumni hall' => 'Balay Alumni',
+            default => $normalized,
+        };
     }
 }

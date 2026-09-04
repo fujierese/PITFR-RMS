@@ -28,7 +28,7 @@
                 <p class="mt-1 text-sm text-emerald-50">Set the account type first to show only the fields that apply.</p>
             </div>
             <div class="p-5">
-            <p class="mb-4 rounded-xl border border-emerald-200 bg-white/80 px-3 py-2 text-sm text-emerald-800">Admin-created accounts are verified immediately and cannot receive admin privileges.</p>
+            <p class="mb-4 rounded-xl border border-emerald-200 bg-white/80 px-3 py-2 text-sm text-emerald-800">Admin-created accounts are verified immediately. The user will receive an email with a secure link to set their password.</p>
             @if($errors->any())
                 <div class="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{{ $errors->first() }}</div>
             @endif
@@ -56,7 +56,11 @@
                 </div>
                 <div>
                     <label for="add-user-suffix" class="mb-1 block text-sm font-medium text-slate-700">Suffix</label>
-                    <input id="add-user-suffix" type="text" name="suffix" value="{{ old('suffix') }}" maxlength="50" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                    <select id="add-user-suffix" name="suffix" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                        @foreach(['' => 'None', 'Jr.' => 'Jr.', 'Sr.' => 'Sr.', 'II' => 'II', 'III' => 'III', 'IV' => 'IV', 'V' => 'V'] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('suffix') === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div>
                     <label for="add-user-email" class="mb-1 block text-sm font-medium text-slate-700">Email address</label>
@@ -116,19 +120,8 @@
                     <label for="add-user-organization" class="mb-1 block text-sm font-medium text-slate-700">Office / organization</label>
                     <input id="add-user-organization" type="text" name="office_or_organization" value="{{ old('office_or_organization') }}" maxlength="191" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                 </div>
-                <div>
-                    <label for="add-user-password" class="mb-1 block text-sm font-medium text-slate-700">Password</label>
-                    <div class="pitfr-password-wrapper">
-                        <input id="add-user-password" type="password" name="password" required minlength="6" class="pitfr-password-input w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
-                        <button type="button" data-password-toggle-target="#add-user-password" aria-label="Show password" class="password-toggle pitfr-password-toggle"></button>
-                    </div>
-                </div>
-                <div>
-                    <label for="add-user-password-confirmation" class="mb-1 block text-sm font-medium text-slate-700">Confirm password</label>
-                    <div class="pitfr-password-wrapper">
-                        <input id="add-user-password-confirmation" type="password" name="password_confirmation" required minlength="6" class="pitfr-password-input w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
-                        <button type="button" data-password-toggle-target="#add-user-password-confirmation" aria-label="Show password" class="password-toggle pitfr-password-toggle"></button>
-                    </div>
+                <div class="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                    The user will create their password from the secure setup link sent to the email address above.
                 </div>
                 <div class="flex gap-3 md:col-span-2">
                     <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">Create account</button>

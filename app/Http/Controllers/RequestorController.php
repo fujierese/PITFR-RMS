@@ -148,7 +148,7 @@ class RequestorController extends Controller
             ->orderBy($sort === 'oldest' ? 'created_at' : 'created_at', $sort === 'oldest' ? 'asc' : 'desc');
 
         $requests = $query->get();
-        $equipment = \App\Models\Equipment::where('is_active', true)->whereNotIn('id', [2, 10])->get();
+        $equipment = \App\Models\Equipment::where('is_active', true)->get();
 
         // Separate by future/past dates and approval status
         $today = now()->toDateString();
@@ -194,10 +194,14 @@ class RequestorController extends Controller
 
         $venueCapacityMap = [];
         $venueRecords = Venue::query()->where('is_active', true)->orderBy('name')->get();
-        $venueOptions = array_values(array_unique(array_merge(
+        $venueOptions = array_values(array_unique(array_map(function ($venueName): string {
+            $value = trim((string) $venueName);
+
+            return strtolower($value) === 'balay alumni hall' ? 'Balay Alumni' : $value;
+        }, array_merge(
             $venueRecords->pluck('name')->filter()->values()->all(),
             self::VENUE_OPTIONS
-        )));
+        ))));
 
         foreach ($venueOptions as $venueName) {
             $venueCapacityMap[$venueName] = $this->availabilityService->getVenueCapacity($venueName);
@@ -372,11 +376,11 @@ class RequestorController extends Controller
     public function edit(FacilityRequest $facilityRequest)
     {
         $user = $this->currentUser();
-        $shouldAllowReschedule = $facilityRequest->status === 'needs_reschedule'
+        $shouldAllowEdit = in_array($facilityRequest->status, ['pending', 'needs_reschedule'], true)
             || $facilityRequest->venue_status === 'needs_reschedule'
             || $facilityRequest->equipment_status === 'needs_reschedule';
 
-        if ($facilityRequest->requested_by_id !== $user->id || !$shouldAllowReschedule) {
+        if ($facilityRequest->requested_by_id !== $user->id || !$shouldAllowEdit) {
             abort(403);
         }
 
@@ -396,7 +400,7 @@ class RequestorController extends Controller
             'venueOptions' => self::VENUE_OPTIONS,
             'equipmentOptions' => self::EQUIPMENT_OPTIONS,
             'controlNumber' => $facilityRequest->control_number,
-            'equipment' => \App\Models\Equipment::where('is_active', true)->whereNotIn('id', [2, 10])->get(),
+            'equipment' => \App\Models\Equipment::where('is_active', true)->get(),
             'equipmentQuantityLimits' => $equipmentQuantityLimits,
             'venueCapacityMap' => $venueCapacityMap,
         ]);
@@ -405,11 +409,11 @@ class RequestorController extends Controller
     public function update(Request $request, FacilityRequest $facilityRequest)
     {
         $user = $this->currentUser();
-        $shouldAllowReschedule = $facilityRequest->status === 'needs_reschedule'
+        $shouldAllowEdit = in_array($facilityRequest->status, ['pending', 'needs_reschedule'], true)
             || $facilityRequest->venue_status === 'needs_reschedule'
             || $facilityRequest->equipment_status === 'needs_reschedule';
 
-        if ($facilityRequest->requested_by_id !== $user->id || !$shouldAllowReschedule) {
+        if ($facilityRequest->requested_by_id !== $user->id || !$shouldAllowEdit) {
             abort(403);
         }
 
@@ -613,6 +617,13 @@ class RequestorController extends Controller
             }
         }
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Request updated successfully.',
+                'redirect' => route('requestor.index', ['tab' => 'requests']),
+            ]);
+        }
+
         return redirect()->route('request.show', $facilityRequest->id)->with('success', 'Request updated successfully.');
     }
 
@@ -729,8 +740,17 @@ class RequestorController extends Controller
 
         // Build validation rules
         $hasDepartmentDirectory = College::query()->exists() && Department::query()->exists();
-        $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Other'];
+        $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
         $hasSavedSignature = (bool) ($user->e_signature_file && Storage::disk('local')->exists('documents/e_signature/users/' . $user->e_signature_file));
+
+        $profileCollegeId = $user->college_id ?? null;
+        $profileDepartmentId = $user->department_id ?? null;
+        if (($user->requestor_type === 'student' || $user->requestor_type === 'faculty') && ! $request->filled('college_id') && $profileCollegeId) {
+            $request->merge(['college_id' => $profileCollegeId]);
+        }
+        if (! $request->filled('department_id') && $profileDepartmentId) {
+            $request->merge(['department_id' => $profileDepartmentId]);
+        }
 
         $rules = [
             'reservation_duration'  => ['nullable', 'in:specific_time,whole_day,whole-day,whole day'],
@@ -740,7 +760,7 @@ class RequestorController extends Controller
             'organization_name'     => ['nullable', 'string', 'max:191'],
             'request_context'       => ['nullable', 'in:personal,student_organization,outside_organization'],
             'student_organization_id' => ['nullable', 'integer', 'exists:student_organizations,id'],
-            'requested_by_position' => ['nullable', 'in:' . implode(',', $positionOptions)],
+            'requested_by_position' => ['nullable', 'string', 'max:100'],
             'requested_by_position_other' => ['nullable', 'string', 'max:100', 'required_if:requested_by_position,Other'],
             'name_of_activity'      => 'required|string|max:200',
             'purpose'               => ['nullable', 'string', 'max:2000'],
@@ -837,7 +857,7 @@ class RequestorController extends Controller
         }
         // Position must come from the authenticated user account only, not from user input.
         // If a custom profile value is stored, normalize it to a supported request position and keep the custom text as the "Other" detail.
-        $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Other'];
+        $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
         $profilePosition = trim((string) ($user->position ?? ''));
         $trustedPosition = $profilePosition !== '' && in_array($profilePosition, $positionOptions, true)
             ? $profilePosition
@@ -1324,7 +1344,7 @@ class RequestorController extends Controller
     {
         $request   = FacilityRequest::with(['requestVenues', 'requestEquipment', 'reservationSchedule'])->findOrFail($id);
         $this->authorize('view', $request);
-        $equipment = \App\Models\Equipment::where('is_active', true)->whereNotIn('id', [2, 10])->get();
+        $equipment = \App\Models\Equipment::where('is_active', true)->get();
         $assignedCustodians = \App\Models\User::whereIn('id', $request->getAssignedEquipmentCustodianIds())->get();
         $custodianStatuses = $request->equipment_custodian_statuses ?? [];
         /** @var \App\Models\User|null $currentUser */

@@ -175,6 +175,48 @@ class RequestActionController extends Controller
         }
     }
 
+    public function custodianReject($facilityRequest, Request $request)
+    {
+        $facilityRequest = $this->resolveFacilityRequest($facilityRequest);
+
+        /** @var User|null $user */
+        $user = Auth::user();
+        abort_unless($user && $user->isCustodian(), 403);
+        $this->authorize('reject', $facilityRequest);
+
+        $notes = trim((string) $request->input('notes', ''));
+
+        DB::beginTransaction();
+
+        try {
+            if ($facilityRequest->status === 'approved' || $facilityRequest->status === 'rejected') {
+                DB::rollBack();
+                return redirect()->back()->with('info', 'This request is verified and endorsed to Supply Office for Approval.');
+            }
+
+            $statusField = $user->isCustodianVenue() ? 'venue_status' : 'equipment_status';
+            $notesField = $user->isCustodianVenue() ? 'venue_notes' : 'equipment_notes';
+            $facilityRequest->update([
+                $statusField => 'rejected',
+                $notesField => $notes,
+                'status' => 'rejected',
+            ]);
+            $facilityRequest->addHistory(
+                $statusField . '_rejected',
+                'Request rejected by ' . $user->name . ($notes !== '' ? ': ' . $notes : ''),
+                $user->id
+            );
+            $this->notifyRequestorForStatusChange($facilityRequest, 'rejected', $notes, $user->name);
+
+            DB::commit();
+            return redirect()->back()->with('success', 'Request rejected successfully.');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Custodian rejection failed for request ' . $facilityRequest->id, ['exception' => $e]);
+            return redirect()->back()->withErrors('Unable to reject request at this time.');
+        }
+    }
+
     public function supplyFinalApproval($facilityRequest, Request $request)
     {
         $facilityRequest = $this->resolveFacilityRequest($facilityRequest);

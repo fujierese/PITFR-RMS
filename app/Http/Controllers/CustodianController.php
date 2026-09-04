@@ -27,7 +27,15 @@ class CustodianController extends Controller
         if ($custodianType === 'equipment') {
             // ✅ Set per-custodian status on each request for blade use
             $allRequests->each(function ($r) use ($user) {
-                $r->custodian_status = $r->getCustodianEquipmentStatus($user->id);
+                $r->custodian_status = $r->status === 'cancelled'
+                    ? 'cancelled'
+                    : $r->getCustodianEquipmentStatus($user->id);
+            });
+        } else {
+            $allRequests->each(function ($r) {
+                if ($r->status === 'cancelled') {
+                    $r->venue_status = 'cancelled';
+                }
             });
         }
 
@@ -420,12 +428,19 @@ class CustodianController extends Controller
     private function getRequestsForCustodian(string $type, int $custodianId)
     {
         if ($type === 'venue') {
-            $venueNames = Venue::where('custodian_id', $custodianId)->pluck('name');
+            $venues = Venue::where('custodian_id', $custodianId)->get(['id', 'name']);
+            $venueIds = $venues->pluck('id');
+            $venueNames = $venues->pluck('name');
             if ($venueNames->isEmpty()) {
                 return collect([]);
             }
 
-            return FacilityRequest::with('requester')->where(function ($query) use ($venueNames) {
+            return FacilityRequest::with(['requester', 'requestVenues.venue', 'reservationSchedule'])
+                ->where(function ($query) use ($venueIds, $venueNames) {
+                $query->whereHas('requestVenues', function ($venueQuery) use ($venueIds) {
+                    $venueQuery->whereIn('venue_id', $venueIds);
+                });
+
                 foreach ($venueNames as $name) {
                     $query->orWhere(fn ($subQuery) => $subQuery->matchesVenue($name));
                 }

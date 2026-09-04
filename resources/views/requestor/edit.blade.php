@@ -120,10 +120,13 @@
                                 } else {
                                     $equipmentItems = collect([
                                         ['name' => 'Sound System', 'quantity' => 1, 'quantity_available' => 1],
-                                        ['name' => 'Canopies', 'quantity' => 3, 'quantity_available' => 3],
-                                        ['name' => 'Industrial Fans', 'quantity' => 4, 'quantity_available' => 4],
-                                        ['name' => 'Iwata Cooler Fans', 'quantity' => 2, 'quantity_available' => 2],
+                                        ['name' => 'Wireless Microphones', 'quantity' => 1, 'quantity_available' => 1],
+                                        ['name' => 'Non-Wireless Microphones', 'quantity' => 1, 'quantity_available' => 1],
+                                        ['name' => 'Canopies', 'quantity' => 10, 'quantity_available' => 10],
+                                        ['name' => 'Industrial Fans', 'quantity' => 6, 'quantity_available' => 6],
+                                        ['name' => 'Iwata Cooler Fans', 'quantity' => 4, 'quantity_available' => 4],
                                         ['name' => 'Tables', 'quantity' => 10, 'quantity_available' => 10],
+                                        ['name' => 'Monobloc Chairs', 'quantity' => 600, 'quantity_available' => 600],
                                     ]);
                                 }
                             @endphp
@@ -174,78 +177,16 @@
                     </div>
                     <div>
                         <label class="text-sm font-medium text-slate-700">Position</label>
-                        <div class="mt-1 flex items-center gap-2">
-                            <input id="saved-position-field" type="text" value="{{ old('position', $request->requester?->position ?? '') }}" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700" readonly>
-                            @if(!$isNeedsReschedule)
-                                <button type="button" id="edit-position-button" class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
-                            @endif
-                        </div>
+                        <input id="saved-position-field" type="text" value="{{ old('position', $request->requester?->position ?? '') }}" class="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700" readonly>
                         <input type="hidden" name="position" id="position-input" value="{{ old('position', $request->requester?->position ?? '') }}">
                     </div>
                 </div>
             </div>
 
             <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <a href="{{ route('request.show', $request->id) }}" class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 sm:w-auto">Cancel</a>
+                <a href="{{ route('request.show', $request->id) }}" data-inline-cancel class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 sm:w-auto">Cancel</a>
                 <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white sm:w-auto">Save Changes</button>
             </div>
         </form>
     </div>
 </div>@endsection
-
-@section('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const form = document.getElementById('request-form');
-    const savedPositionField = document.getElementById('saved-position-field');
-    const positionInput = document.getElementById('position-input');
-    const editPositionButton = document.getElementById('edit-position-button');
-
-    if (!savedPositionField || !positionInput || !editPositionButton || !form) {
-        return;
-    }
-
-    const isNeedsReschedule = form.getAttribute('data-is-needs-reschedule') === '1';
-    if (isNeedsReschedule) {
-        savedPositionField.readOnly = true;
-        savedPositionField.classList.add('bg-slate-50');
-        savedPositionField.classList.remove('bg-white');
-        if (editPositionButton) {
-            editPositionButton.style.display = 'none';
-        }
-        return;
-    }
-
-    const makeEditable = function () {
-        savedPositionField.readOnly = false;
-        savedPositionField.classList.remove('bg-slate-50');
-        savedPositionField.classList.add('bg-white');
-        savedPositionField.focus();
-        editPositionButton.textContent = 'Lock';
-        editPositionButton.classList.add('bg-slate-900', 'text-white');
-    };
-
-    const lockEditable = function () {
-        savedPositionField.readOnly = true;
-        savedPositionField.classList.add('bg-slate-50');
-        savedPositionField.classList.remove('bg-white');
-        editPositionButton.textContent = 'Edit';
-        editPositionButton.classList.remove('bg-slate-900', 'text-white');
-        positionInput.value = savedPositionField.value;
-    };
-
-    editPositionButton.addEventListener('click', function () {
-        if (savedPositionField.readOnly) {
-            makeEditable();
-            return;
-        }
-
-        lockEditable();
-    });
-
-    savedPositionField.addEventListener('input', function () {
-        positionInput.value = savedPositionField.value;
-    });
-});
-</script>
-@endsection

@@ -24,7 +24,8 @@ class CalendarController extends Controller
         $user = auth()->user();
         $role = $this->getUserRole($user);
 
-        $query = FacilityRequest::with(['user', 'requestVenues', 'requestEquipment', 'reservationSchedule']);
+        $query = FacilityRequest::with(['user', 'requestVenues', 'requestEquipment', 'reservationSchedule'])
+            ->where('status', '!=', 'cancelled');
 
         if ($user && $user->isCustodian()) {
             $requests = $this->getRequestsForCustodian($user);
@@ -244,6 +245,7 @@ class CalendarController extends Controller
         if ($role === 'requestor' && $user) {
             $personalRequests = FacilityRequest::with(['requestVenues', 'requestEquipment', 'reservationSchedule'])
                 ->where('requested_by_id', $user->id)
+                ->where('status', '!=', 'cancelled')
                 ->orderByDesc('created_at')
                 ->get();
 
@@ -303,7 +305,8 @@ class CalendarController extends Controller
                 return collect([]);
             }
 
-            return FacilityRequest::where(function ($query) use ($venueNames) {
+            return FacilityRequest::where('status', '!=', 'cancelled')
+                ->where(function ($query) use ($venueNames) {
                 foreach ($venueNames as $name) {
                     $query->orWhere(fn ($subQuery) => $subQuery->matchesVenue($name));
                 }
@@ -316,7 +319,8 @@ class CalendarController extends Controller
                 return collect([]);
             }
 
-            return FacilityRequest::where(function ($query) use ($equipmentNames) {
+            return FacilityRequest::where('status', '!=', 'cancelled')
+                ->where(function ($query) use ($equipmentNames) {
                 foreach ($equipmentNames as $name) {
                     $query->orWhere(fn ($subQuery) => $subQuery->matchesEquipment($name));
                 }

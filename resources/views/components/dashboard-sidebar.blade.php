@@ -31,7 +31,12 @@
     } elseif ($user && ($user->isFaculty() || in_array($user->role, ['faculty', 'staff', 'office_staff'], true))) {
         $displayContext = $meaningfulValue($user->departmentRecord?->name) ?? $meaningfulValue($user->department) ?? $displayContext;
     }
-    $displayIdentity = $displayContext . ($displayPosition ? ' — ' . $displayPosition : '');
+    if ($user && $user->isCustodian()) {
+        $assignedResource = $meaningfulValue($user->assignedCustodianResourceLabel());
+        $displayIdentity = ($assignedResource ?? 'No assigned resource') . ' — ' . ($user->role_label ?? 'Custodian');
+    } else {
+        $displayIdentity = $displayContext . ($displayPosition ? ' — ' . $displayPosition : '');
+    }
 
     if ($user?->isAdmin()) {
         $calendarRoute = route('supply-office.calendar');

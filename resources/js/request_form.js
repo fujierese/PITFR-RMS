@@ -1214,11 +1214,11 @@ const initializeRequestForm = function () {
         // Venue/Equipment mapping for automatic selection
         const venuesRequiringSoundSystem = [
             'Conference Hall & Interaction Center (CHIC)',
-            'Balay Alumni Hall',
+            'Balay Alumni',
             'Gymnasium'
         ];
         
-        // Equipment incompatible with Balay Alumni Hall
+        // Equipment incompatible with Balay Alumni
         const balayIncompatibleEquipment = [
             'Canopies',
             'Industrial Fans',
@@ -1239,7 +1239,7 @@ const initializeRequestForm = function () {
             if (venuesRequiringSoundSystem.includes(venue)) {
                 shouldAutoSelectSoundSystem = true;
             }
-            if (venue === 'Balay Alumni Hall') {
+            if (venue === 'Balay Alumni') {
                 isBalaySelected = true;
             }
         });
@@ -1512,6 +1512,8 @@ const initializeRequestForm = function () {
         return true;
     });
 };
+
+window.initializeRequestForm = initializeRequestForm;
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeRequestForm, { once: true });

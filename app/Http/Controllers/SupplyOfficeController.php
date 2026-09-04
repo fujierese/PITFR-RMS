@@ -552,10 +552,22 @@ class SupplyOfficeController extends Controller
                 $revision->markCustodianNotified();
             });
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Reservation rescheduled successfully. Requestor and custodians have been notified.',
+                ]);
+            }
+
             return redirect()->route('supply-office.index')
                 ->with('success', 'Reservation revised successfully. Requestor and custodians have been notified.');
         } catch (\Exception $e) {
             Log::error('Revision failed', ['error' => $e->getMessage()]);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Failed to reschedule reservation. Please try again.',
+                ], 422);
+            }
+
             return redirect()->back()
                 ->withInput()
                 ->withErrors(['revision' => 'Failed to revise reservation. Please try again.']);

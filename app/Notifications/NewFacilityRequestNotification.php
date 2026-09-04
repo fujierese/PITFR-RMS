@@ -20,12 +20,17 @@ class NewFacilityRequestNotification extends Notification
 
     public function toArray($notifiable): array
     {
+        $resource = method_exists($notifiable, 'assignedCustodianResourceLabel')
+            ? $notifiable->assignedCustodianResourceLabel()
+            : '';
+
         return [
             'request_id' => $this->facilityRequest->id,
             'control_number' => $this->facilityRequest->control_number,
             'activity' => $this->facilityRequest->name_of_activity,
             'status' => 'new_request',
-            'message' => 'A new facility request has been submitted and needs your review.',
+            'resource' => $resource ?: 'Assigned resource',
+            'message' => 'This request is waiting for your verification.',
         ];
     }
 }
