@@ -19,8 +19,8 @@ class UserSeeder extends Seeder
             ['username' => 'ctado@gmail.com',      'name' => 'CHARLES ROMMEL L. TADO', 'role' => 'custodian',             'password' => Hash::make('password')],
             ['username' => 'rguillemer@gmail.com', 'name' => 'ROGELIO GUILLEMER',       'role' => 'custodian',             'password' => Hash::make('password')],
             ['username' => 'jsuralta@gmail.com',   'name' => 'JAIME SURALTA',           'role' => 'custodian',             'password' => Hash::make('password')],
-            ['username' => 'lalmerino@gmail.com',  'name' => 'L. ALMERINO',             'role' => 'custodian',             'password' => Hash::make('password')],
-            ['username' => 'jrvillas@gmail.com',   'name' => 'JR. VILLAS',              'role' => 'custodian',             'password' => Hash::make('password')],
+            ['username' => 'lalmerino@gmail.com',  'name' => 'Leogen Almerino',        'role' => 'custodian',             'password' => Hash::make('password')],
+            ['username' => 'jrvillas@gmail.com',   'name' => 'Ritchard Villas',         'role' => 'custodian',             'password' => Hash::make('password')],
             ['username' => 'admin',                'name' => 'Administrator',           'role' => 'admin',                 'password' => Hash::make('admin')],
         ];
 

@@ -904,6 +904,30 @@ class FacilityRequest extends Model
         return $equipment->getAuthorizedCustodianIds();
     }
 
+    public function getVenueIncludedEquipmentNames(): array
+    {
+        $included = [];
+
+        foreach ($this->getVenueNames() as $venueName) {
+            foreach (\App\Services\VenueEquipmentPolicy::getDefaultEquipment($venueName) as $equipmentName) {
+                $included[] = $equipmentName;
+            }
+        }
+
+        return array_values(array_unique(array_filter(array_map('trim', $included))));
+    }
+
+    public function isVenueIncludedEquipment(string $itemName): bool
+    {
+        $normalized = trim((string) $itemName);
+
+        if ($normalized === '') {
+            return false;
+        }
+
+        return in_array($normalized, $this->getVenueIncludedEquipmentNames(), true);
+    }
+
     // ─── GET ALL CUSTODIAN IDs ASSIGNED TO EQUIPMENT IN THIS REQUEST ──────────
     public function getAssignedEquipmentCustodianIds(): array
     {
@@ -914,6 +938,10 @@ class FacilityRequest extends Model
         $custodianIds = [];
 
         foreach (array_keys($quantities) as $itemName) {
+            if ($this->isVenueIncludedEquipment($itemName)) {
+                continue;
+            }
+
             $custodianIds = array_merge($custodianIds, $this->getAuthorizedCustodianIdsForEquipment($itemName));
         }
 
@@ -1183,12 +1211,10 @@ class FacilityRequest extends Model
 
         // Extract venue custodian from history
         if ($this->venue_status === 'approved') {
-            $venueHistory = $this->histories()
-                ->where('action', 'like', '%venue%')
-                ->whereIn('action', ['venue_status_approved', 'custodian_endorsed'])
-                ->latest('occurred_at')
-                ->first();
-            $venueCustodian = $venueHistory?->user?->name;
+            $venueCustodianId = Venue::whereIn('name', $this->getVenueNames())
+                    ->whereNotNull('custodian_id')
+                    ->value('custodian_id');
+            $venueCustodian = $venueCustodianId ? User::find($venueCustodianId)?->name : null;
         }
 
         // Extract equipment custodians from statuses and history

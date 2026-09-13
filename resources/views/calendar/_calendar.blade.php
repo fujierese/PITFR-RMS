@@ -1613,11 +1613,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 console.log('📅 Events:', viewType, '|', Math.round(daysDiff), 'days');
 
-                fetch('{{ route("calendar.events") }}')
-                    .then(function(response) {
+                fetch('{{ route("calendar.events") }}', {
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                    .then(async function(response) {
+                        var contentType = (response.headers.get('content-type') || '').toLowerCase();
+
                         if (!response.ok) {
-                            throw new Error('Network response was not ok: ' + response.status + ' ' + response.statusText);
+                            var errorText = await response.text();
+                            throw new Error('Network response was not ok: ' + response.status + ' ' + response.statusText + (errorText ? ' - ' + errorText.slice(0, 180).replace(/\s+/g, ' ') : ''));
                         }
+
+                        if (!contentType.includes('application/json')) {
+                            var htmlText = await response.text();
+                            throw new Error('Calendar endpoint returned a non-JSON response. ' + htmlText.slice(0, 180).replace(/\s+/g, ' '));
+                        }
+
                         return response.json();
                     })
                     .then(function(data) {

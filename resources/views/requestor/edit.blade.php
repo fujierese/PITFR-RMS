@@ -122,10 +122,12 @@
                                         ['name' => 'Sound System', 'quantity' => 1, 'quantity_available' => 1],
                                         ['name' => 'Wireless Microphones', 'quantity' => 1, 'quantity_available' => 1],
                                         ['name' => 'Non-Wireless Microphones', 'quantity' => 1, 'quantity_available' => 1],
+                                        ['name' => 'Aircon', 'quantity' => 4, 'quantity_available' => 4],
                                         ['name' => 'Canopies', 'quantity' => 10, 'quantity_available' => 10],
                                         ['name' => 'Industrial Fans', 'quantity' => 6, 'quantity_available' => 6],
                                         ['name' => 'Iwata Cooler Fans', 'quantity' => 4, 'quantity_available' => 4],
                                         ['name' => 'Tables', 'quantity' => 10, 'quantity_available' => 10],
+                                        ['name' => 'Chairs', 'quantity' => 50, 'quantity_available' => 50],
                                         ['name' => 'Monobloc Chairs', 'quantity' => 600, 'quantity_available' => 600],
                                     ]);
                                 }

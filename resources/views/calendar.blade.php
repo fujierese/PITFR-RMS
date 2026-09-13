@@ -185,8 +185,28 @@ document.addEventListener('DOMContentLoaded', function() {
             meridiem: 'short'
         },
         events: function(fetchInfo, successCallback, failureCallback) {
-            fetch('{{ route('calendar.events') }}')
-                .then(response => response.json())
+            fetch('{{ route('calendar.events') }}', {
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(async response => {
+                    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error('Network response was not ok: ' + response.status + ' ' + response.statusText + (errorText ? ' - ' + errorText.slice(0, 180).replace(/\s+/g, ' ') : ''));
+                    }
+
+                    if (!contentType.includes('application/json')) {
+                        const htmlText = await response.text();
+                        throw new Error('Calendar endpoint returned a non-JSON response. ' + htmlText.slice(0, 180).replace(/\s+/g, ' '));
+                    }
+
+                    return response.json();
+                })
                 .then(data => {
                     console.log('Calendar event payload:', data);
                     const mappedEvents = data.map(event => {

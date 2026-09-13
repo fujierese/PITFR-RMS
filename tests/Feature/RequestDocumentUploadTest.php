@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Equipment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class RequestDocumentUploadTest extends TestCase
@@ -84,6 +85,26 @@ class RequestDocumentUploadTest extends TestCase
         $this->studentUser->update([
             'office_or_organization' => null,
         ]);
+    }
+
+    public function test_user_signature_route_returns_image_for_owner(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'student',
+        ]);
+
+        $pngBytes = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAF' .
+            'cYy5AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJ0UkG' .
+            'AAAAAAgIY0xVAAAAAElFTkSuQmCC');
+
+        Storage::disk('local')->put('documents/e_signature/users/' . $user->id . '_signature.png', $pngBytes);
+        $user->update(['e_signature_file' => $user->id . '_signature.png']);
+
+        $response = $this->actingAs($user)->get(route('user.signature', ['user' => $user->id]));
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'image/png');
     }
 
     public function test_student_requires_activity_proposal(): void

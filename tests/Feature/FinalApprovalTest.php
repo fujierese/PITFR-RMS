@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Notifications\RequestStatusChanged;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FinalApprovalTest extends TestCase
@@ -86,6 +87,30 @@ class FinalApprovalTest extends TestCase
                 && $notification->facilityRequest->id === $request->id
         );
         Notification::assertSentToTimes(User::findOrFail($request->requested_by_id), RequestStatusChanged::class, 1);
+    }
+
+    public function test_final_approval_records_signature_snapshot_for_supply_office(): void
+    {
+        Storage::fake('local');
+
+        $request = $this->createRequest();
+        $approver = $this->supplyOffice();
+        $approver->update(['e_signature_file' => 'final-approver-signature.png']);
+
+        Storage::disk('local')->put(
+            'documents/e_signature/users/final-approver-signature.png',
+            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+        );
+
+        $this->actingAs($approver)
+            ->post(route('request.supply.final-approval', $request), ['notes' => 'Final approval granted'])
+            ->assertRedirect();
+
+        $request->refresh();
+
+        $this->assertNotNull($request->final_approval_signature);
+        $this->assertNotNull($request->final_approval_signature_file);
+        $this->assertTrue(Storage::disk('local')->exists('documents/e_signature/approvals/' . $request->final_approval_signature_file));
     }
 
     public function test_supply_office_queue_contains_only_requests_ready_for_final_approval(): void

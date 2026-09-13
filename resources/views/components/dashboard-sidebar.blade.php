@@ -326,6 +326,13 @@
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m-1-2h-2a2 2 0 00-2 2v2h6V5a2 2 0 00-2-2z"/></svg>',
             ];
             $navigation[] = [
+                'key' => 'calendar',
+                'label' => 'Calendar',
+                'route' => route('calendar.index'),
+                'route_name' => 'calendar.index',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+            ];
+            $navigation[] = [
                 'section' => 'Notifications',
                 'type' => 'section-header',
             ];
@@ -416,7 +423,7 @@
             </button>
         </div>
 
-        <div class="mt-3 rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/20 via-emerald-500/10 to-slate-800/80 p-2.5">
+        <div class="group mt-3 rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/20 via-emerald-500/10 to-slate-800/80 p-2.5 shadow-[0_8px_24px_rgba(16,185,129,0.08)] transition duration-300 ease-out motion-safe:animate-[sidebar-card-in_400ms_ease-out_both] hover:-translate-y-0.5 hover:border-emerald-300/50 hover:shadow-[0_10px_28px_rgba(16,185,129,0.16)]">
             <p class="text-[9px] font-semibold uppercase tracking-[0.28em] text-slate-400">Signed in as</p>
             <p class="mt-1 break-words text-sm font-semibold text-white">{{ $displayName }}</p>
             <p class="break-words text-xs text-slate-300">{{ $displayIdentity }}</p>

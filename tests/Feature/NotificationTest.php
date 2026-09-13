@@ -205,6 +205,39 @@ class NotificationTest extends TestCase
         $this->assertStringContainsString('all equipment has been accounted for', strtolower($fulfilledMessage));
     }
 
+    public function test_notification_status_labels_are_human_readable_in_ui_messages(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor']);
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-2026-104',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Readable Status Test',
+            'expected_participants' => 20,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '11:00',
+            'venue' => ['Main Hall'],
+            'equipment' => [],
+            'equipment_quantities' => [],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+            'priority' => 'regular',
+        ]);
+        $request->syncRelationalItems();
+
+        $needsRevisionMessage = (new \App\Notifications\RequestStatusChanged($request, 'needs_revision', 'Needs revision before final approval.'))->toArray($requester)['message'];
+        $venueApprovedMessage = (new \App\Notifications\RequestStatusChanged($request, 'venue_approved', ''))->toArray($requester)['message'];
+
+        $this->assertStringContainsString('Needs revision', $needsRevisionMessage);
+        $this->assertStringNotContainsString('Needs_revision', $needsRevisionMessage);
+        $this->assertStringContainsString('Venue approved', $venueApprovedMessage);
+        $this->assertStringNotContainsString('Venue_approved', $venueApprovedMessage);
+    }
+
     public function test_revision_notification_lists_old_and_new_schedule(): void
     {
         $requester = User::factory()->create(['role' => 'requestor']);

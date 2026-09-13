@@ -30,12 +30,75 @@ class RequestStatusChanged extends Notification
     /**
      * Build the consolidated notification message
      */
+    private function humanizeStatus(string $status): string
+    {
+        $statusMap = [
+            'needs_revision' => 'Needs revision',
+            'needs_reschedule' => 'Needs reschedule',
+            'venue_approved' => 'Venue approved',
+            'equipment_approved' => 'Equipment approved',
+            'final_approved' => 'Final approved',
+            'request_cancelled' => 'Request cancelled',
+            'equipment_returned' => 'Equipment returned',
+        ];
+
+        return $statusMap[$status] ?? ucfirst(str_replace('_', ' ', $status));
+    }
+
+    private function approvalActors(): array
+    {
+        $actors = [];
+
+        if ($this->venueCustodian) {
+            $actors[] = $this->venueCustodian;
+        }
+
+        foreach ($this->equipmentCustodians as $equipmentCustodian) {
+            $actors[] = $equipmentCustodian;
+        }
+
+        if ($this->supplyOffice) {
+            $actors[] = $this->supplyOffice;
+        }
+
+        return array_values(array_filter($actors));
+    }
+
+    private function approvalActorText(): string
+    {
+        $actors = $this->approvalActors();
+
+        if ($actors === []) {
+            return '';
+        }
+
+        if (count($actors) === 1) {
+            return $actors[0];
+        }
+
+        $lastActor = array_pop($actors);
+        return implode(', ', $actors) . ', and ' . $lastActor;
+    }
+
+    private function statusActionWord(): string
+    {
+        return in_array($this->status, ['approved', 'venue_approved', 'equipment_approved'], true)
+            ? 'approved'
+            : 'rejected';
+    }
+
     private function buildConsolidatedMessage($notifiable = null): string
     {
         $message = '';
         $recipientType = $this->determineRecipientType($notifiable);
 
-        if ($this->status === 'approved') {
+        if (in_array($this->status, ['venue_approved', 'equipment_approved'], true)) {
+            $actorText = $this->approvalActorText();
+            $statusLabel = $this->humanizeStatus($this->status);
+            $message = $recipientType === 'requestor'
+                ? "Your request status has been updated" . ($actorText !== '' ? " by {$actorText}" : '') . " to {$statusLabel}. Control No: {$this->facilityRequest->control_number}"
+                : "This request status has been updated to {$statusLabel}. Control No: {$this->facilityRequest->control_number}";
+        } elseif ($this->status === 'approved') {
             if ($recipientType === 'requestor') {
                 $message = 'Your request has been approved.';
             } elseif ($recipientType === 'venue_custodian') {
@@ -65,21 +128,32 @@ class RequestStatusChanged extends Notification
                 }
             }
 
+            $actorText = $this->approvalActorText();
+            if ($recipientType === 'requestor' && $actorText !== '') {
+                $message .= " Updated by {$actorText}.";
+            }
+
             $message .= " Control No: {$this->facilityRequest->control_number}";
             if ($this->supplyOffice) {
                 $message .= ' Your approved request is ready for pickup from the Supply Office.';
             }
         } elseif ($this->status === 'rejected') {
-            $rejecter = $this->venueCustodian ?? $this->supplyOffice ?? 'The system';
+            $rejecter = $this->approvalActorText() ?: 'The system';
             $message = $recipientType === 'requestor'
-                ? "Your request was rejected by {$rejecter}. Control No: {$this->facilityRequest->control_number}"
+                ? "Your request status has been updated by {$rejecter} to rejected. Control No: {$this->facilityRequest->control_number}"
                 : "This request was rejected by {$rejecter}. Control No: {$this->facilityRequest->control_number}";
         } elseif ($this->status === 'needs_reschedule') {
             $admin = $this->supplyOffice ?? 'Supply Office';
             $reason = $this->conflictReason ?? 'scheduling conflict';
             $message = $recipientType === 'requestor'
-                ? "Your reservation needs to be rescheduled due to {$reason}. Control No: {$this->facilityRequest->control_number}"
-                : "This reservation needs to be rescheduled due to {$reason}. Control No: {$this->facilityRequest->control_number}";
+                ? "Your request status has been updated by {$admin} to reschedule your reservation due to {$reason}. Control No: {$this->facilityRequest->control_number}"
+                : "Supply Office asked that this reservation be rescheduled due to {$reason}. Control No: {$this->facilityRequest->control_number}";
+        } elseif ($this->status === 'needs_revision') {
+            $admin = $this->supplyOffice ?? 'Supply Office';
+            $reason = $this->notes !== '' ? $this->notes : 'revision is required before final approval';
+            $message = $recipientType === 'requestor'
+                ? "Your request status has been updated by {$admin} to revise your reservation due to {$reason}. Control No: {$this->facilityRequest->control_number}"
+                : "Supply Office asked that this reservation be revised due to {$reason}. Control No: {$this->facilityRequest->control_number}";
         } elseif ($this->status === 'equipment_returned') {
             $returnStatus = $this->facilityRequest->equipment_returned_status === 'fulfilled'
                 ? 'All equipment has been accounted for and the return is complete.'
@@ -96,7 +170,7 @@ class RequestStatusChanged extends Notification
                 $message .= ' Additional review may be required.';
             }
         } else {
-            $message = "Your request status has been updated to " . ucfirst($this->status) . ". Control No: {$this->facilityRequest->control_number}";
+            $message = 'Your request status has been updated to ' . $this->humanizeStatus($this->status) . ". Control No: {$this->facilityRequest->control_number}";
         }
 
         return $message;
@@ -172,9 +246,12 @@ class RequestStatusChanged extends Notification
             'approved'          => '✅ Request Approved',
             'rejected'          => '❌ Request Rejected',
             'needs_reschedule'  => '🔄 Rescheduling Required',
+            'needs_revision'    => '📝 Needs Revision',
             'equipment_returned'=> '🔄 Equipment Returned',
             'request_cancelled' => '❌ Request Cancelled',
-            default             => ucfirst($this->status),
+            'venue_approved'    => '✅ Venue Approved',
+            'equipment_approved'=> '✅ Equipment Approved',
+            default             => '📣 ' . $this->humanizeStatus($this->status),
         };
 
         $mail = (new MailMessage)

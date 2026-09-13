@@ -121,6 +121,72 @@ class CalendarEventPayloadTest extends TestCase
         $this->assertSame('PIT Multi-Purpose Gymnasium, CHIC Conference Hall', $event['venue']);
     }
 
+    public function test_requestor_calendar_only_shows_own_reservations(): void
+    {
+        $owner = User::factory()->create([
+            'name' => 'Personal Requestor',
+            'username' => 'personal-requestor',
+            'role' => 'requestor',
+            'contact_number' => '09181234568',
+        ]);
+
+        $other = User::factory()->create([
+            'name' => 'Other Requestor',
+            'username' => 'other-requestor',
+            'role' => 'requestor',
+            'contact_number' => '09181234569',
+        ]);
+
+        $myRequest = FacilityRequest::create([
+            'control_number' => 'FER-2026-010',
+            'date_requested' => now()->toDateString(),
+            'department' => 'BSIT',
+            'name_of_activity' => 'My Reservation',
+            'expected_participants' => 12,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '11:00',
+            'requested_by_id' => $owner->id,
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
+
+        $myRequest->reservationSchedule()->create([
+            'start_datetime' => now()->addDay()->setTime(9, 0),
+            'end_datetime' => now()->addDay()->setTime(11, 0),
+        ]);
+
+        $otherRequest = FacilityRequest::create([
+            'control_number' => 'FER-2026-011',
+            'date_requested' => now()->toDateString(),
+            'department' => 'BSIT',
+            'name_of_activity' => 'Other Reservation',
+            'expected_participants' => 15,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '13:00',
+            'end_time' => '15:00',
+            'requested_by_id' => $other->id,
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
+
+        $otherRequest->reservationSchedule()->create([
+            'start_datetime' => now()->addDay()->setTime(13, 0),
+            'end_datetime' => now()->addDay()->setTime(15, 0),
+        ]);
+
+        $response = $this->actingAs($owner)->getJson(route('calendar.events'));
+
+        $response->assertOk();
+        $eventIds = collect($response->json())->pluck('id')->all();
+        $this->assertContains($myRequest->id, $eventIds);
+        $this->assertNotContains($otherRequest->id, $eventIds);
+    }
+
     public function test_calendar_events_preserve_exact_multi_day_time_range_boundaries(): void
     {
         $requestor = User::factory()->create([

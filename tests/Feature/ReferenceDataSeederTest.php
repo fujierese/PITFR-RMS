@@ -23,7 +23,10 @@ class ReferenceDataSeederTest extends TestCase
 
         $this->assertSame(1, Venue::where('name', 'Gymnasium')->count());
         $this->assertSame(1000, Venue::where('name', 'Gymnasium')->value('capacity'));
+        $this->assertSame(200, Venue::where('name', 'Conference Hall & Interaction Center (CHIC)')->value('capacity'));
         $this->assertSame(50, Venue::whereIn('name', ['Balay Alumni', 'Balay Alumni Hall'])->value('capacity'));
+        $this->assertSame('Leogen Almerino', User::where('username', 'lalmerino@gmail.com')->value('name'));
+        $this->assertSame('Ritchard Villas', User::where('username', 'jrvillas@gmail.com')->value('name'));
 
         foreach ([
             'Sound System' => 1,
@@ -52,6 +55,16 @@ class ReferenceDataSeederTest extends TestCase
             User::where('username', 'jrvillas@gmail.com')->value('id'),
             Equipment::where('name', 'Iwata Cooler Fans')->first()->getAuthorizedCustodianIds(),
         );
+        $this->assertSame([
+            'Sound System',
+            'Wireless Microphones',
+            'Non-Wireless Microphones',
+            'Aircon',
+            'Tables',
+            'Chairs',
+        ], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Balay Alumni'));
+        $this->assertContains('Non-Wireless Microphones', \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Conference Hall & Interaction Center (CHIC)'));
+        $this->assertContains('Non-Wireless Microphones', \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Gymnasium'));
         $this->assertSame(
             User::where('username', 'jsuralta@gmail.com')->value('id'),
             Equipment::where('name', 'Canopies')->value('custodian_id'),

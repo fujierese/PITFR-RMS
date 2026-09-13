@@ -14,13 +14,14 @@ class VenueEquipmentPolicy
     {
         $normalizedVenue = self::normalizeVenueName($venueName);
 
-        return match ($normalizedVenue) {
-            'Balay Alumni' => ['Sound System'],
-            'Conference Hall & Interaction Center (CHIC)' => ['Sound System'],
-            'Gymnasium' => ['Sound System'],
-            'PIT Multi-Purpose Gymnasium' => ['Sound System'],
+        $equipment = match ($normalizedVenue) {
+            'Balay Alumni' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
+            'Conference Hall & Interaction Center (CHIC)' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Monobloc Chairs'],
+            'Gymnasium' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones'],
             default => [],
         };
+
+        return array_values(array_unique($equipment));
     }
 
     /**
@@ -40,8 +41,16 @@ class VenueEquipmentPolicy
                 'Industrial Fans',
                 'Iwata Cooler Fans',
                 'Monobloc Chairs',
-                'Wireless Microphones',
-                'Non-Wireless Microphones',
+            ],
+            'Conference Hall & Interaction Center (CHIC)' => [
+                'Canopies',
+                'Industrial Fans',
+                'Iwata Cooler Fans',
+            ],
+            'Gymnasium' => [
+                'Canopies',
+                'Industrial Fans',
+                'Iwata Cooler Fans',
             ],
             default => [],
         };
@@ -69,7 +78,6 @@ class VenueEquipmentPolicy
             'Balay Alumni',
             'Conference Hall & Interaction Center (CHIC)',
             'Gymnasium',
-            'PIT Multi-Purpose Gymnasium',
         ];
     }
 
@@ -79,6 +87,12 @@ class VenueEquipmentPolicy
 
         return match (mb_strtolower($normalized)) {
             'balay alumni hall' => 'Balay Alumni',
+            'chic' => 'Conference Hall & Interaction Center (CHIC)',
+            'conference hall & interaction center (chic)' => 'Conference Hall & Interaction Center (CHIC)',
+            'conference hall and interaction center (chic)' => 'Conference Hall & Interaction Center (CHIC)',
+            'gymnasium' => 'Gymnasium',
+            'pit multi-purpose gymnasium' => 'Gymnasium',
+            'pit multi purpose gymnasium' => 'Gymnasium',
             default => $normalized,
         };
     }

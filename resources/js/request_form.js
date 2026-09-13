@@ -140,6 +140,9 @@ const initializeRequestForm = function () {
     const venueSelect = form.querySelector('select[name="venue"]');
     const otherVenueWrap = document.getElementById('venue-other-wrap');
     const otherVenueInput = document.getElementById('venue-other');
+    const equipmentSelectionPanel = document.getElementById('equipment-selection-panel');
+    const venueDefaultEquipmentPanel = document.getElementById('venue-default-equipment-panel');
+    const venueDefaultEquipmentList = document.getElementById('venue-default-equipment-list');
     const expectedParticipantsInput = form.querySelector('input[name="expected_participants"]');
     const equipmentCheckboxes = form.querySelectorAll('input[name="equipment[]"]');
     const rows = form.querySelectorAll('.equipment-row');
@@ -201,12 +204,15 @@ const initializeRequestForm = function () {
         });
         const selectedVenue = form.querySelector('[name="venue"]:checked');
         const equipmentSelected = form.querySelectorAll('.equipment-checkbox:checked').length > 0;
-        const activityProposalSelected = Boolean(form.querySelector('[name="activity_proposal_file"]')?.files?.length || form.querySelector('[name="proposal_file"]')?.files?.length);
+
+        const currentSupportingInput = requestorType === 'student' || requestorType === 'faculty'
+            ? form.querySelector('[name="activity_proposal_file"]')
+            : form.querySelector('[name="igp_receipt_file"]');
+
+        const activityProposalSelected = Boolean(form.querySelector('[name="activity_proposal_file"]')?.files?.length);
         const igpReceiptSelected = Boolean(form.querySelector('[name="igp_receipt_file"]')?.files?.length);
         const eSignatureSelected = Boolean(form.querySelector('[name="e_signature_file"]')?.files?.length);
-        const supportingDocumentSelected = requestorType === 'student' || requestorType === 'faculty'
-            ? activityProposalSelected
-            : igpReceiptSelected;
+        const supportingDocumentSelected = currentSupportingInput ? Boolean(currentSupportingInput.files?.length) : false;
 
         const requiredChecklist = document.getElementById('checklist-required-fields');
         const venueChecklist = document.getElementById('checklist-venue-availability');
@@ -611,23 +617,41 @@ const initializeRequestForm = function () {
         const venueText = selectedVenue ? selectedVenue.value : (venueSelect?.value || 'No venue selected yet.');
         document.getElementById('summary-venue').textContent = 'Venue: ' + venueText;
 
+        const venueDefaultEquipmentMap = {
+            'Balay Alumni': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
+            'Conference Hall & Interaction Center (CHIC)': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Monobloc Chairs'],
+            'Gymnasium': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones']
+        };
+
+        const selectedVenueName = selectedVenue ? selectedVenue.value : (venueSelect?.value || null);
+        const defaultItems = selectedVenueName && Object.prototype.hasOwnProperty.call(venueDefaultEquipmentMap, selectedVenueName)
+            ? venueDefaultEquipmentMap[selectedVenueName]
+            : [];
+
         const selectedEquipment = Array.from(form.querySelectorAll('input[name="equipment[]"]:checked'));
         const summaryEquipment = document.getElementById('summary-equipment');
 
-        if (selectedEquipment.length === 0) {
+        const mergedEquipment = [...selectedEquipment].map(checkbox => checkbox.value);
+        defaultItems.forEach(item => {
+            if (!mergedEquipment.includes(item)) {
+                mergedEquipment.push(item);
+            }
+        });
+
+        if (mergedEquipment.length === 0) {
             summaryEquipment.innerHTML = 'Equipment: No equipment selected.';
             updateFormSummary();
             return;
         }
 
-        const equipmentLines = selectedEquipment.map(checkbox => {
-            const row = checkbox.closest('.equipment-row');
+        const equipmentLines = mergedEquipment.map(item => {
+            const checkbox = form.querySelector(`input[name="equipment[]"][value="${CSS.escape(item)}"]`);
+            const row = checkbox ? checkbox.closest('.equipment-row') : null;
             const qtyInput = row?.querySelector('.quantity-input-wrap input[type="number"]');
             const qty = qtyInput?.value || '1';
-            return `<div>• ${escapeHtml(checkbox.value)} × ${escapeHtml(qty)}</div>`;
+            return `<div>• ${escapeHtml(item)} × ${escapeHtml(qty)}</div>`;
         });
 
-        // Use escaped values to avoid injecting untrusted content via innerHTML
         summaryEquipment.innerHTML = 'Equipment:<br>' + equipmentLines.join('');
         updateFormSummary();
     };
@@ -653,6 +677,26 @@ const initializeRequestForm = function () {
             otherVenueInput.disabled = true;
             otherVenueInput.value = '';
         }
+    };
+
+    const renderVenueDefaultEquipmentList = function (venueName) {
+        if (!venueDefaultEquipmentList) {
+            return;
+        }
+
+        const list = {
+            'Balay Alumni': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
+            'Conference Hall & Interaction Center (CHIC)': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Monobloc Chairs'],
+            'Gymnasium': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones']
+        };
+
+        const items = list[venueName] || [];
+        venueDefaultEquipmentList.innerHTML = items.map(item => `
+            <li class="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white/70 px-3 py-2">
+                <span class="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                <span class="font-medium text-emerald-800">${escapeHtml(item)}</span>
+            </li>
+        `).join('');
     };
 
     const decodeHtmlEntities = function (value) {
@@ -811,12 +855,203 @@ const initializeRequestForm = function () {
         return valid;
     };
 
+    const formatFileSize = function (bytes) {
+        if (!bytes || Number.isNaN(bytes)) {
+            return '0 KB';
+        }
+
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let size = bytes;
+        let unitIndex = 0;
+
+        while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex += 1;
+        }
+
+        return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+    };
+
+    const setUploadState = function (box, state, options = {}) {
+        if (!box) {
+            return;
+        }
+
+        const status = box.querySelector('[data-upload-status]');
+        const actionLabel = box.querySelector('[data-upload-action-label]');
+        const progress = box.querySelector('[data-upload-progress]');
+        const fileName = box.querySelector('[data-upload-file-name]');
+        const percent = box.querySelector('[data-upload-percent]');
+        const bar = box.querySelector('[data-upload-bar]');
+        const errorBox = box.querySelector('[data-upload-error]');
+        const nextPercent = Number.isFinite(options.percent) ? Math.min(100, Math.max(0, options.percent)) : 0;
+        const fileValue = options.fileName || fileName?.textContent || 'file.pdf';
+
+        box.classList.remove('border-slate-300', 'border-emerald-400', 'border-cyan-400', 'border-emerald-500', 'bg-slate-50', 'bg-cyan-500/5', 'bg-emerald-50/40', 'bg-white', 'shadow-[0_0_0_1px_rgba(34,211,238,0.25)]', 'shadow-[0_0_0_1px_rgba(16,185,129,0.18)]', 'shadow-lg');
+        box.classList.add(
+            state === 'dragging' ? 'border-cyan-400 bg-cyan-500/5 shadow-[0_0_0_1px_rgba(34,211,238,0.25)]' :
+            state === 'uploading' ? 'border-cyan-400 bg-slate-900/60 shadow-[0_0_0_1px_rgba(34,211,238,0.25)]' :
+            state === 'success' ? 'border-emerald-400 bg-emerald-50/40 shadow-[0_0_0_1px_rgba(16,185,129,0.18)]' :
+            state === 'error' ? 'border-red-300 bg-red-50/30 shadow-[0_0_0_1px_rgba(239,68,68,0.12)]' :
+            'border-slate-300 bg-slate-50'
+        );
+
+        if (fileName) {
+            fileName.textContent = fileValue;
+        }
+
+        if (percent) {
+            percent.textContent = `${Math.round(nextPercent)}%`;
+        }
+
+        if (bar) {
+            bar.style.width = `${nextPercent}%`;
+            bar.classList.toggle('bg-gradient-to-r', true);
+            bar.classList.toggle('from-cyan-400', state !== 'error');
+            bar.classList.toggle('to-emerald-400', state !== 'error');
+            bar.classList.toggle('from-red-400', state === 'error');
+            bar.classList.toggle('to-red-300', state === 'error');
+        }
+
+        if (status) {
+            const shouldShowStatus = state === 'uploading' || state === 'success';
+            status.classList.toggle('hidden', !shouldShowStatus);
+            status.textContent = state === 'success' ? 'Uploaded' : 'Uploading...';
+            status.classList.toggle('text-emerald-400', state === 'success');
+            status.classList.toggle('text-cyan-400', state === 'uploading');
+        }
+
+        if (progress) {
+            progress.classList.toggle('hidden', state === 'idle' || state === 'error');
+        }
+
+        if (errorBox) {
+            errorBox.classList.toggle('hidden', state !== 'error');
+        }
+
+        if (actionLabel) {
+            actionLabel.textContent = state === 'success' ? 'Uploaded' : state === 'error' ? 'Retry' : 'Upload a file';
+        }
+    };
+
+    const initializeUploadSurfaceStates = function () {
+        document.querySelectorAll('[data-upload-box]').forEach(function (box) {
+            const input = box.querySelector('input[type="file"]');
+            if (!input) {
+                return;
+            }
+
+            const resetToIdle = function () {
+                setUploadState(box, 'idle');
+            };
+
+            const simulateUpload = function (file) {
+                if (!file) {
+                    resetToIdle();
+                    return;
+                }
+
+                const fileNameValue = file.name || 'file.pdf';
+                const fileSizeValue = formatFileSize(file.size || 0);
+                const progressNode = box.querySelector('[data-upload-file-name]');
+                const statusNode = box.querySelector('[data-upload-status]');
+
+                if (progressNode) {
+                    progressNode.textContent = `${fileNameValue} • ${fileSizeValue}`;
+                }
+
+                if (statusNode) {
+                    statusNode.textContent = 'Uploading...';
+                }
+
+                setUploadState(box, 'uploading', { percent: 15, fileName: `${fileNameValue} • ${fileSizeValue}` });
+
+                let progress = 15;
+                const timer = window.setInterval(function () {
+                    progress += 12;
+                    if (progress >= 100) {
+                        window.clearInterval(timer);
+                        setUploadState(box, 'success', { percent: 100, fileName: `${fileNameValue} • ${fileSizeValue}` });
+                        return;
+                    }
+
+                    setUploadState(box, 'uploading', { percent: progress, fileName: `${fileNameValue} • ${fileSizeValue}` });
+                }, 220);
+
+                const retryButton = box.querySelector('[data-retry-upload]');
+                if (retryButton) {
+                    retryButton.onclick = function () {
+                        window.clearInterval(timer);
+                        setUploadState(box, 'uploading', { percent: 18, fileName: `${fileNameValue} • ${fileSizeValue}` });
+                        let retryProgress = 18;
+                        const retryTimer = window.setInterval(function () {
+                            retryProgress += 16;
+                            if (retryProgress >= 100) {
+                                window.clearInterval(retryTimer);
+                                setUploadState(box, 'success', { percent: 100, fileName: `${fileNameValue} • ${fileSizeValue}` });
+                                return;
+                            }
+                            setUploadState(box, 'uploading', { percent: retryProgress, fileName: `${fileNameValue} • ${fileSizeValue}` });
+                        }, 180);
+                    };
+                }
+            };
+
+            input.addEventListener('change', function () {
+                const file = input.files?.[0];
+                if (!file) {
+                    resetToIdle();
+                    return;
+                }
+
+                simulateUpload(file);
+            });
+
+            box.addEventListener('dragover', function (event) {
+                event.preventDefault();
+                setUploadState(box, 'dragging');
+            });
+
+            box.addEventListener('dragleave', function (event) {
+                if (!box.contains(event.relatedTarget)) {
+                    if (input.files && input.files.length) {
+                        setUploadState(box, 'success', { percent: 100, fileName: input.files[0].name });
+                        return;
+                    }
+                    resetToIdle();
+                }
+            });
+
+            box.addEventListener('drop', function (event) {
+                event.preventDefault();
+                const droppedFiles = event.dataTransfer?.files;
+                if (droppedFiles && droppedFiles.length) {
+                    input.files = droppedFiles;
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+
+            const retryButton = box.querySelector('[data-retry-upload]');
+            if (retryButton) {
+                retryButton.addEventListener('click', function () {
+                    const file = input.files?.[0];
+                    if (!file) {
+                        resetToIdle();
+                        return;
+                    }
+                    simulateUpload(file);
+                    setUploadState(box, 'uploading', { percent: 10, fileName: file.name });
+                });
+            }
+        });
+    };
+
     const initializeFileInputs = function () {
         const fileInputs = [
-            { name: 'activity_proposal_file', preview: 'activity-proposal-preview', label: 'activity-proposal-name', extensions: ['pdf', 'png', 'jpg', 'jpeg'] },
-            { name: 'igp_receipt_file', preview: 'igp-receipt-preview', label: 'igp-receipt-name', extensions: ['pdf', 'png', 'jpg', 'jpeg'] },
-            { name: 'e_signature_file', preview: 'e-signature-preview', label: 'e-signature-name', extensions: ['png', 'jpg', 'jpeg'] },
-            { name: 'proposal_file', preview: 'file-preview', label: 'file-name', extensions: ['pdf', 'png', 'jpg', 'jpeg'] }
+            { name: 'activity_proposal_file', preview: 'activity-proposal-preview', label: 'activity-proposal-name', extensions: ['pdf', 'png', 'jpg', 'jpeg'], displayLabel: 'Activity Proposal' },
+            { name: 'igp_receipt_file', preview: 'igp-receipt-preview', label: 'igp-receipt-name', extensions: ['pdf', 'png', 'jpg', 'jpeg'], displayLabel: 'IGP Receipt' },
+            { name: 'e_signature_file', preview: 'e-signature-preview', label: 'e-signature-name', extensions: ['png', 'jpg', 'jpeg'], displayLabel: 'E-Signature' },
+            { name: 'proposal_file', preview: 'file-preview', label: 'file-name', extensions: ['pdf', 'png', 'jpg', 'jpeg'], displayLabel: 'Supporting Document' }
         ];
 
         fileInputs.forEach(function (config) {
@@ -830,11 +1065,17 @@ const initializeRequestForm = function () {
                 const extension = file?.name.split('.').pop()?.toLowerCase();
                 const preview = document.getElementById(config.preview);
                 const label = document.getElementById(config.label);
+                const uploadCard = input.closest('[data-upload-box]')?.parentElement?.querySelector('[data-upload-file-card]');
+                const uploadFilename = uploadCard?.querySelector('[data-upload-filename]');
+                const uploadSubtitle = uploadCard?.querySelector('[data-upload-subtitle]');
+                const uploadProgress = uploadCard?.querySelector('[data-upload-file-progress]');
+                const uploadCheck = uploadCard?.querySelector('[data-upload-check]');
 
                 if (file && !config.extensions.includes(extension)) {
                     input.value = '';
                     setInputValidationState(input, false, `Invalid file type. Allowed formats: ${config.extensions.join(', ')}`);
                     preview?.classList.add('hidden');
+                    uploadCard?.classList.add('hidden');
                     updateFormSummary();
                     return;
                 }
@@ -842,6 +1083,23 @@ const initializeRequestForm = function () {
                 setInputValidationState(input, true);
                 if (label) label.textContent = file?.name || '';
                 if (preview) preview.classList.toggle('hidden', !file);
+
+                if (uploadCard) {
+                    uploadCard.classList.toggle('hidden', !file);
+                    if (uploadFilename) {
+                        uploadFilename.textContent = file ? file.name : config.displayLabel;
+                    }
+                    if (uploadSubtitle) {
+                        uploadSubtitle.textContent = file ? config.displayLabel : 'No file selected';
+                    }
+                    if (uploadProgress) {
+                        uploadProgress.style.width = file ? '100%' : '0%';
+                    }
+                    if (uploadCheck) {
+                        uploadCheck.innerHTML = file ? '<span>Ready</span>' : '<span>Ready</span>';
+                    }
+                }
+
                 updateFormSummary();
             });
         });
@@ -1207,72 +1465,89 @@ const initializeRequestForm = function () {
     };
 
     const applyVenueSpecificEquipmentRules = function () {
-        // Get selected venues
         const selectedVenues = Array.from(form.querySelectorAll('input[name="venue"]:checked'))
             .map(input => input.value);
-        
-        // Venue/Equipment mapping for automatic selection
-        const venuesRequiringSoundSystem = [
-            'Conference Hall & Interaction Center (CHIC)',
-            'Balay Alumni',
-            'Gymnasium'
-        ];
-        
-        // Equipment incompatible with Balay Alumni
+
+        const venueDefaultEquipmentMap = {
+            'Balay Alumni': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
+            'Conference Hall & Interaction Center (CHIC)': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Monobloc Chairs'],
+            'Gymnasium': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones']
+        };
+
+        const defaultVenue = selectedVenues.find(venue => Object.prototype.hasOwnProperty.call(venueDefaultEquipmentMap, venue));
+        const isVenuePackage = Boolean(defaultVenue);
+
+        if (equipmentSelectionPanel) {
+            equipmentSelectionPanel.style.display = isVenuePackage ? 'none' : 'block';
+        }
+
+        if (venueDefaultEquipmentPanel) {
+            venueDefaultEquipmentPanel.style.display = isVenuePackage ? 'block' : 'none';
+        }
+
+        if (isVenuePackage) {
+            renderVenueDefaultEquipmentList(defaultVenue);
+        }
+
         const balayIncompatibleEquipment = [
             'Canopies',
             'Industrial Fans',
             'Iwata Cooler Fans',
-            'Monobloc Chairs',
-            'Wireless Microphones',
-            'Non-Wireless Microphones'
+            'Monobloc Chairs'
         ];
-        
-        const soundSystemCheckbox = form.querySelector('input[name="equipment[]"][value="Sound System"]');
+
         const equipmentRows = form.querySelectorAll('.equipment-row');
-        
-        let shouldAutoSelectSoundSystem = false;
-        let isBalaySelected = false;
-        
-        // Check if any selected venue requires Sound System
+        const venueDefaultSet = new Set();
+
         selectedVenues.forEach(venue => {
-            if (venuesRequiringSoundSystem.includes(venue)) {
-                shouldAutoSelectSoundSystem = true;
-            }
-            if (venue === 'Balay Alumni') {
-                isBalaySelected = true;
-            }
+            (venueDefaultEquipmentMap[venue] || []).forEach(item => venueDefaultSet.add(item));
         });
-        
-        // Auto-check Sound System if needed
-        if (shouldAutoSelectSoundSystem && soundSystemCheckbox) {
-            soundSystemCheckbox.checked = true;
-            soundSystemCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        
-        // Handle Balay-incompatible equipment
+
         equipmentRows.forEach(row => {
             const checkbox = row.querySelector('input[name="equipment[]"]');
             const itemName = checkbox ? checkbox.value : '';
-            const isIncompatible = balayIncompatibleEquipment.includes(itemName);
-            
-            if (isBalaySelected && isIncompatible) {
-                // Disable and uncheck incompatible equipment for Balay
-                row.style.opacity = '0.5';
+            const isDefaultEquipment = venueDefaultSet.has(itemName);
+            const isBalaySelected = selectedVenues.includes('Balay Alumni');
+            const isIncompatible = isBalaySelected && balayIncompatibleEquipment.includes(itemName);
+
+            if (isDefaultEquipment) {
+                checkbox.checked = true;
+                checkbox.dataset.venueDefault = 'true';
+                checkbox.setAttribute('readonly', 'readonly');
+                checkbox.disabled = true;
+                row.classList.add('border-emerald-300', 'bg-emerald-50/60');
+                row.style.opacity = '1';
                 row.style.pointerEvents = 'none';
-                if (checkbox) {
-                    checkbox.checked = false;
-                    checkbox.disabled = true;
+
+                const qtyWrap = row.querySelector('.quantity-input-wrap');
+                if (qtyWrap) {
+                    qtyWrap.style.display = 'none';
+                    const qtyInput = qtyWrap.querySelector('input[type="number"]');
+                    if (qtyInput) {
+                        qtyInput.value = '1';
+                        qtyInput.disabled = true;
+                    }
+                }
+
+                if (checkbox.matches('input[name="equipment[]"]')) {
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             } else {
-                // Re-enable if not incompatible
-                row.style.opacity = '1';
-                row.style.pointerEvents = 'auto';
-                if (checkbox) {
+                checkbox.dataset.venueDefault = 'false';
+                if (isIncompatible) {
+                    row.style.opacity = '0.5';
+                    row.style.pointerEvents = 'none';
+                    checkbox.checked = false;
+                    checkbox.disabled = true;
+                } else {
+                    row.style.opacity = '1';
+                    row.style.pointerEvents = 'auto';
                     checkbox.disabled = false;
                 }
             }
         });
+
+        updateSelectedItemsSummary();
     };
 
     const attachSelectionListeners = function () {

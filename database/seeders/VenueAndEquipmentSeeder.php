@@ -20,7 +20,7 @@ class VenueAndEquipmentSeeder extends Seeder
             'jsuralta@gmail.com',
         ])->pluck('id', 'username');
 
-        $this->upsertVenue('Conference Hall & Interaction Center (CHIC)', null, $custodians['asala@gmail.com']);
+        $this->upsertVenue('Conference Hall & Interaction Center (CHIC)', 200, $custodians['asala@gmail.com']);
         $this->upsertVenue('Gymnasium', 1000, $custodians['ctado@gmail.com']);
         $this->upsertVenue('Balay Alumni', 50, $custodians['mmercado@gmail.com']);
         Venue::query()->where('name', 'Balay Alumni Hall')->delete();
@@ -32,11 +32,13 @@ class VenueAndEquipmentSeeder extends Seeder
         $this->upsertEquipment('Sound System', 1, $custodians['rguillemer@gmail.com']);
         $this->upsertEquipment('Wireless Microphones', 1, $custodians['rguillemer@gmail.com'], [], ['Wireless Microphone', 'Wireless Microphones']);
         $this->upsertEquipment('Non-Wireless Microphones', 1, $custodians['rguillemer@gmail.com'], [], ['Non-wireless Microphone', 'Non-Wireless Microphones']);
+        $this->upsertEquipment('Aircon', 4, $custodians['mmercado@gmail.com']);
         $this->upsertEquipment('Canopies', 10, $custodians['jsuralta@gmail.com']);
         $this->upsertEquipment('Industrial Fans', 6, $custodians['lalmerino@gmail.com'], $fanAlternate);
         $this->upsertEquipment('Iwata Cooler Fans', 4, $custodians['lalmerino@gmail.com'], $fanAlternate);
         $this->upsertEquipment('Tables', 10, $custodians['jsuralta@gmail.com']);
-        $this->upsertEquipment('Monobloc Chairs', 600, $custodians['jsuralta@gmail.com'], [], ['Chairs', 'Monobloc chairs']);
+        $this->upsertEquipment('Chairs', 50, $custodians['jsuralta@gmail.com'], [], ['Chair', 'Chairs']);
+        $this->upsertEquipment('Monobloc Chairs', 600, $custodians['jsuralta@gmail.com'], [], ['Monobloc chair', 'Monobloc chairs']);
     }
 
     private function upsertVenue(string $name, ?int $capacity, int $custodianId, array $aliases = []): void
@@ -50,6 +52,20 @@ class VenueAndEquipmentSeeder extends Seeder
                 'name' => $canonicalName,
                 'custodian_id' => $custodianId,
             ]);
+        }
+
+        if ($venue->exists) {
+            if ($venue->custodian_id === null) {
+                $venue->custodian_id = $custodianId;
+            }
+            if ($capacity !== null && $venue->capacity === null) {
+                $venue->capacity = $capacity;
+            }
+            if (! $venue->is_active) {
+                $venue->is_active = true;
+            }
+            $venue->save();
+            return;
         }
 
         $venue->fill([
@@ -80,6 +96,26 @@ class VenueAndEquipmentSeeder extends Seeder
 
         if (! $equipment) {
             $equipment = new Equipment(['name' => $canonicalName]);
+        }
+
+        if ($equipment->exists) {
+            if ($equipment->custodian_id === null) {
+                $equipment->custodian_id = $custodianId;
+            }
+            if ($equipment->quantity === null) {
+                $equipment->quantity = $quantity;
+            }
+            if ($equipment->quantity_available === null) {
+                $equipment->quantity_available = $quantity;
+            }
+            if (empty($equipment->authorized_custodian_ids) && ! empty($alternateIds)) {
+                $equipment->authorized_custodian_ids = $alternateIds;
+            }
+            if (! $equipment->is_active) {
+                $equipment->is_active = true;
+            }
+            $equipment->save();
+            return;
         }
 
         $equipment->fill([

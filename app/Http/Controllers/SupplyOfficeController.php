@@ -289,10 +289,12 @@ class SupplyOfficeController extends Controller
                     null,
                     null,
                     [],
-                    Auth::user()->name,
+                    'Supply Office',
                     $reason
                 ));
             }
+
+            $this->notifyAffectedCustodiansOfScheduleChange($facilityRequest, 'needs_reschedule', $reason);
         }
 
         return redirect()->route('supply-office.requests.final-approval')->with('success', 'Request marked for rescheduling.');
@@ -328,11 +330,48 @@ class SupplyOfficeController extends Controller
                 $facilityRequest,
                 'needs_revision',
                 $notes,
-                Auth::user()->name
+                null,
+                null,
+                [],
+                'Supply Office'
             ));
         }
 
+        $this->notifyAffectedCustodiansOfScheduleChange($facilityRequest, 'needs_revision', $notes);
+
         return redirect()->route('supply-office.index')->with('success', 'Request marked as Needs Revision.');
+    }
+
+    private function notifyAffectedCustodiansOfScheduleChange(FacilityRequest $facilityRequest, string $status, string $reason): void
+    {
+        $equipmentCustodianIds = $facilityRequest->getAssignedEquipmentCustodianIds();
+        $venueCustodianIds = Venue::whereIn('name', $facilityRequest->getVenueNames())
+            ->pluck('custodian_id')
+            ->filter()
+            ->unique()
+            ->all();
+        $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
+
+        foreach (User::whereIn('id', $custodianIds)->get() as $custodian) {
+            try {
+                $custodian->notify(new RequestStatusChanged(
+                    $facilityRequest,
+                    $status,
+                    $reason,
+                    null,
+                    null,
+                    [],
+                    'Supply Office',
+                    $reason
+                ));
+            } catch (\Throwable $notificationError) {
+                Log::warning('Affected custodian schedule notification failed.', [
+                    'facility_request_id' => $facilityRequest->id,
+                    'custodian_id' => $custodian->id,
+                    'exception' => $notificationError->getMessage(),
+                ]);
+            }
+        }
     }
 
     /**

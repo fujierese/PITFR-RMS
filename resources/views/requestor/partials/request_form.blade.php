@@ -313,14 +313,17 @@
                     </div>
                 </section>
 
-                <section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
+                <section id="equipment-selection-panel" class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
                     <div class="mb-5 border-b border-slate-200 pb-4">
                         <div class="flex items-center justify-between gap-4">
                             <div>
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Equipment Selection</p>
-                                <p class="mt-1 text-sm text-slate-500">Indicate any equipment required for the activity and review availability.</p>
+                                <p class="mt-1 text-sm text-slate-500">Choose additional items beyond the venue package.</p>
                             </div>
-                            <p class="text-xs text-slate-500">Real-time availability</p>
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">Additional items</span>
+                                <p class="text-xs text-slate-500">Real-time availability</p>
+                            </div>
                         </div>
                     </div>
                     <div class="mt-4 space-y-3">
@@ -336,6 +339,7 @@
                                     ['name' => 'Sound System', 'quantity' => 1, 'quantity_available' => 1],
                                     ['name' => 'Wireless Microphones', 'quantity' => 2, 'quantity_available' => 2],
                                     ['name' => 'Non-Wireless Microphones', 'quantity' => 2, 'quantity_available' => 2],
+                                    ['name' => 'Aircon', 'quantity' => 2, 'quantity_available' => 2],
                                     ['name' => 'Canopies', 'quantity' => 3, 'quantity_available' => 3],
                                     ['name' => 'Industrial Fans', 'quantity' => 4, 'quantity_available' => 4],
                                     ['name' => 'Iwata Cooler Fans', 'quantity' => 2, 'quantity_available' => 2],
@@ -355,10 +359,27 @@
                         <div class="equipment-row flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between {{ $itemAvailable > 0 ? 'hover:border-purple-400 hover:bg-purple-50/70' : 'border-red-100 bg-red-50/70 opacity-70' }} {{ $isSelected ? 'border-emerald-300 bg-emerald-50/60' : '' }}" data-available="{{ $itemAvailable }}" data-total="{{ $itemQty }}" data-name="{{ $itemName }}" data-index="{{ $loop->index }}">
                             <label class="flex flex-1 cursor-pointer items-center gap-3">
                                 <input type="checkbox" name="equipment[]" value="{{ $itemName }}" {{ $itemAvailable <= 0 ? 'disabled' : '' }} {{ $isSelected ? 'checked' : '' }} class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="{{ $itemName }}">
-                                <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
+                                <div class="flex flex-1 items-center gap-2">
+                                    <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
+                                    @php
+                                        $selectedVenueName = old('venue') ?: null;
+                                        $venueIncludedEquipment = [
+                                            'Balay Alumni' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
+                                            'Conference Hall & Interaction Center (CHIC)' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Monobloc Chairs'],
+                                            'Gymnasium' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones'],
+                                        ];
+                                        $isVenueIncludedItem = isset($venueIncludedEquipment[$selectedVenueName]) && in_array($itemName, $venueIncludedEquipment[$selectedVenueName], true);
+                                    @endphp
+                                    @if($isVenueIncludedItem)
+                                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Included</span>
+                                    @endif
+                                </div>
                             </label>
                             <div class="flex flex-col items-start gap-2 sm:items-end sm:text-right">
                                 <span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">{{ $itemAvailable }} / {{ $itemQty }} available</span>
+                                @if($isVenueIncludedItem)
+                                    <span class="text-[10px] font-medium text-emerald-700">Auto-locked: included in the selected venue package.</span>
+                                @endif
                                 <div class="quantity-input-wrap {{ $isSelected ? '' : 'hidden' }}" id="qty-wrap-{{ $loop->index }}">
                                     <label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Qty</label>
                                     <input type="number" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ old('equipment_quantities.'.$itemName) }}" {{ $isSelected ? '' : 'disabled' }} class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-16" placeholder="Enter quantity">
@@ -368,6 +389,19 @@
                         </div>
                         @endforeach
                     </div>
+                </section>
+
+                <section id="venue-default-equipment-panel" class="hidden rounded-[32px] border border-emerald-200 bg-emerald-50/70 p-7 shadow-sm">
+                    <div class="mb-5 border-b border-emerald-200 pb-4">
+                        <div class="flex items-center justify-between gap-4">
+                            <div>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">Venue Equipment Included</p>
+                                <p class="mt-1 text-sm text-emerald-700">This venue already includes the following equipment.</p>
+                            </div>
+                            <span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Included by venue</span>
+                        </div>
+                    </div>
+                    <ul id="venue-default-equipment-list" class="space-y-2 text-sm text-emerald-800"></ul>
                 </section>
 
                 <section class="rounded-[32px] border border-slate-200 bg-slate-50 p-7 shadow-sm">
@@ -479,19 +513,59 @@
                                     Activity Proposal <span class="text-red-500">*</span>
                                 </label>
                                 <p class="mb-3 text-xs text-slate-500">Required document: Comprehensive proposal describing the activity objectives, expected outcomes, and how facilities/equipment support the activity goals.</p>
-                                <div class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition hover:border-emerald-400">
+                                <div data-upload-box class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition duration-200 hover:border-emerald-400">
                                     <div class="space-y-3 text-center">
                                         <svg class="mx-auto h-14 w-14 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
                                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                         </svg>
                                         <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
                                             <label for="activity_proposal_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
-                                                <span>Upload a file</span>
+                                                <span data-upload-action-label>Upload a file</span>
                                                 <input id="activity_proposal_file" name="activity_proposal_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only">
                                             </label>
                                             <span>or drag and drop</span>
                                         </div>
                                         <p class="text-xs text-slate-500">PDF, JPEG, PNG up to 10MB</p>
+                                        <div data-upload-progress class="mt-3 hidden">
+                                            <div class="mb-2 flex items-center justify-between gap-4 text-xs text-slate-600">
+                                                <span data-upload-file-name class="truncate max-w-[220px] text-left">activity-proposal.pdf</span>
+                                                <span data-upload-percent>0%</span>
+                                            </div>
+                                            <div class="h-2.5 overflow-hidden rounded-full bg-slate-200">
+                                                <div data-upload-bar class="h-full w-0 rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all duration-300"></div>
+                                            </div>
+                                        </div>
+                                        <p data-upload-status class="hidden text-xs font-medium text-cyan-400">Uploading...</p>
+                                        <div data-upload-error class="mt-3 hidden flex items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-left text-sm text-red-700">
+                                            <div>
+                                                <div class="font-semibold">Upload failed</div>
+                                                <div class="text-xs text-red-600">Connection lost</div>
+                                            </div>
+                                            <button type="button" data-retry-upload class="rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Retry</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div data-upload-file-card class="mt-3 hidden rounded-2xl border border-slate-200 bg-slate-900/20 p-3 shadow-inner shadow-slate-950/10">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <div class="flex min-w-0 items-center gap-3">
+                                            <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-500/30 bg-slate-800/80 text-slate-200">
+                                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                    <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
+                                                    <path d="M14 2v6h6"></path>
+                                                    <path d="M9 13h6M9 17h6"></path>
+                                                </svg>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <div data-upload-filename class="truncate text-sm font-semibold text-slate-100">Activity Proposal</div>
+                                                <div data-upload-subtitle class="text-xs text-slate-400">Activity Proposal</div>
+                                            </div>
+                                        </div>
+                                        <div data-upload-check class="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-300">
+                                            <span>Ready</span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-700">
+                                        <div data-upload-file-progress class="h-full w-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400"></div>
                                     </div>
                                 </div>
                                 <div id="activity-proposal-preview" class="mt-3 hidden">
@@ -508,19 +582,36 @@
                                     IGP Receipt <span class="text-red-500">*</span>
                                 </label>
                                 <p class="mb-3 text-xs text-slate-500">Required document: Inter-agency Collaborative Agreement (IGP) receipt or approval document for external organizations.</p>
-                                <div class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition hover:border-emerald-400">
+                                <div data-upload-box class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition duration-200 hover:border-emerald-400">
                                     <div class="space-y-3 text-center">
                                         <svg class="mx-auto h-14 w-14 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
                                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                         </svg>
                                         <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
                                             <label for="igp_receipt_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
-                                                <span>Upload a file</span>
+                                                <span data-upload-action-label>Upload a file</span>
                                                 <input id="igp_receipt_file" name="igp_receipt_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only">
                                             </label>
                                             <span>or drag and drop</span>
                                         </div>
                                         <p class="text-xs text-slate-500">PDF, JPEG, PNG up to 10MB</p>
+                                        <div data-upload-progress class="mt-3 hidden">
+                                            <div class="mb-2 flex items-center justify-between gap-4 text-xs text-slate-600">
+                                                <span data-upload-file-name class="truncate max-w-[220px] text-left">igp-receipt.pdf</span>
+                                                <span data-upload-percent>0%</span>
+                                            </div>
+                                            <div class="h-2.5 overflow-hidden rounded-full bg-slate-200">
+                                                <div data-upload-bar class="h-full w-0 rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all duration-300"></div>
+                                            </div>
+                                        </div>
+                                        <p data-upload-status class="hidden text-xs font-medium text-cyan-400">Uploading...</p>
+                                        <div data-upload-error class="mt-3 hidden flex items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-left text-sm text-red-700">
+                                            <div>
+                                                <div class="font-semibold">Upload failed</div>
+                                                <div class="text-xs text-red-600">Connection lost</div>
+                                            </div>
+                                            <button type="button" data-retry-upload class="rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Retry</button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div id="igp-receipt-preview" class="mt-3 hidden">
@@ -536,45 +627,36 @@
                         <div class="rounded-[24px] border border-emerald-200 bg-emerald-50 p-4">
                             <div class="mb-4 border-b border-emerald-200 pb-3">
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">Section V. E-Signature</p>
-                                <p class="mt-2 text-sm font-semibold text-emerald-800">Upload E-Signature <span class="text-red-500">*</span></p>
-                                <p class="mt-1 text-xs text-emerald-700">Required for all requestors. Your e-signature will appear on the official request form for administrative records.</p>
+                                <p class="mt-2 text-sm font-semibold text-emerald-800">Saved E-Signature Status <span class="text-red-500">*</span></p>
+                                <p class="mt-1 text-xs text-emerald-700">Your e-signature is taken from your Account Settings and will appear on the official request form for administrative records.</p>
                             </div>
-                            <label for="e_signature_file" class="mb-3 block text-sm font-semibold text-slate-700">
-                                Upload your e-signature
-                            </label>
-                            <p class="mb-3 text-xs text-slate-500">Upload a PNG or JPG image of your digital signature. If your saved account signature is already available, it will be used automatically.</p>
-                            @if($currentUser?->e_signature_file)
-                                <div class="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
-                                    <div class="flex items-center gap-3">
-                                        <img src="{{ route('user.signature', ['user' => $currentUser->id]) }}" alt="Saved e-signature" class="h-12 max-w-[180px] object-contain rounded bg-white p-2">
-                                        <div class="text-sm text-emerald-800">
-                                            <p class="font-semibold">Using your saved signature</p>
-                                            <p class="text-xs text-emerald-700">This will be applied automatically unless you upload a new file.</p>
+
+                            <div class="rounded-2xl border border-emerald-200 bg-white p-4">
+                                @if($currentUser?->e_signature_file)
+                                    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                        <div class="flex items-center gap-3">
+                                            <img src="{{ route('user.signature', ['user' => $currentUser->id]) }}" alt="Saved e-signature" class="h-14 max-w-[220px] rounded-lg border border-slate-200 bg-white object-contain p-2 shadow-sm">
+                                            <div>
+                                                <p class="text-sm font-semibold text-emerald-800">Using your saved signature</p>
+                                                <p class="text-xs text-emerald-700">This will be applied automatically to the request form and printout.</p>
+                                            </div>
                                         </div>
+                                        <a href="{{ route('requestor.settings') }}" class="inline-flex items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
+                                            Update in Account Settings
+                                        </a>
                                     </div>
-                                </div>
-                            @endif
-                            <div class="rounded-[32px] border-2 border-dashed border-emerald-300 bg-white px-8 pb-8 pt-8 transition hover:border-emerald-400">
-                                <div class="space-y-3 text-center">
-                                    <svg class="mx-auto h-14 w-14 text-emerald-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                                    </svg>
-                                    <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
-                                        <label for="e_signature_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
-                                            <span>Upload a file</span>
-                                            <input id="e_signature_file" name="e_signature_file" type="file" accept=".jpeg,.jpg,.png" class="sr-only">
-                                        </label>
-                                        <span>or drag and drop</span>
+                                @else
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                            <p class="text-sm font-semibold text-amber-700">No saved signature found</p>
+                                            <p class="text-xs text-slate-600">Please upload your signature in Account Settings before submitting or printing this request.</p>
+                                        </div>
+                                        <a href="{{ route('requestor.settings') }}" class="inline-flex items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100">
+                                            Go to Account Settings
+                                        </a>
                                     </div>
-                                    <p class="text-xs text-slate-500">JPEG or PNG up to 10MB</p>
-                                </div>
+                                @endif
                             </div>
-                            <div id="e-signature-preview" class="mt-3 hidden">
-                                <p class="flex items-center justify-between gap-3 text-sm text-slate-600">Selected file: <span id="e-signature-name" class="font-medium"></span><button type="button" data-remove-file="e_signature_file" class="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700" aria-label="Remove e-signature">Remove</button></p>
-                            </div>
-                            @error('e_signature_file')
-                                <p class="mt-2 text-sm text-red-500">{{ $message }}</p>
-                            @enderror
                         </div>
                     </div>
                 </section>

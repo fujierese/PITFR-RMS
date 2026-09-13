@@ -18,9 +18,16 @@
 <body class="bg-emerald-900 min-h-screen flex flex-col pt-14 sm:pt-16">
 
 <header class="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-slate-950/95 text-white shadow-lg backdrop-blur">
-    <nav class="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6" aria-label="Guest navigation">
-        <a href="#home" class="shrink-0 text-sm font-bold tracking-wide text-emerald-300">PIT Facility &amp; Equipment Request System</a>
-        <div class="flex min-w-0 flex-1 items-center justify-end gap-1 overflow-x-auto text-xs font-semibold sm:gap-2 sm:text-sm">
+    <nav class="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6" aria-label="Guest navigation">
+        <a href="#home" class="shrink-0 text-xs font-bold tracking-wide text-emerald-300 sm:text-sm">PIT Facility &amp; Equipment Request System</a>
+
+        <button id="guest-mobile-menu-button" type="button" class="inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10 md:hidden" aria-expanded="false" aria-controls="guest-mobile-menu" aria-label="Toggle menu">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </button>
+
+        <div class="hidden min-w-0 flex-1 items-center justify-end gap-1 overflow-x-auto text-xs font-semibold md:flex md:gap-2 md:text-sm">
             <a href="#home" class="whitespace-nowrap rounded-lg px-3 py-2 transition hover:bg-white/10">Home</a>
             <a href="#calendar-section" class="whitespace-nowrap rounded-lg px-3 py-2 transition hover:bg-white/10">View Facility Calendar</a>
             <a href="#about-us" class="whitespace-nowrap rounded-lg px-3 py-2 transition hover:bg-white/10">About Us</a>
@@ -30,6 +37,18 @@
             <a href="{{ route('login') }}" class="whitespace-nowrap rounded-lg bg-emerald-500 px-3 py-2 text-white transition hover:bg-emerald-600">Login to Request</a>
         </div>
     </nav>
+
+    <div id="guest-mobile-menu" class="hidden border-t border-white/10 bg-slate-950/95 px-4 py-3 md:hidden">
+        <div class="flex flex-col gap-2 text-sm font-semibold text-slate-200">
+            <a href="#home" class="rounded-lg px-3 py-2 transition hover:bg-white/10">Home</a>
+            <a href="#calendar-section" class="rounded-lg px-3 py-2 transition hover:bg-white/10">View Facility Calendar</a>
+            <a href="#about-us" class="rounded-lg px-3 py-2 transition hover:bg-white/10">About Us</a>
+            <a href="#features" class="rounded-lg px-3 py-2 transition hover:bg-white/10">System Features</a>
+            <a href="#how-it-works" class="rounded-lg px-3 py-2 transition hover:bg-white/10">How It Works</a>
+            <a href="#contact-us" class="rounded-lg px-3 py-2 transition hover:bg-white/10">Contact Us</a>
+            <a href="{{ route('login') }}" class="mt-1 rounded-lg bg-emerald-500 px-3 py-2 text-center text-white transition hover:bg-emerald-600">Login to Request</a>
+        </div>
+    </div>
 </header>
 
 {{-- Hero --}}
@@ -258,6 +277,27 @@
 <!-- Tippy.js for Tooltips -->
 <script src="https://unpkg.com/tippy.js@6"></script>
 <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/themes/light.css">
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const toggleButton = document.getElementById('guest-mobile-menu-button');
+        const mobileMenu = document.getElementById('guest-mobile-menu');
+
+        if (toggleButton && mobileMenu) {
+            toggleButton.addEventListener('click', function () {
+                const isHidden = mobileMenu.classList.toggle('hidden');
+                toggleButton.setAttribute('aria-expanded', String(!isHidden));
+            });
+
+            mobileMenu.querySelectorAll('a').forEach(function (link) {
+                link.addEventListener('click', function () {
+                    mobileMenu.classList.add('hidden');
+                    toggleButton.setAttribute('aria-expanded', 'false');
+                });
+            });
+        }
+    });
+</script>
 
 <!-- App JS -->
 @if (app()->runningUnitTests())

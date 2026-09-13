@@ -943,8 +943,9 @@
         $requesterPosition = $request->requested_by_position ?? $request->requester?->position ?? 'N/A';
         $venueApprover = $request->getStageApproverName('venue') ?: 'Pending';
         $equipmentApprover = $request->getStageApproverName('equipment') ?: 'Pending';
-        $venueSignatureRecorded = $request->venue_status === 'approved' && !empty($request->venue_approval_signature);
-        $equipmentSignatureRecorded = $request->equipment_status === 'approved' && !empty($request->equipment_approval_signature);
+        $venueSignatureRecorded = $request->venue_status === 'approved' && !empty($request->venue_approval_signature_file);
+        $equipmentSignatureRecorded = $request->equipment_status === 'approved' && !empty($request->equipment_approval_signature_file);
+        $finalSignatureRecorded = $request->status === 'approved' && !empty($request->final_approval_signature_file);
         $statusLabel = match ($request->status) {
             'approved' => 'Approved',
             'rejected' => 'Rejected',
@@ -1117,7 +1118,7 @@
                                 <div class="approval-list">
                                     @if($venueSignatureRecorded)
                                         <div>{{ $venueApprover }}</div>
-                                        <div>Electronic signature recorded</div>
+                                        <img src="{{ route('request.approval.signature', ['facilityRequest' => $request->id, 'type' => 'venue']) }}" alt="Venue approval signature" style="max-height: 36px; display: block; margin: 3px auto 0; object-fit: contain;">
                                     @else
                                         <div>Pending</div>
                                     @endif
@@ -1126,8 +1127,14 @@
                             <div class="approval-panel">
                                 <span class="title">Approved By</span>
                                 <div class="approval-list">
-                                    <div><strong>{{ $finalApprover }}</strong></div>
-                                    <div>{{ $finalApprovalDate }}</div>
+                                    @if($finalSignatureRecorded)
+                                        <div><strong>{{ $finalApprover }}</strong></div>
+                                        <img src="{{ route('request.approval.signature', ['facilityRequest' => $request->id, 'type' => 'final']) }}" alt="Final approval signature" style="max-height: 36px; display: block; margin: 3px auto 0; object-fit: contain;">
+                                        <div>{{ $finalApprovalDate }}</div>
+                                    @else
+                                        <div><strong>{{ $finalApprover }}</strong></div>
+                                        <div>{{ $finalApprovalDate }}</div>
+                                    @endif
                                 </div>
                             </div>
                         </div>
@@ -1138,7 +1145,7 @@
                                 <div class="approval-list">
                                     @if($equipmentSignatureRecorded)
                                         <div>{{ $equipmentApprover }}</div>
-                                        <div>Electronic signature recorded</div>
+                                        <img src="{{ route('request.approval.signature', ['facilityRequest' => $request->id, 'type' => 'equipment']) }}" alt="Equipment approval signature" style="max-height: 36px; display: block; margin: 3px auto 0; object-fit: contain;">
                                     @else
                                         <div>Pending</div>
                                     @endif

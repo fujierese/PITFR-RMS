@@ -9,7 +9,6 @@ class NotificationController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $user->unreadNotifications()->update(['read_at' => now()]);
         $notifications = $user->notifications()->paginate(20);
 
         return view('notifications.index', compact('notifications'));

@@ -49,13 +49,13 @@
                         <label class="text-sm font-medium text-slate-700">Contact Number</label>
                         <input type="text" name="contact_number" value="{{ old('contact_number', $user->contact_number) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
                     </div>
-                    @if($user->isStudent())
+                    @if($showOrganization && $user->isStudent())
                         <div>
                             <label class="text-sm font-medium text-slate-700">Student ID</label>
                             <input type="text" name="school_id_number" value="{{ old('school_id_number', $user->school_id_number) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
                         </div>
                         <div>
-                            <label class="text-sm font-medium text-slate-700">College</label>
+                            <label class="text-sm font-medium text-slate-700">Registered College</label>
                             <select name="college_id" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
                                 <option value="">Select college</option>
                                 @foreach(($colleges ?? collect()) as $college)
@@ -64,7 +64,7 @@
                             </select>
                         </div>
                         <div>
-                            <label class="text-sm font-medium text-slate-700">Department</label>
+                            <label class="text-sm font-medium text-slate-700">Registered Department</label>
                             <select name="department_id" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
                                 <option value="">Select department</option>
                                 @foreach(($colleges ?? collect())->flatMap->departments as $department)
@@ -72,7 +72,7 @@
                                 @endforeach
                             </select>
                         </div>
-                    @elseif($user->isFaculty())
+                    @elseif($showOrganization && $user->isFaculty())
                         <div>
                             <label class="text-sm font-medium text-slate-700">Faculty ID</label>
                             <input type="text" name="faculty_id" value="{{ old('faculty_id', $user->faculty_id) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
@@ -82,7 +82,7 @@
                             <input type="text" name="position" value="{{ old('position', $user->position) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
                         </div>
                         <div>
-                            <label class="text-sm font-medium text-slate-700">College</label>
+                            <label class="text-sm font-medium text-slate-700">Registered College</label>
                             <select name="college_id" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
                                 <option value="">Select college</option>
                                 @foreach(($colleges ?? collect()) as $college)
@@ -91,7 +91,7 @@
                             </select>
                         </div>
                         <div>
-                            <label class="text-sm font-medium text-slate-700">Department</label>
+                            <label class="text-sm font-medium text-slate-700">Registered Department</label>
                             <select name="department_id" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
                                 <option value="">Select department</option>
                                 @foreach(($colleges ?? collect())->flatMap->departments as $department)
@@ -104,6 +104,16 @@
                         <div>
                             <label class="text-sm font-medium text-slate-700">Department</label>
                             <input type="text" name="department" value="{{ old('department', $user->department) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
+                        </div>
+                    @endif
+                    @if($showOrganization && $user->isRequestor() && !$user->isStudent() && !$user->isFaculty())
+                        <div>
+                            <label class="text-sm font-medium text-slate-700">Registered College</label>
+                            <input type="text" value="{{ $user->college?->name ?? 'Not registered' }}" class="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-slate-600" readonly>
+                        </div>
+                        <div>
+                            <label class="text-sm font-medium text-slate-700">Registered Department</label>
+                            <input type="text" value="{{ $user->department ?? 'Not registered' }}" class="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-slate-600" readonly>
                         </div>
                     @endif
                     @if($showOrganization && ($user->isOutsider() || $user->isStudentOrganization()))
@@ -130,12 +140,24 @@
                 <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                     <h2 class="text-lg font-semibold text-slate-900">E-signature Management</h2>
                     <p class="mt-2 text-sm text-slate-600">Upload the signature image used for printable facility documents.</p>
+
                     @if($user->e_signature_file)
-                        <img src="{{ route('user.signature', ['user' => $user->id]) }}" alt="Current e-signature" class="mt-4 h-16 max-w-full object-contain">
+                        <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                            <p class="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Current e-signature</p>
+                            <img src="{{ route('user.signature', ['user' => $user->id]) }}" alt="Current e-signature" class="h-20 max-w-full rounded-lg border border-slate-200 bg-white object-contain p-2">
+                        </div>
+                    @else
+                        <div class="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-500">
+                            No e-signature uploaded yet.
+                        </div>
                     @endif
+
                     <form method="POST" action="{{ route($settingsRoute . '.signature') }}" enctype="multipart/form-data" class="mt-4 space-y-4">
                         @csrf
-                        <input type="file" name="e_signature_file" accept="image/jpeg,image/png" required class="block w-full text-sm text-slate-600">
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                            <label for="e_signature_file" class="mb-2 block text-sm font-medium text-slate-700">Choose a signature image</label>
+                            <input id="e_signature_file" type="file" name="e_signature_file" accept="image/jpeg,image/png" required class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white">
+                        </div>
                         <button type="submit" class="w-full rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white sm:w-auto">Save E-signature</button>
                     </form>
                 </section>

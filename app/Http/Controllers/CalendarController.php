@@ -31,6 +31,8 @@ class CalendarController extends Controller
             $requests = $this->getRequestsForCustodian($user);
         } elseif ($user && $user->isAdmin()) {
             $requests = $query->get();
+        } elseif ($user && $role === 'requestor') {
+            $requests = $query->where('requested_by_id', $user->id)->get();
         } else {
             // Guest/public view should see only approved and pending requests for availability checking
             $requests = $query->whereIn('status', ['approved', 'pending'])->get();
@@ -42,8 +44,19 @@ class CalendarController extends Controller
             }
 
             $schedule = $req->reservationSchedule;
-            $startDateTime = $schedule ? $schedule->start_datetime : \Illuminate\Support\Carbon::parse($req->start_date . ' ' . ($req->start_time ?? '00:00'));
-            $endDateTime = $schedule ? $schedule->end_datetime : \Illuminate\Support\Carbon::parse(($req->end_date ?? $req->start_date) . ' ' . ($req->end_time ?? $req->start_time ?? '00:00'));
+            if ($schedule) {
+                $startDateTime = $schedule->start_datetime;
+                $endDateTime = $schedule->end_datetime;
+            } else {
+                $startDateTime = $req->start_date instanceof \Illuminate\Support\Carbon
+                    ? $req->start_date->copy()->setTimeFromTimeString($req->start_time ?? '00:00')
+                    : \Illuminate\Support\Carbon::parse((string) ($req->start_date ?? now()->toDateString()))->setTimeFromTimeString($req->start_time ?? '00:00');
+
+                $endDate = $req->end_date ?? $req->start_date ?? now()->toDateString();
+                $endDateTime = $endDate instanceof \Illuminate\Support\Carbon
+                    ? $endDate->copy()->setTimeFromTimeString($req->end_time ?? $req->start_time ?? '00:00')
+                    : \Illuminate\Support\Carbon::parse((string) $endDate)->setTimeFromTimeString($req->end_time ?? $req->start_time ?? '00:00');
+            }
 
             // Ensure times are Carbon instances in the app timezone (Asia/Manila)
             if (!$startDateTime instanceof \Illuminate\Support\Carbon) {
@@ -127,12 +140,21 @@ class CalendarController extends Controller
     private function toPublicCalendarEvent(FacilityRequest $request): array
     {
         $schedule = $request->reservationSchedule;
-        $startDateTime = $schedule
-            ? $schedule->start_datetime
-            : \Illuminate\Support\Carbon::parse($request->start_date . ' ' . ($request->start_time ?? '00:00'));
-        $endDateTime = $schedule
-            ? $schedule->end_datetime
-            : \Illuminate\Support\Carbon::parse(($request->end_date ?? $request->start_date) . ' ' . ($request->end_time ?? $request->start_time ?? '00:00'));
+        if ($schedule) {
+            $startDateTime = $schedule->start_datetime;
+            $endDateTime = $schedule->end_datetime;
+        } else {
+            $startDate = $request->start_date instanceof \Illuminate\Support\Carbon
+                ? $request->start_date
+                : \Illuminate\Support\Carbon::parse((string) ($request->start_date ?? now()->toDateString()));
+            $endDate = $request->end_date ?? $request->start_date ?? now()->toDateString();
+            $endDateValue = $endDate instanceof \Illuminate\Support\Carbon
+                ? $endDate
+                : \Illuminate\Support\Carbon::parse((string) $endDate);
+
+            $startDateTime = $startDate->copy()->setTimeFromTimeString($request->start_time ?? '00:00');
+            $endDateTime = $endDateValue->copy()->setTimeFromTimeString($request->end_time ?? $request->start_time ?? '00:00');
+        }
 
         $startDateTime = $startDateTime instanceof \Illuminate\Support\Carbon
             ? $startDateTime

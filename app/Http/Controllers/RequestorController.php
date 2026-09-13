@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
  
+use App\Models\Equipment;
 use App\Models\FacilityRequest;
 use App\Models\College;
 use App\Models\Department;
@@ -44,7 +45,7 @@ class RequestorController extends Controller
     ];
     private const EQUIPMENT_OPTIONS = [
         'Sound System', 'Canopies', 'Industrial Fans',
-        'Iwata Cooler Fans', 'Tables', 'Wireless Microphones', 'Non-Wireless Microphones', 'Monobloc Chairs',
+        'Iwata Cooler Fans', 'Tables', 'Aircon', 'Chairs', 'Wireless Microphones', 'Non-Wireless Microphones', 'Monobloc Chairs',
     ];
 
     private static function canonicalizeEquipmentName(string $name): string
@@ -61,9 +62,13 @@ class RequestorController extends Controller
             'non-wireless microphones' => 'Non-Wireless Microphones',
             'non wireless microphone' => 'Non-Wireless Microphones',
             'non wireless microphones' => 'Non-Wireless Microphones',
-            'chairs' => 'Monobloc Chairs',
-            'monobloc chairs' => 'Monobloc Chairs',
+            'aircon' => 'Aircon',
+            'air conditioner' => 'Aircon',
+            'air conditioning unit' => 'Aircon',
+            'chair' => 'Chairs',
+            'chairs' => 'Chairs',
             'monobloc chair' => 'Monobloc Chairs',
+            'monobloc chairs' => 'Monobloc Chairs',
         ];
 
         $lower = mb_strtolower($normalized);
@@ -336,7 +341,8 @@ class RequestorController extends Controller
             abort(404);
         }
 
-        if (Auth::id() !== $targetUser->id && ! Auth::user()?->isAdmin()) {
+        $viewer = Auth::user();
+        if (! $viewer || ($viewer->id !== $targetUser->id && ! $viewer->isAdmin())) {
             abort(403);
         }
 
@@ -346,7 +352,13 @@ class RequestorController extends Controller
             abort(404);
         }
 
-        return response()->file(Storage::disk('local')->path($path));
+        $filePath = Storage::disk('local')->path($path);
+        $mimeType = mime_content_type($filePath) ?: 'image/png';
+
+        return response()->file($filePath, [
+            'Content-Type' => $mimeType,
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
     }
 
     public function approvalSignature(FacilityRequest $facilityRequest, string $type)
@@ -466,6 +478,7 @@ class RequestorController extends Controller
 
         $selectedEquipment = array_values(array_filter($validated['equipment'] ?? [], fn($item) => !empty($item)));
         $selectedQuantities = $validated['equipment_quantities'] ?? [];
+        $explicitEquipment = $selectedEquipment;
         $quantities = [];
 
         // Apply venue-specific equipment rules during edit
@@ -473,18 +486,21 @@ class RequestorController extends Controller
         if (is_string($selectedVenues)) {
             $selectedVenues = [$selectedVenues];
         }
-        
+
         if (!empty($selectedVenues)) {
             $venueName = $selectedVenues[0];
-            
-            // Add default equipment required for this venue if not already selected
+
+            // Add default equipment required for this venue if not already selected.
+            // These defaults are part of the venue policy, but they are not necessarily
+            // explicitly chosen by the requestor and therefore should not be forced to
+            // carry an input quantity during reschedule updates.
             $defaultEquipment = VenueEquipmentPolicy::getDefaultEquipment($venueName);
             foreach ($defaultEquipment as $requiredItem) {
-                if (!in_array($requiredItem, $selectedEquipment)) {
+                if (!in_array($requiredItem, $selectedEquipment, true)) {
                     $selectedEquipment[] = $requiredItem;
                 }
             }
-            
+
             // Check for incompatible equipment
             $incompatible = VenueEquipmentPolicy::getIncompatibleEquipment($venueName);
             $requestedIncompatible = array_intersect($selectedEquipment, $incompatible);
@@ -495,9 +511,15 @@ class RequestorController extends Controller
         }
 
         foreach ($selectedEquipment as $itemName) {
-            $quantity = (int) ($selectedQuantities[$itemName] ?? 0);
-            if ($quantity <= 0) {
+            $isExplicitSelection = in_array($itemName, $explicitEquipment, true);
+            $quantity = (int) ($selectedQuantities[$itemName] ?? ($isExplicitSelection ? 0 : 1));
+
+            if ($isExplicitSelection && $quantity <= 0) {
                 return back()->withErrors(['equipment' => 'Please select required equipment and quantity.'])->withInput();
+            }
+
+            if (!$isExplicitSelection && $quantity <= 0) {
+                $quantity = 1;
             }
 
             $maxAllowed = $this->getEditableEquipmentQuantityLimit($facilityRequest, $itemName);
@@ -508,6 +530,7 @@ class RequestorController extends Controller
             $quantities[$itemName] = $quantity;
         }
 
+        $validated['equipment'] = array_values($selectedEquipment);
         $validated['equipment_quantities'] = $quantities;
 
         $startDateTime = $scheduleRange['start'];
@@ -1022,7 +1045,15 @@ class RequestorController extends Controller
         }
 
         // ✅ CHECK AVAILABILITY ONLY — do NOT reserve yet (deduct upon approval)
+        // Some venue default items may be auto-added even when they are not yet present in
+        // the equipment catalog. Those should not block request creation; we only validate
+        // items that actually exist in the catalog.
         foreach ($quantities as $itemName => $qty) {
+            $equipmentExists = Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])->exists();
+            if (!$equipmentExists) {
+                continue;
+            }
+
             $availability = $this->availabilityService->checkEquipmentAvailability($itemName, $qty, $startDateTime, $endDateTime);
 
             if (!$availability['available']) {

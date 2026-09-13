@@ -397,7 +397,7 @@
                             ['label' => 'Pending Requests', 'value' => $pendingCount, 'description' => 'Awaiting review', 'icon' => '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>', 'tone' => 'bg-amber-50 text-amber-700'],
                             ['label' => 'Approved Requests', 'value' => $approvedCount, 'description' => 'Ready for use', 'icon' => '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 13l4 4L19 7"/></svg>', 'tone' => 'bg-emerald-50 text-emerald-700'],
                             ['label' => 'Rejected Requests', 'value' => $rejectedCount, 'description' => 'Needs attention', 'icon' => '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 18L18 6M6 6l12 12"/></svg>', 'tone' => 'bg-rose-50 text-rose-700'],
-                            ['label' => 'Upcoming Reservations', 'value' => $upcomingCount, 'description' => 'Scheduled ahead', 'icon' => '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>', 'tone' => 'bg-sky-50 text-sky-700'],
+                            ['label' => 'Scheduled Reservations', 'value' => $upcomingCount, 'description' => 'Approved and future', 'icon' => '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>', 'tone' => 'bg-sky-50 text-sky-700'],
                             ['label' => 'Completed Reservations', 'value' => $completedCount, 'description' => 'Finished successfully', 'icon' => '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>', 'tone' => 'bg-violet-50 text-violet-700'],
                         ];
                     @endphp
@@ -420,7 +420,7 @@
                 <div class="mt-8 rounded-[24px] border border-slate-200 bg-slate-50 p-5">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                         <div>
-                            <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Upcoming reservations</p>
+                            <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Scheduled reservations</p>
                             <h3 class="mt-2 text-xl font-semibold text-slate-900">Next upcoming bookings</h3>
                         </div>
                     </div>

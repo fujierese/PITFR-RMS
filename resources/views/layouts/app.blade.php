@@ -23,7 +23,7 @@
 </head>
 <body class="@yield('body-class', 'overflow-x-hidden bg-slate-100 min-h-screen text-slate-900')">
 
-<div class="h-screen overflow-hidden bg-slate-100">
+<div class="min-h-screen bg-slate-100">
     @auth
         <aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-50 h-screen w-72 -translate-x-full transform overflow-hidden border-r border-emerald-500/20 bg-slate-950 shadow-[24px_0_60px_rgba(2,6,23,0.3)] transition-transform duration-300 sm:w-80 lg:fixed lg:inset-y-0 lg:left-0 lg:h-screen lg:w-80 lg:translate-x-0 lg:overflow-hidden">
             @include('components.dashboard-sidebar')
@@ -36,7 +36,7 @@
         </button>
     @endauth
 
-    <main class="h-screen overflow-y-auto overflow-x-hidden px-3 py-3 pt-16 sm:px-4 sm:py-4 sm:pt-6 md:px-6 lg:ml-80 lg:h-screen lg:overflow-y-auto lg:px-8 lg:py-6 lg:pt-8">
+    <main class="min-h-screen overflow-x-hidden px-3 py-3 pt-16 sm:px-4 sm:py-4 sm:pt-6 md:px-6 lg:ml-80 lg:min-h-screen lg:overflow-y-auto lg:px-8 lg:py-6 lg:pt-8">
         <div class="mx-auto w-full max-w-none lg:max-w-7xl">
             @if(session('success'))
                 <div role="status" aria-live="polite" aria-label="Success" class="mb-6 rounded-3xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-sm">

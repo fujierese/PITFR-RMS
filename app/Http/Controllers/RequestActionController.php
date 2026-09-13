@@ -122,7 +122,13 @@ class RequestActionController extends Controller
             }
 
             $facilityRequest->save();
-            $this->notifyRequestorForStatusChange($facilityRequest, $user->isCustodianVenue() ? 'venue_approved' : 'equipment_approved', $request->input('notes', ''), $user->name);
+            $this->notifyRequestorForStatusChange(
+                $facilityRequest,
+                $user->isCustodianVenue() ? 'venue_approved' : 'equipment_approved',
+                $request->input('notes', ''),
+                $user->isCustodianVenue() ? $this->venueActorLabel($facilityRequest, $user) : null,
+                $user->isCustodianVenue() ? [] : [$this->equipmentActorLabel($facilityRequest, $user)],
+            );
             DB::commit();
 
             return redirect()->back()->with('success', 'Request verified and forwarded to Administrator.');
@@ -165,7 +171,13 @@ class RequestActionController extends Controller
             $facilityRequest->status = 'pending';
             $facilityRequest->addHistory('revision_requested', 'Revision requested by ' . $user->name . ': ' . $notes, $user->id);
             $facilityRequest->save();
-            $this->notifyRequestorForStatusChange($facilityRequest, 'revision_requested', $notes, $user->name);
+            $this->notifyRequestorForStatusChange(
+                $facilityRequest,
+                'revision_requested',
+                $notes,
+                $user->isCustodianVenue() ? $this->venueActorLabel($facilityRequest, $user) : null,
+                $user->isCustodianVenue() ? [] : [$this->equipmentActorLabel($facilityRequest, $user)],
+            );
 
             DB::commit();
             return redirect()->back()->with('success', 'Revision requested; requester has been notified.');
@@ -206,7 +218,13 @@ class RequestActionController extends Controller
                 'Request rejected by ' . $user->name . ($notes !== '' ? ': ' . $notes : ''),
                 $user->id
             );
-            $this->notifyRequestorForStatusChange($facilityRequest, 'rejected', $notes, $user->name);
+            $this->notifyRequestorForStatusChange(
+                $facilityRequest,
+                'rejected',
+                $notes,
+                $user->isCustodianVenue() ? $this->venueActorLabel($facilityRequest, $user) : null,
+                $user->isCustodianVenue() ? [] : [$this->equipmentActorLabel($facilityRequest, $user)],
+            );
 
             DB::commit();
             return redirect()->back()->with('success', 'Request rejected successfully.');
@@ -263,12 +281,21 @@ class RequestActionController extends Controller
             if (!$facilityRequest->save()) {
                 throw new \Exception('Failed to save facility request changes.');
             }
-            
+
+            $facilityRequest->recordApprovalSignature('final', $user);
             $facilityRequest->addHistory('final_approved', 'Final approval granted by ' . $user->name, $user->getKey());
-            
+
             // ✅ Only notify if status actually changed
             if ($originalStatus !== 'approved') {
-                $this->notifyRequestorForStatusChange($facilityRequest, 'approved', $request->input('notes', ''), $user->name);
+                $approvalDetails = $facilityRequest->getConsolidatedApprovalDetails();
+                $this->notifyRequestorForStatusChange(
+                    $facilityRequest,
+                    'approved',
+                    $request->input('notes', ''),
+                    $this->approvalActorLabel($facilityRequest, $approvalDetails['venue_custodian']),
+                    $this->equipmentActorLabels($facilityRequest, $approvalDetails['equipment_custodians']),
+                    'Supply Office',
+                );
             }
 
             DB::commit();
@@ -311,7 +338,14 @@ class RequestActionController extends Controller
             
             // ✅ Only notify if status actually changed
             if ($originalStatus !== 'rejected') {
-                $this->notifyRequestorForStatusChange($facilityRequest, 'rejected', $request->input('notes', ''), $user->name);
+                $this->notifyRequestorForStatusChange(
+                    $facilityRequest,
+                    'rejected',
+                    $request->input('notes', ''),
+                    null,
+                    [],
+                    $user->name . ' - Supply Office',
+                );
             }
 
             DB::commit();
@@ -342,7 +376,14 @@ class RequestActionController extends Controller
         throw new \InvalidArgumentException('Invalid facility request reference.');
     }
 
-    private function notifyRequestorForStatusChange(FacilityRequest $facilityRequest, string $status, ?string $notes = null, ?string $actor = null): void
+    private function notifyRequestorForStatusChange(
+        FacilityRequest $facilityRequest,
+        string $status,
+        ?string $notes = null,
+        ?string $venueCustodian = null,
+        array $equipmentCustodians = [],
+        ?string $supplyOffice = null
+    ): void
     {
         $requester = $facilityRequest->requester()->first();
         if (! $requester) {
@@ -350,7 +391,15 @@ class RequestActionController extends Controller
         }
 
         try {
-            $requester->notify(new RequestStatusChanged($facilityRequest, $status, $notes ?? '', $actor));
+            $requester->notify(new RequestStatusChanged(
+                $facilityRequest,
+                $status,
+                $notes ?? '',
+                null,
+                $venueCustodian,
+                $equipmentCustodians,
+                $supplyOffice,
+            ));
         } catch (\Throwable $e) {
             Log::warning('Request status notification failed after workflow update.', [
                 'facility_request_id' => $facilityRequest->id,
@@ -358,6 +407,44 @@ class RequestActionController extends Controller
                 'exception' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function venueActorLabel(FacilityRequest $facilityRequest, User $user): string
+    {
+        $venues = $facilityRequest->getVenueNames();
+        $venue = collect($venues)->first(fn (string $venueName) => $user->venues()->where('name', $venueName)->exists());
+
+        return $user->name . ($venue ? " - {$venue} Venue Custodian" : ' - Venue Custodian');
+    }
+
+    private function equipmentActorLabel(FacilityRequest $facilityRequest, User $user): string
+    {
+        $equipment = array_keys($facilityRequest->getAssignedEquipmentForCustodian($user->id));
+        $resource = $equipment !== [] ? implode(', ', $equipment) : 'Equipment';
+
+        return "{$user->name} - {$resource} Equipment Custodian";
+    }
+
+    private function approvalActorLabel(FacilityRequest $facilityRequest, ?string $name): ?string
+    {
+        if (! $name) {
+            return null;
+        }
+
+        $user = User::where('name', $name)->first();
+        if (! $user) {
+            return $name . ' - Venue Custodian';
+        }
+
+        return $this->venueActorLabel($facilityRequest, $user);
+    }
+
+    private function equipmentActorLabels(FacilityRequest $facilityRequest, array $names): array
+    {
+        return collect($names)->map(function (string $name) use ($facilityRequest): string {
+            $user = User::where('name', $name)->first();
+            return $user ? $this->equipmentActorLabel($facilityRequest, $user) : "{$name} - Equipment Custodian";
+        })->values()->all();
     }
 
     private function checkHybridResources(FacilityRequest $facilityRequest): ?string
