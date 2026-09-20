@@ -113,11 +113,26 @@
         :description="$activeTab === 'requests' ? 'View, monitor, and manage all reservation requests submitted under your account.' : 'Stay on top of your reservation activity with a clear overview of the most important updates.'"
         eyebrow="Requestor workspace"
     >
-        <x-slot:actions>
+        @if ($activeTab === 'requests')
+            <x-slot:actions>
                 <a href="{{ route('requestor.index', ['tab' => 'dashboard']) }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Dashboard</a>
                 <a href="{{ route('requestor.index', ['tab' => 'requests']) }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">My Requests</a>
-        </x-slot:actions>
+            </x-slot:actions>
+        @endif
     </x-page-header>
+
+    @if ($activeTab === 'dashboard')
+        <section class="rounded-[24px] border border-cyan-200 bg-cyan-50 p-4 shadow-sm sm:p-5 md:rounded-[28px]" aria-labelledby="request-workflow-heading">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="max-w-3xl">
+                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">What happens next</p>
+                    <h2 id="request-workflow-heading" class="mt-2 text-lg font-semibold text-slate-950">Your request moves through two review steps</h2>
+                    <p class="mt-2 text-sm leading-6 text-slate-700">After you submit, the assigned custodians verify the venue and equipment. The Supply Office then gives final approval, requests a reschedule, or rejects the request. Check My Requests and your notifications for updates.</p>
+                </div>
+                <a href="{{ route('requestor.index', ['tab' => 'requests']) }}" class="inline-flex shrink-0 items-center justify-center rounded-full border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-cyan-800 transition hover:bg-cyan-100">View My Requests</a>
+            </div>
+        </section>
+    @endif
 
     @if ($activeTab === 'create')
         <section class="w-full">
@@ -243,24 +258,27 @@
                                             ? \Carbon\Carbon::parse($requestItem->start_time)->format('g:i A')
                                                 . (!empty($requestItem->end_time) ? ' - ' . \Carbon\Carbon::parse($requestItem->end_time)->format('g:i A') : '')
                                             : '-';
-                                        $canEdit = in_array($statusKey, ['pending', 'needs_reschedule'], true)
+                                        $canEdit = $statusKey === 'needs_reschedule'
                                             || $requestItem->venue_status === 'needs_reschedule'
-                                            || $requestItem->equipment_status === 'needs_reschedule';
+                                            || $requestItem->equipment_status === 'needs_reschedule'
+                                            || ($statusKey === 'pending'
+                                                && $requestItem->venue_status === 'pending'
+                                                && $requestItem->equipment_status === 'pending');
                                         $canCancel = $statusKey === 'pending';
                                         $progressLabels = match ($statusKey) {
-                                            'rejected' => ['Submitted', 'Under Review', 'Rejected'],
+                                            'rejected' => ['Forwarded for review', 'Rejected'],
                                             'cancelled' => ['Submitted', 'Cancelled'],
-                                            'completed' => ['Submitted', 'Under Review', 'Venue Approved', 'Equipment Approved', 'Completed'],
-                                            'approved' => ['Submitted', 'Under Review', 'Venue Approved', 'Equipment Approved'],
-                                            default => ['Submitted', 'Under Review'],
+                                            'completed' => ['Forwarded for review', 'Venue Approved', 'Equipment Approved', 'Completed'],
+                                            'approved' => ['Forwarded for review', 'Venue Approved', 'Equipment Approved'],
+                                            default => [],
                                         };
                                         $progressActiveIndex = match ($statusKey) {
-                                            'pending' => 2,
+                                            'pending' => 1,
                                             'approved' => 3,
-                                            'rejected' => 3,
+                                            'rejected' => 2,
                                             'completed' => count($progressLabels),
                                             'cancelled' => 2,
-                                            default => 2,
+                                            default => 0,
                                         };
                                     @endphp
                                     <tr class="cursor-pointer transition hover:bg-slate-50 focus:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500" data-request-url="{{ route('request.show', $requestItem->id) }}" role="link" tabindex="0" aria-label="Open request details for {{ $requestItem->control_number ?? 'request' }}">
@@ -282,16 +300,18 @@
                                                     <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $priorityBadgeClass }}">{{ $priorityLabel }}</span>
                                                 @endif
                                             </div>
+                                            @if ($progressLabels)
                                             <div class="mt-3 space-y-2">
                                                 @foreach ($progressLabels as $progressIndex => $progressLabel)
                                                     <div class="flex items-center gap-2 text-xs text-slate-500">
-                                                        <span class="flex h-5 w-5 items-center justify-center rounded-full {{ $progressIndex + 1 <= $progressActiveIndex ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500' }}">
+                                                        <span class="flex h-5 w-5 items-center justify-center rounded-full {{ $progressIndex + 1 <= $progressActiveIndex ? ($statusKey === 'pending' ? 'bg-amber-400 text-white' : 'bg-emerald-500 text-white') : 'bg-slate-200 text-slate-500' }}">
                                                             {{ $progressIndex + 1 }}
                                                         </span>
-                                                        <span class="{{ $progressIndex + 1 <= $progressActiveIndex ? 'font-semibold text-slate-900' : '' }}">{{ $progressLabel }}</span>
+                                                        <span class="{{ $progressIndex + 1 <= $progressActiveIndex ? ($statusKey === 'pending' ? 'font-semibold text-amber-800' : 'font-semibold text-slate-900') : '' }}">{{ $progressLabel }}</span>
                                                     </div>
                                                 @endforeach
                                             </div>
+                                            @endif
                                         </td>
                                         <td class="px-4 py-4">
                                             <div class="flex flex-wrap gap-2">
@@ -329,9 +349,12 @@
                                 ? \Carbon\Carbon::parse($requestItem->start_time)->format('g:i A')
                                     . (!empty($requestItem->end_time) ? ' - ' . \Carbon\Carbon::parse($requestItem->end_time)->format('g:i A') : '')
                                 : '-';
-                            $canEdit = in_array($statusKey, ['pending', 'needs_reschedule'], true)
+                            $canEdit = $statusKey === 'needs_reschedule'
                                 || $requestItem->venue_status === 'needs_reschedule'
-                                || $requestItem->equipment_status === 'needs_reschedule';
+                                || $requestItem->equipment_status === 'needs_reschedule'
+                                || ($statusKey === 'pending'
+                                    && $requestItem->venue_status === 'pending'
+                                    && $requestItem->equipment_status === 'pending');
                             $canCancel = $statusKey === 'pending';
                         @endphp
                         <div class="cursor-pointer rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/40 focus:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500" data-request-url="{{ route('request.show', $requestItem->id) }}" role="link" tabindex="0" aria-label="Open request details for {{ $requestItem->control_number ?? 'request' }}">

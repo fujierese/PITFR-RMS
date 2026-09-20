@@ -145,6 +145,11 @@ class FacilityRequest extends Model
         return $this->hasMany(RequestEquipment::class);
     }
 
+    public function requestChangeRequests()
+    {
+        return $this->hasMany(RequestChangeRequest::class);
+    }
+
     public function statusHistory()
     {
         return $this->hasMany(RequestStatusHistory::class);

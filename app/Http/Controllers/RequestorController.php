@@ -388,9 +388,12 @@ class RequestorController extends Controller
     public function edit(FacilityRequest $facilityRequest)
     {
         $user = $this->currentUser();
-        $shouldAllowEdit = in_array($facilityRequest->status, ['pending', 'needs_reschedule'], true)
+        $shouldAllowEdit = $facilityRequest->status === 'needs_reschedule'
             || $facilityRequest->venue_status === 'needs_reschedule'
-            || $facilityRequest->equipment_status === 'needs_reschedule';
+            || $facilityRequest->equipment_status === 'needs_reschedule'
+            || ($facilityRequest->status === 'pending'
+                && $facilityRequest->venue_status === 'pending'
+                && $facilityRequest->equipment_status === 'pending');
 
         if ($facilityRequest->requested_by_id !== $user->id || !$shouldAllowEdit) {
             abort(403);
@@ -421,9 +424,12 @@ class RequestorController extends Controller
     public function update(Request $request, FacilityRequest $facilityRequest)
     {
         $user = $this->currentUser();
-        $shouldAllowEdit = in_array($facilityRequest->status, ['pending', 'needs_reschedule'], true)
+        $shouldAllowEdit = $facilityRequest->status === 'needs_reschedule'
             || $facilityRequest->venue_status === 'needs_reschedule'
-            || $facilityRequest->equipment_status === 'needs_reschedule';
+            || $facilityRequest->equipment_status === 'needs_reschedule'
+            || ($facilityRequest->status === 'pending'
+                && $facilityRequest->venue_status === 'pending'
+                && $facilityRequest->equipment_status === 'pending');
 
         if ($facilityRequest->requested_by_id !== $user->id || !$shouldAllowEdit) {
             abort(403);
@@ -610,6 +616,12 @@ class RequestorController extends Controller
         $facilityRequest->equipment_notes = null;
         $facilityRequest->save();
 
+        $facilityRequest->addHistory(
+            'requestor_edited',
+            'Request edited by ' . $user->name . ' and returned to pending verification.',
+            $user->id
+        );
+
         // Notify custodians about the rescheduled request so review workflow restarts
         $equipmentCustodianIds = [];
         if (!empty($facilityRequest->equipment)) {
@@ -631,13 +643,28 @@ class RequestorController extends Controller
         if (!empty($custodianIds)) {
             $custodians = \App\Models\User::whereIn('id', $custodianIds)->get();
             try {
-                Notification::send($custodians, new \App\Notifications\NewFacilityRequestNotification($facilityRequest));
+                Notification::send($custodians, new \App\Notifications\RequestStatusChanged(
+                    $facilityRequest,
+                    'change_requested',
+                    '',
+                    $user->name
+                ));
             } catch (\Throwable $e) {
                 Log::warning('Failed to notify custodians for rescheduled facility request.', [
                     'facility_request_id' => $facilityRequest->id,
                     'exception' => $e->getMessage(),
                 ]);
             }
+        }
+
+        $supplyOfficeUsers = User::query()->whereIn('role', ['admin', 'supply_office'])->get();
+        if ($supplyOfficeUsers->isNotEmpty()) {
+            Notification::send($supplyOfficeUsers, new \App\Notifications\RequestStatusChanged(
+                $facilityRequest,
+                'change_requested',
+                '',
+                $user->name
+            ));
         }
 
         if ($request->expectsJson()) {

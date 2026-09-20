@@ -38,7 +38,6 @@ class ExampleTest extends TestCase
             ->assertSee('href="#how-it-works"', false)
             ->assertSee('PIT Facility &amp; Equipment Request System', false)
             ->assertSee('href="' . route('login') . '"', false)
-            ->assertSee('href="' . route('register') . '"', false)
             ->assertSee('View Facility Calendar')
             ->assertSee('Request Validation')
             ->assertSee('Supply Office Review')

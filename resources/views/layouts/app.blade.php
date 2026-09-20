@@ -255,13 +255,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const result = await Swal.fire({
                 title: form.dataset.swalTitle || 'Are you sure?',
-                text: form.dataset.swalText || '',
+                text: form.dataset.swalText || 'This action cannot be undone.',
                 icon: form.dataset.swalIcon || 'warning',
                 showCancelButton: true,
+                reverseButtons: true,
+                focusCancel: true,
                 confirmButtonText: form.dataset.swalConfirmText || 'Yes, continue',
-                cancelButtonText: 'Cancel',
+                cancelButtonText: 'Keep it',
                 confirmButtonColor: form.dataset.swalConfirmColor || '#059669',
                 cancelButtonColor: '#9CA3AF',
+                allowOutsideClick: false,
+                allowEscapeKey: true,
             });
 
             if (result.isConfirmed) {

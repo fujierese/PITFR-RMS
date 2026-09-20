@@ -147,6 +147,7 @@ const initializeRequestForm = function () {
     const equipmentCheckboxes = form.querySelectorAll('input[name="equipment[]"]');
     const rows = form.querySelectorAll('.equipment-row');
     const capacityWarningBanner = document.getElementById('capacity-warning-banner');
+    const checklistWarning = document.getElementById('submission-checklist-alert');
     const conflictAlert = document.createElement('div');
     const conflictAlertWrapper = document.getElementById('venue-conflict-alert-wrap');
     const summaryDetails = {
@@ -211,7 +212,7 @@ const initializeRequestForm = function () {
 
         const activityProposalSelected = Boolean(form.querySelector('[name="activity_proposal_file"]')?.files?.length);
         const igpReceiptSelected = Boolean(form.querySelector('[name="igp_receipt_file"]')?.files?.length);
-        const eSignatureSelected = Boolean(form.querySelector('[name="e_signature_file"]')?.files?.length);
+        const eSignatureSelected = Boolean(form.querySelector('[name="e_signature_file"]')?.files?.length) || form.dataset.hasSavedSignature === '1';
         const supportingDocumentSelected = currentSupportingInput ? Boolean(currentSupportingInput.files?.length) : false;
 
         const requiredChecklist = document.getElementById('checklist-required-fields');
@@ -219,9 +220,17 @@ const initializeRequestForm = function () {
         const documentChecklist = document.getElementById('checklist-document-upload');
         const signatureChecklist = document.getElementById('checklist-e-signature');
         if (requiredChecklist) requiredChecklist.checked = allRequiredComplete;
-        if (venueChecklist) venueChecklist.checked = Boolean(selectedVenue);
+        if (venueChecklist) venueChecklist.checked = Boolean(selectedVenue) && (!equipmentSelected || Array.from(form.querySelectorAll('.equipment-row')).some(row => {
+            const checkbox = row.querySelector('.equipment-checkbox');
+            const quantity = row.querySelector('input[type="number"]');
+            return checkbox?.checked && Number(row.dataset.available || 0) >= Number(quantity?.value || 0);
+        }));
         if (documentChecklist) documentChecklist.checked = supportingDocumentSelected;
         if (signatureChecklist) signatureChecklist.checked = eSignatureSelected;
+        if (checklistWarning && [requiredChecklist, venueChecklist, documentChecklist, signatureChecklist].every(item => item?.checked === true)) {
+            checklistWarning.classList.add('hidden');
+            checklistWarning.textContent = '';
+        }
     };
 
     const updateFormSummary = function () {
@@ -290,7 +299,6 @@ const initializeRequestForm = function () {
             return;
         }
 
-        const overage = participants - capacity;
         capacityWarningBanner.className = 'mt-4 rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900';
         capacityWarningBanner.innerHTML = `
             <div class="flex items-start gap-3">
@@ -298,7 +306,6 @@ const initializeRequestForm = function () {
                 <div>
                     <div class="font-semibold">Selected venue capacity exceeded.</div>
                     <div class="text-xs text-red-900/80">The chosen venue (<strong>${escapeHtml(venueName)}</strong>) has a capacity of ${capacity} participant${capacity === 1 ? '' : 's'}.</div>
-                    <div class="text-xs text-red-900/80">You entered ${participants}, which is ${overage} too many for that venue.</div>
                 </div>
             </div>
         `;
@@ -619,8 +626,6 @@ const initializeRequestForm = function () {
 
         const venueDefaultEquipmentMap = {
             'Balay Alumni': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
-            'Conference Hall & Interaction Center (CHIC)': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Monobloc Chairs'],
-            'Gymnasium': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones']
         };
 
         const selectedVenueName = selectedVenue ? selectedVenue.value : (venueSelect?.value || null);
@@ -686,8 +691,6 @@ const initializeRequestForm = function () {
 
         const list = {
             'Balay Alumni': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
-            'Conference Hall & Interaction Center (CHIC)': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Monobloc Chairs'],
-            'Gymnasium': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones']
         };
 
         const items = list[venueName] || [];
@@ -1470,8 +1473,6 @@ const initializeRequestForm = function () {
 
         const venueDefaultEquipmentMap = {
             'Balay Alumni': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
-            'Conference Hall & Interaction Center (CHIC)': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Monobloc Chairs'],
-            'Gymnasium': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones']
         };
 
         const defaultVenue = selectedVenues.find(venue => Object.prototype.hasOwnProperty.call(venueDefaultEquipmentMap, venue));
@@ -1761,15 +1762,26 @@ const initializeRequestForm = function () {
 
     form.addEventListener('submit', function (e) {
         ensureCsrfToken();
+        updateChecklistState();
 
         const clickedButton = document.activeElement && document.activeElement.matches('button[type="submit"]') ? document.activeElement : form.querySelector('button[type="submit"]');
         const requiredOk = validateRequiredFields();
         const dateTimeOk = validateDateTimeRange();
         const qtyOk = validateQuantities();
         const hasConflict = hasConflictBlocker;
+        const checklistComplete = ['checklist-required-fields', 'checklist-venue-availability', 'checklist-document-upload', 'checklist-e-signature']
+            .every(id => document.getElementById(id)?.checked === true);
 
-        if (!requiredOk || !dateTimeOk || !qtyOk || hasConflict) {
+        if (!requiredOk || !dateTimeOk || !qtyOk || hasConflict || !checklistComplete) {
             e.preventDefault();
+            if (!checklistComplete) {
+                if (checklistWarning) {
+                    checklistWarning.textContent = 'Please complete all checklist items before submitting this request.';
+                    checklistWarning.classList.remove('hidden');
+                    checklistWarning.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                }
+                resetSubmitButtonLoading(clickedButton);
+            }
             if (!requiredOk || !dateTimeOk) {
                 const firstInvalid = form.querySelector(':invalid');
                 firstInvalid?.focus();

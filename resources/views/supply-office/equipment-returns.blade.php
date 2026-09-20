@@ -8,6 +8,7 @@
             <div>
                 <h1 class="text-2xl font-semibold">Equipment Returns</h1>
                 <p class="mt-2 text-sm text-sky-100">Track pending, partial, returned, and overdue equipment returns.</p>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-sky-50">Open a request to review its equipment details, then coordinate with the assigned equipment custodian to record returned quantities and condition. Follow up on partial and overdue returns until everything is returned.</p>
             </div>
             <a href="{{ route('supply-office.index') }}" class="inline-flex items-center rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20">Back to Dashboard</a>
         </div>

@@ -90,7 +90,6 @@ Route::middleware(['auth', 'role:admin'])->prefix('supply-office')->group(functi
     Route::middleware('role:admin')->group(function (): void {
         Route::get('/users', [AdminController::class, 'users'])->name('supply-office.users');
         Route::post('/users', [AdminController::class, 'storeUser'])->name('supply-office.users.store');
-        Route::get('/reports', [AdminController::class, 'reports'])->name('supply-office.usage-reports');
     });
     Route::get('/settings', [AdminController::class, 'settings'])->name('supply-office.settings');
     Route::post('/settings/profile', [AdminController::class, 'updateProfile'])->name('supply-office.settings.profile');
@@ -187,6 +186,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/request/{facilityRequest}/custodian/verify', [RequestActionController::class, 'custodianVerify'])->name('request.custodian.verify');
     Route::post('/request/{facilityRequest}/custodian/reject', [RequestActionController::class, 'custodianReject'])->name('request.custodian.reject');
     Route::post('/request/{facilityRequest}/custodian/revision', [RequestActionController::class, 'custodianRequestRevision'])->name('request.custodian.revision');
+    Route::post('/request/{facilityRequest}/change-request', [RequestActionController::class, 'submitChangeRequest'])->name('request.change.submit');
+    Route::post('/request/{facilityRequest}/change-request/approve', [RequestActionController::class, 'approveChangeRequest'])->name('request.change.approve');
+    Route::post('/request/{facilityRequest}/change-request/reject', [RequestActionController::class, 'rejectChangeRequest'])->name('request.change.reject');
     Route::post('/request/{facilityRequest}/supply/final-approval', [RequestActionController::class, 'supplyFinalApproval'])->name('request.supply.final-approval');
     Route::post('/request/{facilityRequest}/supply/decline', [RequestActionController::class, 'supplyDecline'])->name('request.supply.decline');
 });

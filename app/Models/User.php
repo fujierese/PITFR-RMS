@@ -118,6 +118,8 @@ class User extends Authenticatable implements CanResetPassword
         'school_id_number',
         'faculty_id',
         'office_or_organization',
+        'organization_acronym',
+        'organization_type',
         'contact_number',
         'email_verified_at',
         'otp_hash',

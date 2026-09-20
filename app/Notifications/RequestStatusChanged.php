@@ -98,6 +98,10 @@ class RequestStatusChanged extends Notification
             $message = $recipientType === 'requestor'
                 ? "Your request status has been updated" . ($actorText !== '' ? " by {$actorText}" : '') . " to {$statusLabel}. Control No: {$this->facilityRequest->control_number}"
                 : "This request status has been updated to {$statusLabel}. Control No: {$this->facilityRequest->control_number}";
+        } elseif ($this->status === 'change_requested') {
+            $message = "Request {$this->facilityRequest->control_number} was edited by {$this->actor} and returned to pending verification.";
+        } elseif ($this->status === 'change_request_rejected') {
+            $message = "The request change was rejected by " . ($this->actor ?: 'the reviewer') . ". The existing request approvals were preserved. Control No: {$this->facilityRequest->control_number}";
         } elseif ($this->status === 'approved') {
             if ($recipientType === 'requestor') {
                 $message = 'Your request has been approved.';
@@ -251,6 +255,8 @@ class RequestStatusChanged extends Notification
             'request_cancelled' => '❌ Request Cancelled',
             'venue_approved'    => '✅ Venue Approved',
             'equipment_approved'=> '✅ Equipment Approved',
+            'change_requested' => '📝 Request Edited — Verification Required',
+            'change_request_rejected' => '❌ Change Request Rejected',
             default             => '📣 ' . $this->humanizeStatus($this->status),
         };
 

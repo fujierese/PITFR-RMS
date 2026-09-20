@@ -130,6 +130,50 @@ class StudentOrganizationSeeder extends Seeder
             }
         }
 
-        $this->command->info('Student organization master data has been seeded. Unconfirmed CTE organizations remain intentionally excluded.');
+        $nonCollegeOrganizations = [
+            ['name' => 'Supreme Student Government (SSG)', 'acronym' => 'SSG', 'category' => 'Mandated College'],
+            ['name' => 'Publication Fulcrum', 'acronym' => null, 'category' => 'Mandated College'],
+            ['name' => 'Supreme Student Council (SSC)', 'acronym' => 'SSC', 'category' => 'Mandated Highschool'],
+            ['name' => 'The Builder', 'acronym' => null, 'category' => 'Mandated Highschool'],
+            ['name' => 'Molders of Young Minds (MOYM)', 'acronym' => 'MOYM', 'category' => 'Academic Related'],
+            ['name' => 'Society of Healthy and Active Physical Educators (SHAPE)', 'acronym' => 'SHAPE', 'category' => 'Academic Related'],
+            ['name' => 'Organization of Aspiring Critical Language Educators (ORACLE)', 'acronym' => 'ORACLE', 'category' => 'Academic Related'],
+            ['name' => 'Figure Enthusiast (FE)', 'acronym' => 'FE', 'category' => 'Academic Related'],
+            ['name' => 'Kapisanang Filipino (KAFIL)', 'acronym' => 'KAFIL', 'category' => 'Academic Related'],
+            ['name' => 'Movement of Social Thinkers (MOST)', 'acronym' => 'MOST', 'category' => 'Academic Related'],
+            ['name' => 'Technology Educators Organization (TECHEDO)', 'acronym' => 'TECHEDO', 'category' => 'Academic Related'],
+            ['name' => "Graduating Educators' Organization (GEO)", 'acronym' => 'GEO', 'category' => 'Academic Related'],
+            ['name' => 'Alliance of Intellectually Molded Scholars (AIMS)', 'acronym' => 'AIMS', 'category' => 'Academic Related'],
+            ['name' => 'Kristiyanong Kabataan Para sa Bayan (KKB-PIT)', 'acronym' => 'KKB-PIT', 'category' => 'Religious Activities'],
+            ['name' => 'The Enfolders', 'acronym' => null, 'category' => 'Religious Activities'],
+            ['name' => 'PIT Campus Ministry', 'acronym' => null, 'category' => 'Religious Activities'],
+            ['name' => 'PIT Esports', 'acronym' => null, 'category' => 'Sports'],
+            ['name' => 'Absolute Focus', 'acronym' => null, 'category' => 'Sports'],
+            ['name' => 'PIT Arnis Association (PITAA)', 'acronym' => 'PITAA', 'category' => 'Sports'],
+            ['name' => 'PIT Taekwondo Association (PITTA)', 'acronym' => 'PITTA', 'category' => 'Sports'],
+            ['name' => 'Kaapit Sayaw', 'acronym' => null, 'category' => 'Cultural Affairs/Performing Arts'],
+            ['name' => 'Mugna', 'acronym' => null, 'category' => 'Cultural Affairs/Performing Arts'],
+            ['name' => 'PIT-LHS Drums, Bugle, and Lyre Corps. (PIT-LHS DBLC)', 'acronym' => 'PIT-LHS DBLC', 'category' => 'Cultural Affairs/Performing Arts'],
+            ['name' => 'Students Active Volunteers Emergency Responders - Red Cross Youth Council PIT Chapter (SAVERS-RCYC-PIT)', 'acronym' => 'SAVERS-RCYC-PIT', 'category' => 'Emergency Response'],
+            ['name' => 'Alpha Phi Omega - Eta Pi Chapter (APO)', 'acronym' => 'APO', 'category' => 'Emergency Response'],
+            ['name' => 'Association of Student Assistant Program (ASAP)', 'acronym' => 'ASAP', 'category' => 'Emergency Response'],
+        ];
+
+        foreach ($nonCollegeOrganizations as $organization) {
+            StudentOrganization::updateOrCreate(
+                ['name' => $organization['name']],
+                [
+                    'acronym' => $organization['acronym'],
+                    'college_id' => null,
+                    'department_id' => null,
+                    'organization_type' => 'Student Organization',
+                    'category' => $organization['category'],
+                    'adviser' => null,
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        $this->command->info('Student organization master data has been seeded.');
     }
 }

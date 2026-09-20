@@ -104,7 +104,7 @@
                                                 </form>
 
                                                 <!-- Toggle Status Form -->
-                                                <form method="POST" action="{{ route('custodian.equipment.toggle', $item) }}" class="inline">
+                                                <form method="POST" action="{{ route('custodian.equipment.toggle', $item) }}" class="inline" @if($item->is_active) data-swal-confirm data-swal-title="Disable this equipment?" data-swal-text="This equipment will no longer be available for new facility requests." data-swal-confirm-text="Yes, disable it" data-swal-confirm-color="#dc2626" @endif>
                                                     @csrf
                                                     @method('PATCH')
                                                     <button type="submit" class="rounded-lg px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 @if($item->is_active) bg-red-50 text-red-700 hover:bg-red-100 focus:ring-red-500 @else bg-green-50 text-green-700 hover:bg-green-100 focus:ring-green-500 @endif">
@@ -129,7 +129,7 @@
                                                 <!-- Report Issue Modal -->
                                                 <div x-show="issueOpen_{{ $item->id }}" @click.outside="issueOpen_{{ $item->id }} = false" class="absolute right-0 z-10 mt-2 w-96 rounded-lg bg-white shadow-xl ring-1 ring-slate-200/50 p-6">
                                                     <h4 class="text-sm font-semibold text-slate-900 mb-4">Report Equipment Issue</h4>
-                                                    <form method="POST" action="{{ route('custodian.equipment.report-issue', $item) }}" class="space-y-4">
+                                                    <form method="POST" action="{{ route('custodian.equipment.report-issue', $item) }}" class="space-y-4" data-swal-confirm data-swal-title="Submit this issue report?" data-swal-text="The report will update this equipment's condition and availability." data-swal-confirm-text="Yes, submit report" data-swal-confirm-color="#ea580c">
                                                         @csrf
                                                         <div class="flex flex-col gap-1">
                                                             <label class="text-sm font-medium text-slate-700">Equipment</label>
@@ -162,7 +162,7 @@
                                                 <!-- Return Equipment Modal -->
                                                 <div x-show="returnOpen_{{ $item->id }}" @click.outside="returnOpen_{{ $item->id }} = false" class="absolute right-0 z-10 mt-2 w-96 rounded-lg bg-white shadow-xl ring-1 ring-slate-200/50 p-6">
                                                     <h4 class="text-sm font-semibold text-slate-900 mb-4">Return Equipment</h4>
-                                                    <form method="POST" action="{{ route('custodian.equipment.return', $item) }}" class="space-y-4">
+                                                    <form method="POST" action="{{ route('custodian.equipment.return', $item) }}" class="space-y-4" data-swal-confirm data-swal-title="Confirm this equipment return?" data-swal-text="The returned quantity and condition will update the equipment record." data-swal-confirm-text="Yes, confirm return" data-swal-confirm-color="#059669">
                                                         @csrf
                                                         <div class="flex flex-col gap-1">
                                                             <label class="text-sm font-medium text-slate-700">Equipment</label>

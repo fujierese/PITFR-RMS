@@ -139,6 +139,8 @@
 
     $approverTone = $approvalTone;
     $hasUrgentConflict = (bool) ($request->is_emergency && $request->venue_status === 'approved' && $request->status === 'pending');
+    $pendingChangeRequest = $request->requestChangeRequests()->where('status', 'pending')->latest()->first();
+    $hasCustodianApproval = $request->status === 'pending' && ($request->venue_status === 'approved' || $request->equipment_status === 'approved');
 @endphp
 
 @section('content')
@@ -219,6 +221,52 @@
 
     {{-- Role-Based Actions --}}
     <div class="grid gap-4">
+        @if(auth()->check() && auth()->user()->isRequestee() && auth()->id() === $request->requested_by_id && $hasCustodianApproval)
+            <div class="bg-amber-50 border border-amber-200 rounded-3xl p-5 shadow-sm">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900">Request Change</h2>
+                        <p class="text-sm text-slate-600">A custodian has already approved part of this request. Submit a change request before editing; direct editing is locked until a reviewer allows revision.</p>
+                    </div>
+                    @if($pendingChangeRequest)
+                        <span class="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Change Pending Review</span>
+                    @endif
+                </div>
+                @if($pendingChangeRequest)
+                    <p class="mt-3 rounded-2xl border border-amber-200 bg-white/70 p-3 text-sm text-slate-700"><span class="font-semibold">Reason:</span> {{ $pendingChangeRequest->reason }}</p>
+                @else
+                    <form method="POST" action="{{ route('request.change.submit', $request->id) }}" class="mt-4 space-y-3">
+                        @csrf
+                        <label for="change-request-reason" class="block text-sm font-semibold text-slate-700">Why do you need to change this request?</label>
+                        <textarea id="change-request-reason" name="reason" rows="3" minlength="10" maxlength="1000" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700" placeholder="Example: I want to change the venue from Gymnasium to CHIC because CHIC is available on the selected date."></textarea>
+                        <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-amber-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700">Submit Change Request</button>
+                    </form>
+                @endif
+            </div>
+        @endif
+
+        @if(auth()->check() && (auth()->user()->isCustodian() || auth()->user()->isAdmin()) && $pendingChangeRequest)
+            <div class="bg-white border border-cyan-200 rounded-3xl p-5 shadow-sm">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900">Change Request Pending</h2>
+                        <p class="text-sm text-slate-600">The requestor wants to change this request. Approving will open revision and reset the custodian review after the requestor saves changes.</p>
+                        <p class="mt-3 rounded-2xl bg-slate-50 p-3 text-sm text-slate-700"><span class="font-semibold">Reason:</span> {{ $pendingChangeRequest->reason }}</p>
+                    </div>
+                </div>
+                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                    <form method="POST" action="{{ route('request.change.approve', $request->id) }}" data-swal-confirm data-swal-title="Allow this request change?" data-swal-text="The request will move to Needs Revision so the requestor can edit it." data-swal-confirm-text="Yes, allow change" data-swal-confirm-color="#059669">
+                        @csrf
+                        <button type="submit" class="w-full rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white">Allow Change</button>
+                    </form>
+                    <form method="POST" action="{{ route('request.change.reject', $request->id) }}" data-swal-confirm data-swal-title="Reject this change request?" data-swal-text="The existing request approvals will remain unchanged." data-swal-confirm-text="Yes, reject change" data-swal-confirm-color="#dc2626">
+                        @csrf
+                        <button type="submit" class="w-full rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white">Reject Change</button>
+                    </form>
+                </div>
+            </div>
+        @endif
+
         @if(auth()->check() && auth()->user()->isRequestee() && auth()->id() === $request->requested_by_id && ($request->status === 'needs_reschedule' || $request->venue_status === 'needs_reschedule' || $request->equipment_status === 'needs_reschedule'))
             <div class="bg-amber-50 border border-amber-200 rounded-3xl p-5 shadow-sm">
                 <div class="flex items-start justify-between gap-4">

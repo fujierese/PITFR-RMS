@@ -34,7 +34,7 @@
                     <h2 class="text-lg font-semibold text-slate-900">{{ $organization->name }} @if($organization->acronym)<span class="text-slate-500">({{ $organization->acronym }})</span>@endif</h2>
                     <p class="text-sm text-slate-500">{{ $organization->organization_type ?: 'Type not specified' }} · {{ $organization->is_active ? 'Active' : 'Inactive' }} · Adviser: {{ $organization->adviser ?: 'Not assigned' }}</p>
                 </div>
-                <form method="POST" action="{{ route('supply-office.organizations.update', $organization) }}" class="flex items-center gap-2">
+                <form method="POST" action="{{ route('supply-office.organizations.update', $organization) }}" class="flex items-center gap-2" @if($organization->is_active) data-swal-confirm data-swal-title="Deactivate this organization?" data-swal-text="Members will no longer be able to use this organization for new requests." data-swal-confirm-text="Yes, deactivate it" data-swal-confirm-color="#dc2626" @endif>
                     @csrf @method('PUT')
                     <input type="hidden" name="name" value="{{ $organization->name }}">
                     <input type="hidden" name="is_active" value="{{ $organization->is_active ? 0 : 1 }}">

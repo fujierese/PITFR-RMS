@@ -27,10 +27,16 @@
                 <p class="mt-3 text-sm leading-6 text-slate-600">{{ $description }}</p>
             @endif
         </div>
-        @isset($actions)
-            <div class="flex flex-wrap gap-2">
-                {{ $actions }}
-            </div>
-        @endisset
+        <div class="flex flex-col items-stretch gap-3 sm:items-end">
+            @include('components.date-weather')
+            @isset($context)
+                {{ $context }}
+            @endisset
+            @isset($actions)
+                <div class="flex flex-wrap gap-2">
+                    {{ $actions }}
+                </div>
+            @endisset
+        </div>
     </div>
 </section>

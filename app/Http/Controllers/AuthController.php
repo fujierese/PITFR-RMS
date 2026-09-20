@@ -171,13 +171,14 @@ class AuthController extends Controller
         $isGoogleRegistration = is_array($googleProfile);
         $data = $request->validate([
             'requestor_type' => ['required', 'in:outsider'],
-            'first_name' => ['nullable', 'string', 'max:100'],
+            'first_name' => ['required', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
-            'last_name' => ['nullable', 'string', 'max:100'],
-            'contact_person' => ['required', 'string', 'max:100'],
+            'surname' => ['required', 'string', 'max:100'],
             'username' => ['required', 'email', 'max:255', 'unique:users,username'],
             'password' => [$isGoogleRegistration ? 'nullable' : 'required', 'string', 'min:6', 'confirmed'],
             'office_or_organization' => ['required', 'string', 'max:191'],
+            'organization_acronym' => ['nullable', 'string', 'max:50'],
+            'organization_type' => ['required', 'string', 'max:100'],
             'contact_number' => ['nullable', 'string', 'max:50'],
         ], [
             'school_id_number.regex' => 'Student ID must be in format: 23-0098-635 (2 digits - 4 digits - 3 digits)',
@@ -190,7 +191,11 @@ class AuthController extends Controller
             $data['username'] = $googleProfile['email'];
         }
 
-        $fullName = trim($data['contact_person']);
+        $fullName = User::formatFullName(
+            $data['surname'],
+            $data['first_name'],
+            $data['middle_name'] ?? null,
+        );
 
         // Normalize organization / purpose: treat common 'Individual' markers and empty strings as null
         $org = $data['office_or_organization'] ?? null;
@@ -222,6 +227,8 @@ class AuthController extends Controller
             'requestor_type' => $data['requestor_type'],
             'school_id_number' => $data['school_id_number'] ?? null,
             'office_or_organization' => $org,
+            'organization_acronym' => $data['organization_acronym'] ?? null,
+            'organization_type' => $data['organization_type'],
             'contact_number' => $data['contact_number'] ?? null,
             'department' => $departmentName,
             'college_id' => $data['college_id'] ?? null,

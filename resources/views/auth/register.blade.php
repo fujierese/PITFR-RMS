@@ -5,324 +5,135 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="{{ asset('images/PIT-LOGO.png') }}">
     <link rel="apple-touch-icon" href="{{ asset('images/PIT-LOGO.png') }}">
-    <title>Register — PIT Facility Request Portal</title>
+    <title>Register - PIT Facility Request Portal</title>
     @if (app()->runningUnitTests())
-        {{-- Skip Vite asset loading in tests when the manifest may not exist. --}}
     @else
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     @endif
 </head>
-<body class="min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-2 text-slate-100 sm:p-4">
-
-<div class="mx-auto w-full max-w-none overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 shadow-[0_60px_120px_rgba(15,23,42,0.55)] backdrop-blur-xl sm:rounded-[40px] md:max-w-6xl">
-    <div class="space-y-0">
-        <section class="bg-gradient-to-br from-emerald-900 via-slate-900 to-slate-950 p-4 text-white relative overflow-hidden sm:p-6 lg:p-10">
-            <div class="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.12),_transparent_30%)]"></div>
-            <div class="relative z-10 mx-auto w-full max-w-none space-y-6 md:max-w-5xl md:space-y-10">
-                <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex items-center gap-4">
-                        <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-14 w-14 rounded-full border border-white/20 object-cover shadow-lg">
-                        <div>
-                            <p class="text-base font-semibold uppercase tracking-[0.25em] text-white">Palompon Institute of Technology</p>
-                            <p class="text-xs uppercase tracking-[0.32em] text-slate-200/75">Facility Request System</p>
-                        </div>
+<body class="h-screen overflow-hidden bg-slate-100 text-slate-100">
+    <div class="relative h-screen w-full lg:grid lg:h-screen lg:grid-cols-[1.12fr_0.88fr]">
+        <section class="relative hidden min-h-screen bg-slate-950 lg:flex lg:min-h-screen lg:min-h-0 lg:flex-col lg:justify-center lg:pt-10 lg:pb-3 lg:pl-5 lg:pr-8 xl:pl-8 xl:pr-12">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%)]"></div>
+            <div class="absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl"></div>
+            <div class="absolute -bottom-32 right-0 h-96 w-96 rounded-full bg-emerald-400/10 blur-3xl"></div>
+            <div class="relative z-10 ml-0 w-full max-w-[860px] pt-2">
+                <div class="flex items-center gap-4">
+                    <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-lg ring-1 ring-white/10">
+                        <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-12 w-12 rounded-full object-cover">
                     </div>
-                    <div class="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[11px] uppercase tracking-[0.32em] text-slate-200">Modern request workflows</div>
-                </div>
-
-                <div class="max-w-3xl space-y-4">
-                    <p class="text-sm uppercase tracking-[0.3em] text-emerald-200 font-semibold">Welcome to PITFR</p>
-                    <h1 class="text-4xl font-semibold leading-tight">Register for secure facility and equipment booking.</h1>
-                    <p class="text-sm leading-7 text-slate-200/90">Create an account to submit requests, track approvals, and manage your next reservation with a clean and responsive portal.</p>
-                </div>
-
-                <div class="rounded-[32px] border border-white/10 bg-white/5 p-6 sm:p-8 shadow-inner">
-                    <p class="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-200">Why PITFR works</p>
-                    <div class="mt-6 grid gap-4 sm:grid-cols-3">
-                        <div class="rounded-3xl bg-slate-950/30 p-4">
-                            <div class="flex items-center gap-3">
-                                <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                                </div>
-                                <p class="text-sm font-semibold text-white">Fast submissions</p>
-                            </div>
-                            <p class="mt-3 text-xs leading-5 text-slate-200/80">Submit requests quickly with clear approval guidance.</p>
-                        </div>
-                        <div class="rounded-3xl bg-slate-950/30 p-4">
-                            <div class="flex items-center gap-3">
-                                <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>
-                                </div>
-                                <p class="text-sm font-semibold text-white">Device-ready</p>
-                            </div>
-                            <p class="mt-3 text-xs leading-5 text-slate-200/80">Use the portal from desktops, tablets, or mobile devices.</p>
-                        </div>
-                        <div class="rounded-3xl bg-slate-950/30 p-4">
-                            <div class="flex items-center gap-3">
-                                <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-                                </div>
-                                <p class="text-sm font-semibold text-white">Approval tracking</p>
-                            </div>
-                            <p class="mt-3 text-xs leading-5 text-slate-200/80">Keep visibility on every request and status update.</p>
-                        </div>
+                    <div class="leading-tight">
+                        <p class="text-[10px] uppercase tracking-[0.42em] text-slate-100">PITFR-RMS</p>
+                        <p class="mt-2 text-sm font-semibold text-slate-200">Palompon Institute of Technology</p>
                     </div>
+                </div>
+                <div class="mt-4 flex justify-center">
+                    <div class="relative mx-auto w-full max-w-[90%] ml-8 overflow-hidden rounded-[22px] border border-white/10 bg-slate-900 shadow-[0_18px_50px_rgba(15,23,42,0.32)]">
+                        <img src="{{ asset('images/loginpage2.jpg') }}" alt="PIT Facility Request Portal" class="block h-[260px] w-full object-cover sm:h-[320px] lg:h-[360px]">
+                    </div>
+                </div>
+                <div class="mt-10 mb-6 max-w-[330px] pb-4 lg:max-w-[360px]">
+                    <h1 class="text-[2.1rem] font-black leading-[0.9] tracking-[-0.04em] text-white xl:text-[2.8rem]">
+                        Book the<br>
+                        spaces<br>
+                        you <span class="text-emerald-400">need.</span>
+                    </h1>
                 </div>
             </div>
         </section>
 
-        <section class="bg-white p-4 sm:p-6 lg:p-10">
-            <div class="mx-auto w-full max-w-none md:max-w-5xl">
-                <div class="mb-6 space-y-4 md:mb-10">
-                    <p class="text-xs uppercase tracking-[0.32em] text-emerald-600 font-semibold">Create account</p>
-                    <h2 class="text-3xl font-semibold text-slate-950">Create your PITFR account</h2>
-                    <p class="text-sm text-slate-500">Register to begin submitting requests and tracking your facility reservations.</p>
+        <section class="login-panel-reveal flex h-screen items-center justify-center overflow-y-auto bg-slate-100 px-6 py-6 text-slate-900 sm:px-10 lg:px-16 xl:px-24" style="animation-delay: 80ms;">
+            <div class="w-full max-w-[460px]">
+                <div class="mb-8 max-w-full">
+                    <p class="break-words text-xs font-semibold uppercase tracking-[0.25em] text-emerald-600 sm:text-[11px]">Create your PITFR account</p>
                 </div>
 
                 @if($errors->any())
-                    <div class="mb-6 rounded-3xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm">
-                        <div class="flex items-start gap-3">
-                            <svg class="mt-1 h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            <p>{{ $errors->first() }}</p>
-                        </div>
-                    </div>
+                    <div class="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{{ $errors->first() }}</div>
                 @endif
 
-                <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-xl shadow-slate-950/5 sm:p-6 md:rounded-[28px] md:p-8 lg:p-10">
-                    <div class="space-y-10">
-                        <div class="space-y-6">
-                            <p class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Outsider registration</p>
-                            <p class="text-sm leading-6 text-slate-600">This page is for users who are not registered as PIT students or faculty members. Students and Faculty should obtain accounts through the authorized PIT administrator or future MIS provisioning.</p>
+                <p class="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Outsider registration</p>
+                <div class="mb-6 border-l-4 border-emerald-500 bg-emerald-50 p-4 text-sm text-emerald-800">
+                    Students and Faculty accounts are created by the authorized administrator. Outsiders verify their email with a one-time password after registration.
+                </div>
+
+                    <form method="POST" action="{{ route('register.post') }}" class="space-y-5">
+                        @csrf
+                        <input type="hidden" name="requestor_type" value="outsider">
+
+                        @if($googleProfile)
+                            <p class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">Google account connected: {{ $googleProfile['email'] }}.</p>
+                        @endif
+
+                        <div class="grid gap-4 sm:grid-cols-3">
+                            <div>
+                                <label for="first_name" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">First name</label>
+                                <input id="first_name" type="text" name="first_name" value="{{ old('first_name', $googleProfile['first_name'] ?? '') }}" required autocomplete="given-name" placeholder="First name" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                            </div>
+                            <div>
+                                <label for="middle_name" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Middle name</label>
+                                <input id="middle_name" type="text" name="middle_name" value="{{ old('middle_name') }}" autocomplete="additional-name" placeholder="Optional" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                            </div>
+                            <div>
+                                <label for="surname" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Surname</label>
+                                <input id="surname" type="text" name="surname" value="{{ old('surname', $googleProfile['last_name'] ?? '') }}" required autocomplete="family-name" placeholder="Surname" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                            </div>
                         </div>
 
-                        <form method="POST" action="{{ route('register.post') }}" class="space-y-8">
-                            @csrf
-                            @php($selectedRegistrationType = 'outsider')
-                            <input type="hidden" id="requestor_type" name="requestor_type" value="{{ $selectedRegistrationType }}" />
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <label for="username" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Email address</label>
+                                <input id="username" type="email" name="username" value="{{ old('username', $googleProfile['email'] ?? '') }}" required @disabled($googleProfile) autocomplete="email" placeholder="you@example.com" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                                @if($googleProfile)<input type="hidden" name="username" value="{{ $googleProfile['email'] }}">@endif
+                            </div>
+                            <div>
+                                <label for="contact_number" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Contact number</label>
+                                <input id="contact_number" type="text" name="contact_number" value="{{ old('contact_number') }}" autocomplete="tel" placeholder="09171234567" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                            </div>
+                        </div>
 
-                            <a id="google-registration-link" href="{{ route('google.redirect', ['type' => $selectedRegistrationType]) }}" class="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-500">
-                                <span class="text-base font-bold text-red-500">G</span>
-                                Continue with Google
-                            </a>
-                            @if($googleProfile)
-                                <p class="text-sm text-emerald-700">Google account connected: {{ $googleProfile['email'] }}. Complete the required PITFR profile fields below.</p>
-                            @endif
+                        <div>
+                            <label for="office_or_organization" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Organization name / affiliation</label>
+                            <input id="office_or_organization" type="text" name="office_or_organization" value="{{ old('office_or_organization') }}" required placeholder="Your organization, office, company, or Individual / Personal" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                            <p class="mt-2 text-xs text-slate-400">Enter your own organization, office, company, or Individual / Personal.</p>
+                        </div>
 
-                            <div class="hidden" id="student-name-group">
-                                <div class="space-y-3">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">First name</label>
-                                    <input type="text" name="first_name" value="{{ old('first_name', $googleProfile['first_name'] ?? '') }}" required placeholder="Daniel" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                    @error('first_name')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
-                                </div>
-                                <div class="space-y-3">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Middle name <span class="text-slate-400">(optional)</span></label>
-                                    <input type="text" name="middle_name" value="{{ old('middle_name') }}" placeholder="Zrael" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                    @error('middle_name')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
-                                </div>
-                                <div class="space-y-3">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Last name</label>
-                                    <input type="text" name="last_name" value="{{ old('last_name', $googleProfile['last_name'] ?? '') }}" required placeholder="Barro" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                    @error('last_name')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <label for="organization_acronym" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Organization acronym <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
+                                <input id="organization_acronym" type="text" name="organization_acronym" value="{{ old('organization_acronym') }}" maxlength="50" placeholder="Example: ABC" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                            </div>
+                            <div>
+                                <label for="organization_type" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Organization type</label>
+                                <input id="organization_type" type="text" name="organization_type" value="{{ old('organization_type') }}" required maxlength="100" placeholder="Example: Company, NGO, School" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                            </div>
+                        </div>
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <label for="register_password" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Password</label>
+                                <div class="pitfr-password-wrapper">
+                                    <input id="register_password" type="password" name="password" @required(!$googleProfile) autocomplete="new-password" placeholder="At least 6 characters" class="pitfr-password-input w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                                    <button type="button" data-password-toggle-target="#register_password" aria-label="Show password" class="password-toggle pitfr-password-toggle"></button>
                                 </div>
                             </div>
-
-                            <div class="space-y-3 hidden" id="contact-person-group">
-                                <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Contact person</label>
-                                <input type="text" name="contact_person" value="{{ old('contact_person', $googleProfile['name'] ?? '') }}" placeholder="Contact person name" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                @error('contact_person')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
-                            </div>
-
-                            <div class="grid gap-6 sm:grid-cols-2">
-                                <div class="space-y-3">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Phone number</label>
-                                    <input type="text" name="contact_number" value="{{ old('contact_number') }}" placeholder="09171234567" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                    @error('contact_number')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
-                                </div>
-                                <div class="space-y-3">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Email address</label>
-                                    <input type="email" name="username" value="{{ old('username', $googleProfile['email'] ?? '') }}" required @disabled($googleProfile) placeholder="you@example.com" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                    @if($googleProfile)<input type="hidden" name="username" value="{{ $googleProfile['email'] }}">@endif
-                                    @error('username')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
+                            <div>
+                                <label for="register_password_confirmation" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Confirm password</label>
+                                <div class="pitfr-password-wrapper">
+                                    <input id="register_password_confirmation" type="password" name="password_confirmation" @required(!$googleProfile) autocomplete="new-password" placeholder="Re-enter password" class="pitfr-password-input w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                                    <button type="button" data-password-toggle-target="#register_password_confirmation" aria-label="Show password" class="password-toggle pitfr-password-toggle"></button>
                                 </div>
                             </div>
+                        </div>
 
-                            <div class="grid gap-6 sm:grid-cols-2">
-                                <div class="space-y-4" id="college-group">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">College</label>
-                                    <select id="collegeSelect" name="college_id" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
-                                        <option value="">Select College</option>
-                                        @foreach($colleges as $college)
-                                            <option value="{{ $college->id }}" @selected(old('college_id') == $college->id)>{{ $college->name }}</option>
-                                        @endforeach
-                                    </select>
-                                    @error('college_id')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
-                                </div>
-                                <div class="space-y-4" id="department-group">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Department</label>
-                                    <select id="departmentSelect" name="department_id" data-selected="{{ old('department_id') }}" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
-                                        <option value="">Select Department</option>
-                                    </select>
-                                    @error('department_id')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
-                                </div>
-                            </div>
-
-                            <div class="space-y-4" id="school-id-group">
-                                <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Student ID</label>
-                                <input type="text" id="studentIdInput" name="school_id_number" value="{{ old('school_id_number') }}" placeholder="23-0098-635" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                <p class="text-xs text-slate-400">Format: 23-0098-635 (2 digits - 4 digits - 3 digits)</p>
-                                @error('school_id_number')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
-                            </div>
-
-
-                            <div class="grid gap-6 sm:grid-cols-2">
-                                <div class="space-y-4">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Password</label>
-                                    <div class="pitfr-password-wrapper">
-                                        <input type="password" name="password" id="register_password" @required(!$googleProfile) placeholder="{{ $googleProfile ? 'Optional for Google accounts' : 'At least 6 characters' }}" class="pitfr-password-input w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                        <button type="button" data-password-toggle-target="#register_password" aria-label="Show password" class="password-toggle pitfr-password-toggle">
-                                        </button>
-                                    </div>
-                                    @error('password')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
-                                </div>
-                                <div class="space-y-4">
-                                    <label class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Confirm password</label>
-                                    <div class="pitfr-password-wrapper">
-                                        <input type="password" name="password_confirmation" id="register_password_confirmation" @required(!$googleProfile) placeholder="{{ $googleProfile ? 'Optional for Google accounts' : 'Re-enter password' }}" class="pitfr-password-input w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                        <button type="button" data-password-toggle-target="#register_password_confirmation" aria-label="Show password" class="password-toggle pitfr-password-toggle">
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="space-y-4 hidden" id="office-org-group">
-                                <label id="officeOrgLabel" class="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Organization name</label>
-                                <input type="text" id="officeOrgInput" name="office_or_organization" value="{{ old('office_or_organization') }}" required placeholder="Organization name" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
-                                @error('office_or_organization')<p class="text-xs text-red-500">{{ $message }}</p>@enderror
-                                <p class="text-xs text-slate-400">Leave blank or type “Individual / Personal” if booking as an external guest.</p>
-                            </div>
-
-                            <div class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-                                <p class="text-sm text-slate-600">Already have an account? <a href="{{ route('login') }}" class="font-semibold text-emerald-600 hover:text-emerald-700 transition">Sign in</a></p>
-                                <button type="submit" class="w-full rounded-[28px] bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-emerald-600/20 transition hover:bg-emerald-700 hover:-translate-y-0.5 sm:w-auto">Create account</button>
-                            </div>
-                        </form>
-                    </div>
-                    <p class="mt-10 text-center text-xs uppercase tracking-[0.3em] text-slate-400">© {{ date('Y') }} Palompon Institute of Technology</p>
-                </div>
+                        <div class="flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                            <p class="text-sm text-slate-500">Already have an account? <a href="{{ route('login') }}" class="font-semibold text-emerald-600 hover:text-emerald-700">Sign in</a></p>
+                            <button type="submit" class="w-full rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-700 sm:w-auto">Create account</button>
+                        </div>
+                    </form>
+                <p class="mt-8 text-center text-[10px] uppercase tracking-[0.3em] text-slate-400">© {{ date('Y') }} Palompon Institute of Technology</p>
             </div>
         </section>
     </div>
-</div>
-
-<script>
-    const typeField = document.getElementById('requestor_type');
-    const googleRegistrationLink = document.getElementById('google-registration-link');
-    const studentNameGroup = document.getElementById('student-name-group');
-    const contactPersonGroup = document.getElementById('contact-person-group');
-    const contactPersonInput = document.querySelector('[name="contact_person"]');
-    const schoolIdGroup = document.getElementById('school-id-group');
-    const officeOrgGroup = document.getElementById('office-org-group');
-    const officeOrgLabel = document.getElementById('officeOrgLabel');
-    const officeOrgInput = document.getElementById('officeOrgInput');
-    const collegeGroup = document.getElementById('college-group');
-    const departmentGroup = document.getElementById('department-group');
-    const collegeSelect = document.getElementById('collegeSelect');
-    const departmentSelect = document.getElementById('departmentSelect');
-    const studentIdInput = document.getElementById('studentIdInput');
-
-    async function loadDepartments(collegeId, selectedDepartment = '') {
-        departmentSelect.innerHTML = '<option value="">Select Department</option>';
-        if (!collegeId) return;
-        const response = await fetch(`/register/departments/${collegeId}`);
-        if (!response.ok) return;
-        const departments = await response.json();
-        departments.forEach(department => {
-            const option = new Option(department.name, department.id, false, String(department.id) === String(selectedDepartment));
-            departmentSelect.appendChild(option);
-        });
-    }
-
-    collegeSelect.addEventListener('change', function() {
-        loadDepartments(this.value);
-    });
-
-    if (collegeSelect.value) {
-        loadDepartments(collegeSelect.value, departmentSelect.dataset.selected);
-    }
-
-    // Validate Student ID format: XX-XXXX-XXX
-    function validateStudentId(id) {
-        const pattern = /^\d{2}-\d{4}-\d{3}$/;
-        return pattern.test(id.trim());
-    }
-
-    studentIdInput.addEventListener('blur', function() {
-        if (this.value && !validateStudentId(this.value)) {
-            this.classList.add('border-red-500');
-            this.classList.remove('border-slate-300');
-        } else {
-            this.classList.remove('border-red-500');
-            this.classList.add('border-slate-300');
-        }
-    });
-
-    function updateRequestorTypeFields() {
-        const selected = typeField.value;
-        
-        // Show/hide college and department for students only
-        const showCollege = false;
-        const showNamedPerson = false;
-        studentNameGroup.classList.toggle('hidden', !showCollege);
-        contactPersonGroup.classList.toggle('hidden', showNamedPerson);
-        contactPersonInput.disabled = showNamedPerson;
-        document.querySelector('[name="first_name"]').disabled = !showNamedPerson;
-        document.querySelector('[name="middle_name"]').disabled = !showNamedPerson;
-        document.querySelector('[name="last_name"]').disabled = !showNamedPerson;
-        document.querySelector('[name="first_name"]').required = showNamedPerson;
-        document.querySelector('[name="last_name"]').required = showNamedPerson;
-        collegeGroup.classList.toggle('hidden', !showCollege);
-        departmentGroup.classList.toggle('hidden', !showCollege);
-        collegeSelect.disabled = !showCollege;
-        departmentSelect.disabled = !showCollege;
-        
-        // Show/hide student ID for students only (required)
-        schoolIdGroup.classList.toggle('hidden', selected !== 'student');
-        studentIdInput.required = selected === 'student';
-
-        // Show/hide office/organization for external users only
-        const showOffice = true;
-        officeOrgGroup.classList.toggle('hidden', !showOffice);
-        officeOrgInput.disabled = !showOffice;
-        officeOrgInput.required = showOffice;
-
-        if (showOffice) {
-            officeOrgLabel.textContent = 'Organization name';
-            officeOrgInput.placeholder = 'Organization name';
-        } else {
-            officeOrgLabel.textContent = 'Office / organization';
-            officeOrgInput.placeholder = 'External partner or individual';
-        }
-    }
-
-    function selectRequestorType(type) {
-        typeField.value = type;
-        googleRegistrationLink.href = `{{ route('google.redirect') }}?type=${encodeURIComponent(type)}`;
-        document.querySelectorAll('.requestor-type-button').forEach(button => {
-            const isActive = button.dataset.type === type;
-            button.classList.toggle('bg-emerald-50', isActive);
-            button.classList.toggle('border-emerald-600', isActive);
-            button.classList.toggle('text-emerald-700', isActive);
-            button.classList.toggle('bg-white', !isActive);
-            button.classList.toggle('text-slate-900', !isActive);
-        });
-        updateRequestorTypeFields();
-    }
-
-    document.querySelectorAll('.requestor-type-button').forEach(button => {
-        button.addEventListener('click', () => selectRequestorType(button.dataset.type));
-    });
-
-    selectRequestorType(typeField.value || 'student');
-</script>
+</body>
+</html>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Equipment;
 use App\Models\FacilityRequest;
+use App\Models\RequestChangeRequest;
 use App\Models\User;
 use App\Notifications\RequestStatusChanged;
 use App\Services\AvailabilityService;
@@ -11,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class RequestActionController extends Controller
 {
@@ -62,6 +64,108 @@ class RequestActionController extends Controller
             DB::rollBack();
             return redirect()->back()->withErrors('Unable to cancel the request at this time.');
         }
+    }
+
+    public function submitChangeRequest($facilityRequest, Request $request)
+    {
+        $facilityRequest = $this->resolveFacilityRequest($facilityRequest);
+        $user = Auth::user();
+
+        abort_unless($user && $user->id === $facilityRequest->requested_by_id, 403);
+        abort_unless($facilityRequest->status === 'pending'
+            && ($facilityRequest->venue_status === 'approved' || $facilityRequest->equipment_status === 'approved'), 403);
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:1000'],
+        ]);
+
+        if ($facilityRequest->requestChangeRequests()->where('status', 'pending')->exists()) {
+            return redirect()->back()->withErrors(['reason' => 'A change request is already waiting for a decision.']);
+        }
+
+        $changeRequest = $facilityRequest->requestChangeRequests()->create([
+            'requested_by_id' => $user->id,
+            'reason' => trim($validated['reason']),
+            'status' => 'pending',
+        ]);
+        $facilityRequest->addHistory('change_requested', 'Change requested by ' . $user->name . ': ' . $changeRequest->reason, $user->id);
+        $this->notifyChangeRequestParties($facilityRequest, 'change_requested', $changeRequest->reason, $user);
+
+        return redirect()->back()->with('success', 'Change request submitted for review.');
+    }
+
+    public function approveChangeRequest($facilityRequest, Request $request)
+    {
+        return $this->decideChangeRequest($facilityRequest, $request, 'approved');
+    }
+
+    public function rejectChangeRequest($facilityRequest, Request $request)
+    {
+        return $this->decideChangeRequest($facilityRequest, $request, 'rejected');
+    }
+
+    private function decideChangeRequest($facilityRequest, Request $request, string $decision)
+    {
+        $facilityRequest = $this->resolveFacilityRequest($facilityRequest);
+        $user = Auth::user();
+        $changeRequest = $facilityRequest->requestChangeRequests()->where('status', 'pending')->latest()->first();
+
+        abort_unless($user && $changeRequest, 404);
+        abort_unless($this->canDecideChangeRequest($facilityRequest, $user), 403);
+
+        $notes = trim((string) $request->input('notes', ''));
+        $changeRequest->update([
+            'status' => $decision,
+            'decided_by_id' => $user->id,
+            'decided_at' => now(),
+        ]);
+
+        if ($decision === 'approved') {
+            $facilityRequest->update([
+                'status' => 'needs_reschedule',
+                'venue_status' => 'needs_reschedule',
+                'equipment_status' => 'needs_reschedule',
+            ]);
+            $detail = 'Change request approved by ' . $user->name . '. Requestor may edit and resubmit.';
+        } else {
+            $detail = 'Change request rejected by ' . $user->name . ($notes !== '' ? ': ' . $notes : '. Existing request approvals were preserved.');
+        }
+
+        $facilityRequest->addHistory('change_request_' . $decision, $detail, $user->id);
+        $this->notifyRequestorForStatusChange($facilityRequest, $decision === 'approved' ? 'needs_revision' : 'change_request_rejected', $notes ?: $detail, null, [], $user->name);
+
+        return redirect()->back()->with('success', $decision === 'approved'
+            ? 'Change request approved. The requestor may now revise the request.'
+            : 'Change request rejected. The existing request approvals were preserved.');
+    }
+
+    private function canDecideChangeRequest(FacilityRequest $facilityRequest, User $user): bool
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        if ($facilityRequest->venue_status === 'approved' && $user->isCustodianVenue()) {
+            return collect($facilityRequest->getVenueNames())->contains(fn (string $name) => $user->venues()->where('name', $name)->exists());
+        }
+
+        return $facilityRequest->equipment_status === 'approved'
+            && $user->isCustodianEquipment()
+            && $facilityRequest->getAssignedEquipmentForCustodian($user->id) !== [];
+    }
+
+    private function notifyChangeRequestParties(FacilityRequest $facilityRequest, string $status, string $reason, User $requestor): void
+    {
+        $recipients = collect();
+        if ($facilityRequest->venue_status === 'approved') {
+            $recipients = $recipients->merge($facilityRequest->requestVenues()->with('venue.custodian')->get()->map(fn ($item) => $item->venue?->custodian));
+        }
+        if ($facilityRequest->equipment_status === 'approved') {
+            $recipients = $recipients->merge(User::whereIn('id', Equipment::whereIn('name', $facilityRequest->getEquipmentItems())->pluck('custodian_id')->filter())->get());
+        }
+        $recipients = $recipients->merge(User::query()->whereIn('role', ['admin', 'supply_office'])->get())->filter()->unique('id');
+
+        Notification::send($recipients, new RequestStatusChanged($facilityRequest, $status, $reason, $requestor->name));
     }
 
     public function custodianVerify($facilityRequest, Request $request)

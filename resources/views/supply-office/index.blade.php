@@ -31,6 +31,18 @@
         </div>
     </div>
 
+    <section class="rounded-3xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm sm:p-5" aria-labelledby="supply-office-workflow-heading">
+        <div class="flex items-start gap-3">
+            <svg class="mt-0.5 h-5 w-5 shrink-0 text-cyan-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 21a9 9 0 110-18 9 9 0 010 18z"/>
+            </svg>
+            <div>
+                <h2 id="supply-office-workflow-heading" class="text-sm font-semibold text-slate-950">Final review guide</h2>
+                <p class="mt-1 text-sm leading-6 text-slate-700">Open a request after custodian review and confirm the complete schedule, venue, and equipment details. Approve when everything is ready, request a reschedule when the request needs changes, or reject it when it cannot proceed. Add a clear note whenever you reschedule or reject.</p>
+            </div>
+        </div>
+    </section>
+
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <a href="{{ route('supply-office.final-approval') }}" class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm transition hover:bg-amber-100">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Review Queue</p>

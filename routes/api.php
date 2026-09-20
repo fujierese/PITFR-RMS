@@ -30,7 +30,7 @@ Route::post('/login', function (Request $request) {
 
     $user = User::where('username', $request->string('username'))->first();
 
-    if ($user && Hash::check($request->string('password'), $user->password)) {
+    if ($user && $user->is_active && $user->email_verified_at && Hash::check($request->string('password'), $user->password)) {
         $token = $user->createToken('api-access')->plainTextToken;
 
         return response()->json([

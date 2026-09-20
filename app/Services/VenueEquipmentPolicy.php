@@ -16,8 +16,6 @@ class VenueEquipmentPolicy
 
         $equipment = match ($normalizedVenue) {
             'Balay Alumni' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
-            'Conference Hall & Interaction Center (CHIC)' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Monobloc Chairs'],
-            'Gymnasium' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones'],
             default => [],
         };
 
@@ -76,8 +74,6 @@ class VenueEquipmentPolicy
     {
         return [
             'Balay Alumni',
-            'Conference Hall & Interaction Center (CHIC)',
-            'Gymnasium',
         ];
     }
 

@@ -16,6 +16,22 @@
     </x-page-header>
 </div>
 
+<section class="mb-6 rounded-3xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm sm:p-5" aria-labelledby="custodian-workflow-heading">
+    <div class="flex items-start gap-3">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-cyan-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 21a9 9 0 110-18 9 9 0 010 18z"/>
+        </svg>
+        <div>
+            <h2 id="custodian-workflow-heading" class="text-sm font-semibold text-slate-950">Your review step</h2>
+            @if($custodianType === 'equipment')
+                <p class="mt-1 text-sm leading-6 text-slate-700">Open each request to check the requested quantities and equipment availability. Verify requests you can fulfill, reject requests that cannot proceed with a clear note, and record equipment returns after the activity.</p>
+            @else
+                <p class="mt-1 text-sm leading-6 text-slate-700">Open each request to check the venue, date, time, and capacity. Verify requests that can proceed, or reject requests that cannot be accommodated with a clear note. The Supply Office handles final approval.</p>
+            @endif
+        </div>
+    </div>
+</section>
+
 <div class="rounded-3xl bg-white shadow-xl ring-1 ring-slate-200/50 overflow-hidden">
     <form method="GET" action="{{ route('custodian.index') }}" class="mt-6 rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-5 md:mt-8 mx-6 mb-6">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

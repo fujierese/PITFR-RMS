@@ -27,34 +27,32 @@
     @endif
 </head>
 
-<body class="min-h-screen overflow-x-hidden bg-slate-100 text-slate-100 lg:h-screen lg:overflow-hidden">
+<body class="h-screen overflow-hidden bg-slate-100 text-slate-100">
 
-    <div class="relative min-h-screen w-full lg:grid lg:h-screen lg:grid-cols-[1.12fr_0.88fr] lg:overflow-hidden">
+    <div class="relative h-screen w-full lg:grid lg:min-h-screen lg:grid-cols-[1.12fr_0.88fr]">
 
         <!-- =========================
              LEFT SIDE — IMAGES / BRAND
         ========================== -->
-        <section class="login-panel-reveal relative hidden min-h-screen overflow-hidden bg-slate-950 lg:flex lg:h-screen lg:min-h-0 lg:flex-col lg:justify-start lg:pt-12 lg:pl-6 lg:pr-10 xl:pl-8 xl:pr-16">
+        <section class="login-panel-reveal relative hidden min-h-screen bg-slate-950 lg:flex lg:min-h-screen lg:min-h-0 lg:flex-col lg:justify-center lg:pt-10 lg:pb-3 lg:pl-5 lg:pr-8 xl:pl-8 xl:pr-12">
 
-            <!-- Background effects -->
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%)]"></div>
             <div class="absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl"></div>
             <div class="absolute -bottom-32 right-0 h-96 w-96 rounded-full bg-emerald-400/10 blur-3xl"></div>
 
-            <div class="relative z-10 ml-0 w-full max-w-[920px] pt-2">
+            <div class="relative z-10 ml-0 w-full max-w-[860px] pt-2">
 
-                <!-- Logo / Header -->
                 <div class="flex items-center gap-4">
-                    <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-lg ring-1 ring-white/10">
+                    <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-lg ring-1 ring-white/10 xl:h-20 xl:w-20">
                         <img
                             src="{{ asset('images/PIT-LOGO.png') }}"
                             alt="PIT Logo"
-                            class="h-16 w-16 rounded-full object-cover"
+                            class="h-12 w-12 rounded-full object-cover xl:h-16 xl:w-16"
                         >
                     </div>
 
                     <div class="leading-tight">
-                        <p class="text-[11px] uppercase tracking-[0.46em] text-slate-100">
+                        <p class="text-[10px] uppercase tracking-[0.42em] text-slate-100 xl:text-[11px]">
                             PITFR-RMS
                         </p>
 
@@ -64,18 +62,18 @@
                     </div>
                 </div>
 
-                <div class="mt-8 flex justify-center">
-                    <div class="relative mx-auto w-full max-w-[920px] overflow-hidden rounded-[28px] border border-white/10 bg-slate-900 shadow-[0_30px_80px_rgba(15,23,42,0.45)]">
+                <div class="mt-4 flex justify-center">
+                    <div class="relative mx-auto w-full max-w-[90%] ml-8 overflow-hidden rounded-[22px] border border-white/10 bg-slate-900 shadow-[0_18px_50px_rgba(15,23,42,0.32)]">
                         <img
                             src="{{ asset('images/loginpage2.jpg') }}"
                             alt="PIT Facility Request Portal"
-                            class="block h-[520px] w-full object-cover sm:h-[580px]"
+                            class="block h-[320px] w-full object-cover sm:h-[380px] lg:h-[460px]"
                         >
                     </div>
                 </div>
 
-                <div class="mt-3 max-w-[420px]">
-                    <h1 class="text-5xl font-black leading-[1.05] tracking-[-0.04em] text-white xl:text-6xl">
+                <div class="mt-10 mb-6 pb-4 max-w-[330px] lg:max-w-[360px]">
+                    <h1 class="text-[2.1rem] font-black leading-[0.9] tracking-[-0.04em] text-white xl:text-[2.8rem]">
                         Book the
                         <br>
                         spaces
@@ -91,17 +89,10 @@
 
 
         <!-- =========================
-             CENTER DIVIDER
-        ========================== -->
-
-        <div class="hidden lg:block absolute left-1/2 top-1/2 z-20 h-[70vh] w-px -translate-x-1/2 -translate-y-1/2 bg-slate-300"></div>
-
-
-        <!-- =========================
              RIGHT SIDE — LOGIN
         ========================== -->
 
-        <section class="login-panel-reveal flex min-h-screen items-center justify-center bg-slate-100 px-6 py-12 sm:px-10 lg:px-16 xl:px-24" style="animation-delay: 80ms;">
+        <section class="login-panel-reveal flex h-screen items-center justify-center overflow-hidden bg-slate-100 px-6 py-6 sm:px-10 lg:px-16 xl:px-24" style="animation-delay: 80ms;">
 
             <div class="w-full max-w-[460px]">
 
@@ -302,18 +293,6 @@
                     >
                         Sign In
                     </button>
-
-                    <div class="relative my-2">
-                        <div class="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-slate-200"></div>
-                        <div class="relative mx-auto w-fit bg-slate-100 px-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">
-                            or
-                        </div>
-                    </div>
-
-                    <a href="{{ route('google.redirect', ['type' => 'student']) }}" class="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-500">
-                        <span class="text-base font-bold text-red-500">G</span>
-                        Continue with Google
-                    </a>
 
                 </form>
 

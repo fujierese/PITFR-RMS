@@ -7,7 +7,10 @@
     <link rel="apple-touch-icon" href="{{ asset('images/PIT-LOGO.png') }}">
     <title>PIT – Facility & Equipment Request System</title>
     <style>
-        html { scroll-padding-top: 4rem; }
+        html { scroll-padding-top: 4rem; scroll-behavior: smooth; }
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+        }
     </style>
     @if (app()->runningUnitTests())
         {{-- Skip Vite asset loading in tests when the manifest may not exist. --}}
@@ -17,28 +20,46 @@
 </head>
 <body class="bg-emerald-900 min-h-screen flex flex-col pt-14 sm:pt-16">
 
-<header class="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-slate-950/95 text-white shadow-lg backdrop-blur">
-    <nav class="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6" aria-label="Guest navigation">
-        <a href="#home" class="shrink-0 text-xs font-bold tracking-wide text-emerald-300 sm:text-sm">PIT Facility &amp; Equipment Request System</a>
+<header class="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-slate-950/95 text-white shadow-[0_10px_30px_rgba(0,0,0,0.18)] backdrop-blur-sm">
+    <nav class="mx-auto flex w-full max-w-[1600px] items-center justify-between px-2 py-3 sm:px-4 lg:px-5" aria-label="Guest navigation">
+        <a href="#home" class="ml-2 min-w-0 flex-shrink-0 text-left text-base font-bold tracking-tight text-emerald-300 transition hover:text-emerald-200 lg:text-lg">PIT Facility &amp; Equipment Request System</a>
 
-        <button id="guest-mobile-menu-button" type="button" class="inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10 md:hidden" aria-expanded="false" aria-controls="guest-mobile-menu" aria-label="Toggle menu">
+        <button id="guest-mobile-menu-button" type="button" class="ml-auto inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10 lg:hidden" aria-expanded="false" aria-controls="guest-mobile-menu" aria-label="Toggle menu">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
             </svg>
         </button>
 
-        <div class="hidden min-w-0 flex-1 items-center justify-end gap-1 overflow-x-auto text-xs font-semibold md:flex md:gap-2 md:text-sm">
-            <a href="#home" class="whitespace-nowrap rounded-lg px-3 py-2 transition hover:bg-white/10">Home</a>
-            <a href="#calendar-section" class="whitespace-nowrap rounded-lg px-3 py-2 transition hover:bg-white/10">View Facility Calendar</a>
-            <a href="#about-us" class="whitespace-nowrap rounded-lg px-3 py-2 transition hover:bg-white/10">About Us</a>
-            <a href="#features" class="whitespace-nowrap rounded-lg px-3 py-2 transition hover:bg-white/10">System Features</a>
-            <a href="#how-it-works" class="whitespace-nowrap rounded-lg px-3 py-2 transition hover:bg-white/10">How It Works</a>
-            <a href="#contact-us" class="whitespace-nowrap rounded-lg px-3 py-2 transition hover:bg-white/10">Contact Us</a>
-            <a href="{{ route('login') }}" class="whitespace-nowrap rounded-lg bg-emerald-500 px-3 py-2 text-white transition hover:bg-emerald-600">Login to Request</a>
+        <div class="hidden min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap text-sm font-semibold text-slate-100 lg:ml-auto lg:flex lg:gap-2">
+            <a href="#home" class="group relative whitespace-nowrap rounded-md px-2 py-2 transition duration-300 hover:-translate-y-0.5 hover:text-emerald-300 focus-visible:-translate-y-0.5 focus-visible:text-emerald-300">
+                <span class="relative z-10">Home</span>
+                <span class="absolute inset-x-1 bottom-1.5 h-0.5 origin-left scale-x-0 rounded-full bg-emerald-300 transition-transform duration-300 group-hover:scale-x-100"></span>
+            </a>
+            <a href="#calendar-section" class="group relative whitespace-nowrap rounded-md px-2 py-2 transition duration-300 hover:-translate-y-0.5 hover:text-emerald-300 focus-visible:-translate-y-0.5 focus-visible:text-emerald-300">
+                <span class="relative z-10">View Facility Calendar</span>
+                <span class="absolute inset-x-1 bottom-1.5 h-0.5 origin-left scale-x-0 rounded-full bg-emerald-300 transition-transform duration-300 group-hover:scale-x-100"></span>
+            </a>
+            <a href="#about-us" class="group relative whitespace-nowrap rounded-md px-2 py-2 transition duration-300 hover:-translate-y-0.5 hover:text-emerald-300 focus-visible:-translate-y-0.5 focus-visible:text-emerald-300">
+                <span class="relative z-10">About Us</span>
+                <span class="absolute inset-x-1 bottom-1.5 h-0.5 origin-left scale-x-0 rounded-full bg-emerald-300 transition-transform duration-300 group-hover:scale-x-100"></span>
+            </a>
+            <a href="#features" class="group relative whitespace-nowrap rounded-md px-2 py-2 transition duration-300 hover:-translate-y-0.5 hover:text-emerald-300 focus-visible:-translate-y-0.5 focus-visible:text-emerald-300">
+                <span class="relative z-10">System Features</span>
+                <span class="absolute inset-x-1 bottom-1.5 h-0.5 origin-left scale-x-0 rounded-full bg-emerald-300 transition-transform duration-300 group-hover:scale-x-100"></span>
+            </a>
+            <a href="#how-it-works" class="group relative whitespace-nowrap rounded-md px-2 py-2 transition duration-300 hover:-translate-y-0.5 hover:text-emerald-300 focus-visible:-translate-y-0.5 focus-visible:text-emerald-300">
+                <span class="relative z-10">How It Works</span>
+                <span class="absolute inset-x-1 bottom-1.5 h-0.5 origin-left scale-x-0 rounded-full bg-emerald-300 transition-transform duration-300 group-hover:scale-x-100"></span>
+            </a>
+            <a href="#contact-us" class="group relative whitespace-nowrap rounded-md px-2 py-2 transition duration-300 hover:-translate-y-0.5 hover:text-emerald-300 focus-visible:-translate-y-0.5 focus-visible:text-emerald-300">
+                <span class="relative z-10">Contact Us</span>
+                <span class="absolute inset-x-1 bottom-1.5 h-0.5 origin-left scale-x-0 rounded-full bg-emerald-300 transition-transform duration-300 group-hover:scale-x-100"></span>
+            </a>
+            <a href="{{ route('login') }}" class="ml-1 mr-2 whitespace-nowrap rounded-lg bg-emerald-400 px-4 py-2.5 font-bold text-slate-950 shadow-[0_6px_18px_rgba(52,211,153,0.35)] transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-300 focus-visible:-translate-y-0.5 focus-visible:bg-emerald-300">Login to Request</a>
         </div>
     </nav>
 
-    <div id="guest-mobile-menu" class="hidden border-t border-white/10 bg-slate-950/95 px-4 py-3 md:hidden">
+    <div id="guest-mobile-menu" class="hidden border-t border-white/10 bg-slate-950/95 px-4 py-3 lg:hidden">
         <div class="flex flex-col gap-2 text-sm font-semibold text-slate-200">
             <a href="#home" class="rounded-lg px-3 py-2 transition hover:bg-white/10">Home</a>
             <a href="#calendar-section" class="rounded-lg px-3 py-2 transition hover:bg-white/10">View Facility Calendar</a>
@@ -75,6 +96,9 @@
 {{-- Availability & Calendar --}}
 <section id="calendar-section" class="mx-auto w-full max-w-none px-3 py-8 sm:px-6 sm:py-12 lg:max-w-7xl lg:py-16">
     <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-6 lg:p-8">
+        <div class="mb-5 flex justify-end">
+            @include('components.date-weather')
+        </div>
         @include('calendar._calendar', [
             'hideHeader' => true,
             'showHowToRequest' => false,
@@ -234,7 +258,7 @@
     <div class="rounded-3xl bg-gradient-to-r from-emerald-700 to-emerald-600 p-6 text-center text-white shadow-xl sm:p-8 lg:p-12">
         <h2 class="text-3xl font-bold mb-3">Ready to Get Started?</h2>
         <p class="text-emerald-100 mb-8 max-w-md mx-auto">Sign in to submit your facility and equipment requests. New users can create an account to get started.</p>
-        <a href="{{ route('register') }}"
+        <a href="{{ route('login') }}"
            class="inline-flex items-center gap-2 bg-white text-emerald-700 hover:bg-slate-100 font-bold px-8 py-3 rounded-xl transition shadow-lg">
             Sign In Now →
         </a>

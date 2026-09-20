@@ -105,7 +105,7 @@
                                                 </form>
 
                                                 <!-- Toggle Status Form -->
-                                                <form method="POST" action="{{ route('custodian.venues.toggle', $venue) }}" class="inline">
+                                                <form method="POST" action="{{ route('custodian.venues.toggle', $venue) }}" class="inline" @if($venue->is_active) data-swal-confirm data-swal-title="Disable this venue?" data-swal-text="This venue will no longer be available for new facility requests." data-swal-confirm-text="Yes, disable it" data-swal-confirm-color="#dc2626" @endif>
                                                     @csrf
                                                     @method('PATCH')
                                                     <button type="submit" class="rounded-lg px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 @if($venue->is_active) bg-red-50 text-red-700 hover:bg-red-100 focus:ring-red-500 @else bg-green-50 text-green-700 hover:bg-green-100 focus:ring-green-500 @endif">

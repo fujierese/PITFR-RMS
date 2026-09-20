@@ -63,8 +63,8 @@ class ReferenceDataSeederTest extends TestCase
             'Tables',
             'Chairs',
         ], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Balay Alumni'));
-        $this->assertContains('Non-Wireless Microphones', \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Conference Hall & Interaction Center (CHIC)'));
-        $this->assertContains('Non-Wireless Microphones', \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Gymnasium'));
+        $this->assertSame([], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Conference Hall & Interaction Center (CHIC)'));
+        $this->assertSame([], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Gymnasium'));
         $this->assertSame(
             User::where('username', 'jsuralta@gmail.com')->value('id'),
             Equipment::where('name', 'Canopies')->value('custodian_id'),

@@ -35,7 +35,7 @@
     $activeStudentOrganization = $currentUser && $currentUser->isStudent() ? $currentUser->studentOrganizations()->first() : null;
     $trustedOrganizationDisplay = $activeStudentOrganization?->name ?? $currentUser?->office_or_organization ?? 'Organization not provided';
 @endphp
-<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-show-loading="true" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
+<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-has-saved-signature="{{ $currentUser?->e_signature_file ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
     @csrf
 
 <div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]">
@@ -73,6 +73,25 @@
                     <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                         <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 4</p>
                         <p class="mt-1 text-sm font-semibold text-slate-900">Review & Submit</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6 rounded-[24px] border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
+                <div class="flex items-start gap-3">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-cyan-700">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9"></circle>
+                            <path d="M12 16v-4M12 8h.01"></path>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm font-semibold text-cyan-900">Need help? Start here.</p>
+                        <ul class="mt-2 space-y-1 text-sm text-cyan-800">
+                            <li>• Select the correct request type and organization before booking facilities.</li>
+                            <li>• Confirm venue and time availability before finalizing equipment and documents.</li>
+                            <li>• Upload only PDF, JPG, or PNG files under 10MB for proposal and signature attachments.</li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -131,6 +150,7 @@
                             <div class="space-y-3">
                                 <label for="organization_name" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Organization Name <span class="text-red-500">*</span></label>
                                 <input id="organization_name" type="text" name="organization_name" value="{{ old('organization_name', $currentUser?->office_or_organization) }}" readonly required class="w-full rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('organization_name') border-red-300 bg-red-50 @enderror">
+                                <p class="text-xs text-slate-500">This is your registered organization. If it is missing or incorrect, update your account details before submitting.</p>
                                 @error('organization_name')
                                     <p class="text-xs font-medium text-red-600">{{ $message }}</p>
                                 @enderror
@@ -261,7 +281,7 @@
                     <div class="mb-5 border-b border-slate-200 pb-4">
                         <div class="flex items-center justify-between gap-4">
                             <div>
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section III. Venue and Schedule</p>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section III. Venue</p>
                                 <p class="mt-1 text-sm text-slate-500">Select the facility / venue requested for the activity.</p>
                             </div>
                             <p class="text-xs text-slate-500">Choose one</p>
@@ -365,8 +385,6 @@
                                         $selectedVenueName = old('venue') ?: null;
                                         $venueIncludedEquipment = [
                                             'Balay Alumni' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
-                                            'Conference Hall & Interaction Center (CHIC)' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Monobloc Chairs'],
-                                            'Gymnasium' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones'],
                                         ];
                                         $isVenueIncludedItem = isset($venueIncludedEquipment[$selectedVenueName]) && in_array($itemName, $venueIncludedEquipment[$selectedVenueName], true);
                                     @endphp
@@ -513,6 +531,9 @@
                                     Activity Proposal <span class="text-red-500">*</span>
                                 </label>
                                 <p class="mb-3 text-xs text-slate-500">Required document: Comprehensive proposal describing the activity objectives, expected outcomes, and how facilities/equipment support the activity goals.</p>
+                                <div class="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                    Tip: Upload the proposal as a PDF when possible. Supported files are PDF, JPG, JPEG, or PNG, and each file must be under 10MB.
+                                </div>
                                 <div data-upload-box class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition duration-200 hover:border-emerald-400">
                                     <div class="space-y-3 text-center">
                                         <svg class="mx-auto h-14 w-14 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
@@ -666,6 +687,7 @@
                         <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Submission checklist</p>
                         <p class="mt-1 text-sm text-slate-500">Please review the following before submitting your request.</p>
                     </div>
+                    <div id="submission-checklist-alert" role="alert" aria-live="assertive" class="mb-4 hidden rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></div>
                     <div class="space-y-3">
                         <label class="flex items-start gap-3">
                             <input id="checklist-required-fields" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
@@ -780,20 +802,63 @@
             { id: 'e_signature_file', previewId: 'e-signature-preview', nameId: 'e-signature-name' }
         ];
 
+        const showInlineFileValidation = (input, message) => {
+            const uploadBox = input.closest('[data-upload-box]');
+            const parent = uploadBox ? uploadBox.parentElement : input.parentElement;
+            if (!parent) return;
+
+            const existingError = parent.querySelector('[data-file-validation-error]');
+            if (existingError) {
+                existingError.remove();
+            }
+
+            const error = document.createElement('div');
+            error.setAttribute('role', 'alert');
+            error.setAttribute('aria-live', 'assertive');
+            error.dataset.fileValidationError = 'true';
+            error.className = 'mt-3 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 shadow-sm';
+            error.innerHTML = `
+                <svg class="mt-0.5 h-4 w-4 shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>${message}</span>
+            `;
+
+            parent.appendChild(error);
+            input.focus();
+        };
+
         fileInputs.forEach(({ id, previewId, nameId }) => {
             const input = document.getElementById(id);
             if (input) {
                 input.addEventListener('change', function() {
                     const allowedExtensions = id === 'e_signature_file' ? ['jpg', 'jpeg', 'png'] : ['pdf', 'jpg', 'jpeg', 'png'];
                     const allowedMimeTypes = id === 'e_signature_file' ? ['image/jpeg', 'image/png'] : ['application/pdf', 'image/jpeg', 'image/png'];
+                    const maxFileSize = 10 * 1024 * 1024;
                     const file = this.files[0];
                     const extension = file?.name.split('.').pop()?.toLowerCase();
-                    if (file && (!allowedExtensions.includes(extension) || (file.type && !allowedMimeTypes.includes(file.type)))) {
+
+                    const uploadBox = this.closest('[data-upload-box]');
+                    const parent = uploadBox ? uploadBox.parentElement : this.parentElement;
+                    const existingError = parent ? parent.querySelector('[data-file-validation-error]') : null;
+                    if (existingError) {
+                        existingError.remove();
+                    }
+
+                    if (file && file.size > maxFileSize) {
                         this.value = '';
-                        window.alert(`Invalid file type. Allowed formats: ${allowedExtensions.join(', ')}`);
+                        showInlineFileValidation(this, 'File is too large. Please upload a file smaller than 10MB.');
                         updateChecklistState();
                         return;
                     }
+
+                    if (file && (!allowedExtensions.includes(extension) || (file.type && !allowedMimeTypes.includes(file.type)))) {
+                        this.value = '';
+                        showInlineFileValidation(this, `Invalid file type. Please upload ${allowedExtensions.map((ext) => ext.toUpperCase()).join(', ')}.`);
+                        updateChecklistState();
+                        return;
+                    }
+
                     const preview = document.getElementById(previewId);
                     const name = document.getElementById(nameId);
                     if (this.files.length > 0) {
@@ -810,6 +875,14 @@
             button.addEventListener('click', () => {
                 const input = document.getElementById(button.dataset.removeFile);
                 const preview = input ? document.getElementById(fileInputs.find((item) => item.id === input.id)?.previewId) : null;
+                const uploadBox = input ? input.closest('[data-upload-box]') : null;
+                const parent = uploadBox ? uploadBox.parentElement : null;
+                if (parent) {
+                    const existingError = parent.querySelector('[data-file-validation-error]');
+                    if (existingError) {
+                        existingError.remove();
+                    }
+                }
                 if (input) {
                     input.value = '';
                     input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -823,6 +896,52 @@
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('request-form');
         if (!form) return;
+
+        const draftStatus = document.getElementById('draft-status');
+        let formIsDirty = false;
+
+        const updateDraftStatus = (dirty) => {
+            if (!draftStatus) return;
+
+            const indicator = draftStatus.querySelector('span');
+            const label = draftStatus.querySelector('span:last-child');
+
+            if (indicator) {
+                indicator.className = dirty
+                    ? 'h-2 w-2 rounded-full bg-amber-400 animate-pulse'
+                    : 'h-2 w-2 rounded-full bg-emerald-400';
+            }
+
+            if (label) {
+                label.textContent = dirty ? 'Unsaved changes' : 'Draft autosave';
+            }
+        };
+
+        const markFormDirty = () => {
+            if (!formIsDirty) {
+                formIsDirty = true;
+                updateDraftStatus(true);
+            }
+        };
+
+        form.querySelectorAll('input, textarea, select').forEach((field) => {
+            field.addEventListener('input', markFormDirty);
+            field.addEventListener('change', markFormDirty);
+        });
+
+        form.addEventListener('submit', () => {
+            formIsDirty = false;
+            updateDraftStatus(false);
+        });
+
+        window.addEventListener('beforeunload', (event) => {
+            if (formIsDirty) {
+                event.preventDefault();
+                event.returnValue = '';
+            }
+        });
+
+        updateDraftStatus(false);
 
         const durationInputs = document.querySelectorAll('input[name="reservation_duration"]');
         const startTimeInput = document.querySelector('input[name="start_time"]');
@@ -971,7 +1090,7 @@
             const isFaculty = requestorType === 'faculty';
             const activityProposalFile = form.querySelector('[name="activity_proposal_file"]')?.files?.length > 0;
             const igpReceiptFile = form.querySelector('[name="igp_receipt_file"]')?.files?.length > 0;
-            const eSignatureFile = form.querySelector('[name="e_signature_file"]')?.files?.length > 0;
+            const eSignatureFile = form.querySelector('[name="e_signature_file"]')?.files?.length > 0 || form.dataset.hasSavedSignature === '1';
             
             // For backward compatibility, also check proposal_file
             const proposalFile = form.querySelector('[name="proposal_file"]')?.files?.length > 0;

@@ -98,7 +98,7 @@
                                             <p class="mt-4 text-sm leading-6 text-slate-600">{{ $venue->description }}</p>
                                         @endif
                                         <div class="mt-4 flex flex-wrap gap-2">
-                                            <form method="POST" action="{{ route('custodian.venues.toggle', $venue) }}">
+                                            <form method="POST" action="{{ route('custodian.venues.toggle', $venue) }}" @if($venue->is_active) data-swal-confirm data-swal-title="Disable this venue?" data-swal-text="This venue will no longer be available for new facility requests." data-swal-confirm-text="Yes, disable it" data-swal-confirm-color="#dc2626" @endif>
                                                 @csrf
                                                 @method('PATCH')
                                                 <button type="submit" class="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700">{{ $venue->is_active ? 'Disable' : 'Enable' }}</button>
@@ -145,7 +145,7 @@
                                             @endif
                                         </div>
                                         <div class="mt-4 flex flex-wrap gap-2">
-                                            <form method="POST" action="{{ route('custodian.equipment.toggle', $item) }}">
+                                            <form method="POST" action="{{ route('custodian.equipment.toggle', $item) }}" @if($item->is_active) data-swal-confirm data-swal-title="Disable this equipment?" data-swal-text="This equipment will no longer be available for new facility requests." data-swal-confirm-text="Yes, disable it" data-swal-confirm-color="#dc2626" @endif>
                                                 @csrf
                                                 @method('PATCH')
                                                 <button type="submit" class="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700">{{ $item->is_active ? 'Disable' : 'Enable' }}</button>

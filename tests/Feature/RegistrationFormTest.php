@@ -31,7 +31,8 @@ class RegistrationFormTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Outsider registration')
-            ->assertSee('Students and Faculty should obtain accounts through the authorized PIT administrator')
+            ->assertSee('Students and Faculty accounts are created by the authorized administrator')
+            ->assertSee('Outsiders verify their email with a one-time password after registration')
             ->assertDontSee('data-type="student"')
             ->assertDontSee('data-type="faculty"')
             ->assertDontSee('data-type="student_organization"');
@@ -46,7 +47,7 @@ class RegistrationFormTest extends TestCase
 
         $response->assertOk()
             ->assertSee('First name')
-            ->assertSee('Last name')
+            ->assertSee('Surname')
             ->assertSee('Middle name')
             ->assertDontSee('Full name');
     }
@@ -54,14 +55,14 @@ class RegistrationFormTest extends TestCase
     /**
      * Test registration page displays College and Department dropdowns
      */
-    public function test_registration_page_has_college_and_department_dropdowns(): void
+    public function test_registration_page_has_organization_field(): void
     {
         $response = $this->get(route('register'));
 
         $response->assertOk()
-            ->assertSee('College')
-            ->assertSee('Department')
-            ->assertSee('College of Technology and Engineering');
+            ->assertSee('Organization name / affiliation')
+            ->assertSee('Your organization, office, company, or Individual / Personal')
+            ->assertDontSee('College of Technology and Engineering');
     }
 
     /**
@@ -73,7 +74,7 @@ class RegistrationFormTest extends TestCase
         $response = $this->post(route('register.post'), [
             'first_name' => 'John',
             'middle_name' => 'Michael',
-            'last_name' => 'Doe',
+            'surname' => 'Doe',
             'username' => $username,
             'password' => 'password123',
             'password_confirmation' => 'password123',
@@ -96,7 +97,7 @@ class RegistrationFormTest extends TestCase
         $response = $this->post(route('register.post'), [
             'first_name' => 'John',
             'middle_name' => '',
-            'last_name' => 'Doe',
+            'surname' => 'Doe',
             'username' => 'johndoe' . uniqid() . '@test.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
@@ -118,13 +119,13 @@ class RegistrationFormTest extends TestCase
         $response = $this->post(route('register.post'), [
             'first_name' => 'Jane',
             'middle_name' => '',
-            'last_name' => 'External',
+            'surname' => 'External',
             'username' => 'janeext' . uniqid() . '@test.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'requestor_type' => 'outsider',
-            'contact_person' => 'Jane External',
-            'office_or_organization' => 'External Company',
+                'office_or_organization' => 'External Company',
+                'organization_type' => 'External Company',
             'contact_number' => '09171234567',
         ]);
 
@@ -140,7 +141,7 @@ class RegistrationFormTest extends TestCase
         $response = $this->post(route('register.post'), [
             'first_name' => 'John',
             'middle_name' => '',
-            'last_name' => 'Doe',
+            'surname' => 'Doe',
             'username' => 'johndoe' . uniqid() . '@test.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
@@ -159,7 +160,7 @@ class RegistrationFormTest extends TestCase
         $response = $this->post(route('register.post'), [
             'first_name' => 'Faculty',
             'middle_name' => '',
-            'last_name' => 'Member',
+            'surname' => 'Member',
             'username' => $username,
             'password' => 'password123',
             'password_confirmation' => 'password123',
@@ -183,7 +184,6 @@ class RegistrationFormTest extends TestCase
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'requestor_type' => 'student_organization',
-            'contact_person' => 'Organization Account',
             'office_or_organization' => 'PIT Student Council',
         ]);
 
@@ -195,7 +195,7 @@ class RegistrationFormTest extends TestCase
     {
         $this->post(route('register.post'), [
             'first_name' => 'Faculty',
-            'last_name' => 'Member',
+            'surname' => 'Member',
             'username' => 'faculty' . uniqid() . '@test.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
@@ -299,8 +299,10 @@ class RegistrationFormTest extends TestCase
     private function studentData(): array
     {
         return [
-            'contact_person' => 'Test Outsider',
+            'first_name' => 'Test',
+            'surname' => 'Outsider',
             'office_or_organization' => 'Test Organization',
+            'organization_type' => 'External Organization',
             'username' => 'otp' . uniqid() . '@test.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
