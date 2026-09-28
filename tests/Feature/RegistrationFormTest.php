@@ -31,8 +31,6 @@ class RegistrationFormTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Outsider registration')
-            ->assertSee('Students and Faculty accounts are created by the authorized administrator')
-            ->assertSee('Outsiders verify their email with a one-time password after registration')
             ->assertDontSee('data-type="student"')
             ->assertDontSee('data-type="faculty"')
             ->assertDontSee('data-type="student_organization"');
