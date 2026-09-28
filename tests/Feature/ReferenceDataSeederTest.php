@@ -55,14 +55,8 @@ class ReferenceDataSeederTest extends TestCase
             User::where('username', 'jrvillas@gmail.com')->value('id'),
             Equipment::where('name', 'Iwata Cooler Fans')->first()->getAuthorizedCustodianIds(),
         );
-        $this->assertSame([
-            'Sound System',
-            'Wireless Microphones',
-            'Non-Wireless Microphones',
-            'Aircon',
-            'Tables',
-            'Chairs',
-        ], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Balay Alumni'));
+        $this->assertSame([], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Balay Alumni'));
+        $this->assertNotContains('Monobloc Chairs', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Balay Alumni'));
         $this->assertSame([], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Conference Hall & Interaction Center (CHIC)'));
         $this->assertSame([], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Gymnasium'));
         $this->assertSame(

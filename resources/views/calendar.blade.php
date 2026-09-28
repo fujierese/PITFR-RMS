@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             allDay: !isTimed,
                             backgroundColor: event.backgroundColor || '#059669',
                             borderColor: event.borderColor || '#059669',
-                            textColor: event.textColor || '#ffffff',
+                            textColor: event.textColor || '#111827',
                             extendedProps: event.extendedProps || {},
                         };
                     });

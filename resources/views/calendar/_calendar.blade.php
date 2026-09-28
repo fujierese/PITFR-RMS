@@ -860,6 +860,15 @@
 
 .fc-daygrid-day.fc-today {
     background-color: #f0fdf4 !important;
+    box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.75);
+}
+
+.fc-daygrid-day.fc-today .fc-daygrid-day-number {
+    background: rgba(34, 197, 94, 0.12);
+    color: #166534 !important;
+    border: 1px solid rgba(34, 197, 94, 0.24);
+    border-radius: 9999px;
+    padding: 4px 8px !important;
 }
 
 /* ============================================
@@ -976,7 +985,7 @@
 .fc-daygrid-day-number {
     padding: 4px 6px !important;
     font-weight: 700 !important;
-    font-size: 0.95rem !important;
+    font-size: 1rem !important;
     color: #1f2937 !important;
     display: flex !important;
     align-items: center !important;
@@ -1037,7 +1046,7 @@
     margin-left: 0;
     border-radius: 9999px;
     padding: 0.12rem 0.42rem;
-    font-size: 0.58rem;
+    font-size: 0.65rem;
     line-height: 1.2;
     font-weight: 700;
     letter-spacing: 0.02em;
@@ -1114,7 +1123,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.08rem 0.4rem;
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     line-height: 1.28;
     opacity: 0.92;
     min-width: 0;
@@ -1148,7 +1157,7 @@
     border-radius: 0.75rem !important;
     margin: 0 !important;
     padding: 0 !important;
-    font-size: 0.75rem !important;
+    font-size: 0.85rem !important;
     line-height: 1.2 !important;
     display: flex !important;
     align-items: center !important;
@@ -1184,8 +1193,9 @@
     gap: 6px;
     padding: 3px 5px;
     border-radius: 0.75rem;
-    color: inherit;
+    color: inherit !important;
     min-width: 0;
+    opacity: 1 !important;
 }
 
 .fc-event-label {
@@ -1194,13 +1204,20 @@
     text-overflow: ellipsis;
     flex: 1;
     font-weight: 700;
-    color: inherit;
+    color: inherit !important;
     min-width: 0;
+    opacity: 1 !important;
+}
+
+.fc-event-meta-line {
+    color: inherit !important;
+    opacity: 1 !important;
 }
 
 .fc-event-meta {
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.75rem;
+    color: inherit !important;
+    opacity: 1 !important;
 }
 
 /* Event Dot (status indicator) */
@@ -1226,7 +1243,7 @@
 /* Event Title (Truncated) */
 .fc-event-title {
     font-weight: 600 !important;
-    font-size: 0.7rem !important;
+    font-size: 0.8rem !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -1237,7 +1254,7 @@
 
 .fc-event-short-title {
     display: inline;
-    font-size: 0.7rem;
+    font-size: 0.8rem;
 }
 
 /* Daily Total Participants Badge */
@@ -1326,15 +1343,17 @@
 .fc-event-covered-court,
 .fc-event-volleyball,
 .fc-event-other {
-    background-color: transparent !important;
-    border-color: transparent !important;
+    background-color: inherit !important;
+    border-color: inherit !important;
+    opacity: 1 !important;
 }
 
 /* Ensure all events are visible in month view */
 .fc .fc-daygrid-event {
     visibility: visible !important;
-    background-color: transparent !important;
-    border-color: transparent !important;
+    background-color: inherit !important;
+    border-color: inherit !important;
+    opacity: 1 !important;
 }
 
 /* Responsive Calendar */
@@ -1362,12 +1381,12 @@
     }
 
     .fc-event-compact {
-        font-size: 0.65rem !important;
+        font-size: 0.75rem !important;
         padding: 1px 3px !important;
     }
 
     .fc-event-title {
-        font-size: 0.65rem !important;
+        font-size: 0.75rem !important;
     }
 
     .daily-participants-badge {
@@ -1499,22 +1518,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
             function getStatusColorInfo(statusValue) {
                 var normalized = String(statusValue || '').toLowerCase();
+                var textColor = '#111827';
                 if (normalized === 'approved') {
-                    return { bg: '#10b981', border: '#059669', text: '#ffffff' };
+                    return { bg: '#10b981', border: '#059669', text: textColor };
                 }
                 if (normalized === 'pending') {
-                    return { bg: '#f59e0b', border: '#d97706', text: '#111827' };
+                    return { bg: '#f59e0b', border: '#d97706', text: textColor };
                 }
                 if (['rejected', 'cancelled', 'conflict', 'urgent'].includes(normalized)) {
-                    return { bg: '#dc2626', border: '#b91c1c', text: '#ffffff' };
+                    return { bg: '#dc2626', border: '#b91c1c', text: textColor };
                 }
                 if (normalized === 'needs_reschedule') {
-                    return { bg: '#f97316', border: '#ea580c', text: '#ffffff' };
+                    return { bg: '#f97316', border: '#ea580c', text: textColor };
                 }
                 if (normalized === 'completed') {
-                    return { bg: '#64748b', border: '#475569', text: '#ffffff' };
+                    return { bg: '#64748b', border: '#475569', text: textColor };
                 }
-                return { bg: '#e5e7eb', border: '#cbd5e1', text: '#111827' };
+                return { bg: '#e5e7eb', border: '#cbd5e1', text: textColor };
             }
 
     if (!calendarEl) {
@@ -1873,6 +1893,10 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             eventClick: function(info) {
                 if (isPublicCalendar) {
+                    return;
+                }
+
+                if (currentRole === 'requestor' && !(info.event.extendedProps && info.event.extendedProps.isOwner)) {
                     return;
                 }
 

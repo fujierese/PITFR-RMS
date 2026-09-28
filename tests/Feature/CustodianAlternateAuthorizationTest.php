@@ -77,6 +77,75 @@ class CustodianAlternateAuthorizationTest extends TestCase
         ]);
     }
 
+    public function test_equipment_custodian_rejection_appears_in_rejected_requests(): void
+    {
+        $primary = User::factory()->create(['username' => 'rejecting-custodian', 'role' => 'custodian-equipment']);
+        $alternate = User::factory()->create(['username' => 'alternate-custodian', 'role' => 'custodian-equipment']);
+        $request = $this->makeRequestForFan('Industrial Fans', $primary, $alternate);
+
+        $this->actingAs($primary)
+            ->post(route('request.custodian.reject', $request), ['notes' => 'Equipment unavailable'])
+            ->assertRedirect();
+
+        $request->refresh();
+        $this->assertSame('rejected', $request->status);
+        $this->assertSame('rejected', $request->equipment_status);
+        $this->assertSame('rejected', $request->getCustodianEquipmentStatus($primary->id));
+
+        $this->actingAs($primary)
+            ->get(route('custodian.index', ['filter' => 'rejected']))
+            ->assertOk()
+            ->assertSee($request->control_number);
+    }
+
+    public function test_equipment_custodian_list_does_not_repeat_return_status_under_equipment_name(): void
+    {
+        $primary = User::factory()->create(['username' => 'equipment-custodian', 'role' => 'custodian-equipment']);
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+
+        Venue::create([
+            'name' => 'Conference Hall & Interaction Center (CHIC)',
+            'custodian_id' => User::factory()->create(['role' => 'custodian-venue'])->id,
+        ]);
+
+        Equipment::create([
+            'name' => 'Industrial Fans',
+            'custodian_id' => $primary->id,
+            'quantity' => 4,
+            'quantity_available' => 4,
+        ]);
+
+        $request = FacilityRequest::create([
+            'control_number' => 'TEST-RETURN-STATUS',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Return Status Duplicate Test',
+            'expected_participants' => 20,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '11:00',
+            'venue' => ['Conference Hall & Interaction Center (CHIC)'],
+            'equipment' => ['Industrial Fans'],
+            'equipment_quantities' => ['Industrial Fans' => 1],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'approved',
+            'equipment_status' => 'pending',
+            'equipment_returned_status' => 'pending',
+            'equipment_custodian_statuses' => [],
+            'priority' => 'regular',
+        ]);
+
+        $request->syncRelationalItems();
+
+        $this->actingAs($primary)
+            ->get(route('custodian.index'))
+            ->assertOk()
+            ->assertSee('Industrial Fans')
+            ->assertDontSee('<p class="mt-1 text-xs text-slate-500">Pending</p>');
+    }
+
     public function test_l_almerino_can_endorse_fan_equipment(): void
     {
         $primary = User::factory()->create(['username' => 'lalmerino', 'name' => 'L. ALMERINO', 'role' => 'custodian-equipment']);

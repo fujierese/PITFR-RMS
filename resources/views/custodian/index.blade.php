@@ -6,7 +6,7 @@
 <div class="mb-6">
     <x-page-header
         eyebrow="Requests"
-        :title="$filter === 'all' ? ucfirst($custodianType) . ' Custodian Dashboard' : ucfirst($filter) . ' Requests'"
+        :title="$filter === 'all' ? 'All Requests' : ucfirst($filter) . ' Requests'"
         :description="$filter === 'all' ? 'Manage facility requests, track assigned resources, and review approvals from a single page.' : 'Review ' . $filter . ' requests assigned to your ' . $custodianType . ' resources.'"
         accent="slate"
     >
@@ -49,7 +49,7 @@
                         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                             <div>
                                 <label for="custodian-venue" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Venue</label>
-                                <select id="custodian-venue" name="venue" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                                <select id="custodian-venue" name="venue" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                                     <option value="">All</option>
                                     @foreach($requestVenueOptions as $venueOption)
                                         <option value="{{ $venueOption }}" @selected($venueFilter === $venueOption)>{{ $venueOption }}</option>
@@ -58,18 +58,18 @@
                             </div>
                             <div>
                                 <label for="custodian-sort" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Sort</label>
-                                <select id="custodian-sort" name="sort" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                                <select id="custodian-sort" name="sort" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                                     <option value="latest" @selected($sort === 'latest')>Latest</option>
                                     <option value="oldest" @selected($sort === 'oldest')>Oldest</option>
                                 </select>
                             </div>
                             <div>
                                 <label for="custodian-date-from" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Date from</label>
-                                <input id="custodian-date-from" type="date" name="date_from" value="{{ $dateFrom }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                                <input id="custodian-date-from" type="date" name="date_from" value="{{ $dateFrom }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Crect x=%222%22 y=%223%22 width=%2216%22 height=%2214%22 rx=%222%22/%3E%3Cpath d=%22M2 7h16M6 2v4M14 2v4%22 stroke-linecap=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                             </div>
                             <div>
                                 <label for="custodian-date-to" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Date to</label>
-                                <input id="custodian-date-to" type="date" name="date_to" value="{{ $dateTo }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                                <input id="custodian-date-to" type="date" name="date_to" value="{{ $dateTo }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Crect x=%222%22 y=%223%22 width=%2216%22 height=%2214%22 rx=%222%22/%3E%3Cpath d=%22M2 7h16M6 2v4M14 2v4%22 stroke-linecap=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                             </div>
                         </div>
                         <button type="submit" class="mt-4 inline-flex items-center justify-center rounded-full bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">Apply Filters</button>
@@ -86,6 +86,7 @@
             <thead class="border-b border-slate-200 text-slate-500">
                 <tr>
                     <th class="px-4 py-3 font-medium">Reference ID</th>
+                    <th class="px-4 py-3 font-medium">Activity</th>
                     <th class="px-4 py-3 font-medium">Requestor</th>
                     <th class="px-4 py-3 font-medium">Department</th>
                     <th class="px-4 py-3 font-medium">{{ $custodianType === 'venue' ? 'Venue' : 'Equipment' }}</th>
@@ -101,17 +102,12 @@
                         $resourceNames = $custodianType === 'venue' ? $req->getVenueNames() : $req->getEquipmentItems();
                     @endphp
                     <tr class="cursor-pointer transition hover:bg-slate-50 focus:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500" data-request-row data-request-url="{{ route('request.show', $req->id) }}" data-status="{{ $displayStatus }}" role="link" tabindex="0" aria-label="Open request details for {{ $req->control_number }}">
-                        <td class="px-4 py-4 font-medium text-slate-900">
-                            <span class="font-medium text-slate-900">{{ $req->control_number }}</span>
-                            <p class="mt-1 max-w-xs text-xs text-slate-500">{{ $req->name_of_activity }}</p>
-                        </td>
+                        <td class="px-4 py-4 font-medium text-slate-900">{{ $req->control_number }}</td>
+                        <td class="px-4 py-4 text-slate-800">{{ $req->name_of_activity ?? '—' }}</td>
                         <td class="px-4 py-4">{{ $req->requester?->name ?? $req->requested_by }}</td>
                         <td class="px-4 py-4">{{ $req->department ?? '—' }}</td>
                         <td class="px-4 py-4">
                             <span>{{ implode(', ', $resourceNames) ?: '—' }}</span>
-                            @if($custodianType === 'equipment' && $req->equipment_returned_status)
-                                <p class="mt-1 text-xs text-slate-500">{{ ucfirst(str_replace('_', ' ', $req->equipment_returned_status)) }}</p>
-                            @endif
                         </td>
                         <td class="px-4 py-4 whitespace-nowrap">
                             <p>{{ $req->start_date ? $req->start_date->format('M d, Y') : '—' }}</p>
@@ -131,7 +127,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="px-4 py-12 text-center text-sm text-slate-500">No {{ $filter }} requests found.</td></tr>
+                    <tr><td colspan="7" class="px-4 py-12 text-center text-sm text-slate-500">No {{ $filter }} requests found.</td></tr>
                 @endforelse
             </tbody>
         </table>

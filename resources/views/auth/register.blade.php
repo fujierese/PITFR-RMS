@@ -54,7 +54,7 @@
 
                 <p class="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Outsider registration</p>
                 <div class="mb-6 border-l-4 border-emerald-500 bg-emerald-50 p-4 text-sm text-emerald-800">
-                    Students and Faculty accounts are created by the authorized administrator. Outsiders verify their email with a one-time password after registration.
+                    New Outsider users can create an account here. Students, staff, and faculty accounts are created by the Admin.
                 </div>
 
                     <form method="POST" action="{{ route('register.post') }}" class="space-y-5">

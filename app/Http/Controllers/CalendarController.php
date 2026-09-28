@@ -32,7 +32,7 @@ class CalendarController extends Controller
         } elseif ($user && $user->isAdmin()) {
             $requests = $query->get();
         } elseif ($user && $role === 'requestor') {
-            $requests = $query->where('requested_by_id', $user->id)->get();
+            $requests = $query->get();
         } else {
             // Guest/public view should see only approved and pending requests for availability checking
             $requests = $query->whereIn('status', ['approved', 'pending'])->get();
@@ -129,6 +129,7 @@ class CalendarController extends Controller
                     'equipmentStatus' => $req->equipment_status,
                     'facilityRequestId' => $req->id,
                     'requestUrl' => route('request.show', $req->id),
+                    'isOwner' => $role === 'requestor' && $user->id === $req->requested_by_id,
                 ]
             ];
         });

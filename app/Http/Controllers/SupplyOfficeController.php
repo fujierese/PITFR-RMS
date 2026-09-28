@@ -1154,11 +1154,18 @@ class SupplyOfficeController extends Controller
             ->groupBy('priority')
             ->get();
 
+        $approvedRequestCount = FacilityRequest::where('status', 'approved')
+            ->whereHas('reservationSchedule', function ($query) use ($dateFrom, $dateTo) {
+                $query->whereBetween('start_datetime', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
+            })
+            ->count();
+
         return view('supply-office.usage-reports', [
             'equipmentUsage' => $equipmentUsage,
             'venueUsage' => $venueUsage,
             'departmentUsage' => $departmentUsage,
             'priorityStats' => $priorityStats,
+            'approvedRequestCount' => $approvedRequestCount,
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
         ]);

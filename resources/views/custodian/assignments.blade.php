@@ -101,7 +101,7 @@
                                             <form method="POST" action="{{ route('custodian.venues.toggle', $venue) }}" @if($venue->is_active) data-swal-confirm data-swal-title="Disable this venue?" data-swal-text="This venue will no longer be available for new facility requests." data-swal-confirm-text="Yes, disable it" data-swal-confirm-color="#dc2626" @endif>
                                                 @csrf
                                                 @method('PATCH')
-                                                <button type="submit" class="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700">{{ $venue->is_active ? 'Disable' : 'Enable' }}</button>
+                                                <button type="submit" class="rounded-full {{ $venue->is_active ? 'border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100' : 'border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700' }}">{{ $venue->is_active ? 'Disable' : 'Enable' }}</button>
                                             </form>
                                             <form method="POST" action="{{ route('custodian.venues.update', $venue) }}" class="flex flex-wrap gap-2">
                                                 @csrf
@@ -148,7 +148,7 @@
                                             <form method="POST" action="{{ route('custodian.equipment.toggle', $item) }}" @if($item->is_active) data-swal-confirm data-swal-title="Disable this equipment?" data-swal-text="This equipment will no longer be available for new facility requests." data-swal-confirm-text="Yes, disable it" data-swal-confirm-color="#dc2626" @endif>
                                                 @csrf
                                                 @method('PATCH')
-                                                <button type="submit" class="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700">{{ $item->is_active ? 'Disable' : 'Enable' }}</button>
+                                                <button type="submit" class="rounded-full {{ $item->is_active ? 'border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100' : 'border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700' }}">{{ $item->is_active ? 'Disable' : 'Enable' }}</button>
                                             </form>
                                             <form method="POST" action="{{ route('custodian.equipment.update', $item) }}" class="flex flex-wrap gap-2">
                                                 @csrf

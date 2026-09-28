@@ -15,7 +15,7 @@
 
         <div class="grid gap-4 p-4 sm:gap-6 sm:p-6 lg:grid-cols-2">
             <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 class="text-lg font-semibold text-slate-900">Profile Information</h2>
+                <h2 class="text-lg font-semibold text-slate-900">Profile</h2>
                 <form method="POST" action="{{ route($settingsRoute . '.profile') }}" class="mt-4 space-y-4">
                     @csrf
                     <div>
@@ -49,6 +49,12 @@
                         <label class="text-sm font-medium text-slate-700">Contact Number</label>
                         <input type="text" name="contact_number" value="{{ old('contact_number', $user->contact_number) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
                     </div>
+                    @if($isAdmin)
+                        <div>
+                            <label class="text-sm font-medium text-slate-700">Office / Organization</label>
+                            <input type="text" name="office_or_organization" value="{{ old('office_or_organization', $user->office_or_organization) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
+                        </div>
+                    @endif
                     @if($showOrganization && $user->isStudent())
                         <div>
                             <label class="text-sm font-medium text-slate-700">Student ID</label>
@@ -127,7 +133,7 @@
             </section>
 
             <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 class="text-lg font-semibold text-slate-900">Email Notifications</h2>
+                <h2 class="text-lg font-semibold text-slate-900">Notifications</h2>
                 <form method="POST" action="{{ route($settingsRoute . '.notifications') }}" class="mt-4 space-y-4">
                     @csrf
                     <label class="flex items-center gap-3 text-sm text-slate-700"><input type="checkbox" name="request_updates" value="1" @checked($preferences['request_updates'] ?? true)> Request status updates</label>
@@ -152,12 +158,15 @@
                         </div>
                     @endif
 
-                    <form method="POST" action="{{ route($settingsRoute . '.signature') }}" enctype="multipart/form-data" class="mt-4 space-y-4">
+                    <form method="POST" action="{{ route($settingsRoute . '.signature') }}" enctype="multipart/form-data" class="mt-4 space-y-4" data-signature-form>
                         @csrf
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                            <label for="e_signature_file" class="mb-2 block text-sm font-medium text-slate-700">Choose a signature image</label>
-                            <input id="e_signature_file" type="file" name="e_signature_file" accept="image/jpeg,image/png" required class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white">
+                            <label for="e_signature_file" class="mb-2 block text-sm font-medium text-slate-700">Choose a PNG signature image</label>
+                            <p class="mb-3 text-xs text-slate-500">PNG only, transparent background preferred, maximum 500 KB. Use a landscape image between 200x50 and 2400x1200 pixels.</p>
+                            <input id="e_signature_file" type="file" name="e_signature_file" accept="image/png" required data-signature-input class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white">
+                            <img data-signature-preview class="mt-3 hidden max-h-28 w-full rounded-lg border border-slate-200 bg-white object-contain p-2" alt="Selected signature preview">
                         </div>
+                        <label class="flex items-start gap-3 text-sm text-slate-700"><input type="checkbox" name="e_signature_confirmation" value="1" required class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600"> <span>I confirm this image is my signature and may be used on approved request documents.</span></label>
                         <button type="submit" class="w-full rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white sm:w-auto">Save E-signature</button>
                     </form>
                 </section>
@@ -183,6 +192,7 @@
                 </form>
             </section>
 
+            @if(!$isAdmin)
             <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 class="text-lg font-semibold text-slate-900">Account Security</h2>
                 <dl class="mt-4 space-y-3 text-sm">
@@ -193,6 +203,34 @@
                     <p class="mt-4 text-sm text-slate-600">Administrative account security is limited to verified email status and password controls.</p>
                 @endif
             </section>
+            @endif
         </div>
     </div>
 </div>
+
+<script>
+document.querySelectorAll('[data-signature-form]').forEach(function (form) {
+    const input = form.querySelector('[data-signature-input]');
+    const preview = form.querySelector('[data-signature-preview]');
+    if (!input || !preview) return;
+
+    input.addEventListener('change', function () {
+        const file = input.files?.[0];
+        if (!file) {
+            preview.removeAttribute('src');
+            preview.classList.add('hidden');
+            return;
+        }
+
+        if (file.type !== 'image/png' || file.size > 512000) {
+            input.value = '';
+            preview.removeAttribute('src');
+            preview.classList.add('hidden');
+            return;
+        }
+
+        preview.src = URL.createObjectURL(file);
+        preview.classList.remove('hidden');
+    });
+});
+</script>

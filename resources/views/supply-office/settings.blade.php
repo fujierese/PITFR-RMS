@@ -3,7 +3,7 @@
 @section('content')
     @include('settings.account', [
         'settingsRoute' => request()->routeIs('admin.*') ? 'admin.settings' : 'supply-office.settings',
-        'showSignature' => false,
+        'showSignature' => true,
         'showOrganization' => false,
         'isAdmin' => true,
     ])

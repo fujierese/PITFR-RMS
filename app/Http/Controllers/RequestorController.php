@@ -45,7 +45,7 @@ class RequestorController extends Controller
     ];
     private const EQUIPMENT_OPTIONS = [
         'Sound System', 'Canopies', 'Industrial Fans',
-        'Iwata Cooler Fans', 'Tables', 'Aircon', 'Chairs', 'Wireless Microphones', 'Non-Wireless Microphones', 'Monobloc Chairs',
+        'Iwata Cooler Fans', 'Tables', 'Chairs', 'Wireless Microphones', 'Non-Wireless Microphones', 'Monobloc Chairs',
     ];
 
     private static function canonicalizeEquipmentName(string $name): string

@@ -58,7 +58,7 @@
                     </div>
                 </div>
             @endif
-            @if($errors->any())
+            @if(isset($errors) && $errors->any())
                 <div role="alert" aria-live="assertive" aria-label="Error" class="mb-6 rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-800 shadow-sm">
                     <div class="flex items-center gap-3">
                         <svg class="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -275,6 +275,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 if (buttonText.includes('approve')) {
                     loadingText = 'Approving...';
+                } else if (buttonText.includes('verify') || buttonText.includes('endorse')) {
+                    loadingText = 'Verifying...';
                 } else if (buttonText.includes('reject')) {
                     loadingText = 'Rejecting...';
                 } else if (buttonText.includes('return') || buttonText.includes('revision')) {

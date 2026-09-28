@@ -55,4 +55,41 @@ class RequestorSearchBackendTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Sound System');
     }
+
+    public function test_my_requests_hides_regular_priority_and_marks_urgent_requests(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'student',
+        ]);
+
+        FacilityRequest::factory()->create([
+            'requested_by_id' => $user->id,
+            'priority' => 'regular',
+            'status' => 'rejected',
+            'venue_status' => 'rejected',
+            'equipment_status' => 'pending',
+        ]);
+        $urgentRequest = FacilityRequest::factory()->create([
+            'requested_by_id' => $user->id,
+            'priority' => 'regular',
+            'is_emergency' => true,
+            'status' => 'cancelled',
+            'venue_status' => 'cancelled',
+            'equipment_status' => 'cancelled',
+        ]);
+
+        $response = $this->actingAs($user)->get(route('requestor.index', ['tab' => 'requests']));
+
+        $response->assertOk();
+        $response->assertSee('Urgent');
+        $response->assertSee('bg-rose-500 text-white', false);
+        $response->assertDontSee('>Regular<', false);
+        $response->assertSee($urgentRequest->control_number);
+
+        $this->get(route('request.show', $urgentRequest))
+            ->assertOk()
+            ->assertSee('Request Priority')
+            ->assertSee('Regular');
+    }
 }

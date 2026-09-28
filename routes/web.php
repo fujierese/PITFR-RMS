@@ -95,6 +95,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('supply-office')->group(functi
     Route::post('/settings/profile', [AdminController::class, 'updateProfile'])->name('supply-office.settings.profile');
     Route::post('/settings/password', [AdminController::class, 'updatePassword'])->name('supply-office.settings.password');
     Route::post('/settings/notifications', [AdminController::class, 'updateNotificationPreferences'])->name('supply-office.settings.notifications');
+    Route::post('/settings/signature', [AdminController::class, 'updateSignature'])->name('supply-office.settings.signature');
     Route::get('/calendar', [CalendarController::class, 'index'])->name('supply-office.calendar');
     Route::middleware('role:admin')->group(function (): void {
         Route::get('/organizations', [AdminController::class, 'organizations'])->name('supply-office.organizations');
@@ -130,6 +131,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     Route::post('/settings/profile', [AdminController::class, 'updateProfile'])->name('admin.settings.profile');
     Route::post('/settings/password', [AdminController::class, 'updatePassword'])->name('admin.settings.password');
     Route::post('/settings/notifications', [AdminController::class, 'updateNotificationPreferences'])->name('admin.settings.notifications');
+    Route::post('/settings/signature', [AdminController::class, 'updateSignature'])->name('admin.settings.signature');
     Route::get('/calendar', [AdminController::class, 'calendar'])->name('admin.calendar');
     Route::get('/audit-logs', [AdminController::class, 'auditLogs'])->name('admin.audit-logs');
     Route::post('/update', [AdminController::class, 'update'])->name('admin.update');

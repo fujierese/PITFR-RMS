@@ -390,7 +390,6 @@
     } elseif ($currentRoute === 'supply-office.settings') {
         $activeKey = 'settings';
     } elseif ($currentRoute === 'custodian.index') {
-        $activeKey = 'dashboard';
         $activeKey = match (request()->query('filter', 'all')) {
             'pending' => 'reservations-pending',
             'approved' => 'reservations-approved',

@@ -149,4 +149,37 @@ class VisualSignatureLifecycleTest extends TestCase
         $this->assertTrue(Storage::disk('local')->exists('documents/e_signature/approvals/' . $originalSignatureFile));
         $this->assertNotSame('approver-updated.png', $request->venue_approval_signature_file);
     }
+
+    /** @test */
+    public function approval_metadata_records_the_approver_role_and_signature_snapshot(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'custodian-venue',
+            'position' => 'CHIC Venue Custodian',
+            'name' => 'Arlene Sala',
+            'e_signature_file' => 'arlene-signature.png',
+        ]);
+
+        Storage::disk('local')->put('documents/e_signature/users/arlene-signature.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='));
+
+        $request = FacilityRequest::factory()->create([
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+            'venue' => ['Gymnasium'],
+            'equipment' => [],
+        ]);
+
+        $request->recordApprovalSignature('venue', $user);
+
+        $metadata = $request->approval_signature_meta['venue'] ?? null;
+        $decodedMetadata = json_decode(is_array($metadata) ? ($metadata[0] ?? '{}') : ($metadata ?? '{}'), true);
+
+        $this->assertNotEmpty($decodedMetadata);
+        $this->assertSame($user->id, $decodedMetadata['approver_id'] ?? null);
+        $this->assertSame('custodian-venue', $decodedMetadata['approver_role'] ?? null);
+        $this->assertSame('Venue Custodian', $decodedMetadata['approver_role_label'] ?? null);
+        $this->assertNotNull($decodedMetadata['signature_file'] ?? null);
+        $this->assertSame($request->venue_approval_signature_file, $decodedMetadata['signature_file'] ?? null);
+    }
 }

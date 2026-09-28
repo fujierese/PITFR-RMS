@@ -34,8 +34,13 @@
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-800">Usage Reports</h1>
-                    <p class="text-sm text-gray-600 mt-1">Facility and equipment usage statistics and analytics.</p>
+                    <p class="text-sm text-gray-600 mt-1">Review how approved reservations used venues and equipment during a selected date range.</p>
                 </div>
+            </div>
+
+            <div class="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                <p class="font-semibold">What this report shows</p>
+                <p class="mt-1">The report counts approved reservations with schedules in the selected period. Use it to review booking volume, venue use, equipment quantities, department activity, and priority distribution.</p>
             </div>
 
             <!-- Date Range Filter -->
@@ -51,11 +56,26 @@
                     </div>
                 </div>
                 <div class="mt-4">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-semibold transition">
-                        Update Report
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-semibold transition">
+                        Apply Date Range
                     </button>
                 </div>
             </form>
+
+            <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Report period</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-800">{{ \Carbon\Carbon::parse($dateFrom)->format('M d, Y') }} – {{ \Carbon\Carbon::parse($dateTo)->format('M d, Y') }}</p>
+                </div>
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Approved reservations</p>
+                    <p class="mt-2 text-2xl font-bold text-blue-700">{{ $approvedRequestCount }}</p>
+                </div>
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Report status</p>
+                    <p class="mt-2 text-sm font-semibold {{ $approvedRequestCount > 0 ? 'text-emerald-700' : 'text-amber-700' }}">{{ $approvedRequestCount > 0 ? 'Data found' : 'No matching data' }}</p>
+                </div>
+            </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <!-- Equipment Usage -->
@@ -68,7 +88,7 @@
                                 <span class="text-sm font-semibold text-blue-600">{{ $usage['total_used'] }} units</span>
                             </div>
                         @empty
-                            <p class="text-gray-500 text-sm">No equipment usage data for the selected period.</p>
+                            <p class="text-gray-500 text-sm">No approved equipment usage was found for this date range.</p>
                         @endforelse
                     </div>
                 </div>
@@ -83,7 +103,7 @@
                                 <span class="text-sm font-semibold text-green-600">{{ $usage['total_bookings'] }} bookings</span>
                             </div>
                         @empty
-                            <p class="text-gray-500 text-sm">No venue usage data for the selected period.</p>
+                            <p class="text-gray-500 text-sm">No approved venue bookings were found for this date range.</p>
                         @endforelse
                     </div>
                 </div>

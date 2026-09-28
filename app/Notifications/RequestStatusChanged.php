@@ -87,6 +87,58 @@ class RequestStatusChanged extends Notification
             : 'rejected';
     }
 
+    private function notificationTitle(): string
+    {
+        $titleMap = [
+            'new_request' => 'New Request Submitted',
+            'approved' => 'Request Approved',
+            'rejected' => 'Request Rejected',
+            'needs_reschedule' => 'Request Rescheduled',
+            'needs_revision' => 'Request Needs Revision',
+            'request_cancelled' => 'Request Cancelled',
+            'venue_approved' => 'Venue Approved',
+            'equipment_approved' => 'Equipment Approved',
+            'equipment_returned' => 'Equipment Returned',
+            'change_requested' => 'Request Updated',
+            'change_request_rejected' => 'Change Request Rejected',
+        ];
+
+        return $titleMap[$this->status] ?? ucfirst(str_replace('_', ' ', $this->status));
+    }
+
+    private function buildRoleAwareBody($notifiable = null): string
+    {
+        $recipientType = $this->determineRecipientType($notifiable);
+        $controlNumber = $this->facilityRequest->control_number;
+        $actorText = $this->approvalActorText();
+
+        return match ($this->status) {
+            'approved', 'venue_approved', 'equipment_approved' => $recipientType === 'requestor'
+                ? ($actorText !== '' ? "Your request was approved by {$actorText}." : 'Your request was approved.')
+                : ($actorText !== '' ? "Request {$controlNumber} was approved by {$actorText}." : "Request {$controlNumber} was approved."),
+            'rejected' => $recipientType === 'requestor'
+                ? ($actorText !== '' ? "Your request was rejected by {$actorText}." : 'Your request was rejected.')
+                : ($actorText !== '' ? "Request {$controlNumber} was rejected by {$actorText}." : "Request {$controlNumber} was rejected."),
+            'needs_reschedule' => $recipientType === 'requestor'
+                ? (($this->supplyOffice ? "Your request was rescheduled by {$this->supplyOffice}." : 'Your request was rescheduled.') )
+                : (($this->supplyOffice ? "Request {$controlNumber} was rescheduled by {$this->supplyOffice}." : "Request {$controlNumber} was rescheduled.")),
+            'needs_revision' => $recipientType === 'requestor'
+                ? (($this->supplyOffice ? "Your request needs revision from {$this->supplyOffice}." : 'Your request needs revision.') )
+                : (($this->supplyOffice ? "Request {$controlNumber} needs revision from {$this->supplyOffice}." : "Request {$controlNumber} needs revision.")),
+            'request_cancelled' => $this->actor
+                ? "Request {$controlNumber} was cancelled by {$this->actor}."
+                : "Request {$controlNumber} was cancelled.",
+            'equipment_returned' => "Equipment return status was updated for request {$controlNumber}.",
+            'change_requested' => $this->actor
+                ? "A revision was requested by {$this->actor}."
+                : 'A request revision was requested.',
+            'change_request_rejected' => $this->actor
+                ? "A change request was rejected by {$this->actor}."
+                : 'A change request was rejected.',
+            default => $this->buildConsolidatedMessage($notifiable),
+        };
+    }
+
     private function buildConsolidatedMessage($notifiable = null): string
     {
         $message = '';
@@ -232,6 +284,8 @@ class RequestStatusChanged extends Notification
             'control_number' => $this->facilityRequest->control_number,
             'activity' => $this->facilityRequest->name_of_activity,
             'status' => $this->status,
+            'title' => $this->notificationTitle(),
+            'body' => $this->buildRoleAwareBody($notifiable),
             'message' => $this->buildConsolidatedMessage($notifiable),
             'route' => $this->getRequestRouteFor($notifiable),
             'notes' => $this->notes,
@@ -285,6 +339,8 @@ class RequestStatusChanged extends Notification
             'control_number' => $this->facilityRequest->control_number,
             'activity'       => $this->facilityRequest->name_of_activity,
             'status'         => $this->status,
+            'title'          => $this->notificationTitle(),
+            'body'           => $this->buildRoleAwareBody($notifiable),
             'message'        => $this->buildConsolidatedMessage($notifiable),
             'route'          => $this->getRequestRouteFor($notifiable),
             'notes'          => $this->notes,

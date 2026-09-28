@@ -45,7 +45,16 @@
 
                     @if($editUserId === $user->id)
                         <tr>
-                            <td colspan="6" class="px-4 py-4 bg-slate-50">
+                            <td colspan="6" class="p-0">
+                                <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="edit-user-title-{{ $user->id }}">
+                                    <div class="w-full max-w-5xl rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+                                        <div class="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+                                            <div>
+                                                <h2 id="edit-user-title-{{ $user->id }}" class="text-lg font-semibold text-slate-900">Edit User</h2>
+                                                <p class="mt-1 text-sm text-slate-500">Update account details or set a new password.</p>
+                                            </div>
+                                            <a href="{{ route('supply-office.users') }}" class="rounded-full p-2 text-2xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close edit user dialog">&times;</a>
+                                        </div>
                                 <form method="POST" action="{{ route('supply-office.users.update', $user) }}" class="grid grid-cols-1 gap-3 md:grid-cols-5">
                                     @csrf
                                     @method('PUT')
@@ -95,6 +104,14 @@
                                         <input type="text" name="office_or_organization" value="{{ old('office_or_organization', $user->office_or_organization) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="Office / Organization">
                                     </div>
                                     <input type="text" name="contact_number" value="{{ old('contact_number', $user->contact_number) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="Contact Number">
+                                    <div class="md:col-span-2">
+                                        <label for="edit-user-password-{{ $user->id }}" class="mb-1 block text-sm font-medium text-slate-700">New password <span class="font-normal text-slate-500">(optional)</span></label>
+                                        <input id="edit-user-password-{{ $user->id }}" type="password" name="password" autocomplete="new-password" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="Leave blank to keep current password">
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label for="edit-user-password-confirmation-{{ $user->id }}" class="mb-1 block text-sm font-medium text-slate-700">Confirm new password</label>
+                                        <input id="edit-user-password-confirmation-{{ $user->id }}" type="password" name="password_confirmation" autocomplete="new-password" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="Repeat new password">
+                                    </div>
                                     <label class="flex items-center gap-2 text-sm text-slate-700"><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" @checked(old('is_active', $user->is_active ?? true))> Active</label>
                                     <button type="submit" class="rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-700">Save</button>
                                     <a href="{{ route('supply-office.users') }}" class="rounded-xl border border-slate-300 px-3 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Cancel</a>
@@ -118,6 +135,8 @@
                                         updateVisibility();
                                     })();
                                 </script>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                     @endif

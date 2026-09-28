@@ -32,7 +32,6 @@ class VenueAndEquipmentSeeder extends Seeder
         $this->upsertEquipment('Sound System', 1, $custodians['rguillemer@gmail.com']);
         $this->upsertEquipment('Wireless Microphones', 1, $custodians['rguillemer@gmail.com'], [], ['Wireless Microphone', 'Wireless Microphones']);
         $this->upsertEquipment('Non-Wireless Microphones', 1, $custodians['rguillemer@gmail.com'], [], ['Non-wireless Microphone', 'Non-Wireless Microphones']);
-        $this->upsertEquipment('Aircon', 4, $custodians['mmercado@gmail.com']);
         $this->upsertEquipment('Canopies', 10, $custodians['jsuralta@gmail.com']);
         $this->upsertEquipment('Industrial Fans', 6, $custodians['lalmerino@gmail.com'], $fanAlternate);
         $this->upsertEquipment('Iwata Cooler Fans', 4, $custodians['lalmerino@gmail.com'], $fanAlternate);

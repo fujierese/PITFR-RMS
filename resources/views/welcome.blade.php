@@ -223,41 +223,41 @@
 
     {{-- How It Works --}}
     <div id="how-it-works" class="mb-12 rounded-3xl bg-gradient-to-br from-slate-50 to-blue-50 p-4 sm:p-6 lg:mb-16 lg:p-10">
-        <h2 class="text-2xl font-bold text-center text-gray-800 mb-10">How It Works</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        <h2 class="mb-10 text-center text-2xl font-bold text-gray-800 sm:text-3xl">How It Works</h2>
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-5">
             <div class="text-center">
-                <div class="w-12 h-12 rounded-full bg-blue-600 text-white font-bold text-xl flex items-center justify-center mx-auto mb-4 shadow-lg">1</div>
-                <h3 class="font-bold text-gray-800 mb-2">Sign In</h3>
-                <p class="text-sm text-gray-500">Log in with your PIT account to access the request system.</p>
+                <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-xl font-bold text-white shadow-lg">1</div>
+                <h3 class="mb-3 text-lg font-bold text-gray-800">Requestor Signs In</h3>
+                <p class="text-base leading-7 text-gray-600">Log in with your PIT account to access the facility and equipment request portal and begin the reservation process.</p>
             </div>
             <div class="text-center">
-                <div class="w-12 h-12 rounded-full bg-green-600 text-white font-bold text-xl flex items-center justify-center mx-auto mb-4 shadow-lg">2</div>
-                <h3 class="font-bold text-gray-800 mb-2">Submit Request</h3>
-                <p class="text-sm text-gray-500">Provide your reservation details and specify the facilities or equipment needed.</p>
+                <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-600 text-xl font-bold text-white shadow-lg">2</div>
+                <h3 class="mb-3 text-lg font-bold text-gray-800">Requestor Submits Request</h3>
+                <p class="text-base leading-7 text-gray-600">Fill out the request form with the activity details, schedule, venue, purpose, and any equipment or support needed.</p>
             </div>
             <div class="text-center">
-                <div class="w-12 h-12 rounded-full bg-purple-600 text-white font-bold text-xl flex items-center justify-center mx-auto mb-4 shadow-lg">3</div>
-                <h3 class="font-bold text-gray-800 mb-2">Request Validation</h3>
-                <p class="text-sm text-gray-500">Your request will be reviewed based on the submitted details, availability, and requirements.</p>
+                <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-purple-600 text-xl font-bold text-white shadow-lg">3</div>
+                <h3 class="mb-3 text-lg font-bold text-gray-800">Custodian Validates Request</h3>
+                <p class="text-base leading-7 text-gray-600">The custodian checks whether the requested venue or equipment is available, suitable, and properly documented before forwarding it.</p>
             </div>
             <div class="text-center">
-                <div class="w-12 h-12 rounded-full bg-amber-600 text-white font-bold text-xl flex items-center justify-center mx-auto mb-4 shadow-lg">4</div>
-                <h3 class="font-bold text-gray-800 mb-2">Supply Office Review</h3>
-                <p class="text-sm text-gray-500">The Supply Office will review and process your request.</p>
+                <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-600 text-xl font-bold text-white shadow-lg">4</div>
+                <h3 class="mb-3 text-lg font-bold text-gray-800">Supply Office Reviews Request</h3>
+                <p class="text-base leading-7 text-gray-600">The Supply Office validates the request against the approval workflow, queue, and institutional policies before issuing the result.</p>
             </div>
             <div class="text-center">
-                <div class="w-12 h-12 rounded-full bg-orange-600 text-white font-bold text-xl flex items-center justify-center mx-auto mb-4 shadow-lg">5</div>
-                <h3 class="font-bold text-gray-800 mb-2">Confirmation</h3>
-                <p class="text-sm text-gray-500">You will be notified once the review is complete.</p>
+                <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-600 text-xl font-bold text-white shadow-lg">5</div>
+                <h3 class="mb-3 text-lg font-bold text-gray-800">Requestor Receives Notification</h3>
+                <p class="text-base leading-7 text-gray-600">Once the review is complete, the requestor receives a status notification informing them whether the request was approved, rejected, or needs revision.</p>
             </div>
         </div>
-        <p class="mx-auto mt-10 max-w-3xl text-center text-sm leading-6 text-gray-600">Welcome! Please be guided that upon submitting your request, kindly wait for the validation of the Supply Office. Processing time may take a few hours, days, or months depending on the queue. You will be notified once the review is complete.</p>
+        <p class="mx-auto mt-10 max-w-4xl text-center text-base font-semibold leading-8 text-gray-800 sm:text-lg">Welcome! Please be guided that upon submitting your request, kindly wait for the validation of the Supply Office. Then, the Supply Office will give the final approval before the request is processed. Processing time may take a few hours, days, or months depending on the queue. You will be notified once the review is complete.</p>
     </div>
 
     {{-- CTA --}}
     <div class="rounded-3xl bg-gradient-to-r from-emerald-700 to-emerald-600 p-6 text-center text-white shadow-xl sm:p-8 lg:p-12">
         <h2 class="text-3xl font-bold mb-3">Ready to Get Started?</h2>
-        <p class="text-emerald-100 mb-8 max-w-md mx-auto">Sign in to submit your facility and equipment requests. New users can create an account to get started.</p>
+        <p class="text-emerald-100 mb-8 max-w-md mx-auto">New Outsider users can create an account here. Students, staff, and faculty accounts are created by the Admin.</p>
         <a href="{{ route('login') }}"
            class="inline-flex items-center gap-2 bg-white text-emerald-700 hover:bg-slate-100 font-bold px-8 py-3 rounded-xl transition shadow-lg">
             Sign In Now →

@@ -26,7 +26,7 @@
                         </div>
                         <div>
                             <label for="supply-priority" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Priority</label>
-                            <select id="supply-priority" name="priority" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                            <select id="supply-priority" name="priority" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                                 <option value="">All priorities</option>
                                 <option value="regular" {{ $priorityFilter === 'regular' ? 'selected' : '' }}>Regular</option>
                                 <option value="institutional" {{ $priorityFilter === 'institutional' ? 'selected' : '' }}>Institutional</option>
@@ -34,11 +34,11 @@
                         </div>
                         <div>
                             <label for="supply-date-from" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Date from</label>
-                            <input id="supply-date-from" type="date" name="date_from" value="{{ $dateFrom }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                            <input id="supply-date-from" type="date" name="date_from" value="{{ $dateFrom }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Crect x=%222%22 y=%223%22 width=%2216%22 height=%2214%22 rx=%222%22/%3E%3Cpath d=%22M2 7h16M6 2v4M14 2v4%22 stroke-linecap=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                         </div>
                         <div>
                             <label for="supply-date-to" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Date to</label>
-                            <input id="supply-date-to" type="date" name="date_to" value="{{ $dateTo }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                            <input id="supply-date-to" type="date" name="date_to" value="{{ $dateTo }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Crect x=%222%22 y=%223%22 width=%2216%22 height=%2214%22 rx=%222%22/%3E%3Cpath d=%22M2 7h16M6 2v4M14 2v4%22 stroke-linecap=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                         </div>
                     </div>
                     <button type="submit" class="mt-4 inline-flex items-center justify-center rounded-full bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">Apply Filters</button>

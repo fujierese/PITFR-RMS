@@ -169,6 +169,67 @@ class FacilityRequestWorkflowTest extends TestCase
         $response->assertDontSee('>Upcoming</span>', false);
     }
 
+    public function test_request_details_show_stage_specific_pending_and_approval_messages_with_person_and_role(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin', 'name' => 'Juan Dela Cruz']);
+
+        $pendingRequest = FacilityRequest::create([
+            'control_number' => 'TEST-PENDING-ROLE-MESSAGE',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Pending Approval Message Test',
+            'expected_participants' => 20,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'venue' => ['Conference Hall & Interaction Center (CHIC)'],
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => 1],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+            'priority' => 'regular',
+        ]);
+
+        $approvedRequest = FacilityRequest::create([
+            'control_number' => 'TEST-APPROVED-ROLE-MESSAGE',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Approved Approval Message Test',
+            'expected_participants' => 25,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '11:00',
+            'venue' => ['Conference Hall & Interaction Center (CHIC)'],
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => 1],
+            'requested_by_id' => $requester->id,
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+            'approved_by' => 'Juan Dela Cruz',
+            'approved_by_id' => $admin->id,
+            'approved_date' => now(),
+            'priority' => 'regular',
+        ]);
+
+        $this->actingAs($requester)
+            ->get(route('request.show', $pendingRequest))
+            ->assertOk()
+            ->assertSee('Pending Venue Custodian Approval')
+            ->assertDontSee('Waiting for review');
+
+        $this->actingAs($requester)
+            ->get(route('request.show', $approvedRequest))
+            ->assertOk()
+            ->assertSee('Reservation approved')
+            ->assertSee('approved by Juan Dela Cruz, Supply Office');
+    }
+
     public function test_request_details_groups_consecutive_dates_and_displays_activity_items_and_status(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
@@ -201,8 +262,8 @@ class FacilityRequestWorkflowTest extends TestCase
         $response->assertSee('Sep 1, 2026 - Sep 3, 2026');
         $response->assertSee('Sound System');
         $response->assertSee('Qty 2');
-        $response->assertSee('Venue approved; equipment review is in progress');
-        $response->assertSee('Your venue is approved. The equipment request is now being reviewed.');
+        $response->assertSee('Pending Equipment Custodian Approval');
+        $response->assertSee('The venue has been approved and the equipment custodian is still reviewing this request.');
         $response->assertDontSee('Current approver');
         $response->assertDontSee('The request will continue through the existing approval workflow without changing the backend process.');
     }

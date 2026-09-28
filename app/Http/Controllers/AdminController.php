@@ -334,6 +334,7 @@ class AdminController extends Controller
             'faculty_id' => ['nullable', 'string', 'max:50', 'unique:users,faculty_id,' . $user->id],
             'faculty_adviser' => ['nullable', 'in:yes,no'],
             'position' => ['nullable', 'string', 'max:100'],
+            'password' => ['nullable', 'string', 'min:6', 'confirmed'],
             'student_organization_id' => ['nullable', 'integer', 'exists:student_organizations,id'],
             'office_or_organization' => ['nullable', 'string', 'max:255'],
             'contact_number' => ['nullable', 'string', 'max:255'],
@@ -413,6 +414,9 @@ class AdminController extends Controller
             'office_or_organization' => $validated['office_or_organization'] ?? null,
             'contact_number' => $validated['contact_number'] ?? null,
         ]);
+        if (!empty($validated['password'])) {
+            $user->password = Hash::make($validated['password']);
+        }
         $user->save();
 
         if ($user->isStudent() && !empty($validated['student_organization_id'])) {
@@ -506,14 +510,27 @@ class AdminController extends Controller
     {
         $user = Auth::user();
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'surname' => ['nullable', 'string', 'max:100'],
+            'first_name' => ['nullable', 'string', 'max:100'],
+            'middle_name' => ['nullable', 'string', 'max:100'],
+            'suffix' => ['nullable', 'string', 'max:50'],
             'contact_number' => ['nullable', 'string', 'max:255'],
+            'office_or_organization' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $user->fill($validated);
+        $fullName = User::formatFullName(
+            $validated['surname'] ?? null,
+            $validated['first_name'] ?? null,
+            $validated['middle_name'] ?? null,
+            $validated['suffix'] ?? null,
+        );
+
+        $user->fill($validated + ['name' => $fullName]);
         $user->save();
 
-        return redirect()->route('supply-office.settings')->with('success', 'Profile updated successfully.');
+        $route = $request->routeIs('admin.*') ? 'admin.settings' : 'supply-office.settings';
+
+        return redirect()->route($route)->with('success', 'Profile updated successfully.');
     }
 
     public function updatePassword(Request $request)
@@ -539,6 +556,13 @@ class AdminController extends Controller
         $route = $request->routeIs('admin.*') ? 'admin.settings' : 'supply-office.settings';
 
         return $this->saveNotificationPreferences($request, $route);
+    }
+
+    public function updateSignature(Request $request)
+    {
+        $route = $request->routeIs('admin.*') ? 'admin.settings' : 'supply-office.settings';
+
+        return $this->saveSignature($request, $route);
     }
 
     public function calendar(Request $request)

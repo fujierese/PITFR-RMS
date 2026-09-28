@@ -44,6 +44,23 @@ class AdminUserManagementTest extends TestCase
         }
     }
 
+    public function test_add_user_form_filters_departments_and_orders_faculty_position_before_adviser(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)->get(route('admin.users', ['add_user' => 1]));
+
+        $response->assertOk();
+        $response->assertSee('data-college="1"', false);
+        $response->assertSee('data-college="2"', false);
+
+        $html = $response->getContent();
+        $this->assertLessThan(
+            strpos($html, '>Faculty adviser</label>'),
+            strpos($html, '>Position</label>')
+        );
+    }
+
     public function test_admin_can_update_and_delete_a_user(): void
     {
         $admin = User::create([
@@ -75,6 +92,8 @@ class AdminUserManagementTest extends TestCase
             'school_id_number' => '20240001',
             'office_or_organization' => '',
             'contact_number' => '09123456789',
+            'password' => 'new-password123',
+            'password_confirmation' => 'new-password123',
         ]);
 
         $updateResponse->assertRedirect(route('admin.users'));
@@ -83,6 +102,7 @@ class AdminUserManagementTest extends TestCase
             'name' => 'Updated User',
             'role' => 'custodian-equipment',
         ]);
+        $this->assertTrue(Hash::check('new-password123', $user->fresh()->password));
 
         $deleteResponse = $this->delete(route('admin.users.destroy', $user), [
             '_token' => 'test-token',

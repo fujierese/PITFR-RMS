@@ -6,12 +6,14 @@
     <div class="rounded-3xl bg-gradient-to-r from-emerald-700 via-emerald-600 to-emerald-800 p-4 text-white shadow-xl sm:p-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h1 class="text-2xl font-bold sm:text-3xl">🏢 Supply Office</h1>
-                <p class="mt-2 max-w-2xl text-sm text-emerald-50">Manage venues, equipment, custodial assignment, final approvals, and administrative oversight.</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100">Overview</p>
+                <h1 class="mt-2 text-2xl font-bold sm:text-3xl">Dashboard</h1>
             </div>
-            <div class="text-left sm:text-right">
-                <p class="text-sm uppercase tracking-[0.18em] text-emerald-100">Supply Office</p>
-                <p class="mt-2 text-sm text-emerald-50">Venue and equipment governance remains read-write for authorized supply office users only.</p>
+            <div class="flex items-center gap-3">
+                <div class="rounded-2xl border border-white/20 bg-white/10 px-3 py-2 text-left">
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-100">Pending review</p>
+                    <p class="mt-1 text-lg font-semibold text-white">{{ $pendingFinalApprovalCount }}</p>
+                </div>
             </div>
         </div>
     </div>
@@ -27,7 +29,7 @@
         </div>
         <div class="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm ring-1 ring-emerald-50">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Availability Status</p>
-            <p class="mt-3 text-3xl font-semibold text-emerald-700">Live</p>
+            <p class="mt-3 text-2xl font-semibold text-emerald-700">Real-time</p>
         </div>
     </div>
 

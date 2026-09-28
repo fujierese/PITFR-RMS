@@ -75,6 +75,7 @@
     $proposalIsPdf = strtolower(pathinfo((string) $proposalFilename, PATHINFO_EXTENSION)) === 'pdf';
     $venueNames = $request->getVenueNames();
     $equipmentItems = $request->getEquipmentItems();
+    $hasEquipment = !empty($equipmentItems);
     $equipmentQuantities = $request->getEquipmentQuantities();
     $requestStartDate = $request->start_date?->copy()->setTimezone(config('app.timezone', 'Asia/Manila'));
     $requestEndDate = ($request->end_date ?? $request->start_date)?->copy()->setTimezone(config('app.timezone', 'Asia/Manila'));
@@ -83,6 +84,11 @@
         : ($requestStartDate?->format('M j, Y') ?? 'Not specified');
     $reservationTimeLabel = $scheduledStart->setTimezone(config('app.timezone', 'Asia/Manila'))->format('g:i A')
         . ' - ' . $scheduledEnd->setTimezone(config('app.timezone', 'Asia/Manila'))->format('g:i A');
+    $requestPriorityLabel = match (strtolower((string) ($request->priority ?? 'regular'))) {
+        'institutional' => 'Institutional',
+        'regular' => 'Regular',
+        default => ucfirst(str_replace('_', ' ', (string) ($request->priority ?? 'regular'))),
+    };
     $wholeDayRequested = in_array(strtolower((string) ($request->reservation_duration ?? '')), ['whole_day', 'whole-day', 'whole day'], true)
         || ($request->start_time === '00:00' && $request->end_time === '23:59');
     if ($wholeDayRequested) {
@@ -91,47 +97,63 @@
 
     $approvalTone = 'amber';
     $approverTone = 'amber';
-    $currentApprover = 'CHIC Custodian';
+    $currentApprover = 'Venue Custodian';
     $nextStep = 'Venue Review';
-    $approvalMessage = 'Waiting for review';
-    $approverMessage = 'Waiting for review';
+    $approvalTitle = 'Pending Venue Custodian Approval';
+    $approvalBody = 'The venue custodian is still reviewing this reservation request.';
     $approvalTimestamp = null;
+    $approvalActorName = null;
+    $approvalActorRole = null;
+
+    $formatApprovalDate = function ($timestamp) {
+        return $timestamp ? \Carbon\Carbon::parse($timestamp)->format('M j, Y, g:i A') : null;
+    };
 
     if ($request->status === 'approved') {
-        $approvalMessage = 'Reservation approved and confirmed';
-        $approverMessage = 'Your reservation is approved and confirmed.';
+        $approvalTitle = 'Reservation approved';
         $approvalTone = 'emerald';
-        $currentApprover = 'Administrator';
+        $currentApprover = 'Supply Office';
         $nextStep = null;
-        $approvalTimestamp = $request->approved_date ? \Carbon\Carbon::parse($request->approved_date)->format('M j, Y \a\t g:i A') : null;
+        $latestApproval = $request->histories()->whereIn('action', ['final_approved', 'approved'])->latest('occurred_at')->first();
+        $approvalActor = $latestApproval?->user ?? $request->approvedBy()->first();
+        $approvalActorName = $approvalActor?->name ?? ($request->approved_by ?: 'Supply Office');
+        $approvalActorRole = $approvalActor?->role_label ?? 'Supply Office';
+        $approvalTimestamp = $latestApproval?->occurred_at ?? $request->approved_date;
+        $approvalBody = 'This reservation request was approved by ' . $approvalActorName . ', ' . $approvalActorRole . ', on ' . $formatApprovalDate($approvalTimestamp) . '.';
     } elseif ($request->status === 'rejected') {
-        $approvalMessage = 'Reservation request declined';
-        $approverMessage = 'This reservation request was declined.';
+        $approvalTitle = 'Reservation rejected';
         $approvalTone = 'rose';
-        $currentApprover = 'Administrator';
+        $currentApprover = 'Supply Office';
         $nextStep = null;
-        $approvalTimestamp = $request->updated_at ? \Carbon\Carbon::parse($request->updated_at)->format('M j, Y \a\t g:i A') : null;
+        $latestRejection = $request->histories()->whereIn('action', ['final_rejected', 'rejected'])->latest('occurred_at')->first();
+        $approvalActor = $latestRejection?->user ?? $request->histories()->whereIn('action', ['final_rejected', 'rejected'])->latest('occurred_at')->first()?->user;
+        $approvalActorName = $approvalActor?->name ?? 'Supply Office';
+        $approvalActorRole = $approvalActor?->role_label ?? 'Supply Office';
+        $approvalTimestamp = $latestRejection?->occurred_at ?? $request->updated_at;
+        $approvalBody = 'This reservation request was rejected by ' . $approvalActorName . ', ' . $approvalActorRole . ', on ' . $formatApprovalDate($approvalTimestamp) . '.';
     } elseif ($request->venue_status === 'approved' && $request->equipment_status === 'approved') {
-        $approvalMessage = 'Reservation is awaiting final confirmation';
-        $approverMessage = 'Your reservation has passed venue and equipment review and is awaiting final confirmation.';
+        $approvalTitle = 'Pending Final Approval';
+        $approvalBody = 'The request has passed venue and equipment review and is awaiting final approval.';
         $approvalTone = 'amber';
-        $currentApprover = 'Administrator';
+        $currentApprover = 'Supply Office';
         $nextStep = 'Final Approval';
     } elseif ($request->venue_status === 'approved') {
-        $approvalMessage = 'Venue approved; equipment review is in progress';
-        $approverMessage = 'Your venue is approved. The equipment request is now being reviewed.';
+        $approvalTitle = $hasEquipment ? 'Pending Equipment Custodian Approval' : 'Pending Final Approval';
+        $approvalBody = $hasEquipment
+            ? 'The venue has been approved and the equipment custodian is still reviewing this request.'
+            : 'The request has passed venue review and is awaiting final approval.';
         $approvalTone = 'amber';
-        $currentApprover = 'Equipment Custodian';
-        $nextStep = 'Equipment Review';
+        $currentApprover = $hasEquipment ? 'Equipment Custodian' : 'Supply Office';
+        $nextStep = $hasEquipment ? 'Equipment Review' : 'Final Approval';
     } elseif ($request->equipment_status === 'approved') {
-        $approvalMessage = 'Equipment approved; venue review is in progress';
-        $approverMessage = 'Your equipment request is approved. The venue request is now being reviewed.';
+        $approvalTitle = 'Pending Venue Custodian Approval';
+        $approvalBody = 'The equipment has been approved and the venue custodian is still reviewing this request.';
         $approvalTone = 'amber';
         $currentApprover = 'Venue Custodian';
         $nextStep = 'Venue Review';
     } elseif ($request->venue_status === 'rejected' || $request->equipment_status === 'rejected') {
-        $approvalMessage = 'Reservation changes requested';
-        $approverMessage = 'A custodian requested changes before this reservation can proceed.';
+        $approvalTitle = 'Reservation changes requested';
+        $approvalBody = 'A custodian requested changes before this reservation can proceed.';
         $approvalTone = 'rose';
         $currentApprover = 'Custodian';
         $nextStep = 'Respond to revision';
@@ -575,6 +597,10 @@
                         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Contact Number</p>
                         <p class="mt-2 text-sm font-semibold text-slate-900">{{ $request->requester?->contact_number ?: 'Not provided' }}</p>
                     </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Request Priority</p>
+                        <p class="mt-2 text-sm font-semibold text-slate-900">{{ $requestPriorityLabel }}</p>
+                    </div>
                 </div>
             </div>
             <div class="space-y-4 rounded-[24px] border border-slate-200 bg-slate-50 p-5">
@@ -734,9 +760,9 @@
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                 </div>
                 <div>
-                        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Reservation approval status</p>
-                    <p class="mt-1 text-lg font-semibold text-slate-900">{{ $approverMessage }}</p>
-                            <p class="mt-1 text-sm text-slate-600">{{ $approvalMessage }}@if($approvalTimestamp) on {{ $approvalTimestamp }}@endif</p>
+                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Reservation approval status</p>
+                    <p class="mt-1 text-lg font-semibold text-slate-900">{{ $approvalTitle }}</p>
+                    <p class="mt-1 text-sm text-slate-600">{{ $approvalBody }}</p>
                     @if(auth()->user()->isRequestor() && $request->status === 'approved')
                         <p class="mt-3 text-sm font-semibold text-emerald-700">Your approved request is ready for pickup from the Supply Office.</p>
                     @endif

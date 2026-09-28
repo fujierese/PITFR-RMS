@@ -82,6 +82,17 @@ class SupplyOfficeStatusViewsTest extends TestCase
         $response->assertSee(route('supply-office.requests.pending'));
     }
 
+    public function test_supply_office_dashboard_uses_dashboard_heading_without_redundant_label()
+    {
+        $this->actingAs($this->admin);
+        $response = $this->get(route('supply-office.index'));
+
+        $response->assertOk()
+            ->assertSee('Dashboard')
+            ->assertDontSee('🏢 Supply Office')
+            ->assertSee('Pending final approval requests');
+    }
+
     public function test_final_approved_activities_link_in_sidebar()
     {
         $this->actingAs($this->admin);

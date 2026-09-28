@@ -96,16 +96,16 @@
                     <label for="add-user-faculty-id" class="mb-1 block text-sm font-medium text-slate-700">Faculty ID</label>
                     <input id="add-user-faculty-id" type="text" name="faculty_id" value="{{ old('faculty_id') }}" maxlength="50" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                 </div>
+                <div data-position-field>
+                    <label for="add-user-position" class="mb-1 block text-sm font-medium text-slate-700">Position</label>
+                    <input id="add-user-position" type="text" name="position" value="{{ old('position') }}" maxlength="100" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                </div>
                 <div data-faculty-field class="hidden">
                     <label for="add-user-faculty-adviser" class="mb-1 block text-sm font-medium text-slate-700">Faculty adviser</label>
                     <select id="add-user-faculty-adviser" name="faculty_adviser" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
                         <option value="no" @selected(old('faculty_adviser', 'no') === 'no')>No</option>
                         <option value="yes" @selected(old('faculty_adviser') === 'yes')>Yes</option>
                     </select>
-                </div>
-                <div data-position-field>
-                    <label for="add-user-position" class="mb-1 block text-sm font-medium text-slate-700">Position</label>
-                    <input id="add-user-position" type="text" name="position" value="{{ old('position') }}" maxlength="100" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
                 </div>
                 <div data-student-organization-field class="hidden">
                     <label for="add-user-student-organization" class="mb-1 block text-sm font-medium text-slate-700">Student organization</label>
@@ -132,12 +132,37 @@
         <script>
             const accountType = document.getElementById('account_type');
             const facultyAdviser = document.getElementById('add-user-faculty-adviser');
+            const collegeField = document.getElementById('add-user-college');
+            const departmentField = document.getElementById('add-user-department');
             const academicFields = document.querySelectorAll('[data-academic-field]');
             const studentFields = document.querySelectorAll('[data-student-field]');
             const facultyFields = document.querySelectorAll('[data-faculty-field]');
             const positionFields = document.querySelectorAll('[data-position-field]');
             const studentOrganizationFields = document.querySelectorAll('[data-student-organization-field]');
             const organizationFields = document.querySelectorAll('[data-organization-field]');
+            const updateDepartments = () => {
+                const collegeId = collegeField?.value || '';
+                let selectedDepartmentIsVisible = false;
+
+                Array.from(departmentField?.options || []).forEach(option => {
+                    if (!option.value) {
+                        option.hidden = false;
+                        option.disabled = false;
+                        return;
+                    }
+
+                    const matchesCollege = !collegeId || option.dataset.college === collegeId;
+                    option.hidden = !matchesCollege;
+                    option.disabled = !matchesCollege;
+                    if (matchesCollege && option.selected) {
+                        selectedDepartmentIsVisible = true;
+                    }
+                });
+
+                if (!selectedDepartmentIsVisible && departmentField) {
+                    departmentField.value = '';
+                }
+            };
             const updateAccountFields = () => {
                 const isStudent = accountType.value === 'student';
                 const isFaculty = accountType.value === 'faculty';
@@ -152,9 +177,11 @@
                 organizationFields.forEach(field => field.classList.toggle('hidden', !isOutsider));
             };
             accountType.addEventListener('change', updateAccountFields);
+            collegeField?.addEventListener('change', updateDepartments);
             if (facultyAdviser) {
                 facultyAdviser.addEventListener('change', updateAccountFields);
             }
+            updateDepartments();
             updateAccountFields();
         </script>
         </div>

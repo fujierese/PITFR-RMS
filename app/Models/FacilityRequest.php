@@ -173,9 +173,26 @@ class FacilityRequest extends Model
 
     public function recordApprovalSignature(string $approvalType, User $approver): void
     {
+        $signedFile = $approvalType === 'final'
+            ? $this->snapshotSignatureForRecord($approver, 'final')
+            : $this->snapshotSignatureForRecord($approver, $approvalType);
+
+        if ($signedFile) {
+            if ($approvalType === 'final') {
+                $this->final_approval_signature_file = $signedFile;
+            } else {
+                $this->{$approvalType . '_approval_signature_file'} = $signedFile;
+            }
+        }
+
         $payload = json_encode([
             'request_id' => $this->id,
             'approver_id' => $approver->id,
+            'approver_name' => $approver->name,
+            'approver_position' => $approver->position,
+            'approver_role' => (string) ($approver->role ?? ''),
+            'approver_role_label' => $approver->getRoleLabelAttribute(),
+            'signature_file' => $signedFile,
             'type' => $approvalType,
             'time' => now()->toISOString(),
         ]);
@@ -197,15 +214,6 @@ class FacilityRequest extends Model
         if ($approvalType === 'final') {
             $this->final_approval_signature = $this->{$approvalType . '_approval_signature'};
             $meta['final'] = $payload;
-            $signedFile = $this->snapshotSignatureForRecord($approver, 'final');
-            if ($signedFile) {
-                $this->final_approval_signature_file = $signedFile;
-            }
-        } else {
-            $signedFile = $this->snapshotSignatureForRecord($approver, $approvalType);
-            if ($signedFile) {
-                $this->{$approvalType . '_approval_signature_file'} = $signedFile;
-            }
         }
 
         $this->approval_signature_meta = $meta;
@@ -235,6 +243,11 @@ class FacilityRequest extends Model
 
     public function getStageApproverName(string $stage): ?string
     {
+        $snapshot = $this->getApprovalSnapshot($stage);
+        if (!empty($snapshot['approver_name'])) {
+            return (string) $snapshot['approver_name'];
+        }
+
         if ($stage === 'final') {
             $approvedBy = $this->relationLoaded('approvedBy')
                 ? $this->getRelation('approvedBy')
@@ -281,6 +294,29 @@ class FacilityRequest extends Model
         }
 
         return null;
+    }
+
+    public function getStageApproverPosition(string $stage): ?string
+    {
+        $snapshot = $this->getApprovalSnapshot($stage);
+
+        return !empty($snapshot['approver_position']) ? (string) $snapshot['approver_position'] : null;
+    }
+
+    private function getApprovalSnapshot(string $stage): array
+    {
+        $metadata = $this->approval_signature_meta[$stage] ?? null;
+        if (is_array($metadata) && array_is_list($metadata)) {
+            $metadata = end($metadata) ?: null;
+        }
+
+        if (!is_string($metadata) || $metadata === '') {
+            return [];
+        }
+
+        $decoded = json_decode($metadata, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     public function getStageApprovalDate(string $stage): ?Carbon

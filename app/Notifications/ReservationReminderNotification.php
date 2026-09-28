@@ -44,10 +44,28 @@ class ReservationReminderNotification extends Notification
 
     public function toArray($notifiable): array
     {
+        $title = match ($this->reminderType) {
+            'one_day_before' => 'Reservation Reminder',
+            'two_hours_before' => 'Reservation Reminder',
+            'start_time' => 'Reservation Started',
+            default => 'Reservation Update',
+        };
+
+        $body = match ($this->reminderType) {
+            'one_day_before' => 'Your reservation is scheduled for tomorrow.',
+            'two_hours_before' => 'Your reservation begins in 2 hours.',
+            'start_time' => 'Your reservation has started.',
+            default => 'Your reservation status has been updated.',
+        };
+
         return [
             'request_id' => $this->facilityRequest->id,
             'control_number' => $this->facilityRequest->control_number,
             'activity' => $this->facilityRequest->name_of_activity,
+            'status' => 'reservation_reminder',
+            'title' => $title,
+            'body' => $body,
+            'message' => $body,
             'reminder_type' => $this->reminderType,
             'scheduled_for' => $this->scheduledFor->toDateTimeString(),
         ];

@@ -43,6 +43,36 @@ class RequestStatusChangedTest extends TestCase
         $this->assertSame($request->control_number, $payload['control_number']);
     }
 
+    public function test_database_payload_contains_structured_title_and_role_aware_body(): void
+    {
+        $requester = User::factory()->create();
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-2026-071',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Mail Test',
+            'expected_participants' => 10,
+            'start_date' => now()->toDateString(),
+            'end_date' => now()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+            'venue' => [],
+            'equipment' => [],
+            'equipment_quantities' => [],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+        ]);
+
+        $notification = new RequestStatusChanged($request, 'approved', '', 'Juan Dela Cruz', 'Juan Dela Cruz', ['Maria Santos'], 'Supply Office');
+        $payload = $notification->toArray($requester);
+
+        $this->assertSame('Request Approved', $payload['title']);
+        $this->assertStringContainsString('Your request was approved by', $payload['body']);
+        $this->assertStringContainsString('Juan Dela Cruz', $payload['body']);
+    }
+
     public function test_mail_payload_contains_status_label_and_notes(): void
     {
         $requester = User::factory()->create();

@@ -312,11 +312,19 @@ class RequestActionController extends Controller
 
             $statusField = $user->isCustodianVenue() ? 'venue_status' : 'equipment_status';
             $notesField = $user->isCustodianVenue() ? 'venue_notes' : 'equipment_notes';
-            $facilityRequest->update([
+            $statusUpdates = [
                 $statusField => 'rejected',
                 $notesField => $notes,
                 'status' => 'rejected',
-            ]);
+            ];
+
+            if ($statusField === 'equipment_status') {
+                $equipmentCustodianStatuses = $facilityRequest->equipment_custodian_statuses ?? [];
+                $equipmentCustodianStatuses[$user->id] = 'rejected';
+                $statusUpdates['equipment_custodian_statuses'] = $equipmentCustodianStatuses;
+            }
+
+            $facilityRequest->update($statusUpdates);
             $facilityRequest->addHistory(
                 $statusField . '_rejected',
                 'Request rejected by ' . $user->name . ($notes !== '' ? ': ' . $notes : ''),

@@ -13,9 +13,10 @@
         @php
             $data = $notification->data;
             $isNewRequest = ($data['status'] ?? '') === 'new_request';
-            $notificationMessage = $isNewRequest
+            $title = $data['title'] ?? ($isNewRequest ? 'New Request Submitted' : ($data['activity'] ?? 'Request Update'));
+            $notificationMessage = $data['body'] ?? ($isNewRequest
                 ? 'This request is waiting for your verification.'
-                : ($data['message'] ?? ('Status changed to ' . ucfirst(str_replace('_', ' ', $data['status'] ?? ''))));
+                : ($data['message'] ?? ('Status changed to ' . ucfirst(str_replace('_', ' ', $data['status'] ?? '')))));
             $resource = $data['resource'] ?? null;
             if (!$resource && $isNewRequest && auth()->user()?->isCustodian()) {
                 $resource = auth()->user()->assignedCustodianResourceLabel();
@@ -27,15 +28,19 @@
                     <span class="text-2xl">✅</span>
                 @elseif(str_contains($data['status'] ?? '', 'rejected'))
                     <span class="text-2xl">❌</span>
+                @elseif(str_contains($data['status'] ?? '', 'resched'))
+                    <span class="text-2xl">🔄</span>
+                @elseif($isNewRequest)
+                    <span class="text-2xl">📨</span>
                 @else
                     <span class="text-2xl">🔔</span>
                 @endif
             </div>
             <div class="flex-1">
                 <p class="text-sm font-semibold text-gray-800">
-                    {{ $data['activity'] ?? 'Request Update' }}
+                    {{ $title }}
                 </p>
-                <p class="text-xs text-gray-500 mt-0.5">
+                <p class="mt-1 text-sm text-gray-600">
                     {{ $notificationMessage }}
                 </p>
                 @if(!empty($resource))
@@ -44,7 +49,7 @@
                 @if(!empty($data['notes']))
                     <p class="text-xs text-gray-400 mt-1 italic">Note: {{ $data['notes'] }}</p>
                 @endif
-                <p class="text-xs text-gray-300 mt-1">{{ $notification->created_at->diffForHumans() }}</p>
+                <p class="text-xs text-gray-300 mt-2">{{ $notification->created_at->diffForHumans() }}</p>
             </div>
             @if(!$notification->read_at)
                 <span class="shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></span>

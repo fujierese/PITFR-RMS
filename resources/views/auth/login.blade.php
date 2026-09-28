@@ -16,6 +16,17 @@
             animation: login-panel-reveal 700ms ease-out both;
         }
 
+        @media (min-width: 1024px) and (max-height: 760px) {
+            .login-brand-image {
+                height: 300px !important;
+            }
+
+            .login-brand-copy {
+                margin-top: 1.5rem !important;
+                margin-bottom: 0 !important;
+            }
+        }
+
         @media (prefers-reduced-motion: reduce) {
             .login-panel-reveal { animation: none !important; }
         }
@@ -27,9 +38,9 @@
     @endif
 </head>
 
-<body class="h-screen overflow-hidden bg-slate-100 text-slate-100">
+<body class="min-h-screen overflow-x-hidden overflow-y-auto bg-slate-100 text-slate-100">
 
-    <div class="relative h-screen w-full lg:grid lg:min-h-screen lg:grid-cols-[1.12fr_0.88fr]">
+    <div class="relative min-h-screen w-full lg:grid lg:min-h-screen lg:grid-cols-[1.12fr_0.88fr]">
 
         <!-- =========================
              LEFT SIDE — IMAGES / BRAND
@@ -63,7 +74,7 @@
                 </div>
 
                 <div class="mt-4 flex justify-center">
-                    <div class="relative mx-auto w-full max-w-[90%] ml-8 overflow-hidden rounded-[22px] border border-white/10 bg-slate-900 shadow-[0_18px_50px_rgba(15,23,42,0.32)]">
+                    <div class="login-brand-image relative mx-auto w-full max-w-[90%] ml-8 overflow-hidden rounded-[22px] border border-white/10 bg-slate-900 shadow-[0_18px_50px_rgba(15,23,42,0.32)]">
                         <img
                             src="{{ asset('images/loginpage2.jpg') }}"
                             alt="PIT Facility Request Portal"
@@ -72,7 +83,7 @@
                     </div>
                 </div>
 
-                <div class="mt-10 mb-6 pb-4 max-w-[330px] lg:max-w-[360px]">
+                <div class="login-brand-copy mt-10 mb-6 pb-4 max-w-[330px] lg:max-w-[360px]">
                     <h1 class="text-[2.1rem] font-black leading-[0.9] tracking-[-0.04em] text-white xl:text-[2.8rem]">
                         Book the
                         <br>
@@ -92,7 +103,7 @@
              RIGHT SIDE — LOGIN
         ========================== -->
 
-        <section class="login-panel-reveal flex h-screen items-center justify-center overflow-hidden bg-slate-100 px-6 py-6 sm:px-10 lg:px-16 xl:px-24" style="animation-delay: 80ms;">
+        <section class="login-panel-reveal flex min-h-screen h-auto items-start justify-center overflow-visible bg-slate-100 px-6 py-8 sm:px-10 sm:py-10 lg:items-center lg:overflow-y-auto lg:px-16 xl:px-24" style="animation-delay: 80ms;">
 
             <div class="w-full max-w-[460px]">
 

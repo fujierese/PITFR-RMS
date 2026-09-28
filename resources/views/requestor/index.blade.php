@@ -109,17 +109,10 @@
 
 <div class="space-y-4 md:space-y-6">
     <x-page-header
-        :title="$activeTab === 'requests' ? 'My Requests' : 'Dashboard'"
-        :description="$activeTab === 'requests' ? 'View, monitor, and manage all reservation requests submitted under your account.' : 'Stay on top of your reservation activity with a clear overview of the most important updates.'"
+        :title="$activeTab === 'requests' ? 'My Requests' : ($activeTab === 'create' ? 'Create Request' : 'Dashboard')"
+        :description="$activeTab === 'requests' ? 'View, monitor, and manage all reservation requests submitted under your account.' : ($activeTab === 'create' ? 'Submit a new facility request and provide the details needed for review.' : 'Stay on top of your reservation activity with a clear overview of the most important updates.')"
         eyebrow="Requestor workspace"
-    >
-        @if ($activeTab === 'requests')
-            <x-slot:actions>
-                <a href="{{ route('requestor.index', ['tab' => 'dashboard']) }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Dashboard</a>
-                <a href="{{ route('requestor.index', ['tab' => 'requests']) }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">My Requests</a>
-            </x-slot:actions>
-        @endif
-    </x-page-header>
+    />
 
     @if ($activeTab === 'dashboard')
         <section class="rounded-[24px] border border-cyan-200 bg-cyan-50 p-4 shadow-sm sm:p-5 md:rounded-[28px]" aria-labelledby="request-workflow-heading">
@@ -140,14 +133,6 @@
         </section>
     @elseif ($activeTab === 'requests')
         <section class="rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:p-6 md:rounded-[32px] lg:p-8">
-            <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                <div class="max-w-2xl">
-                    <p class="text-sm font-semibold uppercase tracking-[0.3em] text-emerald-600">Reservation management</p>
-                    <h2 class="mt-3 text-2xl font-semibold text-slate-950 sm:text-3xl">My Requests</h2>
-                    <p class="mt-3 text-sm leading-6 text-slate-600">View, monitor, and manage all reservation requests submitted under your account.</p>
-                </div>
-            </div>
-
             @php
                 $filtersExpanded = $statusFilter || $venueFilter || $dateFrom || $dateTo || $sort !== 'latest';
             @endphp
@@ -170,7 +155,7 @@
                 <div id="advanced-filters-panel" class="mt-4 grid gap-4 lg:grid-cols-5 {{ $filtersExpanded ? '' : 'hidden' }}">
                     <div>
                         <label for="status" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Status</label>
-                        <select id="status" name="status" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                        <select id="status" name="status" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                             <option value="">All</option>
                             <option value="pending" {{ $statusFilter === 'pending' ? 'selected' : '' }}>Pending</option>
                             <option value="approved" {{ $statusFilter === 'approved' ? 'selected' : '' }}>Approved</option>
@@ -182,7 +167,7 @@
                     </div>
                     <div>
                         <label for="venue" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Venue</label>
-                        <select id="venue" name="venue" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                        <select id="venue" name="venue" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                             <option value="">All</option>
                             @foreach ($requestVenueOptions as $venueOption)
                                 <option value="{{ $venueOption }}" {{ $venueFilter === $venueOption ? 'selected' : '' }}>{{ $venueOption }}</option>
@@ -191,18 +176,18 @@
                     </div>
                     <div>
                         <label for="sort" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Sort</label>
-                        <select id="sort" name="sort" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                        <select id="sort" name="sort" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                             <option value="latest" {{ $sort === 'latest' ? 'selected' : '' }}>Latest</option>
                             <option value="oldest" {{ $sort === 'oldest' ? 'selected' : '' }}>Oldest</option>
                         </select>
                     </div>
                     <div>
                         <label for="date_from" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Date from</label>
-                        <input type="date" id="date_from" name="date_from" value="{{ $dateFrom }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                        <input type="date" id="date_from" name="date_from" value="{{ $dateFrom }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Crect x=%222%22 y=%223%22 width=%2216%22 height=%2214%22 rx=%222%22/%3E%3Cpath d=%22M2 7h16M6 2v4M14 2v4%22 stroke-linecap=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                     </div>
                     <div>
                         <label for="date_to" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Date to</label>
-                        <input type="date" id="date_to" name="date_to" value="{{ $dateTo }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                        <input type="date" id="date_to" name="date_to" value="{{ $dateTo }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Crect x=%222%22 y=%223%22 width=%2216%22 height=%2214%22 rx=%222%22/%3E%3Cpath d=%22M2 7h16M6 2v4M14 2v4%22 stroke-linecap=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
                     </div>
                 </div>
             </form>
@@ -237,7 +222,7 @@
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Activity</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Venue</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Equipment</th>
-                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Date</th>
+                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Date and Time</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Status</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Actions</th>
                                 </tr>
@@ -249,8 +234,13 @@
                                         $statusBadgeClass = $statusBadgeClasses[$statusKey] ?? 'bg-slate-100 text-slate-700 ring-slate-200';
                                         $statusLabel = $statusLabels[$statusKey] ?? ucfirst(str_replace('_', ' ', $statusKey));
                                         $priorityValue = strtolower((string) ($requestItem->priority ?? ''));
-                                        $priorityLabel = $priorityValue === 'institutional' ? 'Institutional' : ($priorityValue === 'regular' ? 'Regular' : null);
-                                        $priorityBadgeClass = $priorityLabel ? ($priorityBadgeClasses[$priorityValue] ?? 'bg-slate-100 text-slate-700 ring-slate-200') : null;
+                                        $isUrgent = (bool) ($requestItem->is_emergency ?? false);
+                                        $priorityLabel = $isUrgent ? 'Urgent' : ($priorityValue !== '' && $priorityValue !== 'regular'
+                                            ? ($priorityValue === 'institutional' ? 'Institutional' : ucfirst(str_replace('_', ' ', $priorityValue)))
+                                            : null);
+                                        $priorityBadgeClass = $isUrgent
+                                            ? 'bg-rose-100 text-rose-700 ring-rose-200'
+                                            : ($priorityLabel ? ($priorityBadgeClasses[$priorityValue] ?? 'bg-slate-100 text-slate-700 ring-slate-200') : null);
                                         $venueLabel = implode(', ', $requestItem->getVenueNames()) ?: '-';
                                         $equipmentLabel = implode(', ', $requestItem->getEquipmentItems()) ?: '-';
                                         $reservationDate = $requestItem->start_date ? $requestItem->start_date->format('M d, Y') : '-';
@@ -297,17 +287,27 @@
                                             <div class="flex flex-wrap gap-2">
                                                 <x-request-status-badge :request="$requestItem" />
                                                 @if ($priorityLabel)
-                                                    <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $priorityBadgeClass }}">{{ $priorityLabel }}</span>
+                                                    <span class="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $priorityBadgeClass }}" title="{{ $isUrgent ? 'Urgent request' : 'Request priority' }}" aria-label="{{ $isUrgent ? 'Urgent request' : 'Request priority: ' . $priorityLabel }}">@if($isUrgent)<span aria-hidden="true">⚠</span>@endif {{ $priorityLabel }}</span>
                                                 @endif
                                             </div>
                                             @if ($progressLabels)
                                             <div class="mt-3 space-y-2">
                                                 @foreach ($progressLabels as $progressIndex => $progressLabel)
+                                                    @php
+                                                        $progressComplete = $progressIndex + 1 <= $progressActiveIndex;
+                                                        $terminalFailure = in_array($statusKey, ['rejected', 'cancelled'], true) && $progressIndex === count($progressLabels) - 1;
+                                                        $progressIndicatorClass = !$progressComplete
+                                                            ? 'bg-slate-200 text-slate-500'
+                                                            : ($terminalFailure ? 'bg-rose-500 text-white' : ($statusKey === 'pending' ? 'bg-amber-400 text-white' : 'bg-emerald-500 text-white'));
+                                                        $progressTextClass = !$progressComplete
+                                                            ? ''
+                                                            : ($terminalFailure ? 'font-semibold text-rose-700' : ($statusKey === 'pending' ? 'font-semibold text-amber-800' : 'font-semibold text-slate-900'));
+                                                    @endphp
                                                     <div class="flex items-center gap-2 text-xs text-slate-500">
-                                                        <span class="flex h-5 w-5 items-center justify-center rounded-full {{ $progressIndex + 1 <= $progressActiveIndex ? ($statusKey === 'pending' ? 'bg-amber-400 text-white' : 'bg-emerald-500 text-white') : 'bg-slate-200 text-slate-500' }}">
+                                                        <span class="flex h-5 w-5 items-center justify-center rounded-full {{ $progressIndicatorClass }}">
                                                             {{ $progressIndex + 1 }}
                                                         </span>
-                                                        <span class="{{ $progressIndex + 1 <= $progressActiveIndex ? ($statusKey === 'pending' ? 'font-semibold text-amber-800' : 'font-semibold text-slate-900') : '' }}">{{ $progressLabel }}</span>
+                                                        <span class="{{ $progressTextClass }}">{{ $progressLabel }}</span>
                                                     </div>
                                                 @endforeach
                                             </div>
@@ -340,8 +340,13 @@
                             $statusBadgeClass = $statusBadgeClasses[$statusKey] ?? 'bg-slate-100 text-slate-700 ring-slate-200';
                             $statusLabel = $statusLabels[$statusKey] ?? ucfirst(str_replace('_', ' ', $statusKey));
                             $priorityValue = strtolower((string) ($requestItem->priority ?? ''));
-                            $priorityLabel = $priorityValue === 'institutional' ? 'Institutional' : ($priorityValue === 'regular' ? 'Regular' : null);
-                            $priorityBadgeClass = $priorityLabel ? ($priorityBadgeClasses[$priorityValue] ?? 'bg-slate-100 text-slate-700 ring-slate-200') : null;
+                            $isUrgent = (bool) ($requestItem->is_emergency ?? false);
+                            $priorityLabel = $isUrgent ? 'Urgent' : ($priorityValue !== '' && $priorityValue !== 'regular'
+                                ? ($priorityValue === 'institutional' ? 'Institutional' : ucfirst(str_replace('_', ' ', $priorityValue)))
+                                : null);
+                            $priorityBadgeClass = $isUrgent
+                                ? 'bg-rose-100 text-rose-700 ring-rose-200'
+                                : ($priorityLabel ? ($priorityBadgeClasses[$priorityValue] ?? 'bg-slate-100 text-slate-700 ring-slate-200') : null);
                             $venueLabel = implode(', ', $requestItem->getVenueNames()) ?: '-';
                             $equipmentLabel = implode(', ', $requestItem->getEquipmentItems()) ?: '-';
                             $reservationDate = $requestItem->start_date ? $requestItem->start_date->format('M d, Y') : '-';
@@ -363,7 +368,12 @@
                                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{{ $requestItem->control_number ?? '-' }}</p>
                                     <h4 class="mt-2 text-lg font-semibold text-slate-900">{{ $requestItem->name_of_activity ?? '-' }}</h4>
                                 </div>
-                                <x-request-status-badge :request="$requestItem" />
+                                <div class="flex flex-wrap items-center justify-end gap-2">
+                                    <x-request-status-badge :request="$requestItem" />
+                                    @if ($priorityLabel)
+                                        <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset {{ $priorityBadgeClass }}" title="{{ $isUrgent ? 'Urgent request' : 'Request priority' }}" aria-label="{{ $isUrgent ? 'Urgent request' : 'Request priority: ' . $priorityLabel }}">@if($isUrgent)<span aria-hidden="true">⚠</span>@endif {{ $priorityLabel }}</span>
+                                    @endif
+                                </div>
                             </div>
                             <div class="mt-4 space-y-2 text-sm text-slate-600">
                                 <div><span class="font-semibold text-slate-900">Venue:</span> {{ $venueLabel }}</div>

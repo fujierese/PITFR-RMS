@@ -35,6 +35,16 @@
     $activeStudentOrganization = $currentUser && $currentUser->isStudent() ? $currentUser->studentOrganizations()->first() : null;
     $trustedOrganizationDisplay = $activeStudentOrganization?->name ?? $currentUser?->office_or_organization ?? 'Organization not provided';
 @endphp
+<style>
+    .required-asterisk {
+        color: #dc2626;
+        font-weight: 800;
+        font-size: 1rem;
+        line-height: 1;
+        vertical-align: middle;
+    }
+</style>
+
 <form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-has-saved-signature="{{ $currentUser?->e_signature_file ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
     @csrf
 
@@ -45,22 +55,22 @@
                 <div class="max-w-3xl">
                     <p class="text-xs font-semibold uppercase tracking-[0.32em] text-emerald-600">Official request form</p>
                     <h2 class="mt-2 text-2xl font-semibold text-slate-950">Request for the Use of Facility and Equipment</h2>
-                    <p class="mt-3 text-sm leading-6 text-slate-600">Please complete all required fields before submitting your request. Fields marked with (*) are required.</p>
+                    <p class="mt-3 text-sm leading-6 text-slate-600">Please complete all required fields before submitting your request. Fields marked with <span class="required-asterisk">*</span> are required.</p>
                 </div>
                 <div class="flex items-center sm:justify-end">
-                    <span id="draft-status" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm">
-                        <span class="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span id="draft-status" class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm ring-1 ring-amber-200">
+                        <span class="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse"></span>
                         Draft autosave
                     </span>
                 </div>
             </div>
 
             <div class="mb-6">
-                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 mb-3">Request Progress</p>
+                <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Request Progress</p>
                 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                         <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Step 1</p>
-                        <p class="mt-1 text-sm font-semibold text-slate-900">Request Details</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">Requestor Details</p>
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                         <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 2</p>
@@ -68,29 +78,29 @@
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                         <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 3</p>
-                        <p class="mt-1 text-sm font-semibold text-slate-900">Equipment</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">Equipment Requirements</p>
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                         <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 4</p>
-                        <p class="mt-1 text-sm font-semibold text-slate-900">Review & Submit</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">Review & Submit Request</p>
                     </div>
                 </div>
             </div>
 
             <div class="mb-6 rounded-[24px] border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
                 <div class="flex items-start gap-3">
-                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-cyan-700">
-                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-cyan-700 shadow-sm">
+                        <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <circle cx="12" cy="12" r="9"></circle>
                             <path d="M12 16v-4M12 8h.01"></path>
                         </svg>
                     </div>
                     <div class="flex-1">
-                        <p class="text-sm font-semibold text-cyan-900">Need help? Start here.</p>
-                        <ul class="mt-2 space-y-1 text-sm text-cyan-800">
-                            <li>• Select the correct request type and organization before booking facilities.</li>
-                            <li>• Confirm venue and time availability before finalizing equipment and documents.</li>
-                            <li>• Upload only PDF, JPG, or PNG files under 10MB for proposal and signature attachments.</li>
+                        <p class="text-lg font-bold text-cyan-900">Need help? Start here.</p>
+                        <ul class="mt-2 space-y-1 text-base text-cyan-800">
+                            <li>• Enter your details, then choose the venue, date, and time you need.</li>
+                            <li>• Select any equipment you need for your activity.</li>
+                            <li>• Upload clear PDF, JPG, or PNG files smaller than 10MB.</li>
                         </ul>
                     </div>
                 </div>
@@ -148,7 +158,7 @@
                     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
                         @if ($isExternal)
                             <div class="space-y-3">
-                                <label for="organization_name" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Organization Name <span class="text-red-500">*</span></label>
+                                <label for="organization_name" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Organization Name <span class="required-asterisk">*</span></label>
                                 <input id="organization_name" type="text" name="organization_name" value="{{ old('organization_name', $currentUser?->office_or_organization) }}" readonly required class="w-full rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('organization_name') border-red-300 bg-red-50 @enderror">
                                 <p class="text-xs text-slate-500">This is your registered organization. If it is missing or incorrect, update your account details before submitting.</p>
                                 @error('organization_name')
@@ -205,14 +215,14 @@
                     </div>
                     <div class="space-y-4 md:space-y-6">
                         <div>
-                            <label for="name_of_activity" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Activity Name <span class="text-red-500">*</span></label>
+                            <label for="name_of_activity" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Activity Name <span class="required-asterisk">*</span></label>
                             <input id="name_of_activity" type="text" name="name_of_activity" required value="{{ old('name_of_activity') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('name_of_activity') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('name_of_activity') ? 'true' : 'false' }}">
                             @error('name_of_activity')
                                 <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                             @enderror
                         </div>
                         <div>
-                            <label for="purpose" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Purpose <span class="text-red-500">*</span></label>
+                            <label for="purpose" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Purpose <span class="required-asterisk">*</span></label>
                             <textarea id="purpose" name="purpose" rows="3" required class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('purpose') border-red-300 bg-red-50 @enderror">{{ old('purpose') }}</textarea>
                             @error('purpose')
                                 <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
@@ -220,14 +230,14 @@
                         </div>
                         <div class="grid gap-4 md:grid-cols-3 md:gap-5">
                             <div>
-                                <label for="start_date" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Date <span class="text-red-500">*</span></label>
+                                <label for="start_date" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Date <span class="required-asterisk">*</span></label>
                                 <input id="start_date" type="date" name="start_date" required min="{{ now()->toDateString() }}" value="{{ old('start_date') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('start_date') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('start_date') ? 'true' : 'false' }}">
                                 @error('start_date')
                                     <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                                 @enderror
                             </div>
                             <div>
-                                <label for="end_date" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Date (inclusive) <span class="text-red-500">*</span></label>
+                                <label for="end_date" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Date (inclusive) <span class="required-asterisk">*</span></label>
                                 <input id="end_date" type="date" name="end_date" required min="{{ now()->toDateString() }}" value="{{ old('end_date') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('end_date') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('end_date') ? 'true' : 'false' }}">
                                 @error('end_date')
                                     <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
@@ -235,7 +245,7 @@
                                 <p id="overnight-hint" class="mt-2 text-xs text-emerald-600 hidden">Overnight booking detected: end date auto-updated to the next day.</p>
                             </div>
                             <div>
-                                <label for="expected_participants" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Expected No. of Participants <span class="text-red-500">*</span></label>
+                                <label for="expected_participants" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Expected No. of Participants <span class="required-asterisk">*</span></label>
                                 <input id="expected_participants" type="number" name="expected_participants" required min="1" value="{{ old('expected_participants') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('expected_participants') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('expected_participants') ? 'true' : 'false' }}">
                                 @error('expected_participants')
                                     <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
@@ -260,14 +270,14 @@
                         </div>
                         <div class="grid gap-4 md:grid-cols-2 md:gap-5">
                             <div>
-                                <label for="start_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Time <span class="text-red-500">*</span></label>
+                                <label for="start_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Time <span class="required-asterisk">*</span></label>
                                 <input id="start_time" type="time" name="start_time" required value="{{ old('start_time') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('start_time') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('start_time') ? 'true' : 'false' }}">
                                 @error('start_time')
                                     <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                                 @enderror
                             </div>
                             <div>
-                                <label for="end_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Time <span class="text-red-500">*</span></label>
+                                <label for="end_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Time <span class="required-asterisk">*</span></label>
                                 <input id="end_time" type="time" name="end_time" required value="{{ old('end_time') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('end_time') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('end_time') ? 'true' : 'false' }}">
                                 @error('end_time')
                                     <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
@@ -320,7 +330,7 @@
                             </label>
                         </div>
                         <div id="venue-other-wrap" class="mt-4 {{ old('venue') === 'Others (specify)' ? 'block' : 'none' }}">
-                            <label for="venue-other" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Specify Other Venue <span class="text-red-500">*</span></label>
+                            <label for="venue-other" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Specify Other Venue <span class="required-asterisk">*</span></label>
                             <input id="venue-other" type="text" name="other_venue" value="{{ old('other_venue') }}" placeholder="Enter the name of the venue" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('other_venue') border-red-300 bg-red-50 @enderror" @if(old('venue') !== 'Others (specify)') disabled @endif>
                             @error('other_venue')
                                 <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
@@ -341,10 +351,13 @@
                                 <p class="mt-1 text-sm text-slate-500">Choose additional items beyond the venue package.</p>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">Additional items</span>
                                 <p class="text-xs text-slate-500">Real-time availability</p>
                             </div>
                         </div>
+                    </div>
+                    <div id="balay-chair-note" class="hidden mb-4 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900" role="note">
+                        <span class="font-semibold">Balay Alumni already has 50 chairs available onsite.</span>
+                        Request additional Monobloc Chairs only if more seating is needed.
                     </div>
                     <div class="mt-4 space-y-3">
                         @php
@@ -359,7 +372,6 @@
                                     ['name' => 'Sound System', 'quantity' => 1, 'quantity_available' => 1],
                                     ['name' => 'Wireless Microphones', 'quantity' => 2, 'quantity_available' => 2],
                                     ['name' => 'Non-Wireless Microphones', 'quantity' => 2, 'quantity_available' => 2],
-                                    ['name' => 'Aircon', 'quantity' => 2, 'quantity_available' => 2],
                                     ['name' => 'Canopies', 'quantity' => 3, 'quantity_available' => 3],
                                     ['name' => 'Industrial Fans', 'quantity' => 4, 'quantity_available' => 4],
                                     ['name' => 'Iwata Cooler Fans', 'quantity' => 2, 'quantity_available' => 2],
@@ -381,23 +393,10 @@
                                 <input type="checkbox" name="equipment[]" value="{{ $itemName }}" {{ $itemAvailable <= 0 ? 'disabled' : '' }} {{ $isSelected ? 'checked' : '' }} class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="{{ $itemName }}">
                                 <div class="flex flex-1 items-center gap-2">
                                     <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
-                                    @php
-                                        $selectedVenueName = old('venue') ?: null;
-                                        $venueIncludedEquipment = [
-                                            'Balay Alumni' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
-                                        ];
-                                        $isVenueIncludedItem = isset($venueIncludedEquipment[$selectedVenueName]) && in_array($itemName, $venueIncludedEquipment[$selectedVenueName], true);
-                                    @endphp
-                                    @if($isVenueIncludedItem)
-                                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Included</span>
-                                    @endif
                                 </div>
                             </label>
                             <div class="flex flex-col items-start gap-2 sm:items-end sm:text-right">
                                 <span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">{{ $itemAvailable }} / {{ $itemQty }} available</span>
-                                @if($isVenueIncludedItem)
-                                    <span class="text-[10px] font-medium text-emerald-700">Auto-locked: included in the selected venue package.</span>
-                                @endif
                                 <div class="quantity-input-wrap {{ $isSelected ? '' : 'hidden' }}" id="qty-wrap-{{ $loop->index }}">
                                     <label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Qty</label>
                                     <input type="number" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ old('equipment_quantities.'.$itemName) }}" {{ $isSelected ? '' : 'disabled' }} class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-16" placeholder="Enter quantity">
@@ -528,7 +527,7 @@
                             {{-- Activity Proposal for Student/Faculty --}}
                             <div>
                                 <label for="activity_proposal_file" class="mb-3 block text-sm font-semibold text-slate-700">
-                                    Activity Proposal <span class="text-red-500">*</span>
+                                    Activity Proposal <span class="required-asterisk">*</span>
                                 </label>
                                 <p class="mb-3 text-xs text-slate-500">Required document: Comprehensive proposal describing the activity objectives, expected outcomes, and how facilities/equipment support the activity goals.</p>
                                 <div class="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -600,7 +599,7 @@
                             {{-- IGP Receipt for External/Organization --}}
                             <div>
                                 <label for="igp_receipt_file" class="mb-3 block text-sm font-semibold text-slate-700">
-                                    IGP Receipt <span class="text-red-500">*</span>
+                                    IGP Receipt <span class="required-asterisk">*</span>
                                 </label>
                                 <p class="mb-3 text-xs text-slate-500">Required document: Inter-agency Collaborative Agreement (IGP) receipt or approval document for external organizations.</p>
                                 <div data-upload-box class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition duration-200 hover:border-emerald-400">
@@ -635,6 +634,29 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div data-upload-file-card class="mt-3 hidden rounded-2xl border border-slate-200 bg-slate-900/20 p-3 shadow-inner shadow-slate-950/10">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <div class="flex min-w-0 items-center gap-3">
+                                            <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-500/30 bg-slate-800/80 text-slate-200">
+                                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                    <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
+                                                    <path d="M14 2v6h6"></path>
+                                                    <path d="M9 13h6M9 17h6"></path>
+                                                </svg>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <div data-upload-filename class="truncate text-sm font-semibold text-slate-100">IGP Receipt</div>
+                                                <div data-upload-subtitle class="text-xs text-slate-400">IGP Receipt</div>
+                                            </div>
+                                        </div>
+                                        <div data-upload-check class="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-300">
+                                            <span>Ready</span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-700">
+                                        <div data-upload-file-progress class="h-full w-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400"></div>
+                                    </div>
+                                </div>
                                 <div id="igp-receipt-preview" class="mt-3 hidden">
                                     <p class="flex items-center justify-between gap-3 text-sm text-slate-600">Selected file: <span id="igp-receipt-name" class="font-medium"></span><button type="button" data-remove-file="igp_receipt_file" class="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700" aria-label="Remove IGP receipt">Remove</button></p>
                                 </div>
@@ -648,7 +670,7 @@
                         <div class="rounded-[24px] border border-emerald-200 bg-emerald-50 p-4">
                             <div class="mb-4 border-b border-emerald-200 pb-3">
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">Section V. E-Signature</p>
-                                <p class="mt-2 text-sm font-semibold text-emerald-800">Saved E-Signature Status <span class="text-red-500">*</span></p>
+                                <p class="mt-2 text-sm font-semibold text-emerald-800">Saved E-Signature Status <span class="required-asterisk">*</span></p>
                                 <p class="mt-1 text-xs text-emerald-700">Your e-signature is taken from your Account Settings and will appear on the official request form for administrative records.</p>
                             </div>
 
@@ -689,22 +711,30 @@
                     </div>
                     <div id="submission-checklist-alert" role="alert" aria-live="assertive" class="mb-4 hidden rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></div>
                     <div class="space-y-3">
-                        <label class="flex items-start gap-3">
+                        <div class="flex items-start gap-3">
                             <input id="checklist-required-fields" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
-                            <span class="text-sm text-slate-700">All required fields are completed</span>
-                        </label>
-                        <label class="flex items-start gap-3">
+                            <button type="button" data-checklist-target="checklist-required-fields" class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
+                                All required fields are completed
+                            </button>
+                        </div>
+                        <div class="flex items-start gap-3">
                             <input id="checklist-venue-availability" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
-                            <span class="text-sm text-slate-700">Venue and equipment availability confirmed</span>
-                        </label>
-                        <label class="flex items-start gap-3">
+                            <button type="button" data-checklist-target="checklist-venue-availability" class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
+                                Venue and equipment availability confirmed
+                            </button>
+                        </div>
+                        <div class="flex items-start gap-3">
                             <input id="checklist-document-upload" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
-                            <span class="text-sm text-slate-700" id="checklist-document-label">Supporting documents uploaded</span>
-                        </label>
-                        <label class="flex items-start gap-3">
+                            <button type="button" data-checklist-target="checklist-document-upload" class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
+                                <span id="checklist-document-label">Supporting documents uploaded</span>
+                            </button>
+                        </div>
+                        <div class="flex items-start gap-3">
                             <input id="checklist-e-signature" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
-                            <span class="text-sm text-slate-700">E-signature uploaded</span>
-                        </label>
+                            <button type="button" data-checklist-target="checklist-e-signature" class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
+                                E-signature uploaded
+                            </button>
+                        </div>
                     </div>
                 </section>
 
@@ -895,7 +925,8 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('request-form');
-        if (!form) return;
+        if (!form || form.dataset.requestDraftUiInitialized === '1') return;
+        form.dataset.requestDraftUiInitialized = '1';
 
         const draftStatus = document.getElementById('draft-status');
         let formIsDirty = false;
@@ -908,8 +939,14 @@
 
             if (indicator) {
                 indicator.className = dirty
-                    ? 'h-2 w-2 rounded-full bg-amber-400 animate-pulse'
-                    : 'h-2 w-2 rounded-full bg-emerald-400';
+                    ? 'h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse'
+                    : 'h-2.5 w-2.5 rounded-full bg-emerald-500';
+            }
+
+            if (draftStatus) {
+                draftStatus.className = dirty
+                    ? 'inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-sm ring-1 ring-amber-200'
+                    : 'inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm ring-1 ring-emerald-200';
             }
 
             if (label) {
@@ -948,8 +985,10 @@
         const endTimeInput = document.querySelector('input[name="end_time"]');
 
         if (durationInputs.length && startTimeInput && endTimeInput) {
+            let previousDuration = document.querySelector('input[name="reservation_duration"]:checked')?.value || null;
+
             const applyDurationState = () => {
-                const duration = document.querySelector('input[name="reservation_duration"]:checked')?.value ?? 'specific_time';
+                const duration = document.querySelector('input[name="reservation_duration"]:checked')?.value ?? null;
                 const isWholeDay = duration === 'whole_day';
                 startTimeInput.readOnly = isWholeDay;
                 endTimeInput.readOnly = isWholeDay;
@@ -957,10 +996,34 @@
                 if (isWholeDay) {
                     startTimeInput.value = '08:00';
                     endTimeInput.value = '23:59';
+                } else if (previousDuration === 'whole_day' || (!duration && previousDuration)) {
+                    startTimeInput.value = '';
+                    endTimeInput.value = '';
                 }
+
+                previousDuration = duration;
             };
 
-            durationInputs.forEach((input) => input.addEventListener('change', applyDurationState));
+            durationInputs.forEach((input) => {
+                input.addEventListener('mousedown', () => {
+                    input.dataset.wasChecked = input.checked ? 'true' : 'false';
+                });
+                input.addEventListener('keydown', (event) => {
+                    if (event.key === ' ' && input.checked) {
+                        event.preventDefault();
+                        input.checked = false;
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
+                input.addEventListener('click', (event) => {
+                    if (input.dataset.wasChecked === 'true') {
+                        event.preventDefault();
+                        input.checked = false;
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
+                input.addEventListener('change', applyDurationState);
+            });
             applyDurationState();
         }
 
@@ -1027,13 +1090,25 @@
         }
 
         const venueInputs = form.querySelectorAll('input[name="venue"]');
-        venueInputs.forEach((input) => input.addEventListener('change', function () {
-            const otherWrap = document.getElementById('venue-other-wrap');
-            if (otherWrap) {
-                otherWrap.style.display = input.value === 'Others (specify)' && input.checked ? 'block' : 'none';
-            }
-            updateSummary();
-        }));
+        venueInputs.forEach((input) => {
+            input.addEventListener('mousedown', () => {
+                input.dataset.wasChecked = input.checked ? 'true' : 'false';
+            });
+            input.addEventListener('click', (event) => {
+                if (input.dataset.wasChecked === 'true' && input.checked) {
+                    event.preventDefault();
+                    input.checked = false;
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+            input.addEventListener('change', function () {
+                const otherWrap = document.getElementById('venue-other-wrap');
+                if (otherWrap) {
+                    otherWrap.style.display = input.value === 'Others (specify)' && input.checked ? 'block' : 'none';
+                }
+                updateSummary();
+            });
+        });
 
         const otherVenueInput = document.getElementById('venue-other');
         if (otherVenueInput) {
@@ -1049,6 +1124,97 @@
         const checklistVenueAvailability = document.getElementById('checklist-venue-availability');
         const checklistDocumentUpload = document.getElementById('checklist-document-upload');
         const checklistESignature = document.getElementById('checklist-e-signature');
+
+        const isChecklistFieldComplete = (field) => {
+            if (!field) return true;
+            if (field.type === 'radio' || field.type === 'checkbox') return field.checked;
+            if (field.type === 'file') return Boolean(field.files && field.files.length);
+            return String(field.value || '').trim() !== '';
+        };
+
+        const getChecklistTarget = (checklistId) => {
+            const requestorType = form.dataset.requestorType || '';
+            const positionSelect = form.querySelector('[name="requested_by_position"]');
+            const otherPositionInput = form.querySelector('[name="requested_by_position_other"]');
+
+            if (checklistId === 'checklist-required-fields') {
+                const requiredFields = [
+                    requestorType === 'outsider' ? form.querySelector('[name="organization_name"]') : form.querySelector('[name="college_id"]'),
+                    requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
+                    form.querySelector('[name="name_of_activity"]'),
+                    form.querySelector('[name="purpose"]'),
+                    form.querySelector('[name="start_date"]'),
+                    form.querySelector('[name="end_date"]'),
+                    form.querySelector('[name="expected_participants"]'),
+                    form.querySelector('[name="start_time"]'),
+                    form.querySelector('[name="end_time"]'),
+                    form.querySelector('[name="requested_by_position"]'),
+                    positionSelect?.value === 'Other' ? otherPositionInput : null,
+                    form.querySelector('[name="venue"]:checked')
+                ];
+
+                return requiredFields.find((field) => !isChecklistFieldComplete(field)) || null;
+            }
+
+            if (checklistId === 'checklist-venue-availability') {
+                const selectedVenue = form.querySelector('[name="venue"]:checked');
+                if (!selectedVenue) return form.querySelector('[name="venue"]') || null;
+
+                const hasEquipmentSelection = form.querySelectorAll('.equipment-row .equipment-checkbox:checked').length > 0;
+                const hasAvailableEquipmentSelected = [...form.querySelectorAll('.equipment-row')].some((row) => {
+                    const checkbox = row.querySelector('.equipment-checkbox');
+                    const quantity = row.querySelector('input[type="number"]');
+                    return checkbox?.checked && Number(row.dataset.available || 0) >= Number(quantity?.value || 0);
+                });
+
+                if (hasEquipmentSelection && !hasAvailableEquipmentSelected) {
+                    return form.querySelector('.equipment-row .equipment-checkbox, .equipment-row input[type="number"]') || selectedVenue;
+                }
+
+                return null;
+            }
+
+            if (checklistId === 'checklist-document-upload') {
+                const requestContext = form.querySelector('[name="request_context"]')?.value;
+                const isStudent = form.dataset.isStudent === '1';
+                const supportInput = isStudent && requestContext === 'student_organization'
+                    ? form.querySelector('[name="activity_proposal_file"], [name="proposal_file"]')
+                    : form.querySelector('[name="igp_receipt_file"], [name="activity_proposal_file"], [name="proposal_file"]');
+
+                if (supportInput && !supportInput.files?.length) {
+                    return supportInput;
+                }
+
+                return null;
+            }
+
+            if (checklistId === 'checklist-e-signature') {
+                const eSignatureInput = form.querySelector('[name="e_signature_file"]');
+                if (eSignatureInput && !(eSignatureInput.files?.length || form.dataset.hasSavedSignature === '1')) {
+                    return eSignatureInput;
+                }
+                return null;
+            }
+
+            return null;
+        };
+
+        document.querySelectorAll('[data-checklist-target]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const checklistId = button.dataset.checklistTarget;
+                if (!checklistId || document.getElementById(checklistId)?.checked === true) {
+                    return;
+                }
+
+                const target = getChecklistTarget(checklistId);
+                if (!target) {
+                    return;
+                }
+
+                target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                target.focus({ preventScroll: true });
+            });
+        });
 
         const updateChecklistState = () => {
             const requestorType = form.dataset.requestorType;
@@ -1069,14 +1235,7 @@
                 form.querySelector('[name="venue"]:checked')
             ];
 
-            const allRequiredComplete = requiredFields.every((field) => {
-                if (!field) return true;
-                if (field.type === 'radio' || field.type === 'checkbox') {
-                    return field.checked;
-                }
-                return String(field.value).trim() !== '';
-            });
-
+            const allRequiredComplete = requiredFields.every(isChecklistFieldComplete);
             const selectedVenue = form.querySelector('[name="venue"]:checked');
             const hasAvailableEquipmentSelected = [...form.querySelectorAll('.equipment-row')].some((row) => {
                 const checkbox = row.querySelector('.equipment-checkbox');
@@ -1084,22 +1243,15 @@
                 return checkbox?.checked && Number(row.dataset.available || 0) >= Number(quantity?.value || 0);
             });
             const hasEquipmentSelection = form.querySelectorAll('.equipment-row .equipment-checkbox:checked').length > 0;
-            
-            // Check for appropriate document file based on requestor type
             const isStudent = form.dataset.isStudent === '1';
-            const isFaculty = requestorType === 'faculty';
+            const requestContext = form.querySelector('[name="request_context"]')?.value;
             const activityProposalFile = form.querySelector('[name="activity_proposal_file"]')?.files?.length > 0;
+            const proposalFile = form.querySelector('[name="proposal_file"]')?.files?.length > 0;
             const igpReceiptFile = form.querySelector('[name="igp_receipt_file"]')?.files?.length > 0;
             const eSignatureFile = form.querySelector('[name="e_signature_file"]')?.files?.length > 0 || form.dataset.hasSavedSignature === '1';
-            
-            // For backward compatibility, also check proposal_file
-            const proposalFile = form.querySelector('[name="proposal_file"]')?.files?.length > 0;
-            
-            // Has required supporting document based on type
-            const requestContext = form.querySelector('[name="request_context"]')?.value;
             const hasSupportingDocument = isStudent && requestContext === 'student_organization'
                 ? (activityProposalFile || proposalFile)
-                : (isStudent || isFaculty) && !requestContext
+                : (isStudent || requestorType === 'faculty') && !requestContext
                     ? (activityProposalFile || proposalFile)
                     : igpReceiptFile;
 

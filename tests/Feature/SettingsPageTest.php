@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class SettingsPageTest extends TestCase
@@ -20,12 +21,57 @@ class SettingsPageTest extends TestCase
         $response = $this->actingAs($admin)->get(route('admin.settings'));
 
         $response->assertOk();
-        $response->assertSee('Profile Information');
+        $response->assertSee('Profile');
         $response->assertSee('Change Password');
         $response->assertSee('Save Profile');
         $response->assertSee('Update Password');
-        $response->assertSee('Account Security');
-        $response->assertDontSee('E-signature Management');
+        $response->assertSee('Notifications');
+        $response->assertSee('Office / Organization');
+        $response->assertSee('E-signature Management');
+        $response->assertDontSee('Account Security');
+    }
+
+    public function test_admin_can_update_profile_name_and_office(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'name' => 'Old Admin Name',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.settings.profile'), [
+                'surname' => 'Santos',
+                'first_name' => 'Maria',
+                'middle_name' => 'Luz',
+                'suffix' => '',
+                'contact_number' => '09170000000',
+                'office_or_organization' => 'Supply Office',
+            ])
+            ->assertRedirect(route('admin.settings'));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $admin->id,
+            'name' => 'Maria Luz Santos',
+            'office_or_organization' => 'Supply Office',
+        ]);
+    }
+
+    public function test_admin_signature_requires_png_and_confirmation(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->post(route('admin.settings.signature'), [
+                'e_signature_file' => UploadedFile::fake()->create('signature.jpg', 100, 'image/jpeg'),
+                'e_signature_confirmation' => '1',
+            ])
+            ->assertSessionHasErrors('e_signature_file');
+
+        $this->actingAs($admin)
+            ->post(route('admin.settings.signature'), [
+                'e_signature_file' => UploadedFile::fake()->create('signature.png', 100, 'image/png'),
+            ])
+            ->assertSessionHasErrors('e_signature_confirmation');
     }
 
     public function test_requestor_settings_show_registered_organization_and_signature(): void
@@ -41,7 +87,7 @@ class SettingsPageTest extends TestCase
         $response->assertSee('Registered College');
         $response->assertSee('Registered Department');
         $response->assertSee('E-signature Management');
-        $response->assertSee('Email Notifications');
+        $response->assertSee('Notifications');
     }
 
     public function test_requestor_cannot_change_department_through_profile_settings(): void
@@ -98,8 +144,8 @@ class SettingsPageTest extends TestCase
         $response = $this->actingAs($supplyOffice)->get(route('supply-office.settings'));
 
         $response->assertOk();
-        $response->assertSee('Administrative account security');
-        $response->assertSee('Email Notifications');
-        $response->assertDontSee('E-signature Management');
+        $response->assertDontSee('Administrative account security');
+        $response->assertSee('Notifications');
+        $response->assertSee('E-signature Management');
     }
 }

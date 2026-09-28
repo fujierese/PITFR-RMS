@@ -1,4 +1,6 @@
 const initializeReservationDurationToggles = function () {
+    let previousDuration = document.querySelector('input[name="reservation_duration"]:checked')?.value || null;
+
     document.querySelectorAll('.reservation-duration-option').forEach(function (option) {
         const input = option.querySelector('input[name="reservation_duration"]');
         if (!input) {
@@ -31,11 +33,33 @@ const initializeReservationDurationToggles = function () {
                 field.classList.toggle('cursor-not-allowed', isWholeDay);
                 if (isWholeDay) {
                     field.value = field.name === 'start_time' ? '08:00' : '23:59';
+                } else if (previousDuration === 'whole_day' || (!document.querySelector('input[name="reservation_duration"]:checked') && previousDuration)) {
+                    field.value = '';
                 }
             });
         };
 
-        input.addEventListener('change', updateState);
+        input.addEventListener('mousedown', function () {
+            input.dataset.wasChecked = input.checked ? 'true' : 'false';
+        });
+        input.addEventListener('keydown', function (event) {
+            if (event.key === ' ' && input.checked) {
+                event.preventDefault();
+                input.checked = false;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+        input.addEventListener('click', function (event) {
+            if (input.dataset.wasChecked === 'true') {
+                event.preventDefault();
+                input.checked = false;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+        input.addEventListener('change', function () {
+            updateState();
+            previousDuration = document.querySelector('input[name="reservation_duration"]:checked')?.value || null;
+        });
         updateState();
     });
 };
@@ -143,6 +167,7 @@ const initializeRequestForm = function () {
     const equipmentSelectionPanel = document.getElementById('equipment-selection-panel');
     const venueDefaultEquipmentPanel = document.getElementById('venue-default-equipment-panel');
     const venueDefaultEquipmentList = document.getElementById('venue-default-equipment-list');
+    const balayChairNote = document.getElementById('balay-chair-note');
     const expectedParticipantsInput = form.querySelector('input[name="expected_participants"]');
     const equipmentCheckboxes = form.querySelectorAll('input[name="equipment[]"]');
     const rows = form.querySelectorAll('.equipment-row');
@@ -157,6 +182,105 @@ const initializeRequestForm = function () {
         time: document.getElementById('summary-time'),
         equipment: document.getElementById('summary-equipment')
     };
+
+    const isChecklistFieldComplete = function (field) {
+        if (!field) {
+            return true;
+        }
+
+        if (field.type === 'radio' || field.type === 'checkbox') {
+            return field.checked;
+        }
+
+        if (field.type === 'file') {
+            return Boolean(field.files && field.files.length);
+        }
+
+        return String(field.value || '').trim() !== '';
+    };
+
+    const getChecklistTarget = function (checklistId) {
+        const requestorType = form.dataset.requestorType || '';
+        const positionSelect = form.querySelector('[name="requested_by_position"]');
+        const otherPositionInput = form.querySelector('[name="requested_by_position_other"]');
+
+        if (checklistId === 'checklist-required-fields') {
+            const requiredFields = [
+                requestorType === 'outsider' ? form.querySelector('[name="organization_name"]') : form.querySelector('[name="college_id"]'),
+                requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
+                form.querySelector('[name="name_of_activity"]'),
+                form.querySelector('[name="purpose"]'),
+                form.querySelector('[name="start_date"]'),
+                form.querySelector('[name="end_date"]'),
+                form.querySelector('[name="expected_participants"]'),
+                form.querySelector('[name="start_time"]'),
+                form.querySelector('[name="end_time"]'),
+                form.querySelector('[name="requested_by_position"]'),
+                positionSelect?.value === 'Other' ? otherPositionInput : null,
+                form.querySelector('[name="venue"]:checked')
+            ];
+
+            return requiredFields.find(function (field) {
+                return !isChecklistFieldComplete(field);
+            }) || null;
+        }
+
+        if (checklistId === 'checklist-venue-availability') {
+            const selectedVenue = form.querySelector('[name="venue"]:checked');
+            if (!selectedVenue) {
+                return form.querySelector('[name="venue"]') || null;
+            }
+
+            const equipmentSelected = form.querySelectorAll('.equipment-checkbox:checked').length > 0;
+            const hasAvailableEquipmentSelected = Array.from(form.querySelectorAll('.equipment-row')).some(function (row) {
+                const checkbox = row.querySelector('.equipment-checkbox');
+                const quantity = row.querySelector('input[type="number"]');
+                return checkbox?.checked && Number(row.dataset.available || 0) >= Number(quantity?.value || 0);
+            });
+
+            if (equipmentSelected && !hasAvailableEquipmentSelected) {
+                return form.querySelector('.equipment-row .equipment-checkbox, .equipment-row input[type="number"]') || selectedVenue;
+            }
+
+            return null;
+        }
+
+        if (checklistId === 'checklist-document-upload') {
+            const requestContext = form.querySelector('[name="request_context"]')?.value;
+            const isStudent = form.dataset.isStudent === '1';
+            const supportInput = isStudent && requestContext === 'student_organization'
+                ? form.querySelector('[name="activity_proposal_file"], [name="proposal_file"]')
+                : form.querySelector('[name="igp_receipt_file"], [name="activity_proposal_file"], [name="proposal_file"]');
+
+            return supportInput && !supportInput.files?.length ? supportInput : null;
+        }
+
+        if (checklistId === 'checklist-e-signature') {
+            const eSignatureInput = form.querySelector('[name="e_signature_file"]');
+            return eSignatureInput && !(eSignatureInput.files?.length || form.dataset.hasSavedSignature === '1') ? eSignatureInput : null;
+        }
+
+        return null;
+    };
+
+    document.querySelectorAll('[data-checklist-target]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const checklistId = button.dataset.checklistTarget;
+            if (!checklistId || document.getElementById(checklistId)?.checked === true) {
+                return;
+            }
+
+            const target = getChecklistTarget(checklistId);
+            if (!target) {
+                return;
+            }
+
+            target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            if (typeof target.focus === 'function') {
+                target.focus({ preventScroll: true });
+            }
+        });
+    });
 
     const formatDisplayDate = function (value) {
         if (!value) {
@@ -182,6 +306,9 @@ const initializeRequestForm = function () {
 
     const updateChecklistState = function () {
         const requestorType = form.dataset.requestorType || '';
+        const positionSelect = form.querySelector('[name="requested_by_position"]');
+        const otherPositionInput = form.querySelector('[name="requested_by_position_other"]');
+
         const requiredFields = [
             requestorType === 'outsider' ? form.querySelector('[name="organization_name"]') : form.querySelector('[name="college_id"]'),
             requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
@@ -193,41 +320,35 @@ const initializeRequestForm = function () {
             form.querySelector('[name="start_time"]'),
             form.querySelector('[name="end_time"]'),
             form.querySelector('[name="requested_by_position"]'),
+            positionSelect?.value === 'Other' ? otherPositionInput : null,
             form.querySelector('[name="venue"]:checked')
         ];
-        const allRequiredComplete = requiredFields.every(function (field) {
-            if (!field) {
-                return true;
-            }
-            return field.type === 'radio' || field.type === 'checkbox'
-                ? field.checked
-                : String(field.value || '').trim() !== '';
-        });
+        const allRequiredComplete = requiredFields.every(isChecklistFieldComplete);
         const selectedVenue = form.querySelector('[name="venue"]:checked');
         const equipmentSelected = form.querySelectorAll('.equipment-checkbox:checked').length > 0;
 
-        const currentSupportingInput = requestorType === 'student' || requestorType === 'faculty'
-            ? form.querySelector('[name="activity_proposal_file"]')
-            : form.querySelector('[name="igp_receipt_file"]');
-
-        const activityProposalSelected = Boolean(form.querySelector('[name="activity_proposal_file"]')?.files?.length);
-        const igpReceiptSelected = Boolean(form.querySelector('[name="igp_receipt_file"]')?.files?.length);
+        const requestContext = form.querySelector('[name="request_context"]')?.value;
+        const isStudent = form.dataset.isStudent === '1';
+        const hasFileUpload = (isStudent && requestContext === 'student_organization')
+            ? Boolean(form.querySelector('[name="activity_proposal_file"]')?.files?.length || form.querySelector('[name="proposal_file"]')?.files?.length)
+            : Boolean(form.querySelector('[name="igp_receipt_file"]')?.files?.length || form.querySelector('[name="activity_proposal_file"]')?.files?.length || form.querySelector('[name="proposal_file"]')?.files?.length);
         const eSignatureSelected = Boolean(form.querySelector('[name="e_signature_file"]')?.files?.length) || form.dataset.hasSavedSignature === '1';
-        const supportingDocumentSelected = currentSupportingInput ? Boolean(currentSupportingInput.files?.length) : false;
 
         const requiredChecklist = document.getElementById('checklist-required-fields');
         const venueChecklist = document.getElementById('checklist-venue-availability');
         const documentChecklist = document.getElementById('checklist-document-upload');
         const signatureChecklist = document.getElementById('checklist-e-signature');
         if (requiredChecklist) requiredChecklist.checked = allRequiredComplete;
-        if (venueChecklist) venueChecklist.checked = Boolean(selectedVenue) && (!equipmentSelected || Array.from(form.querySelectorAll('.equipment-row')).some(row => {
+        if (venueChecklist) venueChecklist.checked = Boolean(selectedVenue) && (!equipmentSelected || Array.from(form.querySelectorAll('.equipment-row')).some(function (row) {
             const checkbox = row.querySelector('.equipment-checkbox');
             const quantity = row.querySelector('input[type="number"]');
             return checkbox?.checked && Number(row.dataset.available || 0) >= Number(quantity?.value || 0);
         }));
-        if (documentChecklist) documentChecklist.checked = supportingDocumentSelected;
+        if (documentChecklist) documentChecklist.checked = hasFileUpload;
         if (signatureChecklist) signatureChecklist.checked = eSignatureSelected;
-        if (checklistWarning && [requiredChecklist, venueChecklist, documentChecklist, signatureChecklist].every(item => item?.checked === true)) {
+        if (checklistWarning && [requiredChecklist, venueChecklist, documentChecklist, signatureChecklist].every(function (item) {
+            return item?.checked === true;
+        })) {
             checklistWarning.classList.add('hidden');
             checklistWarning.textContent = '';
         }
@@ -616,7 +737,7 @@ const initializeRequestForm = function () {
         };
 
         const summaryDate = endDate && endDate !== startDate ? `${formatDate(startDate)} – ${formatDate(endDate)}` : formatDate(startDate);
-        return `${summaryDate}<br>${formatTime(startTime)} – ${formatTime(endTime)}`;
+            return `${summaryDate}\n${formatTime(startTime)} – ${formatTime(endTime)}`;
     };
 
     const updateSelectedItemsSummary = function () {
@@ -624,24 +745,10 @@ const initializeRequestForm = function () {
         const venueText = selectedVenue ? selectedVenue.value : (venueSelect?.value || 'No venue selected yet.');
         document.getElementById('summary-venue').textContent = 'Venue: ' + venueText;
 
-        const venueDefaultEquipmentMap = {
-            'Balay Alumni': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
-        };
-
-        const selectedVenueName = selectedVenue ? selectedVenue.value : (venueSelect?.value || null);
-        const defaultItems = selectedVenueName && Object.prototype.hasOwnProperty.call(venueDefaultEquipmentMap, selectedVenueName)
-            ? venueDefaultEquipmentMap[selectedVenueName]
-            : [];
-
         const selectedEquipment = Array.from(form.querySelectorAll('input[name="equipment[]"]:checked'));
         const summaryEquipment = document.getElementById('summary-equipment');
 
         const mergedEquipment = [...selectedEquipment].map(checkbox => checkbox.value);
-        defaultItems.forEach(item => {
-            if (!mergedEquipment.includes(item)) {
-                mergedEquipment.push(item);
-            }
-        });
 
         if (mergedEquipment.length === 0) {
             summaryEquipment.innerHTML = 'Equipment: No equipment selected.';
@@ -689,17 +796,7 @@ const initializeRequestForm = function () {
             return;
         }
 
-        const list = {
-            'Balay Alumni': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
-        };
-
-        const items = list[venueName] || [];
-        venueDefaultEquipmentList.innerHTML = items.map(item => `
-            <li class="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white/70 px-3 py-2">
-                <span class="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-                <span class="font-medium text-emerald-800">${escapeHtml(item)}</span>
-            </li>
-        `).join('');
+        venueDefaultEquipmentList.innerHTML = '';
     };
 
     const decodeHtmlEntities = function (value) {
@@ -1198,12 +1295,12 @@ const initializeRequestForm = function () {
                 utilizationCard.appendChild(infoWrap);
 
                 const scheduleWrap = document.createElement('div');
-                scheduleWrap.className = 'mt-2 border-t border-amber-200 pt-2 text-[11px] text-slate-500';
+                scheduleWrap.className = 'mt-2 whitespace-pre-line border-t border-amber-200 pt-2 text-[11px] text-slate-500';
                 const scheduleTitle = document.createElement('div');
                 scheduleTitle.className = 'font-medium';
                 scheduleTitle.textContent = 'Reservation Schedule';
                 const scheduleContent = document.createElement('div');
-                scheduleContent.textContent = getScheduleSummary();
+                    scheduleContent.textContent = getScheduleSummary().replace(/<br>/g, '\n');
                 scheduleWrap.appendChild(scheduleTitle);
                 scheduleWrap.appendChild(scheduleContent);
                 utilizationCard.appendChild(scheduleWrap);
@@ -1471,80 +1568,41 @@ const initializeRequestForm = function () {
         const selectedVenues = Array.from(form.querySelectorAll('input[name="venue"]:checked'))
             .map(input => input.value);
 
-        const venueDefaultEquipmentMap = {
-            'Balay Alumni': ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Aircon', 'Tables', 'Chairs'],
-        };
-
-        const defaultVenue = selectedVenues.find(venue => Object.prototype.hasOwnProperty.call(venueDefaultEquipmentMap, venue));
-        const isVenuePackage = Boolean(defaultVenue);
-
         if (equipmentSelectionPanel) {
-            equipmentSelectionPanel.style.display = isVenuePackage ? 'none' : 'block';
+            equipmentSelectionPanel.style.display = 'block';
         }
 
         if (venueDefaultEquipmentPanel) {
-            venueDefaultEquipmentPanel.style.display = isVenuePackage ? 'block' : 'none';
+            venueDefaultEquipmentPanel.style.display = 'none';
         }
 
-        if (isVenuePackage) {
-            renderVenueDefaultEquipmentList(defaultVenue);
+        if (balayChairNote) {
+            balayChairNote.classList.toggle('hidden', !selectedVenues.includes('Balay Alumni'));
         }
 
         const balayIncompatibleEquipment = [
             'Canopies',
             'Industrial Fans',
-            'Iwata Cooler Fans',
-            'Monobloc Chairs'
+            'Iwata Cooler Fans'
         ];
 
         const equipmentRows = form.querySelectorAll('.equipment-row');
-        const venueDefaultSet = new Set();
-
-        selectedVenues.forEach(venue => {
-            (venueDefaultEquipmentMap[venue] || []).forEach(item => venueDefaultSet.add(item));
-        });
-
         equipmentRows.forEach(row => {
             const checkbox = row.querySelector('input[name="equipment[]"]');
             const itemName = checkbox ? checkbox.value : '';
-            const isDefaultEquipment = venueDefaultSet.has(itemName);
             const isBalaySelected = selectedVenues.includes('Balay Alumni');
             const isIncompatible = isBalaySelected && balayIncompatibleEquipment.includes(itemName);
 
-            if (isDefaultEquipment) {
-                checkbox.checked = true;
-                checkbox.dataset.venueDefault = 'true';
-                checkbox.setAttribute('readonly', 'readonly');
-                checkbox.disabled = true;
-                row.classList.add('border-emerald-300', 'bg-emerald-50/60');
-                row.style.opacity = '1';
+            checkbox.dataset.venueDefault = 'false';
+            if (isIncompatible) {
+                row.style.opacity = '0.5';
                 row.style.pointerEvents = 'none';
-
-                const qtyWrap = row.querySelector('.quantity-input-wrap');
-                if (qtyWrap) {
-                    qtyWrap.style.display = 'none';
-                    const qtyInput = qtyWrap.querySelector('input[type="number"]');
-                    if (qtyInput) {
-                        qtyInput.value = '1';
-                        qtyInput.disabled = true;
-                    }
-                }
-
-                if (checkbox.matches('input[name="equipment[]"]')) {
-                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-                }
+                checkbox.checked = false;
+                checkbox.disabled = true;
             } else {
-                checkbox.dataset.venueDefault = 'false';
-                if (isIncompatible) {
-                    row.style.opacity = '0.5';
-                    row.style.pointerEvents = 'none';
-                    checkbox.checked = false;
-                    checkbox.disabled = true;
-                } else {
-                    row.style.opacity = '1';
-                    row.style.pointerEvents = 'auto';
-                    checkbox.disabled = false;
-                }
+                row.style.opacity = '1';
+                row.style.pointerEvents = 'auto';
+                checkbox.disabled = false;
             }
         });
 
@@ -1553,6 +1611,10 @@ const initializeRequestForm = function () {
 
     const attachSelectionListeners = function () {
         venueRadioInputs.forEach(radio => {
+            radio.addEventListener('mousedown', function () {
+                radio.dataset.wasChecked = radio.checked ? 'true' : 'false';
+            });
+
             const handleVenueSelection = function () {
                 applyVenueSpecificEquipmentRules();
                 updateOtherVenueVisibility();
@@ -1564,7 +1626,13 @@ const initializeRequestForm = function () {
                 saveDraft();
             };
 
-            radio.addEventListener('click', handleVenueSelection);
+            radio.addEventListener('click', function (event) {
+                if (radio.dataset.wasChecked === 'true' && radio.checked) {
+                    event.preventDefault();
+                    radio.checked = false;
+                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
             radio.addEventListener('change', handleVenueSelection);
         });
 

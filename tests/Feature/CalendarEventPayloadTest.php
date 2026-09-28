@@ -121,7 +121,7 @@ class CalendarEventPayloadTest extends TestCase
         $this->assertSame('PIT Multi-Purpose Gymnasium, CHIC Conference Hall', $event['venue']);
     }
 
-    public function test_requestor_calendar_only_shows_own_reservations(): void
+    public function test_requestor_calendar_shows_other_reservations_as_view_only(): void
     {
         $owner = User::factory()->create([
             'name' => 'Personal Requestor',
@@ -184,7 +184,10 @@ class CalendarEventPayloadTest extends TestCase
         $response->assertOk();
         $eventIds = collect($response->json())->pluck('id')->all();
         $this->assertContains($myRequest->id, $eventIds);
-        $this->assertNotContains($otherRequest->id, $eventIds);
+
+        $eventsById = collect($response->json())->keyBy('id');
+        $this->assertTrue($eventsById[$myRequest->id]['extendedProps']['isOwner']);
+        $this->assertFalse($eventsById[$otherRequest->id]['extendedProps']['isOwner']);
     }
 
     public function test_calendar_events_preserve_exact_multi_day_time_range_boundaries(): void

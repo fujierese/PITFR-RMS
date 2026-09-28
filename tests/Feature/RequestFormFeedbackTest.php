@@ -45,6 +45,19 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringNotContainsString('Requested Importance', $html);
     }
 
+    public function test_request_form_marks_initialized_draft_state_to_prevent_duplicate_bindings(): void
+    {
+        $html = view('requestor.partials.request_form', [
+            'controlNumber' => 'FER-2026-001',
+            'venueOptions' => ['Gymnasium'],
+            'equipment' => collect(),
+            'errors' => new \Illuminate\Support\ViewErrorBag(),
+            'requestorType' => 'student',
+        ])->render();
+
+        $this->assertStringContainsString('requestDraftUiInitialized', $html);
+    }
+
     public function test_request_form_shows_default_equipment_options_when_database_is_empty(): void
     {
         $html = view('requestor.partials.request_form', [
@@ -59,10 +72,44 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringContainsString('Wireless Microphones', $html);
         $this->assertStringContainsString('Non-Wireless Microphones', $html);
         $this->assertStringContainsString('Monobloc Chairs', $html);
+        $this->assertStringContainsString('Balay Alumni already has 50 chairs available onsite.', $html);
+        $this->assertStringNotContainsString('Aircon', $html);
         $this->assertStringNotContainsString('value="Wireless Microphone"', $html);
         $this->assertStringNotContainsString('value="Non-wireless Microphone"', $html);
         $this->assertStringNotContainsString('value="Monobloc chairs"', $html);
         $this->assertStringNotContainsString('value="Chairs"', $html);
+    }
+
+    public function test_request_form_checklist_items_include_scroll_targets_for_missing_fields(): void
+    {
+        $html = view('requestor.partials.request_form', [
+            'controlNumber' => 'FER-2026-001',
+            'venueOptions' => ['Gymnasium'],
+            'equipment' => collect(),
+            'errors' => new \Illuminate\Support\ViewErrorBag(),
+            'requestorType' => 'student',
+        ])->render();
+
+        $this->assertStringContainsString('data-checklist-target="checklist-required-fields"', $html);
+        $this->assertStringContainsString('data-checklist-target="checklist-venue-availability"', $html);
+        $this->assertStringContainsString('data-checklist-target="checklist-document-upload"', $html);
+        $this->assertStringContainsString('data-checklist-target="checklist-e-signature"', $html);
+    }
+
+    public function test_external_request_form_uses_consistent_igp_receipt_upload_ui(): void
+    {
+        $html = view('requestor.partials.request_form', [
+            'controlNumber' => 'FER-2026-001',
+            'venueOptions' => ['Gymnasium'],
+            'equipment' => collect(),
+            'errors' => new \Illuminate\Support\ViewErrorBag(),
+            'requestorType' => 'outsider',
+        ])->render();
+
+        $this->assertStringContainsString('id="igp_receipt_file"', $html);
+        $this->assertStringContainsString('data-upload-file-card', $html);
+        $this->assertStringContainsString('data-upload-filename', $html);
+        $this->assertStringContainsString('igp-receipt-preview', $html);
     }
 
     public function test_student_form_displays_trusted_student_organization_as_the_source_of_truth(): void
