@@ -60,6 +60,17 @@
             overflow: hidden;
         }
 
+        .preview-warning {
+            margin: 0 0 2mm;
+            border: 1px solid #b91c1c;
+            background: #fef2f2;
+            color: #991b1b;
+            padding: 2mm 3mm;
+            text-align: center;
+            font-size: 9pt;
+            font-weight: 700;
+        }
+
         .print-settings-helper {
             position: relative;
             width: 100%;
@@ -971,6 +982,9 @@
                 <div class="copy-form" aria-label="Official facility request form">
                     <span class="copy-label">COPY {{ $copy }}</span>
                     <div class="form-body">
+                        @if($request->status !== 'approved')
+                            <div class="preview-warning">PREVIEW ONLY - NOT APPROVED</div>
+                        @endif
                         <div class="header-row">
                             <div class="logo-box">
                                 <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo">
@@ -1110,6 +1124,9 @@
                             <div style="font-size: 0.52rem; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 0.4rem; color: var(--muted);">
                                 @if($request->e_signature_file)Electronic Signature@else Signature over printed name @endif
                             </div>
+                            @if($signatureSerial)
+                                <div style="font-size: 0.52rem; margin-top: 0.2rem; color: var(--muted);">Serial No. {{ $signatureSerial }}</div>
+                            @endif
                         </div>
 
                         <div class="approval-row">
@@ -1184,11 +1201,13 @@
             }
         };
 
-        window.addEventListener('load', function () {
-            setTimeout(function () {
-                window.print();
-            }, 200);
-        });
+        @if($request->status === 'approved')
+            window.addEventListener('load', function () {
+                setTimeout(function () {
+                    window.print();
+                }, 200);
+            });
+        @endif
     </script>
 </body>
 </html>

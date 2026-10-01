@@ -85,6 +85,10 @@ class FacilityRequestPolicy
 
     public function print(User $user, FacilityRequest $facilityRequest): bool
     {
+        if ($user->id === $facilityRequest->requested_by_id) {
+            return true;
+        }
+
         return $facilityRequest->status === 'approved'
             && $this->view($user, $facilityRequest);
     }

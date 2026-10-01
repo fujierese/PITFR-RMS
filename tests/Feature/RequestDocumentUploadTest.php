@@ -60,6 +60,12 @@ class RequestDocumentUploadTest extends TestCase
             'quantity_available' => 100,
         ]);
         Equipment::factory()->create([
+            'name' => 'Aircon',
+            'custodian_id' => $custodian->id,
+            'quantity' => 4,
+            'quantity_available' => 4,
+        ]);
+        Equipment::factory()->create([
             'name' => 'Monobloc chairs',
             'custodian_id' => $custodian->id,
         ]);
@@ -246,6 +252,75 @@ class RequestDocumentUploadTest extends TestCase
         $this->assertNull($request->igp_receipt_file);
     }
 
+    public function test_student_can_request_aircon_for_balay_alumni(): void
+    {
+        $this->actingAs($this->studentUser);
+
+        $response = $this->post(route('requestor.store'), [
+            'requested_by_position' => 'Student',
+            'department' => 'Computer Science',
+            'name_of_activity' => 'Balay Alumni Event',
+            'expected_participants' => 20,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'venue' => 'Balay Alumni',
+            'equipment' => ['Aircon'],
+            'equipment_quantities' => ['Aircon' => 1],
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
+        ]);
+
+        $response->assertRedirect()->assertSessionHasNoErrors();
+
+        $request = FacilityRequest::where('requested_by_id', $this->studentUser->id)->firstOrFail();
+        $this->assertSame(1, $request->getEquipmentQuantities()['Aircon']);
+    }
+
+    public function test_student_can_request_iwata_cooler_fans_for_chic_and_balay_alumni(): void
+    {
+        Equipment::where('name', 'Iwata Cooler Fans')->update([
+            'quantity' => 4,
+            'quantity_available' => 4,
+        ]);
+
+        $this->actingAs($this->studentUser);
+
+        foreach ([
+            'Conference Hall & Interaction Center (CHIC)',
+            'Balay Alumni',
+        ] as $index => $venue) {
+            $response = $this->post(route('requestor.store'), [
+                'requested_by_position' => 'Student',
+                'department' => 'Computer Science',
+                'name_of_activity' => 'Backup Cooling Request ' . $index,
+                'expected_participants' => 20,
+                'start_date' => now()->addDay()->toDateString(),
+                'end_date' => now()->addDay()->toDateString(),
+                'start_time' => '09:00',
+                'end_time' => '12:00',
+                'venue' => $venue,
+                'equipment' => ['Iwata Cooler Fans'],
+                'equipment_quantities' => ['Iwata Cooler Fans' => 1],
+                'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+                'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
+            ]);
+
+            $response->assertRedirect()->assertSessionHasNoErrors();
+        }
+
+        $this->assertSame(2, FacilityRequest::where('requested_by_id', $this->studentUser->id)->count());
+        $this->assertDatabaseHas('facility_requests', [
+            'requested_by_id' => $this->studentUser->id,
+            'name_of_activity' => 'Backup Cooling Request 0',
+        ]);
+        $this->assertDatabaseHas('facility_requests', [
+            'requested_by_id' => $this->studentUser->id,
+            'name_of_activity' => 'Backup Cooling Request 1',
+        ]);
+    }
+
     public function test_requestor_submitted_priority_is_ignored_and_final_classification_stays_regular(): void
     {
         $this->actingAs($this->studentUser);
@@ -400,6 +475,32 @@ class RequestDocumentUploadTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('activity_proposal_file');
+    }
+
+    public function test_urgent_request_more_than_48_hours_away_shows_eligibility_error(): void
+    {
+        $this->actingAs($this->studentUser);
+        $requestDate = now()->addDays(4)->toDateString();
+
+        $response = $this->post(route('requestor.store'), [
+            'department' => 'Computer Science',
+            'name_of_activity' => 'Urgent Workshop',
+            'expected_participants' => 30,
+            'start_date' => $requestDate,
+            'end_date' => $requestDate,
+            'start_time' => '13:00',
+            'end_time' => '15:00',
+            'venue' => 'Covered Court',
+            'equipment' => [],
+            'is_emergency' => true,
+            'emergency_justification' => 'This request needs urgent review.',
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
+        ]);
+
+        $response->assertSessionHasErrors([
+            'is_emergency' => 'Emergency requests are only allowed within 48 hours of the reservation schedule.',
+        ]);
     }
 
     public function test_file_type_validation(): void

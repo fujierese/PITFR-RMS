@@ -75,7 +75,7 @@
 {{-- Hero --}}
 <section id="home" class="relative isolate overflow-hidden bg-cover bg-top px-4 py-14 text-center text-white sm:px-6 sm:py-16 lg:py-20 min-h-[clamp(620px,calc(100vh-64px),820px)]"
         style="background-image: url('{{ asset('images/GPD-BG.jpg') }}');">
-    <div class="absolute inset-0 bg-slate-950/20"></div>
+    <div class="absolute inset-0 bg-slate-950/50"></div>
     <div class="relative z-10 mx-auto max-w-4xl">
         <div class="mx-auto mb-8 flex items-center justify-center sm:h-64 sm:w-64 lg:h-72 lg:w-72">
             <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo"
@@ -87,9 +87,11 @@
         <p class="text-lg font-semibold text-emerald-200 mb-2">
             Palompon Institute of Technology
         </p>
-        <p class="mx-auto mb-8 max-w-2xl text-base text-slate-200 sm:text-lg">
-            Preview public facility availability, explore venue schedules, and sign in to submit reservation requests for PIT venues and equipment.
-        </p>
+        <div class="mx-auto mb-8 max-w-2xl rounded-2xl border border-white/25 bg-slate-950/45 px-5 py-4 shadow-xl backdrop-blur-md">
+            <p class="text-base font-medium leading-relaxed text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] sm:text-lg">
+                Preview public facility availability, explore venue schedules, and sign in to submit reservation requests for PIT venues and equipment.
+            </p>
+        </div>
     </div>
 </section>
 

@@ -55,10 +55,22 @@ class ReferenceDataSeederTest extends TestCase
             User::where('username', 'jrvillas@gmail.com')->value('id'),
             Equipment::where('name', 'Iwata Cooler Fans')->first()->getAuthorizedCustodianIds(),
         );
-        $this->assertSame([], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Balay Alumni'));
-        $this->assertNotContains('Monobloc Chairs', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Balay Alumni'));
+        $this->assertContains('Monobloc Chairs', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Balay Alumni'));
+        $this->assertSame([
+            'Sound System',
+            'Wireless Microphones',
+            'Non-Wireless Microphones',
+            'Tables',
+            'Chairs',
+        ], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Balay Alumni'));
         $this->assertSame([], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Conference Hall & Interaction Center (CHIC)'));
         $this->assertSame([], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Gymnasium'));
+        $this->assertNotContains('Aircon', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Balay Alumni'));
+        $this->assertNotContains('Aircon', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Conference Hall & Interaction Center (CHIC)'));
+        $this->assertNotContains('Iwata Cooler Fans', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Balay Alumni'));
+        $this->assertNotContains('Iwata Cooler Fans', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Bahay Alumni'));
+        $this->assertNotContains('Iwata Cooler Fans', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Conference Hall & Interaction Center (CHIC)'));
+        $this->assertContains('Iwata Cooler Fans', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Gymnasium'));
         $this->assertSame(
             User::where('username', 'jsuralta@gmail.com')->value('id'),
             Equipment::where('name', 'Canopies')->value('custodian_id'),

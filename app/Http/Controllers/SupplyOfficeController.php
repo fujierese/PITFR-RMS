@@ -51,15 +51,17 @@ class SupplyOfficeController extends Controller
             });
         }
 
-        $filteredRequests = $query->orderByDesc('created_at')->get();
-        $allRequests = $baseQuery->orderByDesc('created_at')->get();
+        $filteredRequests = $query->orderBy('start_date')->orderBy('start_time')->orderBy('created_at')->get();
+        $allRequests = $baseQuery->orderBy('start_date')->orderBy('start_time')->orderBy('created_at')->get();
         $pendingReviewQueue = $this->buildRequestListQuery($request)
             ->where('status', 'pending')
             ->where(function ($query) {
                 $query->where('venue_status', '!=', 'rejected')
                     ->orWhere('equipment_status', '!=', 'rejected');
             })
-            ->orderByDesc('created_at')
+            ->orderBy('start_date')
+            ->orderBy('start_time')
+            ->orderBy('created_at')
             ->get();
         $totalCount = $allRequests->count();
         $pendingCount = $allRequests->where('status', 'pending')->count();
@@ -1098,7 +1100,7 @@ class SupplyOfficeController extends Controller
             $query->where('priority', $priority);
         }
 
-        return $query->orderByDesc('created_at');
+        return $query->orderBy('start_date')->orderBy('start_time')->orderBy('created_at');
     }
 
     public function usageReports(Request $request)
@@ -1226,7 +1228,7 @@ class SupplyOfficeController extends Controller
             });
         }
 
-        $requests = $query->orderByDesc('created_at')->get();
+        $requests = $query->orderBy('start_date')->orderBy('start_time')->orderBy('created_at')->get();
 
         $filename = 'facility_requests_report_' . now()->format('Y-m-d_H-i-s') . '.csv';
 

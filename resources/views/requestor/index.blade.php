@@ -12,7 +12,7 @@
     $venueFilter = trim((string) request()->query('venue', ''));
     $dateFrom = request()->query('date_from');
     $dateTo = request()->query('date_to');
-    $sort = request()->query('sort', 'latest');
+    $sort = request()->query('sort', 'oldest');
 
     $filteredRequests = $requests->filter(function ($requestItem) use ($search, $statusFilter, $venueFilter, $dateFrom, $dateTo) {
         $matchesSearch = true;
@@ -57,9 +57,9 @@
     });
 
     if ($sort === 'oldest') {
-        $filteredRequests = $filteredRequests->sortBy([['start_date', 'asc'], ['created_at', 'asc']]);
+        $filteredRequests = $filteredRequests->sortBy([['start_date', 'asc'], ['start_time', 'asc'], ['created_at', 'asc']]);
     } else {
-        $filteredRequests = $filteredRequests->sortBy([['start_date', 'desc'], ['created_at', 'desc']]);
+        $filteredRequests = $filteredRequests->sortBy([['start_date', 'desc'], ['start_time', 'desc'], ['created_at', 'desc']]);
     }
 
     $requestVenueOptions = $requests->flatMap(function ($requestItem) {
@@ -134,7 +134,7 @@
     @elseif ($activeTab === 'requests')
         <section class="rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:p-6 md:rounded-[32px] lg:p-8">
             @php
-                $filtersExpanded = $statusFilter || $venueFilter || $dateFrom || $dateTo || $sort !== 'latest';
+                $filtersExpanded = $statusFilter || $venueFilter || $dateFrom || $dateTo || $sort !== 'oldest';
             @endphp
 
             <form id="request-filters-form" method="GET" action="{{ route('requestor.index', ['tab' => 'requests']) }}" class="mt-6 rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-5 md:mt-8 md:rounded-[28px]">
@@ -176,9 +176,9 @@
                     </div>
                     <div>
                         <label for="sort" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Sort</label>
-                        <select id="sort" name="sort" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                            <option value="latest" {{ $sort === 'latest' ? 'selected' : '' }}>Latest</option>
-                            <option value="oldest" {{ $sort === 'oldest' ? 'selected' : '' }}>Oldest</option>
+                        <select id="sort" name="sort" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                            <option value="oldest" {{ $sort === 'oldest' ? 'selected' : '' }}>Earliest reservation first</option>
+                            <option value="latest" {{ $sort === 'latest' ? 'selected' : '' }}>Latest reservation first</option>
                         </select>
                     </div>
                     <div>

@@ -11,6 +11,43 @@ class RequestorSearchBackendTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_requests_are_sorted_by_reservation_date_and_time_ascending_by_default(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'student',
+        ]);
+
+        foreach ([
+            ['name' => 'December Request', 'date' => '2026-12-01', 'time' => '09:00'],
+            ['name' => 'September Afternoon', 'date' => '2026-09-15', 'time' => '14:00'],
+            ['name' => 'September Morning', 'date' => '2026-09-15', 'time' => '08:00'],
+        ] as $item) {
+            FacilityRequest::create([
+                'requested_by_id' => $user->id,
+                'control_number' => 'FER-' . str_replace(' ', '-', $item['name']),
+                'name_of_activity' => $item['name'],
+                'department' => 'College of Engineering',
+                'status' => 'pending',
+                'date_requested' => '2026-08-01',
+                'expected_participants' => 20,
+                'start_date' => $item['date'],
+                'end_date' => $item['date'],
+                'start_time' => $item['time'],
+                'end_time' => '23:00',
+                'venue' => ['Main Gym'],
+                'equipment' => [],
+            ]);
+        }
+
+        $response = $this->actingAs($user)->get(route('requestor.index', ['tab' => 'requests']));
+        $response->assertOk();
+
+        $content = $response->getContent();
+        $this->assertLessThan(strpos($content, 'September Afternoon'), strpos($content, 'September Morning'));
+        $this->assertLessThan(strpos($content, 'December Request'), strpos($content, 'September Afternoon'));
+    }
+
     public function test_search_matches_partial_case_insensitive_across_multiple_fields(): void
     {
         $user = User::factory()->create([

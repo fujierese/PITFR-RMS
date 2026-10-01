@@ -14,7 +14,12 @@ class VenueEquipmentPolicy
     {
         $normalizedVenue = self::normalizeVenueName($venueName);
 
-        return [];
+        $equipment = match ($normalizedVenue) {
+            'Balay Alumni' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Tables', 'Chairs'],
+            default => [],
+        };
+
+        return array_values(array_unique($equipment));
     }
 
     /**
@@ -32,12 +37,11 @@ class VenueEquipmentPolicy
             'Balay Alumni' => [
                 'Canopies',
                 'Industrial Fans',
-                'Iwata Cooler Fans',
+                'Monobloc Chairs',
             ],
             'Conference Hall & Interaction Center (CHIC)' => [
                 'Canopies',
                 'Industrial Fans',
-                'Iwata Cooler Fans',
             ],
             'Gymnasium' => [
                 'Canopies',

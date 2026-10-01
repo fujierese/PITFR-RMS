@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', function () {
             params.set('venue', venueSelect.value);
         }
 
-        if (sortSelect?.value !== 'latest') {
+        if (sortSelect?.value !== 'oldest') {
             params.set('sort', sortSelect.value);
         }
 
@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (searchInput) searchInput.value = '';
             if (statusSelect) statusSelect.value = '';
             if (venueSelect) venueSelect.value = '';
-            if (sortSelect) sortSelect.value = 'latest';
+            if (sortSelect) sortSelect.value = 'oldest';
             if (dateFromInput) dateFromInput.value = '';
             if (dateToInput) dateToInput.value = '';
             scheduleRefresh();

@@ -98,11 +98,13 @@ class Phase7AdminSearchPrintingTest extends TestCase
     }
 
     /** @test */
-    public function requestor_cannot_print_unapproved_owned_request(): void
+    public function requestor_can_preview_and_print_unapproved_owned_request(): void
     {
         $this->actingAs($this->faculty)
             ->get(route('request.print', $this->pendingRequest->id))
-            ->assertForbidden();
+            ->assertOk()
+            ->assertViewIs('request.print')
+            ->assertSee('PREVIEW ONLY - NOT APPROVED');
     }
 
     /** @test */
@@ -136,23 +138,28 @@ class Phase7AdminSearchPrintingTest extends TestCase
         $response = $this->get(route('request.show', $this->approvedRequest->id));
 
         $response->assertOk();
-        $response->assertSee('Print Request');
+        $response->assertSee('Print Final Request');
     }
 
     /** @test */
-    public function requestor_does_not_see_print_request_on_request_details(): void
+    public function requestor_sees_preview_print_request_on_request_details(): void
     {
-        $this->actingAs($this->student);
+        $this->actingAs($this->faculty);
 
-        $response = $this->get(route('request.show', $this->approvedRequest->id));
+        $response = $this->get(route('request.show', $this->pendingRequest->id));
 
         $response->assertOk();
-        $response->assertDontSee('Print Request');
+        $response->assertSee('Preview (Pending)');
     }
 
     /** @test */
     public function print_form_displays_e_signature_when_present(): void
     {
+        $this->approvedRequest->update([
+            'document_metadata' => [
+                'e_signature' => ['uploaded_at' => '2026-08-14 09:26:35'],
+            ],
+        ]);
         $this->actingAs($this->admin);
 
         $response = $this->get(route('request.print', $this->approvedRequest->id));
@@ -161,6 +168,7 @@ class Phase7AdminSearchPrintingTest extends TestCase
         $response->assertSee(route('request.signature', ['id' => $this->approvedRequest->id]), false);
         $response->assertDontSee('/storage/documents/e_signature/', false);
         $response->assertSee('Electronic Signature', false);
+        $response->assertSee('Serial No. ES-' . $this->approvedRequest->id . '-20260814092635', false);
     }
 
     /** @test */

@@ -65,7 +65,7 @@ class CustodianController extends Controller
         $filter = $request->get('filter', 'all');
         $search = trim((string) $request->get('search', ''));
         $venueFilter = trim((string) $request->get('venue', ''));
-        $sort = $request->get('sort', 'latest') === 'oldest' ? 'oldest' : 'latest';
+        $sort = $request->get('sort', 'oldest') === 'latest' ? 'latest' : 'oldest';
         $dateFrom = $request->get('date_from', '');
         $dateTo = $request->get('date_to', '');
 
@@ -118,9 +118,9 @@ class CustodianController extends Controller
         }
 
         if ($sort === 'oldest') {
-            $requests = $requests->sortBy(fn ($requestItem) => $requestItem->start_date?->timestamp ?? 0)->values();
+            $requests = $requests->sortBy([['start_date', 'asc'], ['start_time', 'asc'], ['created_at', 'asc']]);
         } else {
-            $requests = $requests->sortByDesc(fn ($requestItem) => $requestItem->start_date?->timestamp ?? 0)->values();
+            $requests = $requests->sortBy([['start_date', 'desc'], ['start_time', 'desc'], ['created_at', 'desc']]);
         }
 
         $reviewRequest = $request->has('review')

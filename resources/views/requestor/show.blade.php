@@ -179,14 +179,16 @@
                     </svg>
                     Back
                 </a>
-                @if(!auth()->user()->isRequestor())
                 @can('print', $request)
                     <button type="button" data-print-url="{{ route('request.print', $request->id) }}" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50" onclick="window.open(this.dataset.printUrl, '_blank', 'width=1200,height=900')">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-3a2 2 0 00-2-2h-2M7 17H5a2 2 0 01-2-2v-3a2 2 0 012-2h2m10 0V7a2 2 0 00-2-2H9a2 2 0 00-2 2v3m10 0H7"/></svg>
-                        Print Request
+                        @if($request->status === 'approved')
+                            Print Final Request
+                        @else
+                            Preview{{ $request->status === 'pending' ? ' (Pending)' : ' Request' }}
+                        @endif
                     </button>
                 @endcan
-                @endif
                 <div>
                     <p class="text-sm font-semibold uppercase tracking-[0.25em] text-emerald-600">Request tracking</p>
                     <h1 class="mt-1 text-2xl font-semibold text-slate-900">Request Details</h1>

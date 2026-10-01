@@ -43,7 +43,7 @@
                 <button type="submit" class="inline-flex shrink-0 items-center justify-center rounded-full bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">Search</button>
             </div>
             <div class="flex flex-wrap items-center gap-3">
-                <details class="relative" {{ ($venueFilter || $dateFrom || $dateTo || $sort !== 'latest') ? 'open' : '' }}>
+                <details class="relative" {{ ($venueFilter || $dateFrom || $dateTo || $sort !== 'oldest') ? 'open' : '' }}>
                     <summary class="cursor-pointer list-none rounded-full border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Advanced Filters</summary>
                     <div class="absolute right-0 z-10 mt-3 w-[min(720px,calc(100vw-2rem))] rounded-[24px] border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
                         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -58,9 +58,9 @@
                             </div>
                             <div>
                                 <label for="custodian-sort" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Sort</label>
-                                <select id="custodian-sort" name="sort" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                                    <option value="latest" @selected($sort === 'latest')>Latest</option>
-                                    <option value="oldest" @selected($sort === 'oldest')>Oldest</option>
+                                <select id="custodian-sort" name="sort" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                                    <option value="oldest" @selected($sort === 'oldest')>Earliest reservation first</option>
+                                    <option value="latest" @selected($sort === 'latest')>Latest reservation first</option>
                                 </select>
                             </div>
                             <div>

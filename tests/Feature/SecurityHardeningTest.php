@@ -137,6 +137,11 @@ class SecurityHardeningTest extends TestCase
         $this->actingAs($otherRequestor)
             ->get(route('request.print', $request))
             ->assertForbidden();
+
+        $this->actingAs($owner)
+            ->get(route('request.print', $request))
+            ->assertOk()
+            ->assertViewIs('request.print');
     }
 
     public function test_request_print_page_contains_two_identical_copies_for_authorized_users(): void

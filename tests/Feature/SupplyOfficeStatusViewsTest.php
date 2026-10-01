@@ -117,6 +117,39 @@ class SupplyOfficeStatusViewsTest extends TestCase
         $response->assertViewIs('supply-office.pending-requests');
     }
 
+    public function test_supply_office_pending_requests_are_sorted_by_reservation_date_and_time(): void
+    {
+        $december = FacilityRequest::factory()->create([
+            'requested_by_id' => $this->requestor->id,
+            'status' => 'pending',
+            'start_date' => '2026-12-01',
+            'start_time' => '09:00',
+        ]);
+        $septemberAfternoon = FacilityRequest::factory()->create([
+            'requested_by_id' => $this->requestor->id,
+            'status' => 'pending',
+            'start_date' => '2026-09-15',
+            'start_time' => '14:00',
+        ]);
+        $septemberMorning = FacilityRequest::factory()->create([
+            'requested_by_id' => $this->requestor->id,
+            'status' => 'pending',
+            'start_date' => '2026-09-15',
+            'start_time' => '08:00',
+        ]);
+
+        $response = $this->actingAs($this->admin)->get(route('supply-office.requests.pending'));
+
+        $response->assertOk();
+        $response->assertViewHas('requests', function ($requests) use ($septemberMorning, $septemberAfternoon, $december): bool {
+            return $requests->getCollection()->pluck('id')->all() === [
+                $septemberMorning->id,
+                $septemberAfternoon->id,
+                $december->id,
+            ];
+        });
+    }
+
     public function test_pending_requests_shows_only_pending_status()
     {
         // Create requests with different statuses

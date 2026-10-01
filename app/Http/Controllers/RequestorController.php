@@ -97,7 +97,7 @@ class RequestorController extends Controller
         $venueFilter = trim((string) $request->query('venue', ''));
         $dateFrom = $request->query('date_from');
         $dateTo = $request->query('date_to');
-        $sort = $request->query('sort', 'latest');
+        $sort = $request->query('sort', 'oldest');
 
         $query = FacilityRequest::with(['requestVenues', 'requestEquipment', 'reservationSchedule'])
             ->where('requested_by_id', $user->id);
@@ -149,8 +149,10 @@ class RequestorController extends Controller
             $query->whereDate('start_date', '<=', $dateTo);
         }
 
-        $query->orderBy($sort === 'oldest' ? 'start_date' : 'start_date', $sort === 'oldest' ? 'asc' : 'desc')
-            ->orderBy($sort === 'oldest' ? 'created_at' : 'created_at', $sort === 'oldest' ? 'asc' : 'desc');
+        $sortDirection = $sort === 'latest' ? 'desc' : 'asc';
+        $query->orderBy('start_date', $sortDirection)
+            ->orderBy('start_time', $sortDirection)
+            ->orderBy('created_at', $sortDirection);
 
         $requests = $query->get();
         $equipment = \App\Models\Equipment::where('is_active', true)->get();
@@ -1453,8 +1455,17 @@ class RequestorController extends Controller
         $request = FacilityRequest::findOrFail($id);
         $this->authorize('print', $request);
 
+        $signatureTimestamp = data_get($request->document_metadata, 'e_signature.uploaded_at');
+        $signatureTime = $signatureTimestamp
+            ? Carbon::parse($signatureTimestamp)
+            : $request->created_at;
+        $signatureSerial = $request->e_signature_file && $signatureTime
+            ? sprintf('ES-%d-%s', $request->id, $signatureTime->format('YmdHis'))
+            : null;
+
         return view('request.print', [
             'request' => $request,
+            'signatureSerial' => $signatureSerial,
         ]);
     }
 

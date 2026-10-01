@@ -393,13 +393,33 @@
                                 <input type="checkbox" name="equipment[]" value="{{ $itemName }}" {{ $itemAvailable <= 0 ? 'disabled' : '' }} {{ $isSelected ? 'checked' : '' }} class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="{{ $itemName }}">
                                 <div class="flex flex-1 items-center gap-2">
                                     <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
+                                    @php
+                                        $selectedVenueName = old('venue') ?: null;
+                                        $venueIncludedEquipment = [
+                                            'Balay Alumni' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Tables', 'Chairs'],
+                                        ];
+                                        $isVenueIncludedItem = isset($venueIncludedEquipment[$selectedVenueName]) && in_array($itemName, $venueIncludedEquipment[$selectedVenueName], true);
+                                    @endphp
+                                    @if($isVenueIncludedItem)
+                                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Included</span>
+                                    @endif
                                 </div>
                             </label>
                             <div class="flex flex-col items-start gap-2 sm:items-end sm:text-right">
                                 <span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">{{ $itemAvailable }} / {{ $itemQty }} available</span>
                                 <div class="quantity-input-wrap {{ $isSelected ? '' : 'hidden' }}" id="qty-wrap-{{ $loop->index }}">
                                     <label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Qty</label>
-                                    <input type="number" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ old('equipment_quantities.'.$itemName) }}" {{ $isSelected ? '' : 'disabled' }} class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-16" placeholder="Enter quantity">
+                                    <div class="inline-flex items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white align-middle">
+                                        <input type="number" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ old('equipment_quantities.'.$itemName) }}" {{ $isSelected ? '' : 'disabled' }} class="w-12 border-0 px-2 py-1 text-center text-xs focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500" placeholder="1">
+                                        <span class="flex flex-col border-l border-slate-200">
+                                            <button type="button" data-quantity-step="1" aria-label="Increase {{ $itemName }} quantity" class="flex h-4 w-6 items-center justify-center text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40">
+                                                <svg aria-hidden="true" class="h-3 w-3" viewBox="0 0 16 16" fill="currentColor"><path d="m3.5 10 4.5-4.5 4.5 4.5h-9Z"/></svg>
+                                            </button>
+                                            <button type="button" data-quantity-step="-1" aria-label="Decrease {{ $itemName }} quantity" class="flex h-4 w-6 items-center justify-center border-t border-slate-200 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40">
+                                                <svg aria-hidden="true" class="h-3 w-3" viewBox="0 0 16 16" fill="currentColor"><path d="m3.5 6 4.5 4.5L12.5 6h-9Z"/></svg>
+                                            </button>
+                                        </span>
+                                    </div>
                                 </div>
                                 <div class="equipment-utilization-card mt-2 hidden w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 sm:min-w-[220px]"></div>
                             </div>
@@ -500,7 +520,7 @@
                         </div>
                         <div class="rounded-3xl border border-amber-200 bg-amber-50/80 p-5 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Urgent Request</p>
-                            <p class="mt-3 text-xs leading-5 text-slate-600">If your request requires immediate attention, you may request urgent processing. Final approval and priority classification remain subject to the Custodian or Administrator.</p>
+                            <p class="mt-3 text-xs leading-5 text-slate-600">Urgent processing is available only for requests starting within the next 48 hours. Enter a reason and upload the required documents. Final approval and priority classification remain subject to the Custodian or Administrator.</p>
                             <label class="mt-4 flex items-start gap-3 cursor-pointer">
                                 <input type="checkbox" name="is_emergency" id="urgent-processing-checkbox" value="1" {{ old('is_emergency') ? 'checked' : '' }} class="mt-1 h-4 w-4 rounded border-amber-300 text-amber-600">
                                 <span class="text-sm font-semibold text-amber-800">Request Urgent Processing</span>
@@ -552,10 +572,10 @@
                                                 <span data-upload-percent>0%</span>
                                             </div>
                                             <div class="h-2.5 overflow-hidden rounded-full bg-slate-200">
-                                                <div data-upload-bar class="h-full w-0 rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all duration-300"></div>
+                                                <div data-upload-bar class="h-full w-0 rounded-full bg-emerald-600 transition-all duration-300"></div>
                                             </div>
                                         </div>
-                                        <p data-upload-status class="hidden text-xs font-medium text-cyan-400">Uploading...</p>
+                                        <p data-upload-status class="hidden text-xs font-medium text-slate-700">Uploading...</p>
                                         <div data-upload-error class="mt-3 hidden flex items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-left text-sm text-red-700">
                                             <div>
                                                 <div class="font-semibold">Upload failed</div>
@@ -565,10 +585,10 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div data-upload-file-card class="mt-3 hidden rounded-2xl border border-slate-200 bg-slate-900/20 p-3 shadow-inner shadow-slate-950/10">
+                                <div data-upload-file-card class="mt-3 hidden rounded-2xl border border-slate-200 bg-white p-3">
                                     <div class="flex items-center justify-between gap-3">
                                         <div class="flex min-w-0 items-center gap-3">
-                                            <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-500/30 bg-slate-800/80 text-slate-200">
+                                            <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-600">
                                                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                                     <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
                                                     <path d="M14 2v6h6"></path>
@@ -576,16 +596,16 @@
                                                 </svg>
                                             </div>
                                             <div class="min-w-0">
-                                                <div data-upload-filename class="truncate text-sm font-semibold text-slate-100">Activity Proposal</div>
-                                                <div data-upload-subtitle class="text-xs text-slate-400">Activity Proposal</div>
+                                                <div data-upload-filename class="truncate text-sm font-semibold text-slate-900">Activity Proposal</div>
+                                                <div data-upload-subtitle class="text-xs text-slate-600">Activity Proposal</div>
                                             </div>
                                         </div>
-                                        <div data-upload-check class="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-300">
+                                        <div data-upload-check class="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
                                             <span>Ready</span>
                                         </div>
                                     </div>
-                                    <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-700">
-                                        <div data-upload-file-progress class="h-full w-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400"></div>
+                                    <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
+                                        <div data-upload-file-progress class="h-full w-full rounded-full bg-emerald-600"></div>
                                     </div>
                                 </div>
                                 <div id="activity-proposal-preview" class="mt-3 hidden">

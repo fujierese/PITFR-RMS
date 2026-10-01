@@ -987,10 +987,10 @@ const initializeRequestForm = function () {
         const nextPercent = Number.isFinite(options.percent) ? Math.min(100, Math.max(0, options.percent)) : 0;
         const fileValue = options.fileName || fileName?.textContent || 'file.pdf';
 
-        box.classList.remove('border-slate-300', 'border-emerald-400', 'border-cyan-400', 'border-emerald-500', 'bg-slate-50', 'bg-cyan-500/5', 'bg-emerald-50/40', 'bg-white', 'shadow-[0_0_0_1px_rgba(34,211,238,0.25)]', 'shadow-[0_0_0_1px_rgba(16,185,129,0.18)]', 'shadow-lg');
+        box.classList.remove('border-slate-300', 'border-emerald-400', 'border-cyan-400', 'border-emerald-500', 'bg-slate-50', 'bg-cyan-500/5', 'bg-slate-900/60', 'bg-emerald-50/40', 'bg-white', 'shadow-[0_0_0_1px_rgba(34,211,238,0.25)]', 'shadow-[0_0_0_1px_rgba(16,185,129,0.18)]', 'shadow-lg');
         box.classList.add(
-            state === 'dragging' ? 'border-cyan-400 bg-cyan-500/5 shadow-[0_0_0_1px_rgba(34,211,238,0.25)]' :
-            state === 'uploading' ? 'border-cyan-400 bg-slate-900/60 shadow-[0_0_0_1px_rgba(34,211,238,0.25)]' :
+            state === 'dragging' ? 'border-emerald-500 bg-emerald-50 shadow-lg' :
+            state === 'uploading' ? 'border-emerald-500 bg-white shadow-lg' :
             state === 'success' ? 'border-emerald-400 bg-emerald-50/40 shadow-[0_0_0_1px_rgba(16,185,129,0.18)]' :
             state === 'error' ? 'border-red-300 bg-red-50/30 shadow-[0_0_0_1px_rgba(239,68,68,0.12)]' :
             'border-slate-300 bg-slate-50'
@@ -1006,19 +1006,16 @@ const initializeRequestForm = function () {
 
         if (bar) {
             bar.style.width = `${nextPercent}%`;
-            bar.classList.toggle('bg-gradient-to-r', true);
-            bar.classList.toggle('from-cyan-400', state !== 'error');
-            bar.classList.toggle('to-emerald-400', state !== 'error');
-            bar.classList.toggle('from-red-400', state === 'error');
-            bar.classList.toggle('to-red-300', state === 'error');
+            bar.classList.remove('bg-gradient-to-r', 'from-cyan-400', 'to-emerald-400', 'from-red-400', 'to-red-300', 'bg-emerald-600', 'bg-red-500');
+            bar.classList.add(state === 'error' ? 'bg-red-500' : 'bg-emerald-600');
         }
 
         if (status) {
             const shouldShowStatus = state === 'uploading' || state === 'success';
             status.classList.toggle('hidden', !shouldShowStatus);
             status.textContent = state === 'success' ? 'Uploaded' : 'Uploading...';
-            status.classList.toggle('text-emerald-400', state === 'success');
-            status.classList.toggle('text-cyan-400', state === 'uploading');
+            status.classList.remove('text-emerald-400', 'text-cyan-400');
+            status.classList.add('text-slate-700');
         }
 
         if (progress) {
@@ -1582,8 +1579,7 @@ const initializeRequestForm = function () {
 
         const balayIncompatibleEquipment = [
             'Canopies',
-            'Industrial Fans',
-            'Iwata Cooler Fans'
+            'Industrial Fans'
         ];
 
         const equipmentRows = form.querySelectorAll('.equipment-row');
@@ -1711,6 +1707,7 @@ const initializeRequestForm = function () {
         const checkbox = row.querySelector('.equipment-checkbox');
         const qtyInput = row.querySelector('.quantity-input-wrap input[type="number"]');
         const qtyWrap = row.querySelector('.quantity-input-wrap');
+        const quantityStepButtons = row.querySelectorAll('[data-quantity-step]');
         let errorMessage = row.querySelector('.quantity-error-message');
 
         if (!errorMessage) {
@@ -1728,6 +1725,12 @@ const initializeRequestForm = function () {
 
             qtyInput.max = maxAllowed;
             qtyInput.disabled = !isChecked || available <= 0;
+
+            quantityStepButtons.forEach(button => {
+                const step = Number(button.dataset.quantityStep);
+                const currentQuantity = Number(qtyInput.value) || 0;
+                button.disabled = qtyInput.disabled || (step > 0 ? currentQuantity >= maxAllowed : currentQuantity <= 1);
+            });
 
             if (!qty || qty < 1) {
                 qty = 1;
@@ -1782,6 +1785,16 @@ const initializeRequestForm = function () {
         const badge = row.querySelector('.availability-badge');
         checkbox.addEventListener('change', updateAvailability);
         qtyInput.addEventListener('input', updateAvailability);
+        quantityStepButtons.forEach(button => {
+            button.addEventListener('click', function () {
+                const step = Number(button.dataset.quantityStep);
+                const minimum = Number(qtyInput.min) || 1;
+                const maximum = Number(qtyInput.max) || minimum;
+                const currentQuantity = Number(qtyInput.value) || minimum;
+                qtyInput.value = Math.min(maximum, Math.max(minimum, currentQuantity + step));
+                qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        });
 
         updateAvailability();
         fetchAvailabilityAndUpdate(row);

@@ -13,6 +13,46 @@ class CustodianAlternateAuthorizationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_custodian_requests_are_sorted_by_reservation_date_and_time_ascending_by_default(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        Venue::create([
+            'name' => 'Sorting Test Venue',
+            'custodian_id' => $custodian->id,
+        ]);
+
+        $december = FacilityRequest::factory()->create([
+            'requested_by_id' => $requester->id,
+            'venue' => ['Sorting Test Venue'],
+            'start_date' => '2026-12-01',
+            'start_time' => '09:00',
+        ]);
+        $septemberAfternoon = FacilityRequest::factory()->create([
+            'requested_by_id' => $requester->id,
+            'venue' => ['Sorting Test Venue'],
+            'start_date' => '2026-09-15',
+            'start_time' => '14:00',
+        ]);
+        $septemberMorning = FacilityRequest::factory()->create([
+            'requested_by_id' => $requester->id,
+            'venue' => ['Sorting Test Venue'],
+            'start_date' => '2026-09-15',
+            'start_time' => '08:00',
+        ]);
+
+        $response = $this->actingAs($custodian)->get(route('custodian.index'));
+
+        $response->assertOk();
+        $response->assertViewHas('requests', function ($requests) use ($septemberMorning, $septemberAfternoon, $december): bool {
+            return $requests->pluck('id')->all() === [
+                $septemberMorning->id,
+                $septemberAfternoon->id,
+                $december->id,
+            ];
+        });
+    }
+
     protected function makeRequestForFan(string $fanName, User $primaryCustodian, User $alternateCustodian): FacilityRequest
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
