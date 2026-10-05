@@ -217,6 +217,7 @@
                                 type="text"
                                 id="email"
                                 name="email"
+                                autocomplete="username"
                                 required
                                 value="{{ old('email', old('username')) }}"
                                 placeholder="Enter your email address"
@@ -231,7 +232,7 @@
                     <!-- Password -->
                     <div>
 
-                        <label class="mb-2 block text-sm font-semibold text-slate-700">
+                        <label for="password" class="mb-2 block text-sm font-semibold text-slate-700">
                             Password
                         </label>
 
@@ -259,6 +260,7 @@
                                 type="password"
                                 name="password"
                                 id="password"
+                                autocomplete="current-password"
                                 required
                                 placeholder="Enter your password"
                                 class="pitfr-password-input w-full border-0 border-b-2 border-slate-300 bg-transparent px-4 py-3 pl-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-0"

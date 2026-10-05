@@ -420,6 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(url, {
             method: 'POST',
             headers: {
+                'Accept': 'application/json',
                 'X-CSRF-TOKEN': '{{ csrf_token() }}',
                 'Content-Type': 'application/json'
             }

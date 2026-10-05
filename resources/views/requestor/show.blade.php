@@ -14,6 +14,7 @@
         'approved' => 'emerald',
         'rejected' => 'rose',
         'completed' => 'sky',
+        'cancelled' => 'slate',
         'needs_reschedule' => 'amber',
         default => 'amber',
     };
@@ -51,7 +52,13 @@
         $currentWorkflowIndex = 1;
     }
 
-    $workflowStageLabel = $workflowSteps[$currentWorkflowIndex]['label'] ?? 'Submitted';
+    $workflowStageLabel = match (true) {
+        $request->status === 'cancelled' => 'Cancelled',
+        $request->status === 'rejected' && $request->venue_status === 'rejected' => 'Rejected at Venue Review',
+        $request->status === 'rejected' && $request->equipment_status === 'rejected' => 'Rejected at Equipment Review',
+        $request->status === 'rejected' => 'Rejected at Final Approval',
+        default => $workflowSteps[$currentWorkflowIndex]['label'] ?? 'Submitted',
+    };
     $workflowStatuses = [
         'submitted' => 'approved',
         'venue' => $request->venue_status,
@@ -104,12 +111,26 @@
     $approvalTimestamp = null;
     $approvalActorName = null;
     $approvalActorRole = null;
+    $approvalStatusLabel = 'Reservation approval status';
 
     $formatApprovalDate = function ($timestamp) {
         return $timestamp ? \Carbon\Carbon::parse($timestamp)->format('M j, Y, g:i A') : null;
     };
 
-    if ($request->status === 'approved') {
+    if ($request->status === 'cancelled') {
+        $approvalTitle = 'Reservation cancelled';
+        $approvalBody = 'This reservation request was cancelled';
+        $cancellation = $request->histories()->where('action', 'cancelled')->latest('occurred_at')->first();
+        $cancellationActor = $cancellation?->user?->name ?? 'the requestor';
+        $cancellationDate = $formatApprovalDate($cancellation?->occurred_at);
+        $approvalBody .= ' by ' . $cancellationActor
+            . ($cancellationDate ? ' on ' . $cancellationDate : '')
+            . '. No further approval is required.';
+        $approvalTone = 'slate';
+        $approvalStatusLabel = 'Reservation status';
+        $currentApprover = null;
+        $nextStep = null;
+    } elseif ($request->status === 'approved') {
         $approvalTitle = 'Reservation approved';
         $approvalTone = 'emerald';
         $currentApprover = 'Supply Office';
@@ -123,14 +144,44 @@
     } elseif ($request->status === 'rejected') {
         $approvalTitle = 'Reservation rejected';
         $approvalTone = 'rose';
-        $currentApprover = 'Supply Office';
         $nextStep = null;
-        $latestRejection = $request->histories()->whereIn('action', ['final_rejected', 'rejected'])->latest('occurred_at')->first();
-        $approvalActor = $latestRejection?->user ?? $request->histories()->whereIn('action', ['final_rejected', 'rejected'])->latest('occurred_at')->first()?->user;
-        $approvalActorName = $approvalActor?->name ?? 'Supply Office';
-        $approvalActorRole = $approvalActor?->role_label ?? 'Supply Office';
+        $latestRejection = $request->histories()
+            ->whereIn('action', ['venue_status_rejected', 'equipment_status_rejected', 'final_rejected', 'rejected'])
+            ->latest('occurred_at')
+            ->first();
+        $rejectedStage = match ($latestRejection?->action) {
+            'venue_status_rejected' => 'venue',
+            'equipment_status_rejected' => 'equipment',
+            'final_rejected', 'rejected' => 'final',
+            default => $request->venue_status === 'rejected'
+                ? 'venue'
+                : ($request->equipment_status === 'rejected' ? 'equipment' : 'final'),
+        };
+        $approvalActor = $latestRejection?->user;
+        $approvalActorName = $approvalActor?->name ?? match ($rejectedStage) {
+            'venue' => 'Venue Custodian',
+            'equipment' => 'Equipment Custodian',
+            default => 'Supply Office',
+        };
+        $approvalActorRole = $approvalActor?->role_label ?? match ($rejectedStage) {
+            'venue' => 'Venue Custodian',
+            'equipment' => 'Equipment Custodian',
+            default => 'Supply Office',
+        };
+        $currentApprover = match ($rejectedStage) {
+            'venue' => 'Venue Custodian',
+            'equipment' => 'Equipment Custodian',
+            default => 'Supply Office',
+        };
         $approvalTimestamp = $latestRejection?->occurred_at ?? $request->updated_at;
-        $approvalBody = 'This reservation request was rejected by ' . $approvalActorName . ', ' . $approvalActorRole . ', on ' . $formatApprovalDate($approvalTimestamp) . '.';
+        $rejectionStageLabel = match ($rejectedStage) {
+            'venue' => 'Venue Review',
+            'equipment' => 'Equipment Review',
+            default => 'Final Approval',
+        };
+        $approvalTitle = 'Reservation rejected at ' . $rejectionStageLabel;
+        $approvalBody = 'This reservation request was rejected by ' . $approvalActorName
+            . ' (' . $approvalActorRole . ') on ' . $formatApprovalDate($approvalTimestamp) . '.';
     } elseif ($request->venue_status === 'approved' && $request->equipment_status === 'approved') {
         $approvalTitle = 'Pending Final Approval';
         $approvalBody = 'The request has passed venue and equipment review and is awaiting final approval.';
@@ -163,11 +214,16 @@
     $hasUrgentConflict = (bool) ($request->is_emergency && $request->venue_status === 'approved' && $request->status === 'pending');
     $pendingChangeRequest = $request->requestChangeRequests()->where('status', 'pending')->latest()->first();
     $hasCustodianApproval = $request->status === 'pending' && ($request->venue_status === 'approved' || $request->equipment_status === 'approved');
+    $pendingCustodianNames = collect($custodialEndorsements ?? [])
+        ->where('status', 'pending')
+        ->pluck('name')
+        ->unique()
+        ->implode(', ');
 @endphp
 
 @section('content')
 
-<div class="space-y-6">
+<div class="space-y-8">
 
     {{-- Header --}}
     <div class="rounded-[32px] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:p-8">
@@ -204,7 +260,7 @@
                     </span>
                 @endif
                 <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset
-                    {{ $overallStatusTone === 'emerald' ? 'bg-emerald-100 text-emerald-700 ring-emerald-200' : ($overallStatusTone === 'rose' ? 'bg-rose-100 text-rose-700 ring-rose-200' : ($overallStatusTone === 'sky' ? 'bg-sky-100 text-sky-700 ring-sky-200' : 'bg-amber-100 text-amber-700 ring-amber-200')) }}">
+                    {{ $overallStatusTone === 'emerald' ? 'bg-emerald-100 text-emerald-700 ring-emerald-200' : ($overallStatusTone === 'rose' ? 'bg-rose-100 text-rose-700 ring-rose-200' : ($overallStatusTone === 'sky' ? 'bg-sky-100 text-sky-700 ring-sky-200' : ($overallStatusTone === 'slate' ? 'bg-slate-200 text-slate-700 ring-slate-300' : 'bg-amber-100 text-amber-700 ring-amber-200'))) }}">
                     {{ $requestStatusLabel }}
                 </span>
             </div>
@@ -224,22 +280,26 @@
                     <p class="mt-1 text-sm font-semibold text-slate-700">Current stage: {{ $workflowStageLabel }}</p>
                 </div>
             </div>
-            <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                @foreach($workflowSteps as $index => $step)
-                    @php
-                        $stepStatus = $workflowStatuses[$step['key']] ?? 'pending';
-                        $isCurrent = $step['key'] === 'approval' && $currentWorkflowIndex === 3;
-                        $stepIcon = $stepStatus === 'rejected' ? '✕' : ($stepStatus === 'approved' ? '✓' : ($isCurrent ? '◉' : '🕐'));
-                        $stepTone = $stepStatus === 'rejected' ? 'rose' : ($stepStatus === 'approved' ? 'emerald' : ($isCurrent ? 'amber' : 'slate'));
-                    @endphp
-                    <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
-                        <div class="mx-auto flex h-8 w-8 items-center justify-center rounded-full text-lg {{ $stepTone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : ($stepTone === 'rose' ? 'bg-rose-100 text-rose-700' : ($stepTone === 'amber' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500')) }}" aria-label="{{ $stepStatus }}">
-                            {{ $stepIcon }}
+            @if($request->status === 'cancelled')
+                <p class="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">This request was cancelled, so the approval workflow has ended.</p>
+            @else
+                <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    @foreach($workflowSteps as $index => $step)
+                        @php
+                            $stepStatus = $workflowStatuses[$step['key']] ?? 'pending';
+                            $isCurrent = $step['key'] === 'approval' && $currentWorkflowIndex === 3;
+                            $stepIcon = $stepStatus === 'rejected' ? '✕' : ($stepStatus === 'approved' ? '✓' : ($isCurrent ? '◉' : '🕐'));
+                            $stepTone = $stepStatus === 'rejected' ? 'rose' : ($stepStatus === 'approved' ? 'emerald' : ($isCurrent ? 'amber' : 'slate'));
+                        @endphp
+                        <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
+                            <div class="mx-auto flex h-8 w-8 items-center justify-center rounded-full text-lg {{ $stepTone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : ($stepTone === 'rose' ? 'bg-rose-100 text-rose-700' : ($stepTone === 'amber' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500')) }}" aria-label="{{ $stepStatus }}">
+                                {{ $stepIcon }}
+                            </div>
+                            <p class="mt-2 text-sm font-semibold text-slate-800">{{ $step['label'] }}</p>
                         </div>
-                        <p class="mt-2 text-sm font-semibold text-slate-800">{{ $step['label'] }}</p>
-                    </div>
-                @endforeach
-            </div>
+                    @endforeach
+                </div>
+            @endif
         </div>
     </div>
 
@@ -501,10 +561,6 @@
                             </div>
                         </div>
 
-                        <button type="button" onclick="generateApprovalSlip()"
-                                class="w-full inline-flex items-center justify-center rounded-2xl bg-blue-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-blue-700">
-                            Generate Approval Slip
-                        </button>
                     @elseif($request->status === 'rejected')
                         <div class="rounded-2xl bg-red-50 border border-red-200 p-4">
                             <div class="flex items-center gap-3">
@@ -523,9 +579,9 @@
                     <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
                         <p class="text-sm font-semibold text-slate-700">Custodial Endorsement Summary</p>
                         <div class="mt-3 space-y-2">
-                            @forelse($assignedCustodians as $custodian)
+                            @forelse($custodialEndorsements as $endorsement)
                                 @php
-                                    $status = $custodianStatuses[$custodian->id] ?? 'pending';
+                                    $status = $endorsement['status'] ?? 'pending';
                                     $badge = match($status) {
                                         'approved' => 'bg-emerald-100 text-emerald-700',
                                         'revision_requested' => 'bg-orange-100 text-orange-700',
@@ -534,13 +590,13 @@
                                     };
                                 @endphp
                                 <div class="flex items-center justify-between rounded-xl bg-white border border-slate-200 px-3 py-2">
-                                    <span class="text-sm text-slate-700">{{ $custodian->name }}</span>
+                                    <span class="text-sm text-slate-700">{{ $endorsement['name'] }} <span class="text-slate-500">({{ $endorsement['resource_type'] }})</span></span>
                                     <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $badge }}">
                                         {{ ucfirst(str_replace('_', ' ', $status)) }}
                                     </span>
                                 </div>
                             @empty
-                                <p class="text-xs text-slate-500">No custodial endorsement data available.</p>
+                                <p class="text-xs text-slate-500">No assigned custodians are available for this request.</p>
                             @endforelse
                         </div>
                     </div>
@@ -695,7 +751,7 @@
         </div>
     </div>
 
-    @if($proposalFilename || $request->igp_receipt_file || $request->e_signature_file)
+    @if($proposalFilename || $request->igp_receipt_file)
         <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div class="flex items-start gap-3">
@@ -729,18 +785,6 @@
         </div>
     @endif
 
-    @if($request->e_signature_file)
-        <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-            <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
-                <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
-                E-Signature
-            </div>
-            <div class="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <img src="{{ route('request.signature', ['id' => $request->id]) }}" alt="Requestor e-signature" class="max-h-32 max-w-full object-contain">
-            </div>
-        </div>
-    @endif
-
     <div id="proposal-preview-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/75 p-4" role="dialog" aria-modal="true" aria-labelledby="proposal-preview-title">
         <div class="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -758,13 +802,16 @@
         </div>
         <div class="mt-5 rounded-[24px] border border-slate-200 bg-slate-50 p-5">
             <div class="flex items-start gap-3">
-                <div class="rounded-2xl {{ $approverTone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : ($approverTone === 'rose' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700') }} p-3">
+                <div class="rounded-2xl {{ $approverTone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : ($approverTone === 'rose' ? 'bg-rose-100 text-rose-700' : ($approverTone === 'slate' ? 'bg-slate-200 text-slate-700' : 'bg-amber-100 text-amber-700')) }} p-3">
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                 </div>
                 <div>
-                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Reservation approval status</p>
+                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">{{ $approvalStatusLabel }}</p>
                     <p class="mt-1 text-lg font-semibold text-slate-900">{{ $approvalTitle }}</p>
                     <p class="mt-1 text-sm text-slate-600">{{ $approvalBody }}</p>
+                    @if($request->status === 'pending' && $pendingCustodianNames !== '')
+                        <p class="mt-2 text-sm text-slate-700"><span class="font-semibold">Assigned reviewer(s):</span> {{ $pendingCustodianNames }}</p>
+                    @endif
                     @if(auth()->user()->isRequestor() && $request->status === 'approved')
                         <p class="mt-3 text-sm font-semibold text-emerald-700">Your approved request is ready for pickup from the Supply Office.</p>
                     @endif
@@ -781,7 +828,7 @@
         <div class="mt-5 space-y-4">
             @forelse($request->histories()->orderByDesc('occurred_at')->get() as $history)
                 <div class="flex gap-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white {{ str_contains($history->action, 'approved') ? 'bg-emerald-500' : (str_contains($history->action, 'rejected') ? 'bg-rose-500' : (str_contains($history->action, 'returned') ? 'bg-sky-500' : 'bg-slate-400')) }}">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white {{ str_contains($history->action, 'approved') || str_contains($history->action, 'custodian_endorsed') ? 'bg-emerald-500' : (str_contains($history->action, 'rejected') ? 'bg-rose-500' : (str_contains($history->action, 'returned') ? 'bg-sky-500' : 'bg-slate-400')) }}">
                         {{ strtoupper(substr($history->action, 0, 1)) }}
                     </div>
                     <div class="flex-1">
@@ -891,15 +938,6 @@
             submitButton.textContent = 'Save Reschedule';
         }
     });
-
-    function generateApprovalSlip() {
-        Swal.fire({
-            title: 'Approval slip',
-            text: 'Approval Slip generation is not yet implemented. This placeholder represents the print/export workflow for the finalized approval.',
-            icon: 'info',
-            confirmButtonColor: '#2563eb'
-        });
-    }
 
     async function handleFinalApproval(event) {
         event.preventDefault();

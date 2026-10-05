@@ -9,18 +9,76 @@ use App\Models\MaintenanceSchedule;
 use App\Models\Venue;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class AvailabilityService
 {
-    public function checkFacilityRequest(FacilityRequest $facilityRequest, ?int $excludeRequestId = null): ?string
+    public function lockResourcesForFacilityRequests(FacilityRequest ...$facilityRequests): void
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new \LogicException('Reservation resources must be locked inside a database transaction.');
+        }
+
+        $resources = collect($facilityRequests)
+            ->flatMap(function (FacilityRequest $request): array {
+                $venues = collect($request->getVenueNames())
+                    ->map(fn (string $name): array => ['venue', mb_strtolower(trim($name))]);
+                $equipment = collect(array_keys($request->getEquipmentQuantities()))
+                    ->map(fn (string $name): array => ['equipment', mb_strtolower(trim($name))]);
+
+                return $venues->concat($equipment)->all();
+            })
+            ->filter(fn (array $resource): bool => $resource[1] !== '')
+            ->unique(fn (array $resource): string => $resource[0] . ':' . $resource[1])
+            ->sortBy(fn (array $resource): string => $resource[0] . ':' . $resource[1])
+            ->values();
+
+        if ($resources->isEmpty()) {
+            return;
+        }
+
+        $lockRows = $resources
+            ->map(fn (array $resource): array => [
+                'resource_type' => $resource[0],
+                'resource_hash' => hash('sha256', $resource[1]),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ])
+            ->all();
+
+        DB::table('reservation_resource_locks')->insertOrIgnore($lockRows);
+
+        DB::table('reservation_resource_locks')
+            ->where(function ($query) use ($lockRows): void {
+                foreach ($lockRows as $lockRow) {
+                    $query->orWhere(function ($resourceQuery) use ($lockRow): void {
+                        $resourceQuery
+                            ->where('resource_type', $lockRow['resource_type'])
+                            ->where('resource_hash', $lockRow['resource_hash']);
+                    });
+                }
+            })
+            ->orderBy('resource_type')
+            ->orderBy('resource_hash')
+            ->lockForUpdate()
+            ->get(['id']);
+    }
+
+    public function checkFacilityRequest(
+        FacilityRequest $facilityRequest,
+        ?int $excludeRequestId = null,
+        bool $ignoreVenueConflicts = false
+    ): ?string
     {
         $requestedStart = $facilityRequest->getRequestedStartDateTime();
         $requestedEnd = $facilityRequest->getRequestedEndDateTime();
 
-        foreach ($facilityRequest->getVenueNames() as $venueName) {
-            $availability = $this->checkVenueAvailability($venueName, $requestedStart, $requestedEnd, $excludeRequestId);
-            if (!$availability['available']) {
-                return $availability['message'] ?? 'Venue booking conflict detected.';
+        if (! $ignoreVenueConflicts) {
+            foreach ($facilityRequest->getVenueNames() as $venueName) {
+                $availability = $this->checkVenueAvailability($venueName, $requestedStart, $requestedEnd, $excludeRequestId);
+                if (!$availability['available']) {
+                    return $availability['message'] ?? 'Venue booking conflict detected.';
+                }
             }
         }
 
@@ -87,9 +145,7 @@ class AvailabilityService
             return ['available' => false, 'message' => 'The selected venue is unavailable.', 'capacity' => $venueRecord->capacity];
         }
 
-        $requests = FacilityRequest::with(['requestVenues', 'reservationSchedule'])
-            ->when($excludeRequestId !== null, fn ($query) => $query->whereKeyNot($excludeRequestId))
-            ->get();
+        $requests = $this->getApprovedRequestsOverlapping($requestedStart, $requestedEnd, $excludeRequestId);
 
         $conflicts = $requests->contains(function (FacilityRequest $request) use ($venueName, $requestedStart, $requestedEnd): bool {
                 if ($request->status !== 'approved') {
@@ -126,13 +182,11 @@ class AvailabilityService
 
     public function getOutstandingEquipmentQuantity(string $itemName, Carbon $requestedStart, Carbon $requestedEnd, ?int $excludeRequestId = null): int
     {
-        $requests = FacilityRequest::with(['requestEquipment', 'reservationSchedule'])
-            ->when($excludeRequestId !== null, fn ($query) => $query->whereKeyNot($excludeRequestId))
-            ->get();
+        $requests = $this->getApprovedRequestsOverlapping($requestedStart, $requestedEnd, $excludeRequestId);
 
         $outstanding = 0;
         foreach ($requests as $request) {
-            if ($request->status !== 'approved' || in_array($request->equipment_returned_status, ['returned', 'fulfilled'], true)) {
+            if ($request->status !== 'approved') {
                 continue;
             }
 
@@ -140,13 +194,39 @@ class AvailabilityService
                 continue;
             }
 
-            $quantities = $request->getEquipmentQuantities();
+            $quantities = $request->getInventoryOutstandingQuantities();
             if (isset($quantities[$itemName])) {
                 $outstanding += (int) $quantities[$itemName];
             }
         }
 
         return $outstanding;
+    }
+
+    private function getApprovedRequestsOverlapping(Carbon $requestedStart, Carbon $requestedEnd, ?int $excludeRequestId): Collection
+    {
+        return FacilityRequest::query()
+            ->where('status', 'approved')
+            ->when($excludeRequestId !== null, fn ($query) => $query->whereKeyNot($excludeRequestId))
+            ->where(function ($query) use ($requestedStart, $requestedEnd): void {
+                $query->whereHas('reservationSchedule', function ($scheduleQuery) use ($requestedStart, $requestedEnd): void {
+                    $scheduleQuery
+                        ->where('start_datetime', '<', $requestedEnd)
+                        ->where('end_datetime', '>', $requestedStart);
+                })->orWhere(function ($legacyQuery) use ($requestedStart, $requestedEnd): void {
+                    $legacyQuery->whereDoesntHave('reservationSchedule')
+                        ->whereDate('start_date', '<=', $requestedEnd->toDateString())
+                        ->where(function ($endDateQuery) use ($requestedStart): void {
+                            $endDateQuery->whereDate('end_date', '>=', $requestedStart->toDateString())
+                                ->orWhere(function ($singleDateQuery) use ($requestedStart): void {
+                                    $singleDateQuery->whereNull('end_date')
+                                        ->whereDate('start_date', '>=', $requestedStart->toDateString());
+                                });
+                        });
+                });
+            })
+            ->with(['requestVenues', 'requestEquipment', 'reservationSchedule'])
+            ->get();
     }
 
     private function buildVenueMessage(bool $conflicts, bool $maintenance, bool $holiday): ?string

@@ -28,7 +28,7 @@
                 const weatherElements = [...document.querySelectorAll('[data-weather]')];
                 if (!weatherElements.length) return;
                 try {
-                    const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=11.05&longitude=124.78&current=temperature_2m,weather_code&temperature_unit=celsius&timezone=Asia%2FManila');
+                    const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=11.0508&longitude=124.3843&current=temperature_2m,weather_code&temperature_unit=celsius&timezone=Asia%2FManila');
                     if (!response.ok) throw new Error('Weather request failed');
                     const current = (await response.json()).current || {};
                     const label = weatherLabels[current.weather_code] || 'Conditions available';

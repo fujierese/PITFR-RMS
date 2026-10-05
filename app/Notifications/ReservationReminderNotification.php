@@ -7,10 +7,12 @@ use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use App\Notifications\Concerns\UsesNotificationPreferences;
 
 class ReservationReminderNotification extends Notification
 {
     use Queueable;
+    use UsesNotificationPreferences;
 
     public function __construct(
         public FacilityRequest $facilityRequest,
@@ -20,7 +22,7 @@ class ReservationReminderNotification extends Notification
 
     public function via($notifiable): array
     {
-        return ['mail', 'database'];
+        return $this->channelsWithPreference($notifiable, 'request_updates', ['mail', 'database']);
     }
 
     public function toMail($notifiable): MailMessage

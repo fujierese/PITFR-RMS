@@ -4,10 +4,12 @@ namespace App\Notifications;
 use App\Models\FacilityRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
+use App\Notifications\Concerns\UsesNotificationPreferences;
 
 class NewFacilityRequestNotification extends Notification
 {
     use Queueable;
+    use UsesNotificationPreferences;
 
     public function __construct(public FacilityRequest $facilityRequest, public ?string $actor = null)
     {
@@ -15,27 +17,23 @@ class NewFacilityRequestNotification extends Notification
 
     public function via($notifiable): array
     {
-        return ['database'];
+        return $this->channelsWithPreference($notifiable, 'request_updates', ['database']);
     }
 
     public function toArray($notifiable): array
     {
-        $resource = method_exists($notifiable, 'assignedCustodianResourceLabel')
-            ? $notifiable->assignedCustodianResourceLabel()
-            : '';
-
-        $body = $this->actor
-            ? "A new request was submitted by {$this->actor}."
-            : 'A new request is waiting for your verification.';
+        $requestorName = $this->actor ?? $this->facilityRequest->requester?->name ?? 'Unknown requestor';
+        $activityName = $this->facilityRequest->name_of_activity ?: 'Untitled activity';
+        $body = "A new request from {$requestorName} for \"{$activityName}\" is waiting for your verification.";
 
         return [
             'request_id' => $this->facilityRequest->id,
             'control_number' => $this->facilityRequest->control_number,
-            'activity' => $this->facilityRequest->name_of_activity,
+            'activity' => $activityName,
+            'requestor_name' => $requestorName,
             'status' => 'new_request',
             'title' => 'New Request Submitted',
             'body' => $body,
-            'resource' => $resource ?: 'Assigned resource',
             'message' => $body,
         ];
     }

@@ -7,10 +7,12 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\DatabaseMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use App\Notifications\Concerns\UsesNotificationPreferences;
 
 class EquipmentReturned extends Notification
 {
     use Queueable;
+    use UsesNotificationPreferences;
 
     protected $equipment;
     protected $custodian;
@@ -29,7 +31,7 @@ class EquipmentReturned extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        return $this->channelsWithPreference($notifiable, 'request_updates', ['database', 'mail']);
     }
 
     public function toDatabase(object $notifiable): array

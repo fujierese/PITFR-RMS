@@ -360,9 +360,15 @@
                     <p class="mt-1 text-sm text-slate-600">Tap a date to inspect request details and availability.</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
-                    <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"><span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>Pending</span>
-                    <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Reserved</span>
-                    <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600"><span class="h-2.5 w-2.5 rounded-full bg-slate-300"></span>Available</span>
+                    <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"><span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>Pending request</span>
+                    <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Reserved (approved)</span>
+                    <span class="text-xs text-slate-600">No event shown = no request listed for that date; check venue and time availability before submitting.</span>
+                    @if($user && $user->isAdmin())
+                        <label for="include-cancelled-events" class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                            <input id="include-cancelled-events" type="checkbox" class="rounded border-slate-300 text-slate-600 focus:ring-slate-500">
+                            Show cancelled
+                        </label>
+                    @endif
                 </div>
             </div>
         </div>
@@ -858,16 +864,16 @@
     background-color: #f1f5f9 !important;
 }
 
-.fc-daygrid-day.fc-today {
+.fc .fc-daygrid-day.fc-today {
     background-color: #f0fdf4 !important;
-    box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.75);
+    box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.75) !important;
 }
 
-.fc-daygrid-day.fc-today .fc-daygrid-day-number {
-    background: rgba(34, 197, 94, 0.12);
+.fc .fc-daygrid-day.fc-today .fc-daygrid-day-number {
+    background: rgba(34, 197, 94, 0.12) !important;
     color: #166534 !important;
-    border: 1px solid rgba(34, 197, 94, 0.24);
-    border-radius: 9999px;
+    border: 1px solid rgba(34, 197, 94, 0.24) !important;
+    border-radius: 9999px !important;
     padding: 4px 8px !important;
 }
 
@@ -1220,26 +1226,6 @@
     opacity: 1 !important;
 }
 
-/* Event Dot (status indicator) */
-.event-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    display: inline-block;
-    background-color: #cbd5e1;
-}
-
-.event-dot.gymnasium,
-.event-dot.chic,
-.event-dot.oval,
-.event-dot.balay,
-.event-dot.covered-court,
-.event-dot.volleyball,
-.event-dot.other {
-    background-color: #cbd5e1;
-}
-
 /* Event Title (Truncated) */
 .fc-event-title {
     font-weight: 600 !important;
@@ -1343,16 +1329,12 @@
 .fc-event-covered-court,
 .fc-event-volleyball,
 .fc-event-other {
-    background-color: inherit !important;
-    border-color: inherit !important;
     opacity: 1 !important;
 }
 
 /* Ensure all events are visible in month view */
 .fc .fc-daygrid-event {
     visibility: visible !important;
-    background-color: inherit !important;
-    border-color: inherit !important;
     opacity: 1 !important;
 }
 
@@ -1498,13 +1480,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
             function getStatusBadgeTone(statusValue) {
                 var normalized = String(statusValue || '').trim().toLowerCase();
+                if (normalized === 'cancelled') {
+                    return 'status-neutral';
+                }
                 if (normalized === 'approved') {
                     return 'status-approved';
                 }
                 if (normalized === 'pending') {
                     return 'status-pending';
                 }
-                if (['rejected', 'cancelled', 'conflict', 'urgent'].includes(normalized)) {
+                if (['rejected', 'conflict', 'urgent'].includes(normalized)) {
                     return 'status-rejected';
                 }
                 if (normalized === 'needs_reschedule') {
@@ -1519,13 +1504,16 @@ document.addEventListener('DOMContentLoaded', function() {
             function getStatusColorInfo(statusValue) {
                 var normalized = String(statusValue || '').toLowerCase();
                 var textColor = '#111827';
+                if (normalized === 'cancelled') {
+                    return { bg: '#e2e8f0', border: '#94a3b8', text: '#475569' };
+                }
                 if (normalized === 'approved') {
                     return { bg: '#10b981', border: '#059669', text: textColor };
                 }
                 if (normalized === 'pending') {
                     return { bg: '#f59e0b', border: '#d97706', text: textColor };
                 }
-                if (['rejected', 'cancelled', 'conflict', 'urgent'].includes(normalized)) {
+                if (['rejected', 'conflict', 'urgent'].includes(normalized)) {
                     return { bg: '#dc2626', border: '#b91c1c', text: textColor };
                 }
                 if (normalized === 'needs_reschedule') {
@@ -1633,7 +1621,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 console.log('📅 Events:', viewType, '|', Math.round(daysDiff), 'days');
 
-                fetch('{{ route("calendar.events") }}', {
+                var eventsUrl = new URL('{{ route("calendar.events") }}', window.location.origin);
+                var cancelledToggle = document.getElementById('include-cancelled-events');
+                if (cancelledToggle && cancelledToggle.checked) {
+                    eventsUrl.searchParams.set('include_cancelled', '1');
+                }
+
+                fetch(eventsUrl.toString(), {
                     credentials: 'same-origin',
                     headers: {
                         'Accept': 'application/json',
@@ -1739,6 +1733,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 classNames: ['status-event', 'status-' + String(status || 'neutral').toLowerCase().replace(/\s+/g, '-')],
                                 extendedProps: Object.assign({}, event.extendedProps, {
                                     tooltipContent: createTooltipContent(event, status),
+                                    status: status,
                                     venue: venue,
                                     venueClass: 'status-indicator',
                                     venueDotColor: statusPalette.bg,
@@ -1869,7 +1864,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 var statusTone = getStatusBadgeTone(status);
                 var statusText = normalizeStatusLabel(status);
                 var statusLabel = statusText ? '<span class="event-status-badge ' + __esc(statusTone) + '">' + __esc(statusText) + '</span>' : '';
-                var dot = '<span class="event-dot"></span>';
                 var label = '<span class="fc-event-label activity-marquee-viewport"><span class="activity-name">' + __esc(title) + '</span></span>';
 
                 var metaItems = [];
@@ -1889,7 +1883,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 var metaLine = metaItems.length ? '<div class="fc-event-meta-line">' + metaItems.join(' · ') + '</div>' : '';
 
-                return { html: '<div class="fc-event-compact">' + dot + '<div class="fc-event-body"><div class="fc-event-line">' + label + statusLabel + '</div>' + metaLine + '</div></div>' };
+                return { html: '<div class="fc-event-compact"><div class="fc-event-body"><div class="fc-event-line">' + label + statusLabel + '</div>' + metaLine + '</div></div>' };
             },
             eventClick: function(info) {
                 if (isPublicCalendar) {
@@ -2073,6 +2067,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         window.calendar = calendar;
         calendar.render();
+        var cancelledToggle = document.getElementById('include-cancelled-events');
+        if (cancelledToggle) {
+            cancelledToggle.addEventListener('change', function() {
+                calendar.refetchEvents();
+            });
+        }
         console.log('✅ Calendar initialized successfully');
     } catch (error) {
         console.error('❌ Calendar initialization failed:', error);

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
@@ -75,13 +76,29 @@ class DocumentUploadService
 
             // Store the file
             $path = "documents/{$documentType}";
-            $file->storeAs($path, $filename, 'local');
+            if ($file->storeAs($path, $filename, 'local') === false) {
+                Log::error('Document upload failed to store file.', [
+                    'document_type' => $documentType,
+                    'control_number' => $controlNumber,
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => 'An error occurred while uploading the file.',
+                ];
+            }
 
             return [
                 'success' => true,
                 'filename' => $filename,
             ];
         } catch (\Throwable $e) {
+            Log::error('Document upload failed.', [
+                'document_type' => $documentType,
+                'control_number' => $controlNumber,
+                'exception' => $e,
+            ]);
+
             return [
                 'success' => false,
                 'error' => "An error occurred while uploading the file.",
@@ -137,6 +154,11 @@ class DocumentUploadService
             }
             return false;
         } catch (\Throwable $e) {
+            Log::error('Document deletion failed.', [
+                'document_type' => $documentType,
+                'filename' => basename($filename),
+                'exception' => $e,
+            ]);
             return false;
         }
     }

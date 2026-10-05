@@ -2,46 +2,64 @@
 
 @section('title', 'Audit Logs - Supply Office')
 
+@php
+    $formatAuditValue = function ($value): string {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+
+        return is_scalar($value)
+            ? (string) $value
+            : (json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?: '—');
+    };
+@endphp
+
 @section('content')
 <div class="container mx-auto px-4 py-8">
     <div class="max-w-7xl mx-auto">
         <div class="bg-white rounded-lg shadow-md p-6">
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+            <div class="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-800">System Audit Logs</h1>
                     <p class="text-sm text-gray-600 mt-1">Complete history of all facility request actions and changes.</p>
                 </div>
+                <a href="{{ route('supply-office.audit-logs.export', request()->query()) }}" style="display: inline-flex; align-items: center; justify-content: center; border-radius: 0.75rem; background: #047857; padding: 0.625rem 1rem; color: #fff; font-size: 0.875rem; font-weight: 700; line-height: 1.25rem; text-decoration: none; white-space: nowrap;">
+                    Download CSV
+                </a>
             </div>
 
             <!-- Filters -->
             <form method="GET" class="mb-6 bg-gray-50 p-4 rounded-lg">
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
                         <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Action, detail, or user..." class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Action</label>
-                        <select name="action" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">All Actions</option>
-                            <option value="submitted" {{ ($filters['action'] ?? '') === 'submitted' ? 'selected' : '' }}>Submitted</option>
-                            <option value="venue_approved" {{ ($filters['action'] ?? '') === 'venue_approved' ? 'selected' : '' }}>Venue Approved</option>
-                            <option value="venue_rejected" {{ ($filters['action'] ?? '') === 'venue_rejected' ? 'selected' : '' }}>Venue Rejected</option>
-                            <option value="equipment_approved" {{ ($filters['action'] ?? '') === 'equipment_approved' ? 'selected' : '' }}>Equipment Approved</option>
-                            <option value="equipment_rejected" {{ ($filters['action'] ?? '') === 'equipment_rejected' ? 'selected' : '' }}>Equipment Rejected</option>
-                            <option value="approved" {{ ($filters['action'] ?? '') === 'approved' ? 'selected' : '' }}>Final Approved</option>
-                            <option value="rejected" {{ ($filters['action'] ?? '') === 'rejected' ? 'selected' : '' }}>Final Rejected</option>
-                            <option value="equipment_returned" {{ ($filters['action'] ?? '') === 'equipment_returned' ? 'selected' : '' }}>Equipment Returned</option>
-                            <option value="cancelled" {{ ($filters['action'] ?? '') === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                        <label for="audit-user-filter" class="block text-sm font-medium text-gray-700 mb-1">User</label>
+                        <select id="audit-user-filter" name="user_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">All Users</option>
+                            @foreach($users as $filterUser)
+                                <option value="{{ $filterUser->id }}" @selected((string) ($filters['user_id'] ?? '') === (string) $filterUser->id)>{{ $filterUser->name }}</option>
+                            @endforeach
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
-                        <input type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <label for="audit-action-filter" class="block text-sm font-medium text-gray-700 mb-1">Action</label>
+                        <select id="audit-action-filter" name="action" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">All Actions</option>
+                            @foreach($actions as $action)
+                                <option value="{{ $action }}" @selected(($filters['action'] ?? '') === $action)>{{ ucfirst(str_replace('_', ' ', $action)) }}</option>
+                            @endforeach
+                        </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
-                        <input type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <label for="audit-date-from" class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                        <input id="audit-date-from" type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label for="audit-date-to" class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                        <input id="audit-date-to" type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                 </div>
                 <div class="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -55,8 +73,12 @@
             </form>
 
             <!-- Audit Logs Table -->
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm text-gray-600">Showing <span class="font-semibold text-gray-900">{{ $auditLogs->count() }}</span> of <span class="font-semibold text-gray-900">{{ $totalMatchingLogs }}</span> matching audit entries</p>
+                <p class="text-xs text-gray-500">Page {{ $auditLogs->currentPage() }} of {{ max(1, $auditLogs->lastPage()) }}</p>
+            </div>
+            <div class="overflow-x-auto rounded-lg border border-gray-200">
+                <table class="min-w-[900px] w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
@@ -94,36 +116,46 @@
                                         <a href="{{ route('request.show', $log->facilityRequest->id) }}" class="text-blue-600 hover:text-blue-800">
                                             {{ $log->facilityRequest->control_number }}
                                         </a>
+                                    @elseif($log->targetUser)
+                                        <span class="text-gray-700">{{ $log->targetUser->name }}</span>
                                     @else
                                         -
                                     @endif
                                 </td>
-                                <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-                                    {{ $log->detail ?? '-' }}
+                                <td class="px-6 py-4 text-sm text-gray-900">
+                                    <details class="max-w-xs">
+                                        <summary class="cursor-pointer font-medium text-blue-700 hover:text-blue-900">
+                                            View details
+                                        </summary>
+                                        <p class="mt-2 whitespace-pre-wrap break-words text-xs leading-5 text-gray-700">{{ $log->detail ?: 'No additional details.' }}</p>
+                                    </details>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    @if(isset($log->old_values) && is_array($log->old_values) && !empty($log->old_values))
-                                        <button type="button" class="text-blue-600 hover:text-blue-800 font-medium" 
-                                                onclick="toggleChanges(this, event)"
-                                                data-changes="{{ htmlspecialchars(json_encode(['old' => $log->old_values, 'new' => $log->new_values ?? []])) }}">
-                                            View Changes
-                                        </button>
-                                        <div class="hidden mt-2 pt-2 border-t border-gray-200 changes-detail">
-                                            @foreach($log->old_values as $field => $oldValue)
+                                    @php
+                                        $oldValues = is_array($log->old_values ?? null) ? $log->old_values : [];
+                                        $newValues = is_array($log->new_values ?? null) ? $log->new_values : [];
+                                        $changedFields = collect(array_unique(array_merge(array_keys($oldValues), array_keys($newValues))))
+                                            ->filter(fn ($field) => ($oldValues[$field] ?? null) !== ($newValues[$field] ?? null));
+                                    @endphp
+                                    @if($changedFields->isNotEmpty())
+                                        <details class="min-w-40">
+                                            <summary class="cursor-pointer rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-center text-xs font-semibold text-blue-800 hover:bg-blue-100">
+                                                View {{ $changedFields->count() }} {{ \Illuminate\Support\Str::plural('change', $changedFields->count()) }}
+                                            </summary>
+                                            <div class="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                            @foreach($changedFields as $field)
                                                 @php
-                                                    $newValue = $log->new_values[$field] ?? null;
+                                                    $oldValue = $oldValues[$field] ?? null;
+                                                    $newValue = $newValues[$field] ?? null;
                                                 @endphp
-                                                @if($oldValue !== $newValue)
-                                                    <div class="text-xs mb-2">
-                                                        <span class="font-semibold text-gray-700">{{ ucfirst(str_replace('_', ' ', $field)) }}:</span>
-                                                        <br>
-                                                        <span class="text-red-600">← {{ json_encode($oldValue) }}</span>
-                                                        <br>
-                                                        <span class="text-green-600">→ {{ json_encode($newValue) }}</span>
-                                                    </div>
-                                                @endif
+                                                <div class="text-xs">
+                                                    <p class="font-semibold text-gray-700">{{ ucfirst(str_replace('_', ' ', $field)) }}</p>
+                                                    <p class="mt-1 whitespace-pre-wrap break-words text-red-700">Before: {{ $formatAuditValue($oldValue) }}</p>
+                                                    <p class="mt-1 whitespace-pre-wrap break-words text-emerald-700">After: {{ $formatAuditValue($newValue) }}</p>
+                                                </div>
                                             @endforeach
-                                        </div>
+                                            </div>
+                                        </details>
                                     @else
                                         <span class="text-gray-400">-</span>
                                     @endif
@@ -150,21 +182,4 @@
     </div>
 </div>
 
-<script>
-function toggleChanges(button, event) {
-    event.preventDefault();
-    const detail = button.nextElementSibling;
-    const isHidden = detail.classList.contains('hidden');
-    
-    if (isHidden) {
-        detail.classList.remove('hidden');
-        button.textContent = 'Hide Changes';
-        button.classList.add('text-blue-800', 'font-bold');
-    } else {
-        detail.classList.add('hidden');
-        button.textContent = 'View Changes';
-        button.classList.remove('text-blue-800', 'font-bold');
-    }
-}
-</script>
 @endsection

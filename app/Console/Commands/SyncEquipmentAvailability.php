@@ -31,22 +31,12 @@ class SyncEquipmentAvailability extends Command
         \App\Models\Equipment::query()->update(['quantity_available' => \DB::raw('quantity')]);
         $this->info('Reset all equipment to full availability');
 
-        // Get all approved requests that haven't been fully returned
-        $approvedRequests = \App\Models\FacilityRequest::where('status', 'approved')
-            ->where(function($query) {
-                $query->where('equipment_returned_status', '!=', 'returned')
-                      ->where('equipment_returned_status', '!=', 'overdue');
-            })
-            ->get();
+        $approvedRequests = \App\Models\FacilityRequest::where('status', 'approved')->get();
 
         $this->info('Found ' . $approvedRequests->count() . ' approved requests with outstanding equipment');
 
         foreach ($approvedRequests as $request) {
-            // Get quantities, defaulting to 1 for each equipment if not specified
-            $quantities = $request->equipment_quantities ?? [];
-            if (empty($quantities) && !empty($request->equipment)) {
-                $quantities = array_fill_keys($request->equipment, 1);
-            }
+            $quantities = $request->getInventoryOutstandingQuantities();
 
             foreach ($quantities as $itemName => $qty) {
                 $equipment = \App\Models\Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])->first();

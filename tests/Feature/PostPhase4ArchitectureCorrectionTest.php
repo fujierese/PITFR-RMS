@@ -45,6 +45,44 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
         }
     }
 
+    public function test_requestor_cannot_submit_a_specific_time_starting_at_or_before_five_am(): void
+    {
+        $student = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+
+        $this->actingAs($student)
+            ->post(route('requestor.store'), $this->requestPayload([
+                'start_time' => '05:00',
+                'end_time' => '06:00',
+                'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            ]))
+            ->assertSessionHasErrors('start_time');
+
+        $this->assertDatabaseMissing('facility_requests', [
+            'requested_by_id' => $student->id,
+            'start_time' => '05:00',
+            'end_time' => '06:00',
+        ]);
+    }
+
+    public function test_requestor_can_submit_a_specific_time_starting_after_five_am(): void
+    {
+        $student = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+
+        $this->actingAs($student)
+            ->post(route('requestor.store'), $this->requestPayload([
+                'start_time' => '05:01',
+                'end_time' => '06:00',
+                'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            ]))
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('facility_requests', [
+            'requested_by_id' => $student->id,
+            'start_time' => '05:01',
+            'end_time' => '06:00',
+        ]);
+    }
+
     public function test_student_organization_request_requires_active_membership(): void
     {
         $student = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);

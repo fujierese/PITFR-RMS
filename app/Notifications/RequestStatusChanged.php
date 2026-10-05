@@ -6,10 +6,12 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
+use App\Notifications\Concerns\UsesNotificationPreferences;
 
 class RequestStatusChanged extends Notification
 {
     use Queueable;
+    use UsesNotificationPreferences;
 
     public function __construct(
         public FacilityRequest $facilityRequest,
@@ -24,7 +26,7 @@ class RequestStatusChanged extends Notification
 
     public function via($notifiable): array
     {
-        return ['mail', 'database', 'broadcast'];
+        return $this->channelsWithPreference($notifiable, 'request_updates', ['mail', 'database', 'broadcast']);
     }
 
     /**
@@ -283,6 +285,7 @@ class RequestStatusChanged extends Notification
             'request_id' => $this->facilityRequest->id,
             'control_number' => $this->facilityRequest->control_number,
             'activity' => $this->facilityRequest->name_of_activity,
+            'requestor_name' => $this->facilityRequest->requester?->name ?? 'Unknown requestor',
             'status' => $this->status,
             'title' => $this->notificationTitle(),
             'body' => $this->buildRoleAwareBody($notifiable),
@@ -338,6 +341,7 @@ class RequestStatusChanged extends Notification
             'request_id'     => $this->facilityRequest->id,
             'control_number' => $this->facilityRequest->control_number,
             'activity'       => $this->facilityRequest->name_of_activity,
+            'requestor_name' => $this->facilityRequest->requester?->name ?? 'Unknown requestor',
             'status'         => $this->status,
             'title'          => $this->notificationTitle(),
             'body'           => $this->buildRoleAwareBody($notifiable),

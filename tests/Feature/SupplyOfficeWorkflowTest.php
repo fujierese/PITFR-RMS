@@ -126,6 +126,84 @@ class SupplyOfficeWorkflowTest extends TestCase
         Notification::assertNothingSent();
     }
 
+    public function test_supply_office_dashboard_paginates_the_review_queue(): void
+    {
+        for ($index = 0; $index < 16; $index++) {
+            $this->makeRequest();
+        }
+
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->get(route('supply-office.index'))
+            ->assertOk()
+            ->assertSee('16 waiting')
+            ->assertSee('queue_page=2');
+
+        $this->actingAs($admin)
+            ->get(route('supply-office.index', ['queue_page' => 2]))
+            ->assertOk()
+            ->assertSee('16 waiting');
+    }
+
+    public function test_supply_office_dashboard_report_card_uses_the_count_provided_by_the_controller(): void
+    {
+        $this->makeRequest();
+        $this->makeRequest();
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->get(route('supply-office.index'))
+            ->assertOk()
+            ->assertSee('Usage and activity reports')
+            ->assertSee('<p class="mt-3 text-2xl font-semibold text-slate-900">2</p>', false);
+    }
+
+    public function test_advanced_filters_are_visible_when_requested_and_filter_the_review_queue(): void
+    {
+        $matchingRequest = $this->makeRequest([
+            'control_number' => 'TEST-SUPPLY-FILTER-MATCH',
+            'department' => 'Information Technology',
+            'venue' => ['Gymnasium'],
+            'priority' => 'regular',
+            'start_date' => '2026-10-10',
+        ]);
+        $this->makeRequest([
+            'control_number' => 'TEST-SUPPLY-FILTER-NO-MATCH',
+            'department' => 'Business Administration',
+            'venue' => ['Auditorium'],
+            'priority' => 'institutional',
+            'start_date' => '2026-10-12',
+        ]);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->get(route('supply-office.index'))
+            ->assertOk()
+            ->assertSee('id="advanced-filter-toggle"', false)
+            ->assertSee('aria-controls="advanced-request-filters"', false)
+            ->assertSee('id="advanced-request-filters"', false)
+            ->assertSee(' hidden ', false)
+            ->assertSee('name="department"', false)
+            ->assertSee('name="venue"', false)
+            ->assertSee('name="date_from"', false)
+            ->assertSee('name="date_to"', false)
+            ->assertSee('name="priority"', false);
+
+        $this->get(route('supply-office.index', [
+            'department' => 'Information Technology',
+            'venue' => 'Gymnasium',
+            'date_from' => '2026-10-09',
+            'date_to' => '2026-10-11',
+            'priority' => 'regular',
+        ]))
+            ->assertOk()
+            ->assertSee($matchingRequest->control_number)
+            ->assertDontSee('TEST-SUPPLY-FILTER-NO-MATCH')
+        ->assertSee('id="advanced-request-filters"', false)
+            ->assertSee('aria-expanded="true"', false);
+    }
+
     public function test_repeated_supply_office_approval_does_not_duplicate_audit_or_notification(): void
     {
         $request = $this->makeRequest();

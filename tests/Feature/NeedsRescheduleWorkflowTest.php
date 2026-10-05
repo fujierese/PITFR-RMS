@@ -114,6 +114,27 @@ class NeedsRescheduleWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_requestor_cannot_reschedule_with_a_specific_time_starting_at_five_am(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $request = $this->createNeedsRescheduleRequest($requester);
+
+        $this->actingAs($requester)
+            ->put(route('requestor.update', $request), [
+                'start_date' => now()->addDay()->toDateString(),
+                'end_date' => now()->addDay()->toDateString(),
+                'start_time' => '05:00',
+                'end_time' => '06:00',
+                'venue' => 'Conference Hall & Interaction Center (CHIC)',
+                'equipment' => ['Sound System'],
+                'equipment_quantities' => ['Sound System' => 1],
+            ])
+            ->assertSessionHasErrors('start_time');
+
+        $this->assertSame('09:00', $request->fresh()->start_time);
+        $this->assertSame('12:00', $request->fresh()->end_time);
+    }
+
     public function test_needs_reschedule_update_returns_request_to_normal_approval_flow(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);

@@ -55,6 +55,10 @@
                 <span class="relative z-10">Contact Us</span>
                 <span class="absolute inset-x-1 bottom-1.5 h-0.5 origin-left scale-x-0 rounded-full bg-emerald-300 transition-transform duration-300 group-hover:scale-x-100"></span>
             </a>
+            <button type="button" data-open-faq-modal aria-haspopup="dialog" aria-controls="faq-modal" class="group relative whitespace-nowrap rounded-md px-2 py-2 text-left transition duration-300 hover:-translate-y-0.5 hover:text-emerald-300 focus-visible:-translate-y-0.5 focus-visible:text-emerald-300">
+                <span class="relative z-10">FAQ</span>
+                <span class="absolute inset-x-1 bottom-1.5 h-0.5 origin-left scale-x-0 rounded-full bg-emerald-300 transition-transform duration-300 group-hover:scale-x-100"></span>
+            </button>
             <a href="{{ route('login') }}" class="ml-1 mr-2 whitespace-nowrap rounded-lg bg-emerald-400 px-4 py-2.5 font-bold text-slate-950 shadow-[0_6px_18px_rgba(52,211,153,0.35)] transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-300 focus-visible:-translate-y-0.5 focus-visible:bg-emerald-300">Login to Request</a>
         </div>
     </nav>
@@ -67,6 +71,7 @@
             <a href="#features" class="rounded-lg px-3 py-2 transition hover:bg-white/10">System Features</a>
             <a href="#how-it-works" class="rounded-lg px-3 py-2 transition hover:bg-white/10">How It Works</a>
             <a href="#contact-us" class="rounded-lg px-3 py-2 transition hover:bg-white/10">Contact Us</a>
+            <button type="button" data-open-faq-modal aria-haspopup="dialog" aria-controls="faq-modal" class="rounded-lg px-3 py-2 text-left transition hover:bg-white/10">FAQ</button>
             <a href="{{ route('login') }}" class="mt-1 rounded-lg bg-emerald-500 px-3 py-2 text-center text-white transition hover:bg-emerald-600">Login to Request</a>
         </div>
     </div>
@@ -295,7 +300,13 @@
 <footer class="bg-gray-800 text-gray-400 text-center text-sm py-6 mt-8">
     <p class="font-medium text-gray-300">© {{ date('Y') }} Palompon Institute of Technology</p>
     <p class="text-xs mt-1">Quality Management System Portal — Facility & Equipment Request System</p>
+    <nav class="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 px-4" aria-label="Help and legal information">
+        <button type="button" data-open-faq-modal aria-haspopup="dialog" aria-controls="faq-modal" class="text-emerald-300 underline-offset-4 hover:underline">FAQ</button>
+        <button type="button" data-open-info-modal="privacy" aria-haspopup="dialog" aria-controls="faq-modal" class="text-emerald-300 underline-offset-4 hover:underline">Privacy Policy (Draft)</button>
+        <button type="button" data-open-info-modal="data-privacy" aria-haspopup="dialog" aria-controls="faq-modal" class="text-emerald-300 underline-offset-4 hover:underline">Data Privacy Act of 2012</button>
+    </nav>
 </footer>
+@include('components.faq-modal')
 
 <!-- FullCalendar CSS -->
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">

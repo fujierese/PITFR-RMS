@@ -5,6 +5,9 @@ namespace Tests\Feature;
 use App\Models\FacilityRequest;
 use App\Models\User;
 use App\Models\Venue;
+use App\Notifications\NewFacilityRequestNotification;
+use App\Notifications\PasswordChangedNotification;
+use App\Notifications\ResetPasswordNotification;
 use App\Notifications\RequestStatusChanged;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -236,6 +239,134 @@ class NotificationTest extends TestCase
         $this->assertStringNotContainsString('Needs_revision', $needsRevisionMessage);
         $this->assertStringContainsString('Venue approved', $venueApprovedMessage);
         $this->assertStringNotContainsString('Venue_approved', $venueApprovedMessage);
+    }
+
+    public function test_notifications_page_formats_legacy_status_messages_and_titles(): void
+    {
+        $requestor = User::factory()->create(['role' => 'requestor', 'name' => 'Nick Requestor']);
+
+        $requestor->notifications()->create([
+            'id' => (string) Str::uuid(),
+            'type' => RequestStatusChanged::class,
+            'data' => [
+                'status' => 'needs_revision',
+                'activity' => "Mad Dog's Party Homie",
+                'requestor_name' => 'Nick Requestor',
+                'body' => 'Your request status has been updated to Needs_revision. Control No: FER-2026-695',
+            ],
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $requestor->notifications()->create([
+            'id' => (string) Str::uuid(),
+            'type' => RequestStatusChanged::class,
+            'data' => [
+                'status' => 'venue_approved',
+                'activity' => "Mad Dog's Party Homie",
+                'requestor_name' => 'Nick Requestor',
+                'body' => 'Your request status has been updated to Venue_approved. Control No: FER-2026-695',
+            ],
+            'created_at' => now()->subMinute(),
+            'updated_at' => now()->subMinute(),
+        ]);
+
+        $response = $this->actingAs($requestor)->get(route('notifications.index'));
+
+        $response->assertOk()
+            ->assertSee('Request Needs Revision')
+            ->assertSee('Your request status has been updated to Needs Revision. Control No: FER-2026-695')
+            ->assertSee('Request Venue Approved')
+            ->assertSee('Your request status has been updated to Venue Approved. Control No: FER-2026-695')
+            ->assertSee('🔄')
+            ->assertDontSee('Needs_revision')
+            ->assertDontSee('Venue_approved');
+    }
+
+    public function test_request_and_security_notification_preferences_control_delivery_channels(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'requestor',
+            'notification_preferences' => [
+                'request_updates' => false,
+                'security_alerts' => true,
+            ],
+        ]);
+        $request = FacilityRequest::factory()->create(['requested_by_id' => $user->id]);
+
+        $this->assertSame([], (new RequestStatusChanged($request, 'approved'))->via($user));
+        $this->assertSame([], (new NewFacilityRequestNotification($request))->via($user));
+        $this->assertSame(['database', 'mail'], (new PasswordChangedNotification())->via($user));
+
+        $user->notification_preferences = [
+            'request_updates' => true,
+            'security_alerts' => false,
+        ];
+
+        $this->assertSame(['mail', 'database', 'broadcast'], (new RequestStatusChanged($request, 'approved'))->via($user));
+        $this->assertSame([], (new PasswordChangedNotification())->via($user));
+        $this->assertSame(['mail'], (new ResetPasswordNotification('token'))->via($user));
+    }
+
+    public function test_password_change_security_alert_renders_without_request_metadata(): void
+    {
+        $user = User::factory()->create(['role' => 'requestor']);
+        $user->notifications()->create([
+            'id' => (string) Str::uuid(),
+            'type' => PasswordChangedNotification::class,
+            'data' => (new PasswordChangedNotification())->toArray($user),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->get(route('notifications.index'));
+
+        $response->assertOk()
+            ->assertSee('Password Changed')
+            ->assertSee('Your PITFR-RMS account password was changed.')
+            ->assertSee('🛡️')
+            ->assertDontSee('Requestor:');
+    }
+
+    public function test_legacy_new_request_notification_shows_details_from_linked_request(): void
+    {
+        [$requester, $request] = $this->createOverrideScenario();
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+
+        $custodian->notifications()->create([
+            'id' => (string) Str::uuid(),
+            'type' => NewFacilityRequestNotification::class,
+            'data' => [
+                'request_id' => $request->id,
+                'status' => 'new_request',
+                'title' => 'New Request Submitted',
+                'body' => 'A new request is waiting for your verification.',
+            ],
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($custodian)->get(route('notifications.index'));
+
+        $response->assertOk()
+            ->assertSee('New Request Submitted')
+            ->assertSee('A new request from ' . $requester->name . ' for "' . $request->name_of_activity . '" is waiting for your verification.')
+            ->assertSee('Requestor: <strong>' . e($requester->name) . '</strong>', false)
+            ->assertSee('Activity: <strong>' . e($request->name_of_activity) . '</strong>', false)
+            ->assertSee('Control No: <strong>' . e($request->control_number) . '</strong>', false);
+    }
+
+    public function test_new_request_notification_shows_requestor_and_activity_without_resource_list(): void
+    {
+        [$requester, , $request] = $this->createOverrideScenario();
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+
+        $data = (new NewFacilityRequestNotification($request))->toArray($custodian);
+
+        $this->assertSame($requester->name, $data['requestor_name']);
+        $this->assertSame($request->name_of_activity, $data['activity']);
+        $this->assertStringContainsString($requester->name, $data['body']);
+        $this->assertStringContainsString($request->name_of_activity, $data['body']);
+        $this->assertArrayNotHasKey('resource', $data);
     }
 
     public function test_revision_notification_lists_old_and_new_schedule(): void

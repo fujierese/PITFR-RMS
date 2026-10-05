@@ -42,6 +42,9 @@ Route::get('/', function() {
     return view('welcome');
 })->name('home');
 Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar.index');
+Route::view('/faq', 'legal.faq')->name('faq');
+Route::view('/privacy-policy', 'legal.privacy')->name('privacy.policy');
+Route::view('/data-privacy-act', 'legal.data-privacy')->name('privacy.data-act');
 Route::get('/login',   [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login',  [AuthController::class, 'login']);
 Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
@@ -103,6 +106,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('supply-office')->group(functi
         Route::put('/organizations/{organization}', [AdminController::class, 'updateOrganization'])->name('supply-office.organizations.update');
         Route::post('/organizations/{organization}/memberships', [AdminController::class, 'storeOrganizationMembership'])->name('supply-office.organizations.memberships.store');
         Route::put('/organization-memberships/{membership}', [AdminController::class, 'updateOrganizationMembership'])->name('supply-office.organizations.memberships.update');
+        Route::get('/audit-logs/export', [AdminController::class, 'exportAuditLogs'])->name('supply-office.audit-logs.export');
         Route::get('/audit-logs', [AdminController::class, 'auditLogs'])->name('supply-office.audit-logs');
         Route::put('/users/{user}', [AdminController::class, 'updateUser'])->name('supply-office.users.update');
         Route::delete('/users/{user}', [AdminController::class, 'destroyUser'])->name('supply-office.users.destroy');
@@ -110,6 +114,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('supply-office')->group(functi
         Route::get('/export',  [AdminController::class, 'export'])->name('supply-office.export');
     });
     Route::get('/usage-reports', [SupplyOfficeController::class, 'usageReports'])->name('supply-office.usage-reports');
+    Route::get('/usage-reports/export', [SupplyOfficeController::class, 'exportUsageReports'])->name('supply-office.usage-reports.export');
     Route::get('/calendar', [CalendarController::class, 'index'])->name('supply-office.calendar');
     Route::post('/update',  [SupplyOfficeController::class, 'update'])->name('supply-office.update');
     Route::post('/requests/needs-revision', [SupplyOfficeController::class, 'needsRevision'])->name('supply-office.requests.needs-revision');
@@ -133,6 +138,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     Route::post('/settings/notifications', [AdminController::class, 'updateNotificationPreferences'])->name('admin.settings.notifications');
     Route::post('/settings/signature', [AdminController::class, 'updateSignature'])->name('admin.settings.signature');
     Route::get('/calendar', [AdminController::class, 'calendar'])->name('admin.calendar');
+    Route::get('/audit-logs/export', [AdminController::class, 'exportAuditLogs'])->name('admin.audit-logs.export');
     Route::get('/audit-logs', [AdminController::class, 'auditLogs'])->name('admin.audit-logs');
     Route::post('/update', [AdminController::class, 'update'])->name('admin.update');
     Route::post('/delete', [AdminController::class, 'destroy'])->name('admin.destroy');

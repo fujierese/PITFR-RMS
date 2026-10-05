@@ -24,22 +24,31 @@ class CalendarController extends Controller
         $user = auth()->user();
         $role = $this->getUserRole($user);
 
-        $query = FacilityRequest::with(['user', 'requestVenues', 'requestEquipment', 'reservationSchedule'])
-            ->where('status', '!=', 'cancelled');
+        $query = FacilityRequest::with(['user', 'requestVenues', 'requestEquipment', 'reservationSchedule']);
+        $includeCancelled = $user && $user->isAdmin() && $request->boolean('include_cancelled');
+        if (! $includeCancelled) {
+            $query->where('status', '!=', 'cancelled');
+        }
 
         if ($user && $user->isCustodian()) {
             $requests = $this->getRequestsForCustodian($user);
         } elseif ($user && $user->isAdmin()) {
             $requests = $query->get();
         } elseif ($user && $role === 'requestor') {
-            $requests = $query->get();
+            $requests = $query->where(function ($calendarQuery) use ($user): void {
+                $calendarQuery->where('requested_by_id', $user->id)
+                    ->orWhereIn('status', ['approved', 'pending']);
+            })->get();
         } else {
             // Guest/public view should see only approved and pending requests for availability checking
             $requests = $query->whereIn('status', ['approved', 'pending'])->get();
         }
 
         $events = $requests->map(function($req) use ($role, $user) {
-            if (! $user) {
+            if (
+                ! $user
+                || ($user->isRequestee() && $user->id !== $req->requested_by_id)
+            ) {
                 return $this->toPublicCalendarEvent($req);
             }
 
@@ -166,6 +175,12 @@ class CalendarController extends Controller
 
         $isAllDay = in_array(strtolower((string) ($request->reservation_duration ?? '')), ['whole_day', 'whole-day', 'whole day'], true);
         $eventEnd = $isAllDay ? $endDateTime->copy()->addDay()->startOfDay() : $endDateTime;
+        $status = (string) $request->status;
+        $statusColors = match ($status) {
+            'approved' => ['background' => '#10B981', 'border' => '#059669'],
+            'pending' => ['background' => '#F59E0B', 'border' => '#D97706'],
+            default => ['background' => '#6B7280', 'border' => '#4B5563'],
+        };
 
         return [
             'id' => 'public-' . hash_hmac('sha256', (string) $request->getKey(), config('app.key')),
@@ -173,9 +188,10 @@ class CalendarController extends Controller
             'start' => $startDateTime->format('Y-m-d\TH:i:s'),
             'end' => $eventEnd->format('Y-m-d\TH:i:s'),
             'allDay' => $isAllDay,
+            'status' => $status,
             'venue' => implode(', ', $request->getVenueNames()),
-            'backgroundColor' => '#6B7280',
-            'borderColor' => '#4B5563',
+            'backgroundColor' => $statusColors['background'],
+            'borderColor' => $statusColors['border'],
             'textColor' => '#FFFFFF',
         ];
     }
@@ -210,9 +226,9 @@ class CalendarController extends Controller
                 'className' => 'rejected-event',
             ],
             'cancelled' => [
-                'background' => '#6B7280',
-                'border' => '#4B5563',
-                'text' => '#FFFFFF',
+                'background' => '#E2E8F0',
+                'border' => '#94A3B8',
+                'text' => '#475569',
                 'className' => 'neutral-event',
             ],
             default => [
@@ -357,12 +373,18 @@ class CalendarController extends Controller
     {
         $facilityRequest = FacilityRequest::findOrFail($id);
         $user = auth()->user();
-        $type = $request->get('type'); // 'venue', 'equipment', or null for full approval
+        $type = $request->validate([
+            'type' => ['nullable', 'in:venue,equipment'],
+        ])['type'] ?? null;
 
         $this->authorize('approve', $facilityRequest);
         abort_unless($user->isAdmin() || in_array($type, ['venue', 'equipment'], true), 403);
 
-        if (! $user->isAdmin()) {
+        if ($user->isAdmin()) {
+            abort_unless($type === null, 403);
+
+            return app(RequestActionController::class)->supplyFinalApproval($facilityRequest, $request);
+        } else {
             $mayApproveVenue = $type === 'venue' && $user->isCustodianVenue()
                 && collect($user->venues()->pluck('name'))->map(fn ($name) => mb_strtolower($name))
                     ->intersect(collect($facilityRequest->getVenueNames())->map(fn ($name) => mb_strtolower($name)))->isNotEmpty();
@@ -372,22 +394,9 @@ class CalendarController extends Controller
             abort_unless($mayApproveVenue || $mayApproveEquipment, 403);
         }
 
-        if ($user->isAdmin()) {
-            if ($type === 'venue') {
-                $facilityRequest->venue_status = 'approved';
-            } elseif ($type === 'equipment') {
-                $facilityRequest->equipment_status = 'approved';
-            } else {
-                $facilityRequest->status = 'approved';
-                $facilityRequest->approved_by_id = $user->id;
-                $facilityRequest->approved_by = $user->name;
-                $facilityRequest->approved_date = now();
-                $facilityRequest->venue_status = 'approved';
-                $facilityRequest->equipment_status = 'approved';
-            }
-        } elseif ($user->isCustodianVenue() && ($type === 'venue' || !$type)) {
+        if (! $user->isAdmin() && $user->isCustodianVenue() && $type === 'venue') {
             $facilityRequest->venue_status = 'approved';
-        } elseif ($user->isCustodianEquipment() && ($type === 'equipment' || !$type)) {
+        } elseif (! $user->isAdmin() && $user->isCustodianEquipment() && $type === 'equipment') {
             $facilityRequest->equipment_status = 'approved';
         }
 
@@ -400,11 +409,12 @@ class CalendarController extends Controller
     {
         $request->validate([
             'venues' => 'required|array',
+            'venues.*' => 'required|string|max:255',
             'start_date' => 'required|date',
             'start_time' => 'required|date_format:H:i',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'end_time' => 'required|date_format:H:i',
-            'exclude_request_id' => 'nullable|integer'
+            'exclude_request_id' => 'nullable|integer|exists:facility_requests,id'
         ]);
 
         $venues = $request->venues;
@@ -414,29 +424,22 @@ class CalendarController extends Controller
         $scheduleRange = \App\Models\FacilityRequest::normalizeScheduleRange($startDate, $request->start_time, $endDate, $request->end_time);
         $requestedStart = $scheduleRange['start'];
         $requestedEnd = $scheduleRange['end'];
+        if (! $requestedStart || ! $requestedEnd || $requestedEnd->lte($requestedStart)) {
+            return response()->json([
+                'has_conflicts' => false,
+                'conflicts' => [],
+                'message' => 'End date and time must be after the start date and time.',
+            ], 422);
+        }
 
         $conflicts = [];
 
-        // Check each venue for conflicts
         foreach ($venues as $venue) {
-            $venueConflicts = FacilityRequest::where(fn ($query) => $query->matchesVenue($venue))
-                ->where(function($query) {
-                    $query->where(function($approvedQuery) {
-                        $approvedQuery->where('status', 'approved')
-                                      ->where('equipment_returned_status', '!=', 'returned');
-                    })
-                    ->orWhere(function($pendingQuery) {
-                        $pendingQuery->where('status', 'pending')
-                                     ->where('venue_status', '!=', 'rejected')
-                                     ->where('equipment_status', '!=', 'rejected');
-                    });
-                })
+            $venueConflicts = FacilityRequest::with('reservationSchedule')
+                ->where('status', 'approved')
+                ->where(fn ($query) => $query->matchesVenue($venue))
                 ->when($excludeId, function($query) use ($excludeId) {
                     return $query->where('id', '!=', $excludeId);
-                })
-                ->where(function($query) use ($startDate, $endDate) {
-                    $query->whereBetween('start_date', [$startDate, $endDate])
-                          ->orWhereBetween('end_date', [$startDate, $endDate]);
                 })
                 ->get()
                 ->filter(function($conflict) use ($requestedStart, $requestedEnd) {

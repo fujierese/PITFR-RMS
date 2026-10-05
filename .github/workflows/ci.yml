@@ -39,8 +39,15 @@ jobs:
         run: composer audit --no-interaction
 
       - name: Audit JavaScript dependencies
-        run: npm audit --omit=dev --audit-level=high
-        continue-on-error: true
+        run: npm audit --audit-level=high
+
+      - name: Lint PHP syntax
+        run: find app bootstrap config database routes tests -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Smoke-test SQLite migrations
+        run: |
+          touch database/database.sqlite
+          php artisan migrate:fresh --force --database=sqlite
 
       - name: Run tests
         run: php artisan test --compact

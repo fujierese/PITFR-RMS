@@ -85,6 +85,20 @@ class FacilityRequest extends Model
         return $this->start_time;
     }
 
+    public function getStatusAttribute($value): ?string
+    {
+        $status = strtolower((string) $value);
+        if (in_array($status, ['approved', 'rejected', 'completed'], true)) {
+            return $value;
+        }
+
+        $hasCancellationHistory = $this->relationLoaded('histories')
+            ? $this->getRelation('histories')->contains('action', 'cancelled')
+            : $this->histories()->where('action', 'cancelled')->exists();
+
+        return $hasCancellationHistory ? 'cancelled' : $value;
+    }
+
     public function setTimeAttribute($value): void
     {
         $this->attributes['start_time'] = $value;
@@ -750,10 +764,6 @@ class FacilityRequest extends Model
         $effectiveEndTime = $endTimeValue ?? $startTimeValue ?? '00:00';
         $end = self::normalizeScheduleValue($effectiveEndDate, $effectiveEndTime, $start);
 
-        if ($start && $end && $end->lte($start)) {
-            $end = $start->copy()->addDay()->setTime(0, 0, 0);
-        }
-
         return [
             'start' => $start,
             'end' => $end,
@@ -1088,102 +1098,155 @@ class FacilityRequest extends Model
     // ─── MARK EQUIPMENT AS RETURNED ──────────────────────────────────────────
     public function markEquipmentReturned(int $custodianId, array $returnedEquipment, ?string $notes = null, array $damageDetails = [], array $missingDetails = [], array $damageRemarks = [], array $missingRemarks = []): void
     {
-        // ❗ Ensure event is finished, defaulting to end_date when start_date is not set
-        $eventEndDate = $this->end_date ?? $this->start_date;
-        if ($eventEndDate && now()->lt($eventEndDate)) {
-            throw new \Exception('Event is not yet finished.');
+        if (now()->lt($this->getRequestedEndDateTime())) {
+            throw new \InvalidArgumentException('Equipment cannot be returned before the event has ended.');
         }
 
-        if ($this->equipment_returned_status === 'fulfilled') {
+        if ($this->status !== 'approved' || $this->equipment_status !== 'approved') {
+            throw new \InvalidArgumentException('Equipment can only be returned for an approved request.');
+        }
+
+        if (in_array($this->equipment_returned_status, ['returned', 'fulfilled'], true)) {
             throw new \Exception('Equipment has already been recorded as fulfilled for this request.');
         }
 
         $requestedQuantities = $this->resolvedQuantities();
         $returnedItems = $this->equipment_returned_items ?? [];
-        $prevCustodianReturn = $returnedItems[$custodianId]['equipment'] ?? [];
+        $custodianKey = (string) $custodianId;
+        $prevCustodianData = $returnedItems[$custodianKey] ?? $returnedItems[$custodianId] ?? [];
+        $assignedQuantities = $this->getAssignedEquipmentForCustodian($custodianId);
+        $normalizedReturns = $this->normalizeReturnQuantities($returnedEquipment, $assignedQuantities, 'returned');
+        $normalizedDamaged = $this->normalizeReturnQuantities($damageDetails, $assignedQuantities, 'damaged');
+        $normalizedMissing = $this->normalizeReturnQuantities($missingDetails, $assignedQuantities, 'missing');
 
-        $returnedItems[$custodianId] = [
-            'equipment'   => [],
-            'returned_at' => now()->toISOString(),
-            'notes'       => $notes,
+        $prevReturns = $prevCustodianData['equipment'] ?? [];
+        $prevDamaged = $prevCustodianData['damaged'] ?? [];
+        $prevMissing = $prevCustodianData['missing'] ?? [];
+        $custodianData = [
+            'equipment' => $prevReturns,
+            'damaged' => $prevDamaged,
+            'missing' => $prevMissing,
         ];
+        $inventoryDeltas = [];
 
-        $damagedTotals = [];
-        $missingTotals = [];
-        $damagedTotal = 0;
-        $missingTotal = 0;
+        foreach ($assignedQuantities as $itemName => $requestedByCustodian) {
+            $oldReturned = (int) ($prevReturns[$itemName] ?? 0);
+            $oldDamaged = (int) ($prevDamaged[$itemName] ?? 0);
+            $oldMissing = (int) ($prevMissing[$itemName] ?? 0);
+            $newReturned = $normalizedReturns[$itemName] ?? $oldReturned;
+            $newDamaged = $normalizedDamaged[$itemName] ?? $oldDamaged;
+            $newMissing = $normalizedMissing[$itemName] ?? $oldMissing;
 
-        foreach ($damageDetails as $itemName => $qty) {
-            $damagedTotals[$itemName] = max(0, (int) $qty);
-        }
-
-        foreach ($missingDetails as $itemName => $qty) {
-            $missingTotals[$itemName] = max(0, (int) $qty);
-        }
-
-        $damagedTotal = array_sum($damagedTotals);
-        $missingTotal = array_sum($missingTotals);
-        $shouldRestoreInventory = $damagedTotal === 0 && $missingTotal === 0;
-
-        foreach ($returnedEquipment as $itemName => $qty) {
-            $qty = (int) $qty;
-            if ($qty <= 0) continue;
-
-            $eq = $this->findEquipmentForCustodian($itemName, $custodianId);
-            if (!$eq) continue;
-
-            $alreadyReturnedByCustodian = (int) ($prevCustodianReturn[$itemName] ?? 0);
-            $delta = $qty - $alreadyReturnedByCustodian;
-
-            if ($delta <= 0) {
-                $returnedItems[$custodianId]['equipment'][$itemName] = $alreadyReturnedByCustodian;
-                continue;
+            if ($newReturned < $oldReturned || $newDamaged < $oldDamaged || $newMissing < $oldMissing) {
+                throw new \InvalidArgumentException("Recorded return quantities for '{$itemName}' cannot be reduced.");
+            }
+            if ($newDamaged > $newReturned || ($newDamaged - $oldDamaged) > ($newReturned - $oldReturned)) {
+                throw new \InvalidArgumentException("Damaged quantity for '{$itemName}' must be part of the newly returned quantity.");
             }
 
-            $requestedQty = (int) ($requestedQuantities[$itemName] ?? 0);
-
-            $totalReturnedSoFar = 0;
-            foreach ($returnedItems as $cId => $custodianData) {
-                if ($cId == $custodianId) continue;
-                $totalReturnedSoFar += (int) ($custodianData['equipment'][$itemName] ?? 0);
-            }
-
-            $totalReturnedSoFar += $alreadyReturnedByCustodian;
-            $remainingNeeded = max(0, $requestedQty - $totalReturnedSoFar);
-            $toRelease = min($delta, $remainingNeeded);
-            $newTotalByCustodian = $alreadyReturnedByCustodian + $toRelease;
-
-            $returnedItems[$custodianId]['equipment'][$itemName] = $newTotalByCustodian;
-
-            if ($toRelease > 0 && $shouldRestoreInventory) {
-                $locked = \App\Models\Equipment::whereKey($eq->id)->lockForUpdate()->first();
-                if ($locked) {
-                    $locked->quantity_available = min($locked->quantity, $locked->quantity_available + $toRelease);
-                    $locked->save();
+            $returnedByOthers = 0;
+            $missingByOthers = 0;
+            foreach ($returnedItems as $otherCustodianId => $otherData) {
+                if ((string) $otherCustodianId === $custodianKey) {
+                    continue;
                 }
+                $returnedByOthers += (int) ($otherData['equipment'][$itemName] ?? 0);
+                $missingByOthers += (int) ($otherData['missing'][$itemName] ?? 0);
+            }
+
+            if ($returnedByOthers + $missingByOthers + $newReturned + $newMissing > (int) $requestedQuantities[$itemName]) {
+                throw new \InvalidArgumentException("Returned and missing quantity for '{$itemName}' exceeds the approved quantity.");
+            }
+
+            $custodianData['equipment'][$itemName] = $newReturned;
+            $custodianData['damaged'][$itemName] = $newDamaged;
+            $custodianData['missing'][$itemName] = $newMissing;
+
+            $goodReturnDelta = ($newReturned - $oldReturned) - ($newDamaged - $oldDamaged);
+            if ($goodReturnDelta > 0) {
+                $equipment = $this->findEquipmentForCustodian($itemName, $custodianId);
+                if (! $equipment) {
+                    throw new \InvalidArgumentException("Equipment '{$itemName}' is no longer assigned to this custodian.");
+                }
+                $inventoryDeltas[$equipment->id] = [$equipment, $goodReturnDelta];
+            }
+        }
+
+        foreach ([$returnedEquipment, $damageDetails, $missingDetails] as $quantities) {
+            foreach (array_keys($quantities) as $itemName) {
+                if (! array_key_exists($itemName, $assignedQuantities)) {
+                    throw new \InvalidArgumentException("Equipment '{$itemName}' is not assigned to this custodian for this request.");
+                }
+            }
+        }
+
+        if (array_sum($custodianData['equipment']) + array_sum($custodianData['missing']) === 0) {
+            throw new \InvalidArgumentException('Record at least one returned or missing unit.');
+        }
+
+        $custodianData['returned_at'] = now()->toISOString();
+        $custodianData['notes'] = $notes;
+        $returnedItems[$custodianKey] = $custodianData;
+
+        foreach ($inventoryDeltas as [$equipment, $quantity]) {
+            $locked = \App\Models\Equipment::whereKey($equipment->id)->lockForUpdate()->first();
+            if ($locked) {
+                $locked->quantity_available = min($locked->quantity, $locked->quantity_available + $quantity);
+                $locked->save();
             }
         }
 
         $allReturned = $this->isAllEquipmentReturned($returnedItems);
         $damageRemarkText = $this->flattenReturnRemarks($damageRemarks);
         $missingRemarkText = $this->flattenReturnRemarks($missingRemarks);
+        $recordedDamaged = 0;
+        $recordedMissing = 0;
+        foreach ($returnedItems as $custodianData) {
+            $recordedDamaged += array_sum(array_map('intval', $custodianData['damaged'] ?? []));
+            $recordedMissing += array_sum(array_map('intval', $custodianData['missing'] ?? []));
+        }
+        $legacyDamaged = max(0, (int) $this->equipment_return_damaged_quantity - array_sum(array_map(
+            static fn (array $data): int => array_sum(array_map('intval', $data['damaged'] ?? [])),
+            $returnedItems
+        )));
+        $legacyMissing = max(0, (int) $this->equipment_return_missing_quantity - array_sum(array_map(
+            static fn (array $data): int => array_sum(array_map('intval', $data['missing'] ?? [])),
+            $returnedItems
+        )));
 
         $this->update([
             'equipment_returned_items' => $returnedItems,
             'equipment_returned_status' => $allReturned ? 'fulfilled' : 'partial',
             'equipment_returned_date' => $allReturned ? now() : $this->equipment_returned_date,
+            'equipment_returned_by' => $custodianId,
             'equipment_return_notes' => $notes,
-            'equipment_return_damaged_quantity' => $damagedTotal,
-            'equipment_return_missing_quantity' => $missingTotal,
-            'equipment_return_damage_remarks' => $damageRemarkText,
-            'equipment_return_missing_remarks' => $missingRemarkText,
+            'equipment_return_damaged_quantity' => $legacyDamaged + $recordedDamaged,
+            'equipment_return_missing_quantity' => $legacyMissing + $recordedMissing,
+            'equipment_return_damage_remarks' => $damageRemarkText ?? $this->equipment_return_damage_remarks,
+            'equipment_return_missing_remarks' => $missingRemarkText ?? $this->equipment_return_missing_remarks,
         ]);
 
         $this->addHistory(
             'equipment_returned',
-            'Equipment recorded as returned by custodian ID: ' . $custodianId . ($damagedTotal > 0 ? ' Damaged units: ' . $damagedTotal : '') . ($missingTotal > 0 ? ' Missing units: ' . $missingTotal : ''),
+            'Equipment return recorded by custodian ID: ' . $custodianId . ($recordedDamaged > 0 ? ' Damaged units: ' . $recordedDamaged : '') . ($recordedMissing > 0 ? ' Missing units: ' . $recordedMissing : ''),
             $custodianId
         );
+    }
+
+    private function normalizeReturnQuantities(array $quantities, array $assignedQuantities, string $label): array
+    {
+        $normalized = [];
+        foreach ($quantities as $itemName => $quantity) {
+            if (! array_key_exists($itemName, $assignedQuantities)) {
+                throw new \InvalidArgumentException("Equipment '{$itemName}' is not assigned to this custodian for this request.");
+            }
+            if (! is_numeric($quantity) || (int) $quantity != $quantity || (int) $quantity < 0) {
+                throw new \InvalidArgumentException("The {$label} quantity for '{$itemName}' must be a non-negative integer.");
+            }
+            $normalized[$itemName] = (int) $quantity;
+        }
+
+        return $normalized;
     }
 
     private function isAllEquipmentReturned(array $returnedItems): bool
@@ -1192,21 +1255,83 @@ class FacilityRequest extends Model
 
         if (empty($totalRequested)) return true;
 
-        $totalReturned = [];
+        $totalAccounted = [];
 
         foreach ($returnedItems as $custodianData) {
             foreach ($custodianData['equipment'] ?? [] as $itemName => $qty) {
-                $totalReturned[$itemName] = ($totalReturned[$itemName] ?? 0) + (int) $qty;
+                $totalAccounted[$itemName] = ($totalAccounted[$itemName] ?? 0) + (int) $qty;
+            }
+            foreach ($custodianData['missing'] ?? [] as $itemName => $qty) {
+                $totalAccounted[$itemName] = ($totalAccounted[$itemName] ?? 0) + (int) $qty;
             }
         }
 
         foreach ($totalRequested as $itemName => $requestedQty) {
-            if (($totalReturned[$itemName] ?? 0) < (int) $requestedQty) {
+            if (($totalAccounted[$itemName] ?? 0) < (int) $requestedQty) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    public function getInventoryOutstandingQuantities(): array
+    {
+        $requestedQuantities = $this->resolvedQuantities();
+        $returnedItems = $this->equipment_returned_items ?? [];
+        $goodReturns = [];
+        $hasStructuredCustodianRecords = false;
+        $hasPerItemConditionRecords = false;
+
+        foreach ($returnedItems as $custodianData) {
+            if (! is_array($custodianData)) {
+                continue;
+            }
+            if (isset($custodianData['equipment']) && is_array($custodianData['equipment'])) {
+                $hasStructuredCustodianRecords = true;
+                $hasPerItemConditionRecords = $hasPerItemConditionRecords
+                    || array_key_exists('damaged', $custodianData)
+                    || array_key_exists('missing', $custodianData);
+                foreach ($custodianData['equipment'] as $itemName => $quantity) {
+                    $returned = max(0, (int) $quantity);
+                    $damaged = max(0, (int) ($custodianData['damaged'][$itemName] ?? 0));
+                    $goodReturns[$itemName] = ($goodReturns[$itemName] ?? 0) + max(0, $returned - $damaged);
+                }
+            }
+        }
+
+        if (
+            (! $hasStructuredCustodianRecords || ! $hasPerItemConditionRecords)
+            && ((int) $this->equipment_return_damaged_quantity > 0 || (int) $this->equipment_return_missing_quantity > 0)
+        ) {
+            return $requestedQuantities;
+        }
+
+        if (! $hasStructuredCustodianRecords) {
+            foreach ($returnedItems as $itemName => $quantity) {
+                if (is_numeric($quantity)) {
+                    $goodReturns[$itemName] = ($goodReturns[$itemName] ?? 0) + max(0, (int) $quantity);
+                }
+            }
+        }
+
+        foreach ($returnedItems as $custodianData) {
+            if (! is_array($custodianData) || isset($custodianData['equipment'])) {
+                continue;
+            }
+            foreach ($custodianData as $itemName => $quantity) {
+                if (is_numeric($quantity)) {
+                    $goodReturns[$itemName] = ($goodReturns[$itemName] ?? 0) + max(0, (int) $quantity);
+                }
+            }
+        }
+
+        $outstanding = [];
+        foreach ($requestedQuantities as $itemName => $quantity) {
+            $outstanding[$itemName] = max(0, (int) $quantity - min((int) $quantity, (int) ($goodReturns[$itemName] ?? 0)));
+        }
+
+        return $outstanding;
     }
 
     private function flattenReturnRemarks(array $remarks): ?string
@@ -1235,9 +1360,8 @@ class FacilityRequest extends Model
 
     public function isOverdue(): bool
     {
-        $eventEndDate = $this->end_date ?? $this->start_date;
-        return $eventEndDate && now()->gt($eventEndDate)
-            && $this->equipment_returned_status !== 'returned';
+        return now()->gt($this->getRequestedEndDateTime())
+            && ! in_array($this->equipment_returned_status, ['returned', 'fulfilled'], true);
     }
 
     /**

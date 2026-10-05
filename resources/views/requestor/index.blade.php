@@ -116,13 +116,10 @@
 
     @if ($activeTab === 'dashboard')
         <section class="rounded-[24px] border border-cyan-200 bg-cyan-50 p-4 shadow-sm sm:p-5 md:rounded-[28px]" aria-labelledby="request-workflow-heading">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div class="max-w-3xl">
-                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">What happens next</p>
-                    <h2 id="request-workflow-heading" class="mt-2 text-lg font-semibold text-slate-950">Your request moves through two review steps</h2>
-                    <p class="mt-2 text-sm leading-6 text-slate-700">After you submit, the assigned custodians verify the venue and equipment. The Supply Office then gives final approval, requests a reschedule, or rejects the request. Check My Requests and your notifications for updates.</p>
-                </div>
-                <a href="{{ route('requestor.index', ['tab' => 'requests']) }}" class="inline-flex shrink-0 items-center justify-center rounded-full border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-cyan-800 transition hover:bg-cyan-100">View My Requests</a>
+            <div class="max-w-3xl">
+                <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">What happens next</p>
+                <h2 id="request-workflow-heading" class="mt-2 text-lg font-semibold text-slate-950">Your request moves through two review steps</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-700">After you submit, the assigned custodians verify the venue and equipment. The Supply Office then gives final approval, requests a reschedule, or rejects the request. Check My Requests and your notifications for updates.</p>
             </div>
         </section>
     @endif

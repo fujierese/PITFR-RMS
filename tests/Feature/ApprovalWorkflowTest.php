@@ -117,6 +117,150 @@ class ApprovalWorkflowTest extends TestCase
         Notification::assertSentTo($requester, RequestStatusChanged::class);
     }
 
+    public function test_calendar_final_approval_requires_both_custodian_approvals(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $request = $this->createRequestForApproval($requester);
+        $request->update(['venue_status' => 'pending']);
+
+        $this->actingAs($admin)
+            ->postJson(route('calendar.approve', ['id' => $request->id]))
+            ->assertStatus(409)
+            ->assertJson([
+                'message' => 'Cannot finalize approval until both custodians have approved the request.',
+            ]);
+
+        $this->assertSame('pending', $request->fresh()->status);
+        $this->assertSame('pending', $request->fresh()->venue_status);
+        $this->assertSame('approved', $request->fresh()->equipment_status);
+        $this->assertNull($request->fresh()->approved_by_id);
+        $this->assertNull($request->fresh()->approved_date);
+
+        $request->update(['venue_status' => 'approved', 'equipment_status' => 'pending']);
+        $this->actingAs($admin)
+            ->postJson(route('calendar.approve', ['id' => $request->id]))
+            ->assertStatus(409);
+        $this->assertSame('pending', $request->fresh()->status);
+        $this->assertSame('approved', $request->fresh()->venue_status);
+        $this->assertSame('pending', $request->fresh()->equipment_status);
+    }
+
+    public function test_calendar_final_approval_does_not_allow_admin_to_approve_custodian_stages(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $request = $this->createRequestForApproval($requester);
+        $request->update(['venue_status' => 'pending']);
+
+        $this->actingAs($admin)
+            ->postJson(route('calendar.approve', ['id' => $request->id]), ['type' => 'venue'])
+            ->assertForbidden();
+
+        $this->assertSame('pending', $request->fresh()->status);
+        $this->assertSame('pending', $request->fresh()->venue_status);
+    }
+
+    public function test_calendar_final_approval_succeeds_after_both_custodian_stages(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $request = $this->createRequestForApproval($requester);
+
+        $this->actingAs($admin)
+            ->postJson(route('calendar.approve', ['id' => $request->id]))
+            ->assertOk()
+            ->assertJson(['message' => 'Request approved successfully']);
+
+        $request->refresh();
+        $this->assertSame('approved', $request->status);
+        $this->assertSame('approved', $request->venue_status);
+        $this->assertSame('approved', $request->equipment_status);
+        $this->assertSame($admin->id, $request->approved_by_id);
+        $this->assertNotNull($request->approved_date);
+        $this->assertDatabaseHas('request_histories', [
+            'facility_request_id' => $request->id,
+            'action' => 'final_approved',
+            'user_id' => $admin->id,
+        ]);
+        Notification::assertSentTo($requester, RequestStatusChanged::class);
+    }
+
+    public function test_second_overlapping_venue_request_cannot_be_finally_approved(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $firstRequest = $this->createRequestForApproval($requester);
+        $secondRequest = $this->createRequestForApproval($requester);
+        $secondRequest->update(['control_number' => 'FER-2026-031']);
+
+        $this->actingAs($admin)
+            ->post(route('supply-office.update'), [
+                'id' => $firstRequest->id,
+                'action' => 'approve',
+            ])
+            ->assertRedirect(route('supply-office.index'));
+
+        $this->actingAs($admin)
+            ->post(route('supply-office.update'), [
+                'id' => $secondRequest->id,
+                'action' => 'approve',
+            ])
+            ->assertSessionHasErrors('action');
+
+        $this->assertSame('approved', $firstRequest->fresh()->status);
+        $this->assertSame('pending', $secondRequest->fresh()->status);
+        $this->assertNull($secondRequest->fresh()->approved_by_id);
+    }
+
+    public function test_second_overlapping_equipment_request_cannot_exceed_inventory(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $equipmentCustodian = User::factory()->create(['role' => 'custodian-equipment']);
+        Equipment::create([
+            'name' => 'Single Projector',
+            'custodian_id' => $equipmentCustodian->id,
+            'quantity' => 1,
+            'quantity_available' => 1,
+        ]);
+        Venue::create([
+            'name' => 'Separate Training Room',
+            'custodian_id' => $equipmentCustodian->id,
+        ]);
+
+        $firstRequest = $this->createRequestForApproval($requester);
+        $firstRequest->update([
+            'equipment' => ['Single Projector'],
+            'equipment_quantities' => ['Single Projector' => 1],
+        ]);
+        $secondRequest = $this->createRequestForApproval($requester);
+        $secondRequest->update([
+            'control_number' => 'FER-2026-032',
+            'venue' => ['Separate Training Room'],
+            'equipment' => ['Single Projector'],
+            'equipment_quantities' => ['Single Projector' => 1],
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('supply-office.update'), [
+                'id' => $firstRequest->id,
+                'action' => 'approve',
+            ])
+            ->assertRedirect(route('supply-office.index'));
+
+        $this->actingAs($admin)
+            ->post(route('supply-office.update'), [
+                'id' => $secondRequest->id,
+                'action' => 'approve',
+            ])
+            ->assertSessionHasErrors('action');
+
+        $this->assertSame('approved', $firstRequest->fresh()->status);
+        $this->assertSame('pending', $secondRequest->fresh()->status);
+        $this->assertSame(0, (int) Equipment::where('name', 'Single Projector')->value('quantity_available'));
+    }
+
     public function test_admin_rejection_marks_request_rejected_and_creates_history_and_notification(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);

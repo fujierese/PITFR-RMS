@@ -180,6 +180,11 @@ class RequestActionController extends Controller
         DB::beginTransaction();
 
         try {
+            $this->availabilityService->lockResourcesForFacilityRequests($facilityRequest);
+            $facilityRequest = FacilityRequest::whereKey($facilityRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
             $conflictMessage = $this->checkHybridResources($facilityRequest);
             if ($conflictMessage) {
                 DB::rollBack();
@@ -220,9 +225,6 @@ class RequestActionController extends Controller
                 $facilityRequest->recordApprovalSignature('equipment', $user);
                 $facilityRequest->save();
                 $facilityRequest->addHistory('custodian_endorsed', 'Equipment request verified and endorsed by ' . $user->name, $user->id);
-
-                DB::commit();
-                return redirect()->back()->with('success', 'Equipment endorsement recorded and request forwarded to Administrator.');
             }
 
             $facilityRequest->save();
@@ -358,14 +360,27 @@ class RequestActionController extends Controller
         DB::beginTransaction();
 
         try {
+            $this->availabilityService->lockResourcesForFacilityRequests($facilityRequest);
+            $facilityRequest = FacilityRequest::whereKey($facilityRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
             $conflictMessage = $this->checkHybridResources($facilityRequest);
             if ($conflictMessage) {
                 DB::rollBack();
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => $conflictMessage], 422);
+                }
+
                 return redirect()->back()->withErrors($conflictMessage);
             }
 
             if ($facilityRequest->status === 'approved' && ($facilityRequest->approved_by_id || $facilityRequest->approved_by)) {
                 DB::rollBack();
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => 'This request is already approved.'], 409);
+                }
+
                 return redirect()->route('supply-office.index')->with('info', 'This request is already approved.');
             }
 
@@ -373,6 +388,12 @@ class RequestActionController extends Controller
                 || $facilityRequest->venue_status !== 'approved'
                 || $facilityRequest->equipment_status !== 'approved') {
                 DB::rollBack();
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'message' => 'Cannot finalize approval until both custodians have approved the request.',
+                    ], 409);
+                }
+
                 return redirect()->back()->withErrors('Cannot finalize approval: required custodial endorsements are incomplete.');
             }
 
@@ -411,10 +432,18 @@ class RequestActionController extends Controller
             }
 
             DB::commit();
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Request approved successfully']);
+            }
+
             return redirect()->route('supply-office.index')->with('success', 'Final approval granted successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Final approval failed for request ' . $facilityRequest->id, ['exception' => $e]);
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Unable to finalize approval at this time.'], 500);
+            }
+
             return redirect()->back()->withErrors('Unable to finalize approval at this time.');
         }
     }

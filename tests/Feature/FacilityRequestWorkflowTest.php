@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Equipment;
 use App\Models\Venue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -84,11 +85,14 @@ class FacilityRequestWorkflowTest extends TestCase
         $this->assertDatabaseHas('facility_requests', [
             'name_of_activity' => 'Urgent Seminar',
             'is_emergency' => true,
+            'priority' => 'institutional',
+            'requested_priority' => 'institutional',
         ]);
     }
 
     public function test_custodian_verification_uses_current_schema_without_old_approval_columns()
     {
+        Notification::fake();
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         $venueCustodian = User::factory()->create(['role' => 'custodian-venue']);
 
@@ -130,6 +134,48 @@ class FacilityRequestWorkflowTest extends TestCase
             'action' => 'custodian_endorsed',
             'user_id' => $venueCustodian->id,
         ]);
+        Notification::assertSentTo($requester, \App\Notifications\RequestStatusChanged::class, function ($notification): bool {
+            return $notification->status === 'venue_approved';
+        });
+    }
+
+    public function test_custodian_rejection_notifies_the_requestor(): void
+    {
+        Notification::fake();
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $venueCustodian = User::factory()->create(['role' => 'custodian-venue']);
+        Venue::create([
+            'name' => 'Conference Hall & Interaction Center (CHIC)',
+            'custodian_id' => $venueCustodian->id,
+        ]);
+        $facilityRequest = FacilityRequest::create([
+            'control_number' => 'TEST-REJECTION-NOTIFICATION',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Rejection Notification Test',
+            'expected_participants' => 20,
+            'start_date' => now()->addDays(2)->toDateString(),
+            'end_date' => now()->addDays(2)->toDateString(),
+            'start_time' => '10:00',
+            'end_time' => '12:00',
+            'venue' => ['Conference Hall & Interaction Center (CHIC)'],
+            'equipment' => [],
+            'equipment_quantities' => [],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+            'priority' => 'regular',
+        ]);
+        $facilityRequest->syncRelationalItems();
+
+        $this->actingAs($venueCustodian)
+            ->post(route('request.custodian.reject', $facilityRequest), ['notes' => 'Venue unavailable'])
+            ->assertRedirect();
+
+        Notification::assertSentTo($requester, \App\Notifications\RequestStatusChanged::class, function ($notification): bool {
+            return $notification->status === 'rejected';
+        });
     }
 
     public function test_request_details_uses_independent_workflow_icons(): void

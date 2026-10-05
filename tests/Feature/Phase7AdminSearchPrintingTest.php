@@ -141,6 +141,62 @@ class Phase7AdminSearchPrintingTest extends TestCase
         $response->assertSee('Print Final Request');
     }
 
+    public function test_admin_final_approval_queue_has_a_direct_request_details_link(): void
+    {
+        $this->approvedRequest->update([
+            'status' => 'pending',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('supply-office.requests.final-approval'))
+            ->assertOk()
+            ->assertSee('href="' . route('request.show', $this->approvedRequest->id) . '"', false);
+    }
+
+    public function test_request_details_lists_both_venue_and_equipment_custodians(): void
+    {
+        $venueCustodian = User::factory()->create(['role' => 'custodian-venue', 'name' => 'Venue Reviewer']);
+        $equipmentCustodian = User::factory()->create(['role' => 'custodian-equipment', 'name' => 'Equipment Reviewer']);
+        $venueName = $this->approvedRequest->getVenueNames()[0] ?? 'Gymnasium';
+        $equipmentName = 'Sound System';
+
+        Venue::create(['name' => $venueName, 'custodian_id' => $venueCustodian->id]);
+        Equipment::create([
+            'name' => $equipmentName,
+            'custodian_id' => $equipmentCustodian->id,
+            'quantity' => 5,
+            'quantity_available' => 5,
+        ]);
+        $this->approvedRequest->update([
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+            'venue' => [$venueName],
+            'equipment' => [$equipmentName],
+            'equipment_quantities' => [$equipmentName => 1],
+        ]);
+        $this->approvedRequest->syncRelationalItems();
+
+        $this->actingAs($this->admin)
+            ->get(route('request.show', $this->approvedRequest->id))
+            ->assertOk()
+            ->assertSee('Assigned reviewer(s):')
+            ->assertSee('Venue Reviewer')
+            ->assertSee('Equipment Reviewer')
+            ->assertSee('Venue custodian')
+            ->assertSee('Equipment custodian');
+    }
+
+    public function test_request_details_does_not_display_the_e_signature_image(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('request.show', $this->approvedRequest->id))
+            ->assertOk()
+            ->assertDontSee('test_signature_001.png');
+    }
+
     /** @test */
     public function requestor_sees_preview_print_request_on_request_details(): void
     {
@@ -150,6 +206,16 @@ class Phase7AdminSearchPrintingTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Preview (Pending)');
+    }
+
+    public function requestor_create_form_prompts_for_confirmation_before_submission(): void
+    {
+        $this->actingAs($this->student)
+            ->get(route('requestor.index'))
+            ->assertOk()
+            ->assertSee('data-swal-confirm', false)
+            ->assertSee('Submit this request?')
+            ->assertSee('Yes, submit request');
     }
 
     /** @test */

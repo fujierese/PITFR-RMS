@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use App\Http\Controllers\Concerns\ManagesAccountSettings;
 
@@ -179,7 +180,7 @@ class AdminController extends Controller
             'middle_name' => ['nullable', 'string', 'max:100'],
             'suffix' => ['nullable', 'string', 'max:50'],
             'username' => ['required', 'email', 'max:255', 'unique:users,username'],
-            'password' => ['nullable', 'string', 'min:6', 'confirmed'],
+            'password' => ['nullable', 'string', 'min:12', 'confirmed'],
             'college_id' => ['required_if:account_type,student,faculty', 'nullable', 'exists:colleges,id'],
             'department_id' => ['required_if:account_type,student,faculty', 'nullable', 'exists:departments,id'],
             'school_id_number' => ['required_if:account_type,student', 'nullable', 'string', 'regex:/^\d{2}-\d{4}-\d{3}$/'],
@@ -334,7 +335,7 @@ class AdminController extends Controller
             'faculty_id' => ['nullable', 'string', 'max:50', 'unique:users,faculty_id,' . $user->id],
             'faculty_adviser' => ['nullable', 'in:yes,no'],
             'position' => ['nullable', 'string', 'max:100'],
-            'password' => ['nullable', 'string', 'min:6', 'confirmed'],
+            'password' => ['nullable', 'string', 'min:12', 'confirmed'],
             'student_organization_id' => ['nullable', 'integer', 'exists:student_organizations,id'],
             'office_or_organization' => ['nullable', 'string', 'max:255'],
             'contact_number' => ['nullable', 'string', 'max:255'],
@@ -414,10 +415,17 @@ class AdminController extends Controller
             'office_or_organization' => $validated['office_or_organization'] ?? null,
             'contact_number' => $validated['contact_number'] ?? null,
         ]);
-        if (!empty($validated['password'])) {
+        $passwordChanged = ! empty($validated['password']);
+        if ($passwordChanged) {
             $user->password = Hash::make($validated['password']);
         }
         $user->save();
+        if ($passwordChanged) {
+            $user->tokens()->delete();
+        }
+        if (! $user->is_active) {
+            $this->revokeUserAccess($user);
+        }
 
         if ($user->isStudent() && !empty($validated['student_organization_id'])) {
             StudentOrganizationMember::updateOrCreate(
@@ -465,12 +473,27 @@ class AdminController extends Controller
         ];
 
         $user->update(['is_active' => false]);
+        $this->revokeUserAccess($user);
 
         $this->recordUserAudit($currentUser, $user, 'user_deactivated', 'Deactivated the user account.', $oldValues, [
             'is_active' => $user->fresh()->is_active,
         ]);
 
         return redirect()->route('admin.users')->with('success', 'User deactivated successfully.');
+    }
+
+    private function revokeUserAccess(User $user): void
+    {
+        $user->tokens()->delete();
+
+        if (config('session.driver') !== 'database') {
+            return;
+        }
+
+        $sessionTable = (string) config('session.table', 'sessions');
+        if (Schema::hasTable($sessionTable)) {
+            DB::table($sessionTable)->where('user_id', $user->getKey())->delete();
+        }
     }
 
     public function reactivateUser(User $user)
@@ -537,7 +560,7 @@ class AdminController extends Controller
     {
         $request->validate([
             'current_password' => ['required'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'password' => ['required', 'string', 'min:12', 'confirmed'],
         ]);
 
         $user = Auth::user();
@@ -547,6 +570,8 @@ class AdminController extends Controller
 
         $user->password = Hash::make($request->password);
         $user->save();
+        $user->tokens()->delete();
+        $this->notifyPasswordChanged($user);
 
         return redirect()->route('supply-office.settings')->with('success', 'Password updated successfully.');
     }
@@ -593,39 +618,130 @@ class AdminController extends Controller
 
     public function auditLogs(Request $request)
     {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $allLogs = $this->filteredAuditLogs($request);
+        $perPage = 50;
+        $auditLogs = new LengthAwarePaginator(
+            $allLogs->forPage(LengthAwarePaginator::resolveCurrentPage(), $perPage)->values(),
+            $allLogs->count(),
+            $perPage,
+            LengthAwarePaginator::resolveCurrentPage(),
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+        $actions = \App\Models\RequestHistory::query()->select('action')->distinct()->pluck('action')
+            ->concat(AuditLog::query()->select('action')->distinct()->pluck('action'))
+            ->unique()->sort()->values();
+
+        return view('supply-office.audit-logs', [
+            'auditLogs' => $auditLogs,
+            'filters' => $request->only(['search', 'action', 'user_id', 'date_from', 'date_to']),
+            'users' => User::orderBy('name')->get(['id', 'name']),
+            'actions' => $actions,
+            'totalMatchingLogs' => $allLogs->count(),
+        ]);
+    }
+
+    public function exportAuditLogs(Request $request): StreamedResponse
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $logs = $this->filteredAuditLogs($request);
+        $filename = 'audit-logs-' . now()->format('Y-m-d-His') . '.csv';
+
+        return response()->streamDownload(function () use ($logs): void {
+            $handle = fopen('php://output', 'w');
+            if ($handle === false) {
+                throw new \RuntimeException('Unable to open CSV output stream.');
+            }
+
+            fwrite($handle, "\xEF\xBB\xBF");
+            $safeCsvText = static function (?string $value): string {
+                $value = $value ?? '';
+                return preg_match('/^[\s\t\r]*[=+\-@]/u', $value) === 1 ? "'" . $value : $value;
+            };
+
+            fputcsv($handle, ['Timestamp', 'User', 'Action', 'Request', 'Details', 'Changes']);
+            foreach ($logs as $log) {
+                $oldValues = is_array($log->old_values ?? null) ? $log->old_values : [];
+                $newValues = is_array($log->new_values ?? null) ? $log->new_values : [];
+                $changes = [];
+                foreach (array_unique(array_merge(array_keys($oldValues), array_keys($newValues))) as $field) {
+                    $oldValue = $oldValues[$field] ?? null;
+                    $newValue = $newValues[$field] ?? null;
+                    if ($oldValue !== $newValue) {
+                        $changes[] = $field . ': ' . json_encode($oldValue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                            . ' -> ' . json_encode($newValue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    }
+                }
+
+                fputcsv($handle, [
+                    $log->occurred_at?->format('Y-m-d H:i:s') ?? '',
+                    $safeCsvText($log->user?->name ?? 'System'),
+                    $safeCsvText((string) $log->action),
+                    $safeCsvText($log->facilityRequest?->control_number ?? $log->targetUser?->name ?? ''),
+                    $safeCsvText((string) ($log->detail ?? '')),
+                    $safeCsvText(implode('; ', $changes)),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function filteredAuditLogs(Request $request)
+    {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:200'],
+            'action' => ['nullable', 'string', 'max:100'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+        ]);
+
+        $search = trim((string) ($filters['search'] ?? ''));
+        $action = $filters['action'] ?? null;
+        $userId = $filters['user_id'] ?? null;
+        $dateFrom = $filters['date_from'] ?? null;
+        $dateTo = $filters['date_to'] ?? null;
+
         $requestHistoryQuery = \App\Models\RequestHistory::with(['facilityRequest', 'user'])
-            ->orderByDesc('occurred_at');
-
-        if ($search = $request->get('search')) {
-            $requestHistoryQuery->where(function ($q) use ($search) {
-                $q->where('action', 'like', '%' . $search . '%')
-                  ->orWhere('detail', 'like', '%' . $search . '%')
-                  ->orWhereHas('facilityRequest', function ($fr) use ($search) {
-                      $fr->where('control_number', 'like', '%' . $search . '%')
-                         ->orWhere('name_of_activity', 'like', '%' . $search . '%');
-                  })
-                  ->orWhereHas('user', function ($u) use ($search) {
-                      $u->where('name', 'like', '%' . $search . '%');
-                  });
+            ->when($action, fn ($query) => $query->where('action', $action))
+            ->when($userId, fn ($query) => $query->where('user_id', $userId))
+            ->when($dateFrom, fn ($query) => $query->whereDate('occurred_at', '>=', $dateFrom))
+            ->when($dateTo, fn ($query) => $query->whereDate('occurred_at', '<=', $dateTo))
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($searchQuery) use ($search): void {
+                    $searchQuery->where('action', 'like', '%' . $search . '%')
+                        ->orWhere('detail', 'like', '%' . $search . '%')
+                        ->orWhereHas('facilityRequest', function ($requestQuery) use ($search): void {
+                            $requestQuery->where('control_number', 'like', '%' . $search . '%')
+                                ->orWhere('name_of_activity', 'like', '%' . $search . '%');
+                        })
+                        ->orWhereHas('user', fn ($userQuery) => $userQuery->where('name', 'like', '%' . $search . '%'));
+                });
             });
-        }
 
-        if ($action = $request->get('action')) {
-            $requestHistoryQuery->where('action', $action);
-        }
-
-        if ($dateFrom = $request->get('date_from')) {
-            $requestHistoryQuery->whereDate('occurred_at', '>=', $dateFrom);
-        }
-
-        if ($dateTo = $request->get('date_to')) {
-            $requestHistoryQuery->whereDate('occurred_at', '<=', $dateTo);
-        }
-
-        $requestLogs = $requestHistoryQuery->get();
+        $requestLogs = $requestHistoryQuery->get()->map(function ($log) {
+            $log->kind = 'request';
+            $log->old_values = [];
+            $log->new_values = [];
+            return $log;
+        });
 
         $userAuditLogs = AuditLog::with(['actor', 'targetUser'])
-            ->orderByDesc('created_at')
+            ->when($action, fn ($query) => $query->where('action', $action))
+            ->when($userId, fn ($query) => $query->where(fn ($userQuery) => $userQuery->where('actor_id', $userId)->orWhere('target_user_id', $userId)))
+            ->when($dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $dateFrom))
+            ->when($dateTo, fn ($query) => $query->whereDate('created_at', '<=', $dateTo))
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($searchQuery) use ($search): void {
+                    $searchQuery->where('action', 'like', '%' . $search . '%')
+                        ->orWhere('details', 'like', '%' . $search . '%')
+                        ->orWhereHas('actor', fn ($userQuery) => $userQuery->where('name', 'like', '%' . $search . '%'))
+                        ->orWhereHas('targetUser', fn ($userQuery) => $userQuery->where('name', 'like', '%' . $search . '%'));
+                });
+            })
             ->get()
             ->map(function (AuditLog $log) {
                 $log->kind = 'user_management';
@@ -636,25 +752,9 @@ class AdminController extends Controller
                 return $log;
             });
 
-        $allLogs = $requestLogs->concat($userAuditLogs)
-            ->sortByDesc(fn ($log) => $log->occurred_at ? $log->occurred_at->toDateTimeString() : $log->created_at?->toDateTimeString())
+        return $requestLogs->concat($userAuditLogs)
+            ->sortByDesc(fn ($log) => $log->occurred_at?->toDateTimeString() ?? $log->created_at?->toDateTimeString())
             ->values();
-
-        $page = (int) $request->query('page', 1);
-        $perPage = 50;
-        $items = $allLogs->slice(($page - 1) * $perPage, $perPage)->values();
-        $auditLogs = new LengthAwarePaginator(
-            $items,
-            $allLogs->count(),
-            $perPage,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()]
-        );
-
-        return view('supply-office.audit-logs', [
-            'auditLogs' => $auditLogs,
-            'filters' => $request->only(['search', 'action', 'date_from', 'date_to']),
-        ]);
     }
 
     protected function recordUserAudit(?User $actor, ?User $targetUser, string $action, string $details = '', array $oldValues = [], array $newValues = []): void

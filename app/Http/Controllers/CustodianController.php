@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Equipment;
 use App\Models\FacilityRequest;
+use App\Models\User;
 use App\Models\Venue;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -48,6 +49,12 @@ class CustodianController extends Controller
                 ? $allRequests->where('custodian_status', 'approved')->count()
                 : $allRequests->where($custodianType . '_status', 'approved')->count(),
         ];
+        $pendingRequests = $allRequests->filter(fn ($requestItem) => $custodianType === 'equipment'
+            ? $requestItem->custodian_status === 'pending'
+            : $requestItem->{$custodianType . '_status'} === 'pending');
+        $pendingRequests = $pendingRequests
+            ->sortBy([['start_date', 'asc'], ['start_time', 'asc'], ['created_at', 'asc']])
+            ->take(5);
 
         // Separate recent/upcoming requests from old/completed requests
         $today = now()->toDateString();
@@ -55,7 +62,7 @@ class CustodianController extends Controller
             $schedule = $request->reservationSchedule;
             $start = $schedule ? $schedule->start_datetime : $request->start_date;
             return $start && $start->toDateString() >= $today;
-        });
+        })->sortBy([['start_date', 'asc'], ['start_time', 'asc'], ['created_at', 'asc']])->take(5);
         $pastRequests = $allRequests->filter(function ($request) use ($today) {
             $schedule = $request->reservationSchedule;
             $start = $schedule ? $schedule->start_datetime : $request->start_date;
@@ -127,11 +134,12 @@ class CustodianController extends Controller
             ? FacilityRequest::find($request->review)
             : null;
 
-        return view('custodian.index', [
+        $viewData = [
             'user'               => $user,
             'custodianType'      => $custodianType,
             'requests'           => $requests,
             'allRequests'        => $allRequests,
+            'pendingRequests'    => $pendingRequests,
             'upcomingRequests'   => $upcomingRequests,
             'pastRequests'       => $pastRequests,
             'filter'             => $filter,
@@ -143,7 +151,11 @@ class CustodianController extends Controller
             'dateFrom'           => $dateFrom,
             'dateTo'             => $dateTo,
             'requestVenueOptions' => $requestVenueOptions,
-        ]);
+        ];
+
+        $hasRequestListQuery = $request->hasAny(['filter', 'search', 'venue', 'sort', 'date_from', 'date_to']);
+
+        return view($hasRequestListQuery ? 'custodian.index' : 'custodian.dashboard', $viewData);
     }
 
     public function settings(Request $request)
@@ -160,12 +172,22 @@ class CustodianController extends Controller
     {
         $user = Auth::user();
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'surname' => ['nullable', 'string', 'max:100'],
+            'first_name' => ['nullable', 'string', 'max:100'],
+            'middle_name' => ['nullable', 'string', 'max:100'],
+            'suffix' => ['nullable', 'string', 'max:50'],
             'department' => ['nullable', 'string', 'max:255'],
             'contact_number' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $user->fill($validated);
+        $user->fill($validated + [
+            'name' => User::formatFullName(
+                $validated['surname'] ?? null,
+                $validated['first_name'] ?? null,
+                $validated['middle_name'] ?? null,
+                $validated['suffix'] ?? null,
+            ),
+        ]);
         $user->save();
 
         return redirect()->route('custodian.settings')->with('success', 'Profile updated successfully.');
@@ -175,7 +197,7 @@ class CustodianController extends Controller
     {
         $request->validate([
             'current_password' => ['required'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'password' => ['required', 'string', 'min:12', 'confirmed'],
         ]);
 
         $user = Auth::user();
@@ -185,6 +207,8 @@ class CustodianController extends Controller
 
         $user->password = Hash::make($request->password);
         $user->save();
+        $user->tokens()->delete();
+        $this->notifyPasswordChanged($user);
 
         return redirect()->route('custodian.settings')->with('success', 'Password updated successfully.');
     }
@@ -209,6 +233,16 @@ class CustodianController extends Controller
             'id'     => 'required|integer|exists:facility_requests,id',
             'action' => 'required|in:approve,reject,return',
             'notes'  => 'nullable|string',
+            'equipment' => 'nullable|array',
+            'equipment.*' => 'integer|min:0',
+            'damaged_quantity' => 'nullable|array',
+            'damaged_quantity.*' => 'integer|min:0',
+            'missing_quantity' => 'nullable|array',
+            'missing_quantity.*' => 'integer|min:0',
+            'damage_remarks' => 'nullable|array',
+            'damage_remarks.*' => 'nullable|string|max:500',
+            'missing_remarks' => 'nullable|array',
+            'missing_remarks.*' => 'nullable|string|max:500',
         ]);
 
         DB::beginTransaction();
@@ -235,20 +269,14 @@ class CustodianController extends Controller
                     return back()->withErrors(['error' => 'You are not assigned to any equipment in this request.']);
                 }
 
-                $returnEquipmentPayload = $request->input('equipment', []);
-                $damagePayload = $request->input('damaged_quantity', []);
-                $missingPayload = $request->input('missing_quantity', []);
-                $damageRemarks = $request->input('damage_remarks', []);
-                $missingRemarks = $request->input('missing_remarks', []);
-
                 $fr->markEquipmentReturned(
                     $user->id,
-                    $returnEquipmentPayload,
+                    $validated['equipment'] ?? [],
                     $validated['notes'] ?? null,
-                    $damagePayload,
-                    $missingPayload,
-                    $damageRemarks,
-                    $missingRemarks
+                    $validated['damaged_quantity'] ?? [],
+                    $validated['missing_quantity'] ?? [],
+                    $validated['damage_remarks'] ?? [],
+                    $validated['missing_remarks'] ?? []
                 );
 
                 DB::commit();
@@ -489,7 +517,7 @@ class CustodianController extends Controller
 
     public function returnEquipment(Request $request, $id)
     {
-        $facilityRequest = \App\Models\FacilityRequest::findOrFail($id);
+        $facilityRequest = FacilityRequest::findOrFail($id);
         $user = auth()->user();
         $this->authorize('returnEquipment', $facilityRequest);
         abort_unless(
@@ -511,7 +539,12 @@ class CustodianController extends Controller
             'notes' => 'nullable|string|max:500',
         ]);
 
+        DB::beginTransaction();
+
         try {
+            $facilityRequest = FacilityRequest::whereKey($facilityRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
             $facilityRequest->markEquipmentReturned(
                 $user->id,
                 $validated['equipment'],
@@ -522,10 +555,13 @@ class CustodianController extends Controller
                 $validated['missing_remarks'] ?? []
             );
 
+            DB::commit();
+
             return back()->with('success', 'Equipment returned successfully.');
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Equipment return failed for request ' . $facilityRequest->id . ': ' . $e->getMessage(), ['exception' => $e]);
-            return back()->with('error', 'Unable to return equipment at this time.');
+            return back()->withErrors(['return' => $e->getMessage()]);
         }
     }
 
@@ -848,4 +884,3 @@ class CustodianController extends Controller
                        ->with('success', "Equipment returned successfully. Quantity available updated.");
     }
 }
-

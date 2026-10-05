@@ -61,6 +61,9 @@ class ExampleTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Email')
+            ->assertSee('autocomplete="username"', false)
+            ->assertSee('autocomplete="current-password"', false)
+            ->assertSee('for="password"', false)
             ->assertSee('Forgot Password?')
             ->assertSee('Return to Home')
             ->assertDontSee('Username')

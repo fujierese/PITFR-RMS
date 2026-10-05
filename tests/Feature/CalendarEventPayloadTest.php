@@ -179,6 +179,22 @@ class CalendarEventPayloadTest extends TestCase
             'end_datetime' => now()->addDay()->setTime(15, 0),
         ]);
 
+        FacilityRequest::create([
+            'control_number' => 'FER-2026-012',
+            'date_requested' => now()->toDateString(),
+            'department' => 'BSIT',
+            'name_of_activity' => 'Rejected Reservation',
+            'expected_participants' => 15,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '16:00',
+            'end_time' => '17:00',
+            'requested_by_id' => $other->id,
+            'status' => 'rejected',
+            'venue_status' => 'rejected',
+            'equipment_status' => 'pending',
+        ]);
+
         $response = $this->actingAs($owner)->getJson(route('calendar.events'));
 
         $response->assertOk();
@@ -187,7 +203,12 @@ class CalendarEventPayloadTest extends TestCase
 
         $eventsById = collect($response->json())->keyBy('id');
         $this->assertTrue($eventsById[$myRequest->id]['extendedProps']['isOwner']);
-        $this->assertFalse($eventsById[$otherRequest->id]['extendedProps']['isOwner']);
+        $otherEvent = collect($response->json())->firstWhere('title', 'Other Reservation');
+        $this->assertNotNull($otherEvent);
+        $this->assertStringStartsWith('public-', $otherEvent['id']);
+        $this->assertArrayNotHasKey('extendedProps', $otherEvent);
+        $this->assertArrayNotHasKey('requestor', $otherEvent);
+        $this->assertNotContains('Rejected Reservation', collect($response->json())->pluck('title')->all());
     }
 
     public function test_calendar_events_preserve_exact_multi_day_time_range_boundaries(): void
@@ -275,8 +296,11 @@ class CalendarEventPayloadTest extends TestCase
         $this->assertSame('Private Activity', $event['title']);
         $this->assertSame('2026-09-01T10:00:00', $event['start']);
         $this->assertSame('2026-09-01T12:00:00', $event['end']);
+        $this->assertSame('approved', $event['status']);
+        $this->assertSame('#10B981', $event['backgroundColor']);
+        $this->assertSame('#059669', $event['borderColor']);
         $this->assertSame([
-            'id', 'title', 'start', 'end', 'allDay', 'venue',
+            'id', 'title', 'start', 'end', 'allDay', 'status', 'venue',
             'backgroundColor', 'borderColor', 'textColor',
         ], array_keys($event));
         $serializedEvent = json_encode($event);
@@ -289,6 +313,76 @@ class CalendarEventPayloadTest extends TestCase
         $apiEvent = collect($this->getJson('/api/reservations')->json())
             ->firstWhere('title', 'Private Activity');
         $this->assertSame($event, $apiEvent);
+    }
+
+    public function test_public_pending_calendar_event_uses_the_pending_legend_color(): void
+    {
+        $requestor = User::factory()->create(['role' => 'requestor']);
+        FacilityRequest::create([
+            'control_number' => 'FER-2026-PENDING-COLOR',
+            'date_requested' => now()->toDateString(),
+            'department' => 'BSIT',
+            'name_of_activity' => 'Pending Calendar Activity',
+            'expected_participants' => 12,
+            'start_date' => '2026-09-02',
+            'end_date' => '2026-09-02',
+            'start_time' => '10:00',
+            'end_time' => '12:00',
+            'requested_by_id' => $requestor->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+        ]);
+
+        $event = collect($this->getJson(route('calendar.events'))->assertOk()->json())
+            ->firstWhere('title', 'Pending Calendar Activity');
+
+        $this->assertNotNull($event);
+        $this->assertSame('pending', $event['status']);
+        $this->assertSame('#F59E0B', $event['backgroundColor']);
+        $this->assertSame('#D97706', $event['borderColor']);
+    }
+
+    public function test_cancelled_requests_are_hidden_by_default_and_only_admins_can_include_them(): void
+    {
+        $requestor = User::factory()->create(['role' => 'requestor']);
+        $cancelledRequest = FacilityRequest::create([
+            'control_number' => 'FER-2026-CANCELLED-CALENDAR',
+            'date_requested' => now()->toDateString(),
+            'department' => 'BSIT',
+            'name_of_activity' => 'Cancelled Calendar Activity',
+            'expected_participants' => 12,
+            'start_date' => '2026-09-03',
+            'end_date' => '2026-09-03',
+            'start_time' => '10:00',
+            'end_time' => '12:00',
+            'requested_by_id' => $requestor->id,
+            'status' => 'cancelled',
+            'venue_status' => 'cancelled',
+            'equipment_status' => 'cancelled',
+        ]);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $adminDefault = $this->actingAs($admin)->getJson(route('calendar.events'));
+        $adminDefault->assertOk();
+        $this->assertNotContains($cancelledRequest->id, collect($adminDefault->json())->pluck('id')->all());
+
+        $adminIncludingCancelled = $this->getJson(route('calendar.events', ['include_cancelled' => '1']));
+        $adminIncludingCancelled->assertOk();
+        $event = collect($adminIncludingCancelled->json())->firstWhere('id', $cancelledRequest->id);
+
+        $this->assertNotNull($event);
+        $this->assertSame('cancelled', $event['status']);
+        $this->assertSame('#E2E8F0', $event['backgroundColor']);
+        $this->assertSame('#94A3B8', $event['borderColor']);
+        $this->assertSame('#475569', $event['textColor']);
+        $this->get(route('calendar.index'))->assertOk()->assertSee('id="include-cancelled-events"', false);
+
+        $nonAdminResponse = $this->actingAs($requestor)
+            ->getJson(route('calendar.events', ['include_cancelled' => '1']));
+        $nonAdminResponse->assertOk();
+        $this->assertNotContains($cancelledRequest->id, collect($nonAdminResponse->json())->pluck('id')->all());
+        $this->get(route('calendar.index'))->assertOk()->assertDontSee('id="include-cancelled-events"', false);
     }
 
     public function test_public_calendar_preserves_whole_day_as_8_am_to_exclusive_midnight(): void

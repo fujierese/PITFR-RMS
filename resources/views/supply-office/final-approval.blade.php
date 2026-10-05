@@ -34,8 +34,8 @@
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                 @foreach($requests as $request)
-                    <tr class="cursor-pointer transition hover:bg-slate-50 focus:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-amber-500" data-request-url="{{ route('request.show', $request->id) }}" role="link" tabindex="0" aria-label="Open request details for {{ $request->control_number }}">
-                        <td class="px-4 py-4 font-semibold text-slate-900">{{ $request->control_number }}</td>
+                    <tr class="transition hover:bg-slate-50">
+                        <td class="px-4 py-4 font-semibold text-slate-900"><a class="rounded text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500" href="{{ route('request.show', $request->id) }}"> {{ $request->control_number }} <span class="sr-only">— open request details</span></a></td>
                         <td class="px-4 py-4">{{ $request->requester?->name ?? 'Unknown' }}</td>
                         <td class="px-4 py-4">{{ $request->department ?? '—' }}</td>
                         <td class="px-4 py-4">{{ implode(', ', $request->getVenueNames()) ?: '—' }}</td>

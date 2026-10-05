@@ -3,6 +3,11 @@
 @section('title', 'My Assignments')
 
 @section('content')
+@php
+    $assignedVenues = collect($venues);
+    $assignedEquipment = collect($equipment);
+    $hasAssignedResources = $assignedVenues->isNotEmpty() || $assignedEquipment->isNotEmpty();
+@endphp
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="space-y-6">
         <x-page-header
@@ -19,43 +24,49 @@
 
             <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 @if($custodianType === 'venue')
-                    <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Assigned Venues</p>
-                        <p class="mt-3 text-3xl font-semibold text-white">{{ $venues->count() }}</p>
-                        <p class="mt-2 text-sm text-slate-300">{{ $venues->count() === 1 ? 'venue assigned' : 'venues assigned' }}</p>
+                    <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Assigned Venues</p>
+                        <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $venues->count() }}</p>
+                        <p class="mt-2 text-sm text-slate-600">{{ $venues->count() === 1 ? 'venue assigned' : 'venues assigned' }}</p>
                     </div>
                 @elseif($custodianType === 'equipment')
-                    <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Assigned Equipment</p>
-                        <p class="mt-3 text-3xl font-semibold text-white">{{ $equipment->count() }}</p>
-                        <p class="mt-2 text-sm text-slate-300">{{ $equipment->count() === 1 ? 'item assigned' : 'items assigned' }}</p>
+                    <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Assigned Equipment</p>
+                        <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $equipment->count() }}</p>
+                        <p class="mt-2 text-sm text-slate-600">{{ $equipment->count() === 1 ? 'item assigned' : 'items assigned' }}</p>
                     </div>
                 @else
-                    <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Assigned Venues</p>
-                        <p class="mt-3 text-3xl font-semibold text-white">{{ $venues->count() }}</p>
-                        <p class="mt-2 text-sm text-slate-300">{{ $venues->count() === 1 ? 'venue assigned' : 'venues assigned' }}</p>
-                    </div>
-                    <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Assigned Equipment</p>
-                        <p class="mt-3 text-3xl font-semibold text-white">{{ $equipment->count() }}</p>
-                        <p class="mt-2 text-sm text-slate-300">{{ $equipment->count() === 1 ? 'item assigned' : 'items assigned' }}</p>
-                    </div>
-                    <div class="rounded-3xl bg-white/10 p-4 border border-white/10 shadow-sm">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Total Assignments</p>
-                        <p class="mt-3 text-3xl font-semibold text-white">{{ $venues->count() + $equipment->count() }}</p>
-                        <p class="mt-2 text-sm text-slate-300">All active custodian resources</p>
-                    </div>
+                    @if($assignedVenues->isNotEmpty())
+                        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Assigned Venues</p>
+                            <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $assignedVenues->count() }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ $assignedVenues->count() === 1 ? 'venue assigned' : 'venues assigned' }}</p>
+                        </div>
+                    @endif
+                    @if($assignedEquipment->isNotEmpty())
+                        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Assigned Equipment</p>
+                            <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $assignedEquipment->count() }}</p>
+                            <p class="mt-2 text-sm text-slate-600">{{ $assignedEquipment->count() === 1 ? 'item assigned' : 'items assigned' }}</p>
+                        </div>
+                    @endif
+                    @if($hasAssignedResources)
+                        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Total Assignments</p>
+                            <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $assignedVenues->count() + $assignedEquipment->count() }}</p>
+                            <p class="mt-2 text-sm text-slate-600">All active custodian resources</p>
+                        </div>
+                    @endif
                 @endif
             </div>
 
-            <div class="mt-6 rounded-3xl bg-slate-950/40 p-4 ring-1 ring-white/10">
+            <div class="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50 p-4">
                 @if($custodianType === 'venue')
-                    <p class="text-sm text-slate-200">Assigned venue: <span class="font-semibold text-white">{{ $venues->pluck('name')->join(', ') ?: 'None' }}</span></p>
+                    <p class="text-sm text-slate-700">Assigned venue: <span class="font-semibold text-slate-950">{{ $venues->pluck('name')->join(', ') ?: 'None' }}</span></p>
                 @elseif($custodianType === 'equipment')
-                    <p class="text-sm text-slate-200">Assigned equipment: <span class="font-semibold text-white">{{ $equipment->pluck('name')->join(', ') ?: 'None' }}</span></p>
+                    <p class="text-sm text-slate-700">Assigned equipment: <span class="font-semibold text-slate-950">{{ $equipment->pluck('name')->join(', ') ?: 'None' }}</span></p>
                 @else
-                    <p class="text-sm text-slate-200">Assigned resources: <span class="font-semibold text-white">{{ $venues->pluck('name')->merge($equipment->pluck('name'))->join(', ') ?: 'None' }}</span></p>
+                    <p class="text-sm text-slate-700">Assigned resources: <span class="font-semibold text-slate-950">{{ $venues->pluck('name')->merge($equipment->pluck('name'))->join(', ') ?: 'None' }}</span></p>
                 @endif
             </div>
         </section>
@@ -74,7 +85,7 @@
             </div>
 
             <div class="space-y-10 p-4 sm:p-6">
-                @if($custodianType === 'venue' || empty($custodianType))
+                @if($custodianType === 'venue' || (empty($custodianType) && $assignedVenues->isNotEmpty()))
                     <div>
                         <div class="flex items-center justify-between gap-4">
                             <h3 class="text-lg font-semibold text-slate-900">Assigned Venues</h3>
@@ -103,12 +114,18 @@
                                                 @method('PATCH')
                                                 <button type="submit" class="rounded-full {{ $venue->is_active ? 'border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100' : 'border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700' }}">{{ $venue->is_active ? 'Disable' : 'Enable' }}</button>
                                             </form>
-                                            <form method="POST" action="{{ route('custodian.venues.update', $venue) }}" class="flex flex-wrap gap-2">
+                                            <form method="POST" action="{{ route('custodian.venues.update', $venue) }}" class="grid w-full grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
                                                 @csrf
                                                 @method('PUT')
-                                                <input type="text" name="name" value="{{ $venue->name }}" class="w-40 rounded-xl border border-slate-300 px-2 py-1 text-xs" required>
-                                                <input type="number" name="capacity" value="{{ $venue->capacity }}" min="1" class="w-24 rounded-xl border border-slate-300 px-2 py-1 text-xs">
-                                                <button type="submit" class="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">Save</button>
+                                                <div class="min-w-0">
+                                                    <label for="venue-name-{{ $venue->id }}" class="mb-1 block text-xs font-medium text-slate-600">Venue name</label>
+                                                    <input id="venue-name-{{ $venue->id }}" type="text" name="name" value="{{ $venue->name }}" class="w-full min-w-0 rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
+                                                </div>
+                                                <div>
+                                                    <label for="venue-capacity-{{ $venue->id }}" class="mb-1 block text-xs font-medium text-slate-600">Capacity</label>
+                                                    <input id="venue-capacity-{{ $venue->id }}" type="number" name="capacity" value="{{ $venue->capacity }}" min="1" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                                                </div>
+                                                <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Save</button>
                                             </form>
                                         </div>
                                     </div>
@@ -118,7 +135,7 @@
                     </div>
                 @endif
 
-                @if($custodianType === 'equipment' || empty($custodianType))
+                @if($custodianType === 'equipment' || (empty($custodianType) && $assignedEquipment->isNotEmpty()))
                     <div>
                         <div class="flex items-center justify-between gap-4">
                             <h3 class="text-lg font-semibold text-slate-900">Assigned Equipment</h3>
@@ -150,13 +167,22 @@
                                                 @method('PATCH')
                                                 <button type="submit" class="rounded-full {{ $item->is_active ? 'border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100' : 'border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700' }}">{{ $item->is_active ? 'Disable' : 'Enable' }}</button>
                                             </form>
-                                            <form method="POST" action="{{ route('custodian.equipment.update', $item) }}" class="flex flex-wrap gap-2">
+                                            <form method="POST" action="{{ route('custodian.equipment.update', $item) }}" class="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
                                                 @csrf
                                                 @method('PUT')
-                                                <input type="text" name="name" value="{{ $item->name }}" class="w-36 rounded-xl border border-slate-300 px-2 py-1 text-xs" required>
-                                                <input type="number" name="quantity" value="{{ $item->quantity }}" min="1" class="w-20 rounded-xl border border-slate-300 px-2 py-1 text-xs" required>
-                                                <input type="number" name="quantity_available" value="{{ $item->quantity_available }}" min="0" class="w-20 rounded-xl border border-slate-300 px-2 py-1 text-xs" required>
-                                                <button type="submit" class="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">Save</button>
+                                                <div class="min-w-0 sm:col-span-2">
+                                                    <label for="equipment-name-{{ $item->id }}" class="mb-1 block text-xs font-medium text-slate-600">Equipment name</label>
+                                                    <input id="equipment-name-{{ $item->id }}" type="text" name="name" value="{{ $item->name }}" class="w-full min-w-0 rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
+                                                </div>
+                                                <div>
+                                                    <label for="equipment-quantity-{{ $item->id }}" class="mb-1 block text-xs font-medium text-slate-600">Total quantity</label>
+                                                    <input id="equipment-quantity-{{ $item->id }}" type="number" name="quantity" value="{{ $item->quantity }}" min="1" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
+                                                </div>
+                                                <div>
+                                                    <label for="equipment-available-{{ $item->id }}" class="mb-1 block text-xs font-medium text-slate-600">Available quantity</label>
+                                                    <input id="equipment-available-{{ $item->id }}" type="number" name="quantity_available" value="{{ $item->quantity_available }}" min="0" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
+                                                </div>
+                                                <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white sm:col-span-2">Save</button>
                                             </form>
                                         </div>
                                     </div>
@@ -164,6 +190,9 @@
                             </div>
                         @endif
                     </div>
+                @endif
+                @if(empty($custodianType) && !$hasAssignedResources)
+                    <p class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">No resources are currently assigned to you. Contact an administrator if you believe this is incorrect.</p>
                 @endif
             </div>
         </section>

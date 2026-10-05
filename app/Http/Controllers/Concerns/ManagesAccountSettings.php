@@ -2,11 +2,27 @@
 
 namespace App\Http\Controllers\Concerns;
 
+use App\Models\User;
+use App\Notifications\PasswordChangedNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 trait ManagesAccountSettings
 {
+    protected function notifyPasswordChanged(User $user): void
+    {
+        try {
+            $user->notify(new PasswordChangedNotification());
+        } catch (Throwable $exception) {
+            Log::warning('Unable to deliver password change notification.', [
+                'user_id' => $user->id,
+                'exception' => $exception,
+            ]);
+        }
+    }
+
     public function saveNotificationPreferences(Request $request, string $route)
     {
         $user = $request->user();

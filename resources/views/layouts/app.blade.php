@@ -71,6 +71,15 @@
                     @yield('content')
         </div>
     </main>
+    <footer class="border-t border-slate-200 bg-white px-4 py-5 text-center text-sm text-slate-600 lg:ml-80">
+        <nav class="flex flex-wrap justify-center gap-x-5 gap-y-2" aria-label="Help and legal information">
+            <button type="button" class="font-medium text-emerald-800 underline-offset-4 hover:underline" data-open-faq-modal aria-haspopup="dialog" aria-controls="faq-modal">FAQ</button>
+            <button type="button" class="font-medium text-emerald-800 underline-offset-4 hover:underline" data-open-info-modal="privacy" aria-haspopup="dialog" aria-controls="faq-modal">Privacy Policy (Draft)</button>
+            <button type="button" class="font-medium text-emerald-800 underline-offset-4 hover:underline" data-open-info-modal="data-privacy" aria-haspopup="dialog" aria-controls="faq-modal">Data Privacy Act of 2012</button>
+        </nav>
+        <p class="mt-2 text-xs text-slate-500">Privacy information is a draft and must be reviewed by PIT before official use.</p>
+    </footer>
+    @include('components.faq-modal')
 </div>
 
 @yield('scripts')

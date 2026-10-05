@@ -45,7 +45,7 @@
     }
 </style>
 
-<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-has-saved-signature="{{ $currentUser?->e_signature_file ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
+<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="Submit this request?" data-swal-text="Please confirm that the request details are complete and correct." data-swal-icon="question" data-swal-confirm-text="Yes, submit request" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-has-saved-signature="{{ $currentUser?->e_signature_file ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
     @csrf
 
 <div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]">
@@ -272,6 +272,7 @@
                             <div>
                                 <label for="start_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Time <span class="required-asterisk">*</span></label>
                                 <input id="start_time" type="time" name="start_time" required value="{{ old('start_time') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('start_time') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('start_time') ? 'true' : 'false' }}">
+                                <p id="reservation-time-error" class="mt-2 hidden text-xs font-medium text-red-600" aria-live="polite">Reservations cannot start between 12:00 AM and 5:00 AM. Choose a start time after 5:00 AM or use the Whole Day option.</p>
                                 @error('start_time')
                                     <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                                 @enderror
@@ -1003,9 +1004,23 @@
         const durationInputs = document.querySelectorAll('input[name="reservation_duration"]');
         const startTimeInput = document.querySelector('input[name="start_time"]');
         const endTimeInput = document.querySelector('input[name="end_time"]');
+        const reservationTimeError = document.getElementById('reservation-time-error');
 
         if (durationInputs.length && startTimeInput && endTimeInput) {
             let previousDuration = document.querySelector('input[name="reservation_duration"]:checked')?.value || null;
+
+            const validateReservationTimes = () => {
+                const duration = document.querySelector('input[name="reservation_duration"]:checked')?.value || 'specific_time';
+                const isDisallowedStart = duration === 'specific_time'
+                    && Boolean(startTimeInput.value)
+                    && startTimeInput.value <= '05:00';
+
+                startTimeInput.setCustomValidity(isDisallowedStart
+                    ? 'Reservations cannot start between 12:00 AM and 5:00 AM. Choose a start time after 5:00 AM or use the Whole Day option.'
+                    : '');
+                startTimeInput.setAttribute('aria-invalid', isDisallowedStart ? 'true' : 'false');
+                reservationTimeError?.classList.toggle('hidden', !isDisallowedStart);
+            };
 
             const applyDurationState = () => {
                 const duration = document.querySelector('input[name="reservation_duration"]:checked')?.value ?? null;
@@ -1022,8 +1037,13 @@
                 }
 
                 previousDuration = duration;
+                validateReservationTimes();
             };
 
+            startTimeInput.addEventListener('input', validateReservationTimes);
+            startTimeInput.addEventListener('change', validateReservationTimes);
+            endTimeInput.addEventListener('input', validateReservationTimes);
+            endTimeInput.addEventListener('change', validateReservationTimes);
             durationInputs.forEach((input) => {
                 input.addEventListener('mousedown', () => {
                     input.dataset.wasChecked = input.checked ? 'true' : 'false';
@@ -1085,7 +1105,7 @@
             if (summaryDetails.venue) summaryDetails.venue.textContent = venueText;
             const isWholeDay = form.querySelector('[name="reservation_duration"]:checked')?.value === 'whole_day';
             if (summaryDetails.date) summaryDetails.date.textContent = startDate && endDate ? `${formatDisplayDate(startDate)}${startDate === endDate ? '' : ` – ${formatDisplayDate(endDate)}`}` : 'Not selected';
-            if (summaryDetails.time) summaryDetails.time.textContent = isWholeDay ? 'Whole day (12:00 AM – 11:59 PM)' : (startTime && endTime ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}` : 'Not selected');
+            if (summaryDetails.time) summaryDetails.time.textContent = isWholeDay ? 'Whole day (08:00 AM – 11:59 PM)' : (startTime && endTime ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}` : 'Not selected');
 
             const selectedEquipment = [...form.querySelectorAll('.equipment-row')].filter((row) => {
                 const checkbox = row.querySelector('.equipment-checkbox');

@@ -7,10 +7,12 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use App\Notifications\Concerns\UsesNotificationPreferences;
 
 class ReservationRevised extends Notification implements ShouldQueue
 {
     use Queueable;
+    use UsesNotificationPreferences;
 
     protected FacilityRequest $facilityRequest;
     protected array $oldState;
@@ -43,7 +45,7 @@ class ReservationRevised extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return $this->channelsWithPreference($notifiable, 'request_updates', ['database']);
     }
 
     public function toDatabase(object $notifiable): array

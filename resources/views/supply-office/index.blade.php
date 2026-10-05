@@ -2,6 +2,10 @@
 @section('title', 'Administration')
 
 @section('content')
+@php
+    $advancedFiltersActive = collect(['department', 'venue', 'date_from', 'date_to', 'priority'])
+        ->contains(fn ($key) => filled(request($key)));
+@endphp
 <div class="space-y-6">
     <div class="rounded-3xl bg-gradient-to-r from-emerald-700 via-emerald-600 to-emerald-800 p-4 text-white shadow-xl sm:p-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -58,7 +62,7 @@
         </a>
         <a href="{{ route('supply-office.usage-reports') }}" class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm transition hover:bg-emerald-100">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Reports</p>
-            <p class="mt-3 text-2xl font-semibold text-slate-900">{{ $allRequests->count() }}</p>
+            <p class="mt-3 text-2xl font-semibold text-slate-900">{{ $totalCount }}</p>
             <p class="mt-2 text-sm text-slate-600">Usage and activity reports</p>
         </a>
         <a href="{{ route('supply-office.audit-logs') }}" class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm transition hover:bg-emerald-100">
@@ -77,16 +81,52 @@
             <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">{{ $pendingFinalApprovalCount }} waiting</span>
         </div>
 
-        <form method="GET" action="{{ route('supply-office.index') }}" class="mb-6 grid gap-3 md:grid-cols-4">
-            <label class="md:col-span-2">
-                <span class="sr-only">Search requests</span>
-                <input type="search" name="search" value="{{ $searchQuery }}" placeholder="Search request number, activity, organization, venue, equipment..." class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            </label>
-            <button type="submit" class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Advanced Filters</button>
-            <a href="{{ route('supply-office.index') }}" class="rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Clear</a>
+        <form method="GET" action="{{ route('supply-office.index') }}" class="mb-6">
+            <div class="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                <label>
+                    <span class="sr-only">Search requests</span>
+                    <input type="search" name="search" value="{{ $searchQuery }}" placeholder="Search request number, activity, organization, venue, equipment..." class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                </label>
+                <button type="submit" class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Search</button>
+                <button type="button" id="advanced-filter-toggle" aria-expanded="{{ $advancedFiltersActive ? 'true' : 'false' }}" aria-controls="advanced-request-filters" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                    Advanced Filters <span aria-hidden="true">▾</span>
+                </button>
+            </div>
+            <div id="advanced-request-filters" @if(!$advancedFiltersActive) hidden @endif class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <label>
+                        <span class="mb-1 block text-xs font-semibold text-slate-600">Department</span>
+                        <input type="search" name="department" value="{{ request('department') }}" placeholder="Any department" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                    </label>
+                    <label>
+                        <span class="mb-1 block text-xs font-semibold text-slate-600">Venue</span>
+                        <input type="search" name="venue" value="{{ request('venue') }}" placeholder="Any venue" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                    </label>
+                    <label>
+                        <span class="mb-1 block text-xs font-semibold text-slate-600">From date</span>
+                        <input type="date" name="date_from" value="{{ request('date_from') }}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                    </label>
+                    <label>
+                        <span class="mb-1 block text-xs font-semibold text-slate-600">To date</span>
+                        <input type="date" name="date_to" value="{{ request('date_to') }}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                    </label>
+                    <label>
+                        <span class="mb-1 block text-xs font-semibold text-slate-600">Priority</span>
+                        <select name="priority" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                            <option value="">Any priority</option>
+                            <option value="regular" @selected(request('priority') === 'regular')>Regular</option>
+                            <option value="institutional" @selected(request('priority') === 'institutional')>Institutional</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <button type="submit" class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Apply filters</button>
+                    <a href="{{ route('supply-office.index') }}" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Clear filters</a>
+                </div>
+            </div>
         </form>
 
-        @if($finalApprovalQueue->isEmpty())
+        @if($finalApprovalQueue->count() === 0)
             <div class="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 p-6 text-center shadow-sm sm:p-8">
                 <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-700 mb-4">
                     <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -123,6 +163,9 @@
                     </tbody>
                 </table>
             </div>
+        @endif
+        @if($finalApprovalQueue->hasPages())
+            <div class="mt-6">{{ $finalApprovalQueue->links() }}</div>
         @endif
     </div>
 
@@ -291,17 +334,39 @@
     @endif
 </div>
 <script>
-    document.querySelectorAll('[data-request-url]').forEach((requestTarget) => {
-        requestTarget.addEventListener('click', (event) => {
-            if (event.target.closest('a, button, form, input, select, textarea')) return;
-            window.location.href = requestTarget.dataset.requestUrl;
-        });
+    (() => {
+        const advancedFilterToggle = document.getElementById('advanced-filter-toggle');
+        const advancedRequestFilters = document.getElementById('advanced-request-filters');
 
-        requestTarget.addEventListener('keydown', (event) => {
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            window.location.href = requestTarget.dataset.requestUrl;
+        if (advancedFilterToggle && advancedRequestFilters) {
+            const hasActiveAdvancedFilters = new URLSearchParams(window.location.search);
+            const shouldOpenFilters = ['department', 'venue', 'date_from', 'date_to', 'priority']
+                .some((key) => hasActiveAdvancedFilters.has(key) && hasActiveAdvancedFilters.get(key) !== '');
+
+            if (shouldOpenFilters) {
+                advancedRequestFilters.hidden = false;
+                advancedFilterToggle.setAttribute('aria-expanded', 'true');
+            }
+
+            advancedFilterToggle.addEventListener('click', () => {
+                const isExpanded = advancedFilterToggle.getAttribute('aria-expanded') === 'true';
+                advancedFilterToggle.setAttribute('aria-expanded', String(!isExpanded));
+                advancedRequestFilters.hidden = isExpanded;
+            });
+        }
+
+        document.querySelectorAll('[data-request-url]').forEach((requestTarget) => {
+            requestTarget.addEventListener('click', (event) => {
+                if (event.target.closest('a, button, form, input, select, textarea')) return;
+                window.location.href = requestTarget.dataset.requestUrl;
+            });
+
+            requestTarget.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                window.location.href = requestTarget.dataset.requestUrl;
+            });
         });
-    });
+    })();
 </script>
 @endsection

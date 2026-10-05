@@ -53,6 +53,131 @@ class CustodianAlternateAuthorizationTest extends TestCase
         });
     }
 
+    public function test_custodian_dashboard_is_an_overview_separate_from_all_requests(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        Venue::create([
+            'name' => 'Dashboard Test Venue',
+            'custodian_id' => $custodian->id,
+        ]);
+        FacilityRequest::factory()->create([
+            'requested_by_id' => $requester->id,
+            'venue' => ['Dashboard Test Venue'],
+            'start_date' => now()->addDays(2)->toDateString(),
+            'start_time' => '09:00',
+            'venue_status' => 'pending',
+        ]);
+
+        $dashboardResponse = $this->actingAs($custodian)->get(route('custodian.index'));
+
+        $dashboardResponse->assertOk()
+            ->assertViewIs('custodian.dashboard')
+            ->assertSee('Custodian Dashboard')
+            ->assertSee('Pending Review')
+            ->assertDontSee('Search requests');
+
+        $allRequestsResponse = $this->get(route('custodian.index', ['filter' => 'all']));
+
+        $allRequestsResponse->assertOk()
+            ->assertViewIs('custodian.index')
+            ->assertSee('All Requests')
+            ->assertSee('Search requests');
+    }
+
+    public function test_custodian_assignments_summary_cards_use_readable_contrast(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+        Venue::create([
+            'name' => 'Readable Summary Venue',
+            'custodian_id' => $custodian->id,
+        ]);
+
+        $response = $this->actingAs($custodian)->get(route('custodian.assignments'));
+
+        $response->assertOk()
+            ->assertSee('bg-slate-50', false)
+            ->assertSee('Assigned Venues')
+            ->assertSee('text-slate-600', false)
+            ->assertSee('text-slate-900', false)
+            ->assertSee('venue assigned')
+            ->assertSee('Assigned venue:')
+            ->assertSee('bg-emerald-50', false);
+    }
+
+    public function test_generic_custodian_assignments_hide_empty_resource_sections_and_label_edit_fields(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian']);
+        Venue::create([
+            'name' => 'Conference Hall & Interaction Center (CHIC)',
+            'custodian_id' => $custodian->id,
+            'capacity' => 300,
+        ]);
+
+        $venueOnlyResponse = $this->actingAs($custodian)->get(route('custodian.assignments'));
+
+        $venueOnlyResponse->assertOk()
+            ->assertSee('Assigned Venues')
+            ->assertSee('Total Assignments')
+            ->assertDontSee('Assigned Equipment')
+            ->assertDontSee('0 total')
+            ->assertSee('Venue name')
+            ->assertSee('Capacity')
+            ->assertSee('Conference Hall & Interaction Center (CHIC)');
+
+        Equipment::create([
+            'name' => 'Assigned Test Equipment',
+            'custodian_id' => $custodian->id,
+            'quantity' => 3,
+            'quantity_available' => 3,
+        ]);
+
+        $bothResourcesResponse = $this->get(route('custodian.assignments'));
+
+        $bothResourcesResponse->assertOk()
+            ->assertSee('Assigned Venues')
+            ->assertSee('Assigned Equipment')
+            ->assertSee('Total Assignments')
+            ->assertSee('Equipment name')
+            ->assertSee('Total quantity')
+            ->assertSee('Available quantity');
+    }
+
+    public function test_generic_custodian_with_only_equipment_does_not_show_empty_venue_section(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian']);
+        Equipment::create([
+            'name' => 'Equipment Only Assignment',
+            'custodian_id' => $custodian->id,
+            'quantity' => 2,
+            'quantity_available' => 2,
+        ]);
+
+        $response = $this->actingAs($custodian)->get(route('custodian.assignments'));
+
+        $response->assertOk()
+            ->assertSee('Assigned Equipment')
+            ->assertSee('Total Assignments')
+            ->assertDontSee('Assigned Venues')
+            ->assertDontSee('0 total');
+    }
+
+    public function test_generic_custodian_without_resources_sees_one_clear_empty_state(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian']);
+
+        $response = $this->actingAs($custodian)->get(route('custodian.assignments'));
+
+        $response->assertOk()
+            ->assertDontSee('Assigned Venues')
+            ->assertDontSee('Assigned Equipment')
+            ->assertDontSee('0 total')
+            ->assertSee('No resources are currently assigned to you.')
+            ->assertSee('Contact an administrator if you believe this is incorrect.');
+
+        $this->assertSame(1, substr_count($response->getContent(), 'No resources are currently assigned to you.'));
+    }
+
     protected function makeRequestForFan(string $fanName, User $primaryCustodian, User $alternateCustodian): FacilityRequest
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);

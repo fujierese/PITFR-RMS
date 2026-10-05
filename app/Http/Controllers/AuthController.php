@@ -29,15 +29,27 @@ class AuthController extends Controller
     public function login(LoginRequest $request)
     {
         $email = trim((string) $request->input('email', $request->input('username', '')));
+        $accountKey = 'login:account:' . hash('sha256', mb_strtolower($email));
+        $ipKey = 'login:ip:' . hash('sha256', (string) $request->ip());
+        if (RateLimiter::tooManyAttempts($accountKey, 5) || RateLimiter::tooManyAttempts($ipKey, 20)) {
+            return back()
+                ->withErrors(['email' => 'Too many login attempts. Please try again later.'])
+                ->withInput($request->except('password'));
+        }
+
         $credentials = [
             'username' => $email,
             'password' => $request->input('password'),
         ];
 
         if (!Auth::guard('web')->attempt($credentials, $request->boolean('remember'))) {
+            RateLimiter::hit($accountKey, 60);
+            RateLimiter::hit($ipKey, 60);
             return back()->withErrors(['email' => 'Invalid email or password.'])->withInput($request->except('password'));
         }
 
+        RateLimiter::clear($accountKey);
+        RateLimiter::clear($ipKey);
         $user = Auth::user();
         if ($user->is_active === false) {
             Auth::logout();
@@ -97,6 +109,10 @@ class AuthController extends Controller
 
         $existing = User::where('google_id', $googleUser->getId())->first();
         if ($existing) {
+            if (! $existing->is_active) {
+                return redirect()->route('login')->withErrors(['username' => 'This account is deactivated. Contact an administrator.']);
+            }
+
             Auth::login($existing);
             return $this->redirectByRole($existing->role);
         }
@@ -105,6 +121,9 @@ class AuthController extends Controller
         if ($existing) {
             if ($existing->role !== 'requestor') {
                 return redirect()->route('register')->withErrors(['username' => 'This email belongs to an administrator-managed account.']);
+            }
+            if (! $existing->is_active) {
+                return redirect()->route('login')->withErrors(['username' => 'This account is deactivated. Contact an administrator.']);
             }
 
             $existing->forceFill(['google_id' => $googleUser->getId(), 'email_verified_at' => $existing->email_verified_at ?: now()])->save();
@@ -151,12 +170,13 @@ class AuthController extends Controller
         $data = $request->validate([
             'token' => ['required'],
             'email' => ['required', 'email'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'password' => ['required', 'string', 'min:12', 'confirmed'],
         ]);
         $status = Password::reset(
             ['username' => strtolower(trim($data['email'])), 'password' => $data['password'], 'password_confirmation' => $request->input('password_confirmation'), 'token' => $data['token']],
             function (User $user, string $password): void {
                 $user->forceFill(['password' => Hash::make($password)])->save();
+                $user->tokens()->delete();
             }
         );
 
@@ -175,7 +195,7 @@ class AuthController extends Controller
             'middle_name' => ['nullable', 'string', 'max:100'],
             'surname' => ['required', 'string', 'max:100'],
             'username' => ['required', 'email', 'max:255', 'unique:users,username'],
-            'password' => [$isGoogleRegistration ? 'nullable' : 'required', 'string', 'min:6', 'confirmed'],
+            'password' => [$isGoogleRegistration ? 'nullable' : 'required', 'string', 'min:12', 'confirmed'],
             'office_or_organization' => ['required', 'string', 'max:191'],
             'organization_acronym' => ['nullable', 'string', 'max:50'],
             'organization_type' => ['required', 'string', 'max:100'],

@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Custodian Dashboard')
+@section('title', $filter === 'all' ? 'All Requests' : ucfirst($filter) . ' Requests')
 
 @section('content')
 
@@ -11,7 +11,7 @@
         accent="slate"
     >
         <x-slot:actions>
-            <a href="{{ route('custodian.index', ['filter' => 'all']) }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Back to Dashboard</a>
+            <a href="{{ route('custodian.index') }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Back to Dashboard</a>
         </x-slot:actions>
     </x-page-header>
 </div>

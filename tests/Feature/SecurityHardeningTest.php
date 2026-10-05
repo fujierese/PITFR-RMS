@@ -7,6 +7,7 @@ use App\Models\FacilityRequest;
 use App\Models\User;
 use App\Models\Venue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -34,6 +35,35 @@ class SecurityHardeningTest extends TestCase
             ->assertForbidden();
 
         $this->assertSame('pending', $request->fresh()->venue_status);
+    }
+
+    public function test_unknown_authenticated_role_cannot_list_all_requests(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'unknown']));
+
+        $this->getJson('/api/facility-requests')->assertForbidden();
+    }
+
+    public function test_custodian_request_detail_does_not_include_requestor_or_history_data(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor']);
+        $custodian = User::factory()->create(['role' => 'custodian-equipment']);
+        Equipment::create([
+            'name' => 'Sound System',
+            'custodian_id' => $custodian->id,
+            'quantity' => 2,
+            'quantity_available' => 2,
+        ]);
+        $request = $this->facilityRequest($requester, [], ['Sound System' => 1]);
+
+        Sanctum::actingAs($custodian);
+
+        $this->getJson("/api/facility-requests/{$request->id}")
+            ->assertOk()
+            ->assertJsonPath('name_of_activity', 'Security test')
+            ->assertJsonMissingPath('user')
+            ->assertJsonMissingPath('histories')
+            ->assertJsonMissingPath('requested_by_id');
     }
 
     public function test_unassigned_equipment_custodian_cannot_process_return(): void
@@ -122,7 +152,7 @@ class SecurityHardeningTest extends TestCase
         $this->assertSame(1, $request->equipment_return_damaged_quantity ?? 0);
         $this->assertSame('Broken cable', $request->equipment_return_damage_remarks ?? '');
         $this->assertSame(0, $request->equipment_return_missing_quantity ?? 0);
-        $this->assertSame(2, $equipment->quantity_available);
+        $this->assertSame(3, $equipment->quantity_available);
     }
 
     public function test_requestor_cannot_view_another_requestors_request_or_printout(): void
@@ -159,6 +189,23 @@ class SecurityHardeningTest extends TestCase
             ->assertSee('REQUEST FOR THE USE OF FACILITY/EQUIPMENT')
             ->assertSee('COPY 1')
             ->assertSee('COPY 2');
+    }
+
+    public function test_request_details_keep_e_signature_only_in_print_view(): void
+    {
+        $owner = User::factory()->create(['role' => 'requestor']);
+        $request = $this->facilityRequest($owner, [], [], [
+            'e_signature_file' => 'private/signatures/requestor.png',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertDontSee(route('request.signature', ['id' => $request->id]));
+
+        $this->get(route('request.print', $request))
+            ->assertOk()
+            ->assertSee(route('request.signature', ['id' => $request->id]));
     }
 
     public function test_equipment_custodian_approves_before_admin_final_approval(): void
@@ -235,6 +282,95 @@ class SecurityHardeningTest extends TestCase
             'status' => 'cancelled',
         ]);
         $this->assertNull($request->fresh()->deleted_at);
+    }
+
+    public function test_api_update_reports_that_request_edits_are_unsupported(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor']);
+        $request = $this->facilityRequest($requester, [], []);
+
+        Sanctum::actingAs($requester);
+
+        $this->putJson("/api/facility-requests/{$request->id}", ['name_of_activity' => 'Changed'])
+            ->assertStatus(501)
+            ->assertJsonPath('success', false);
+
+        $this->assertSame('Security test', $request->fresh()->name_of_activity);
+    }
+
+    public function test_api_rejects_non_positive_equipment_quantities(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor']);
+        Equipment::create([
+            'name' => 'Sound System',
+            'custodian_id' => User::factory()->create(['role' => 'custodian-equipment'])->id,
+            'quantity' => 2,
+            'quantity_available' => 2,
+        ]);
+
+        Sanctum::actingAs($requester);
+
+        $this->postJson('/api/facility-requests', [
+            'name_of_activity' => 'Quantity validation',
+            'expected_participants' => 10,
+            'start_date' => now()->addDays(2)->toDateString(),
+            'end_date' => now()->addDays(2)->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+            'department' => 'IT',
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => -1],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('equipment_quantities.Sound System');
+    }
+
+    public function test_api_login_tokens_have_finite_expiration(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'requestor',
+            'username' => 'token-expiry-' . uniqid() . '@test.com',
+            'password' => Hash::make('secure-password-123'),
+            'email_verified_at' => now(),
+        ]);
+
+        $response = $this->postJson('/api/login', [
+            'username' => $user->username,
+            'password' => 'secure-password-123',
+        ])->assertOk();
+
+        $plainTextToken = $response->json('token');
+        $this->assertNotEmpty($plainTextToken);
+        $this->assertNotNull($user->tokens()->firstOrFail()->expires_at);
+        $this->assertTrue($user->tokens()->firstOrFail()->expires_at->between(now()->addHours(23), now()->addHours(25)));
+    }
+
+    public function test_requestor_password_change_revokes_api_tokens(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'requestor',
+            'password' => Hash::make('old-password-123'),
+        ]);
+        $user->createToken('existing-api-token');
+
+        $this->actingAs($user)
+            ->post(route('requestor.settings.password'), [
+                'current_password' => 'old-password-123',
+                'password' => 'new-password-123',
+                'password_confirmation' => 'new-password-123',
+            ])
+            ->assertRedirect(route('requestor.settings'));
+
+        $this->assertSame(0, $user->tokens()->count());
+    }
+
+    public function test_web_and_api_responses_include_security_headers(): void
+    {
+        $this->get('/')->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
+            ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+        $this->getJson('/api/reservations')->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertHeader('X-Frame-Options', 'SAMEORIGIN');
     }
 
     private function facilityRequest(User $requester, array $venues, array $equipment, array $overrides = []): FacilityRequest

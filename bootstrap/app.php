@@ -15,9 +15,15 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             \Illuminate\Http\Middleware\HandleCors::class,
+            \App\Http\Middleware\EnsureActiveAccount::class,
+            \App\Http\Middleware\SecurityHeaders::class,
+        ]);
+        $middleware->api(append: [
+            \App\Http\Middleware\SecurityHeaders::class,
         ]);
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
+            'active.account' => \App\Http\Middleware\EnsureActiveAccount::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

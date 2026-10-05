@@ -27,7 +27,6 @@ class SupplyOfficeController extends Controller
     public function index(Request $request)
     {
         $baseQuery = FacilityRequest::whereIn('status', ['pending', 'approved']);
-
         $query = clone $baseQuery;
         if ($filter = $request->get('filter')) {
             if ($filter !== 'all') {
@@ -51,8 +50,9 @@ class SupplyOfficeController extends Controller
             });
         }
 
-        $filteredRequests = $query->orderBy('start_date')->orderBy('start_time')->orderBy('created_at')->get();
-        $allRequests = $baseQuery->orderBy('start_date')->orderBy('start_time')->orderBy('created_at')->get();
+        $filteredRequests = $query->orderBy('start_date')->orderBy('start_time')->orderBy('created_at')
+            ->paginate(15, ['*'], 'requests_page')
+            ->appends($request->query());
         $pendingReviewQueue = $this->buildRequestListQuery($request)
             ->where('status', 'pending')
             ->where(function ($query) {
@@ -62,10 +62,11 @@ class SupplyOfficeController extends Controller
             ->orderBy('start_date')
             ->orderBy('start_time')
             ->orderBy('created_at')
-            ->get();
-        $totalCount = $allRequests->count();
-        $pendingCount = $allRequests->where('status', 'pending')->count();
-        $approvedCount = $allRequests->where('status', 'approved')->count();
+            ->paginate(15, ['*'], 'queue_page')
+            ->appends($request->query());
+        $totalCount = (clone $baseQuery)->count();
+        $pendingCount = (clone $baseQuery)->where('status', 'pending')->count();
+        $approvedCount = (clone $baseQuery)->where('status', 'approved')->count();
         $finalApprovalQueue = $pendingReviewQueue;
 
         $venueSearch = trim((string) $request->get('venue_search', ''));
@@ -98,9 +99,8 @@ class SupplyOfficeController extends Controller
 
         return view('supply-office.index', [
             'requests'          => $filteredRequests,
-            'allRequests'       => $allRequests,
             'finalApprovalQueue' => $finalApprovalQueue,
-            'pendingFinalApprovalCount' => $finalApprovalQueue->count(),
+            'pendingFinalApprovalCount' => $finalApprovalQueue->total(),
             'totalCount'        => $totalCount,
             'pendingCount'      => $pendingCount,
             'approvedCount'     => $approvedCount,
@@ -710,14 +710,19 @@ class SupplyOfficeController extends Controller
             'priority' => 'nullable|in:regular,institutional',
         ]);
 
+        $requestForLocking = FacilityRequest::find($validated['id']);
+        if (! $requestForLocking) {
+            return redirect()->back()->withErrors(['id' => 'Request not found.']);
+        }
+
         DB::beginTransaction();
 
         try {
-            $fr = FacilityRequest::whereKey($validated['id'])->first();
-            if (! $fr) {
-                DB::rollBack();
-                return redirect()->back()->withErrors(['id' => 'Request not found.']);
+            if ($validated['action'] === 'approve') {
+                app(\App\Services\AvailabilityService::class)
+                    ->lockResourcesForFacilityRequests($requestForLocking);
             }
+            $fr = FacilityRequest::whereKey($validated['id'])->lockForUpdate()->firstOrFail();
 
             $alreadyApproved = $fr->status === 'approved' || ($fr->approved_by_id || $fr->approved_by);
             if ($alreadyApproved && $validated['action'] === 'approve') {
@@ -896,6 +901,8 @@ class SupplyOfficeController extends Controller
         try {
             DB::transaction(function () use ($urgentRequest, $conflictingRequest, $overrideReason, $actingUser): void {
                 $timestamp = now()->toDateTimeString();
+                app(\App\Services\AvailabilityService::class)
+                    ->lockResourcesForFacilityRequests($urgentRequest, $conflictingRequest);
 
                 $lockedUrgentRequest = FacilityRequest::whereKey($urgentRequest->id)
                     ->lockForUpdate()
@@ -1105,72 +1112,197 @@ class SupplyOfficeController extends Controller
 
     public function usageReports(Request $request)
     {
-        $dateFrom = $request->get('date_from', now()->startOfMonth()->toDateString());
-        $dateTo = $request->get('date_to', now()->endOfMonth()->toDateString());
+        $filters = $this->usageReportFilters($request);
+        $rows = $this->getUsageReportRows($filters['from'], $filters['to']);
+        $breakdown = $request->query('breakdown');
+        $breakdownValue = trim((string) $request->query('value', ''));
 
-        // Equipment usage statistics
-        $equipmentUsage = DB::table('facility_requests')
-            ->join('reservation_schedules', 'reservation_schedules.facility_request_id', '=', 'facility_requests.id')
-            ->selectRaw('JSON_UNQUOTE(JSON_EXTRACT(equipment, "$[*]")) as equipment_item, SUM(JSON_EXTRACT(equipment_quantities, CONCAT("$.", JSON_UNQUOTE(JSON_EXTRACT(equipment, "$[*]"))))) as total_used')
-            ->where('facility_requests.status', 'approved')
-            ->whereBetween('reservation_schedules.start_datetime', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
-            ->groupBy('equipment_item')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'equipment' => $item->equipment_item,
-                    'total_used' => $item->total_used ?? 1,
-                ];
-            });
+        $detailRows = $rows->when(
+            in_array($breakdown, ['equipment', 'venue', 'department', 'priority'], true) && $breakdownValue !== '',
+            function ($reportRows) use ($breakdown, $breakdownValue) {
+                return $reportRows->filter(function (array $row) use ($breakdown, $breakdownValue): bool {
+                    return match ($breakdown) {
+                        'equipment' => array_key_exists($breakdownValue, $row['equipment']),
+                        'venue' => in_array($breakdownValue, $row['venues'], true),
+                        'department' => $row['department'] === $breakdownValue,
+                        'priority' => $row['priority'] === $breakdownValue,
+                    };
+                })->values();
+            }
+        );
 
-        // Venue usage statistics
-        $venueUsage = DB::table('facility_requests')
-            ->join('reservation_schedules', 'reservation_schedules.facility_request_id', '=', 'facility_requests.id')
-            ->selectRaw('JSON_UNQUOTE(JSON_EXTRACT(venue, "$[*]")) as venue_item, COUNT(*) as total_bookings')
-            ->where('facility_requests.status', 'approved')
-            ->whereBetween('reservation_schedules.start_datetime', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
-            ->groupBy('venue_item')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'venue' => $item->venue_item,
-                    'total_bookings' => $item->total_bookings,
-                ];
-            });
+        $equipmentUsage = [];
+        $venueUsage = [];
+        $departmentUsage = [];
+        $priorityCounts = [];
+        $monthlyUsage = [];
 
-        // Department usage
-        $departmentUsage = FacilityRequest::selectRaw('department, COUNT(*) as total_requests, SUM(expected_participants) as total_participants')
-            ->where('status', 'approved')
-            ->whereHas('reservationSchedule', function ($query) use ($dateFrom, $dateTo) {
-                $query->whereBetween('start_datetime', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
-            })
-            ->groupBy('department')
-            ->get();
+        foreach ($rows as $row) {
+            foreach ($row['equipment'] as $name => $quantity) {
+                $equipmentUsage[$name] = ($equipmentUsage[$name] ?? 0) + $quantity;
+            }
+            foreach ($row['venues'] as $name) {
+                $venueUsage[$name] = ($venueUsage[$name] ?? 0) + 1;
+            }
 
-        // Priority distribution
-        $priorityStats = FacilityRequest::selectRaw('priority, COUNT(*) as count')
-            ->where('status', 'approved')
-            ->whereHas('reservationSchedule', function ($query) use ($dateFrom, $dateTo) {
-                $query->whereBetween('start_datetime', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
-            })
-            ->groupBy('priority')
-            ->get();
+            $department = $row['department'];
+            $departmentUsage[$department]['total_requests'] = ($departmentUsage[$department]['total_requests'] ?? 0) + 1;
+            $departmentUsage[$department]['total_participants'] = ($departmentUsage[$department]['total_participants'] ?? 0) + $row['participants'];
 
-        $approvedRequestCount = FacilityRequest::where('status', 'approved')
-            ->whereHas('reservationSchedule', function ($query) use ($dateFrom, $dateTo) {
-                $query->whereBetween('start_datetime', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
-            })
-            ->count();
+            $priorityCounts[$row['priority']] = ($priorityCounts[$row['priority']] ?? 0) + 1;
+            $month = $row['request']->reservationSchedule->start_datetime->format('Y-m');
+            $monthlyUsage[$month] = ($monthlyUsage[$month] ?? 0) + 1;
+        }
+
+        arsort($equipmentUsage);
+        arsort($venueUsage);
+        ksort($monthlyUsage);
+        $monthCursor = $filters['from']->copy()->startOfMonth();
+        $lastMonth = $filters['to']->copy()->startOfMonth();
+        while ($monthCursor->lte($lastMonth)) {
+            $monthlyUsage[$monthCursor->format('Y-m')] = $monthlyUsage[$monthCursor->format('Y-m')] ?? 0;
+            $monthCursor->addMonth();
+        }
+        ksort($monthlyUsage);
+
+        $previousTo = $filters['from']->copy()->subDay()->endOfDay();
+        $previousFrom = $previousTo->copy()->startOfDay()->subDays($filters['days'] - 1);
+        $previousPeriodCount = $this->getUsageReportRows($previousFrom, $previousTo)->count();
+        $changePercent = $previousPeriodCount === 0
+            ? ($rows->isEmpty() ? 0 : null)
+            : round((($rows->count() - $previousPeriodCount) / $previousPeriodCount) * 100, 1);
 
         return view('supply-office.usage-reports', [
-            'equipmentUsage' => $equipmentUsage,
-            'venueUsage' => $venueUsage,
-            'departmentUsage' => $departmentUsage,
-            'priorityStats' => $priorityStats,
-            'approvedRequestCount' => $approvedRequestCount,
-            'dateFrom' => $dateFrom,
-            'dateTo' => $dateTo,
+            'equipmentUsage' => collect($equipmentUsage)->map(fn ($count, $name) => ['equipment' => $name, 'total_used' => $count]),
+            'venueUsage' => collect($venueUsage)->map(fn ($count, $name) => ['venue' => $name, 'total_bookings' => $count]),
+            'departmentUsage' => collect($departmentUsage)->map(fn ($totals, $department) => (object) [
+                'department' => $department,
+                'total_requests' => $totals['total_requests'],
+                'total_participants' => $totals['total_participants'],
+            ]),
+            'priorityStats' => collect($priorityCounts)->map(fn ($count, $priority) => (object) ['priority' => $priority, 'count' => $count]),
+            'approvedRequestCount' => $rows->count(),
+            'dateFrom' => $filters['from']->toDateString(),
+            'dateTo' => $filters['to']->toDateString(),
+            'preset' => $filters['preset'],
+            'detailRows' => $detailRows,
+            'breakdown' => $breakdown,
+            'breakdownValue' => $breakdownValue,
+            'totalEquipmentUnits' => array_sum($equipmentUsage),
+            'totalVenueBookings' => array_sum($venueUsage),
+            'totalParticipants' => $rows->sum('participants'),
+            'monthlyUsage' => $monthlyUsage,
+            'previousPeriodCount' => $previousPeriodCount,
+            'changePercent' => $changePercent,
+            'previousFrom' => $previousFrom->toDateString(),
+            'previousTo' => $previousTo->toDateString(),
         ]);
+    }
+
+    public function exportUsageReports(Request $request): StreamedResponse
+    {
+        $filters = $this->usageReportFilters($request);
+        $rows = $this->getUsageReportRows($filters['from'], $filters['to']);
+        $filename = 'usage-report-' . $filters['from']->toDateString() . '-to-' . $filters['to']->toDateString() . '.csv';
+
+        return response()->streamDownload(function () use ($rows): void {
+            $handle = fopen('php://output', 'w');
+            if ($handle === false) {
+                throw new \RuntimeException('Unable to open CSV output stream.');
+            }
+
+            fwrite($handle, "\xEF\xBB\xBF");
+
+            $safeCsvText = static function (?string $value): string {
+                $value = $value ?? '';
+                return preg_match('/^[\s\t\r]*[=+\-@]/u', $value) === 1 ? "'" . $value : $value;
+            };
+
+            fputcsv($handle, ['Control Number', 'Activity', 'Requestor', 'Department', 'Priority', 'Start', 'End', 'Venues', 'Equipment', 'Equipment Units', 'Participants']);
+            foreach ($rows as $row) {
+                fputcsv($handle, [
+                    $safeCsvText($row['request']->control_number),
+                    $safeCsvText($row['request']->name_of_activity),
+                    $safeCsvText($row['request']->requester?->name ?? $row['request']->user?->name ?? 'Unknown'),
+                    $safeCsvText($row['department']),
+                    $safeCsvText($row['priority']),
+                    $row['request']->reservationSchedule->start_datetime->format('Y-m-d H:i'),
+                    $row['request']->reservationSchedule->end_datetime->format('Y-m-d H:i'),
+                    $safeCsvText(implode('; ', $row['venues'])),
+                    $safeCsvText(implode('; ', array_map(fn ($name, $quantity) => $name . ' (' . $quantity . ')', array_keys($row['equipment']), array_values($row['equipment'])))),
+                    array_sum($row['equipment']),
+                    $row['participants'],
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function usageReportFilters(Request $request): array
+    {
+        $validated = $request->validate([
+            'preset' => ['nullable', 'in:this_month,last_month,calendar_half_year,this_year,custom'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+        ]);
+        $preset = $validated['preset'] ?? 'this_month';
+        $today = now();
+
+        [$from, $to] = match ($preset) {
+            'last_month' => [$today->copy()->subMonthNoOverflow()->startOfMonth(), $today->copy()->subMonthNoOverflow()->endOfMonth()],
+            'calendar_half_year' => [
+                $today->month <= 6 ? $today->copy()->startOfYear() : $today->copy()->month(7)->startOfMonth(),
+                $today->month <= 6 ? $today->copy()->month(6)->endOfMonth() : $today->copy()->endOfYear(),
+            ],
+            'this_year' => [$today->copy()->startOfYear(), $today->copy()->endOfYear()],
+            'custom' => [
+                isset($validated['date_from']) ? \Illuminate\Support\Carbon::parse($validated['date_from']) : $today->copy()->startOfMonth(),
+                isset($validated['date_to']) ? \Illuminate\Support\Carbon::parse($validated['date_to']) : $today->copy()->endOfMonth(),
+            ],
+            default => [$today->copy()->startOfMonth(), $today->copy()->endOfMonth()],
+        };
+
+        if ($preset !== 'custom' && isset($validated['date_from'], $validated['date_to'])) {
+            $preset = 'custom';
+            $from = \Illuminate\Support\Carbon::parse($validated['date_from']);
+            $to = \Illuminate\Support\Carbon::parse($validated['date_to']);
+        }
+
+        if ($from->gt($to)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'date_to' => 'The end date must be on or after the start date.',
+            ]);
+        }
+
+        $days = (int) $from->copy()->startOfDay()->diffInDays($to->copy()->startOfDay()) + 1;
+
+        return ['from' => $from->startOfDay(), 'to' => $to->endOfDay(), 'days' => $days, 'preset' => $preset];
+    }
+
+    private function getUsageReportRows(\Illuminate\Support\Carbon $from, \Illuminate\Support\Carbon $to)
+    {
+        return FacilityRequest::with(['requester', 'user', 'requestVenues', 'requestEquipment.equipment', 'reservationSchedule'])
+            ->where('status', 'approved')
+            ->whereHas('reservationSchedule', function (Builder $query) use ($from, $to): void {
+                $query->whereBetween('start_datetime', [$from, $to]);
+            })
+            ->get()
+            ->map(function (FacilityRequest $request): array {
+                $equipment = $request->getEquipmentQuantities();
+                $venues = $request->getVenueNames();
+                $schedule = $request->reservationSchedule;
+
+                return [
+                    'request' => $request,
+                    'venues' => array_values(array_unique(array_filter($venues))),
+                    'equipment' => array_filter($equipment, fn ($quantity, $name) => $name !== '' && $quantity > 0, ARRAY_FILTER_USE_BOTH),
+                    'department' => trim((string) $request->department) ?: 'Unspecified',
+                    'priority' => trim((string) $request->priority) ?: 'regular',
+                    'participants' => (int) $request->expected_participants,
+                    'start' => $schedule->start_datetime,
+                ];
+            });
     }
 
     private function normalizeReportListValue($value): array

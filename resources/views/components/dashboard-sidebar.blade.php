@@ -390,12 +390,12 @@
     } elseif ($currentRoute === 'supply-office.settings') {
         $activeKey = 'settings';
     } elseif ($currentRoute === 'custodian.index') {
-        $activeKey = match (request()->query('filter', 'all')) {
+        $activeKey = request()->has('filter') ? match (request()->query('filter')) {
             'pending' => 'reservations-pending',
             'approved' => 'reservations-approved',
             'rejected' => 'reservations-rejected',
             default => 'reservations-all',
-        };
+        } : 'dashboard';
     } elseif ($currentRoute === 'custodian.venue' || $currentRoute === 'custodian.equipment') {
         $activeKey = 'assignments';
     } elseif ($currentRoute === 'custodian.assignments') {

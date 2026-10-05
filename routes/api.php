@@ -17,7 +17,7 @@ use App\Http\Controllers\Api\FacilityRequestApiController;
 |
 */
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+Route::middleware(['auth:sanctum', 'active.account'])->get('/user', function (Request $request) {
     return $request->user();
 });
 
@@ -31,7 +31,7 @@ Route::post('/login', function (Request $request) {
     $user = User::where('username', $request->string('username'))->first();
 
     if ($user && $user->is_active && $user->email_verified_at && Hash::check($request->string('password'), $user->password)) {
-        $token = $user->createToken('api-access')->plainTextToken;
+        $token = $user->createToken('api-access', ['*'], now()->addDay())->plainTextToken;
 
         return response()->json([
             'success' => true,
@@ -42,9 +42,9 @@ Route::post('/login', function (Request $request) {
     }
 
     return response()->json(['success' => false, 'message' => 'Invalid credentials'], 401);
-});
+})->middleware('throttle:10,1');
 
-Route::middleware('auth:sanctum')->post('/logout', function (Request $request) {
+Route::middleware(['auth:sanctum', 'active.account'])->post('/logout', function (Request $request) {
     $request->user()->currentAccessToken()?->delete();
     return response()->json(['success' => true, 'message' => 'Logged out successfully']);
 });
@@ -53,7 +53,7 @@ Route::middleware('auth:sanctum')->post('/logout', function (Request $request) {
 Route::get('reservations', [App\Http\Controllers\CalendarController::class, 'getEvents']);
 
 // Facility Request APIs
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'active.account'])->group(function () {
     Route::apiResource('facility-requests', FacilityRequestApiController::class);
     Route::post('facility-requests/{facility_request}/approve', [FacilityRequestApiController::class, 'approve']);
     Route::post('facility-requests/{facility_request}/reject', [FacilityRequestApiController::class, 'reject']);

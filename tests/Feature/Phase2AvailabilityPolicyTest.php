@@ -9,6 +9,7 @@ use App\Models\Venue;
 use App\Services\AvailabilityService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class Phase2AvailabilityPolicyTest extends TestCase
@@ -109,6 +110,45 @@ class Phase2AvailabilityPolicyTest extends TestCase
         );
 
         $this->assertFalse($result['available']);
+    }
+
+    public function test_transactional_resource_locks_are_created_for_catalog_resources(): void
+    {
+        [, $venue, $equipment] = $this->resourceSetup('Lockable Venue', true);
+        $request = new FacilityRequest([
+            'venue' => [$venue->name],
+            'equipment' => [$equipment->name],
+            'equipment_quantities' => [$equipment->name => 1],
+        ]);
+
+        DB::transaction(function () use ($request): void {
+            app(AvailabilityService::class)->lockResourcesForFacilityRequests($request);
+        });
+
+        $this->assertDatabaseCount('reservation_resource_locks', 2);
+    }
+
+    public function test_resource_locks_create_rows_for_missing_catalog_names_too(): void
+    {
+        $request = new FacilityRequest([
+            'venue' => ['Custom Venue'],
+            'equipment' => ['Custom Equipment'],
+            'equipment_quantities' => ['Custom Equipment' => 1],
+        ]);
+
+        DB::transaction(function () use ($request): void {
+            app(AvailabilityService::class)->lockResourcesForFacilityRequests($request);
+        });
+
+        $this->assertDatabaseCount('reservation_resource_locks', 2);
+        $this->assertDatabaseHas('reservation_resource_locks', [
+            'resource_type' => 'venue',
+            'resource_hash' => hash('sha256', 'custom venue'),
+        ]);
+        $this->assertDatabaseHas('reservation_resource_locks', [
+            'resource_type' => 'equipment',
+            'resource_hash' => hash('sha256', 'custom equipment'),
+        ]);
     }
 
     private function resourceSetup(string $venueName, bool $withEquipment = false): array

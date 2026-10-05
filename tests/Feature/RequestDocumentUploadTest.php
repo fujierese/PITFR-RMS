@@ -252,7 +252,74 @@ class RequestDocumentUploadTest extends TestCase
         $this->assertNull($request->igp_receipt_file);
     }
 
-    public function test_student_can_request_aircon_for_balay_alumni(): void
+    public function test_legacy_proposal_upload_rejects_html_and_serves_approved_types_safely(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+        $this->actingAs($this->studentUser);
+
+        $basePayload = [
+            'requested_by_position' => 'Student',
+            'department' => 'Computer Science',
+            'name_of_activity' => 'Tech Workshop',
+            'expected_participants' => 50,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'venue' => 'Conference Hall & Interaction Center (CHIC)',
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => 1],
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'e_signature_file' => UploadedFile::fake()->create('signature.png', 100, 'image/png'),
+        ];
+
+        $this->post(route('requestor.store'), $basePayload + [
+            'proposal_file' => UploadedFile::fake()->create('legacy.html', 100, 'text/html'),
+        ])->assertSessionHasErrors('proposal_file');
+        $this->assertDatabaseCount('facility_requests', 0);
+
+        $this->post(route('requestor.store'), $basePayload + [
+            'proposal_file' => UploadedFile::fake()->create('legacy.pdf', 100, 'application/pdf'),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $request = FacilityRequest::where('requested_by_id', $this->studentUser->id)->firstOrFail();
+        $this->assertNotSame('legacy.pdf', $request->proposal_file);
+        Storage::disk('local')->assertExists('documents/proposal_file/' . $request->proposal_file);
+
+        $this->get(route('request.proposal', ['id' => $request->id]))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+        $this->get(route('request.proposal.download', ['id' => $request->id]))
+            ->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+
+        Storage::disk('local')->put('proposals/legacy.html', '<script>alert(1)</script>');
+        $request->forceFill([
+            'activity_proposal_file' => null,
+            'proposal_file' => 'legacy.html',
+        ])->save();
+
+        $this->get(route('request.proposal', ['id' => $request->id]))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/octet-stream')
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertHeader('Content-Disposition', 'attachment; filename=legacy.html');
+
+        Storage::disk('public')->put('proposals/legacy-public.pdf', 'legacy public PDF');
+        $request->forceFill(['proposal_file' => 'legacy-public.pdf'])->save();
+
+        $this->get(route('request.proposal', ['id' => $request->id]))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+
+        $request->forceFill(['proposal_file' => '../legacy.html'])->save();
+        $this->get(route('request.proposal', ['id' => $request->id]))->assertNotFound();
+    }
+
+    public function test_student_cannot_request_deactivated_aircon_for_balay_alumni(): void
     {
         $this->actingAs($this->studentUser);
 
@@ -272,10 +339,12 @@ class RequestDocumentUploadTest extends TestCase
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ]);
 
-        $response->assertRedirect()->assertSessionHasNoErrors();
+        $response->assertRedirect()->assertSessionHasErrors('equipment');
 
-        $request = FacilityRequest::where('requested_by_id', $this->studentUser->id)->firstOrFail();
-        $this->assertSame(1, $request->getEquipmentQuantities()['Aircon']);
+        $this->assertDatabaseMissing('facility_requests', [
+            'requested_by_id' => $this->studentUser->id,
+            'name_of_activity' => 'Balay Alumni Event',
+        ]);
     }
 
     public function test_student_can_request_iwata_cooler_fans_for_chic_and_balay_alumni(): void

@@ -12,24 +12,56 @@
         @forelse($notifications as $notification)
         @php
             $data = $notification->data;
-            $isNewRequest = ($data['status'] ?? '') === 'new_request';
-            $title = $data['title'] ?? ($isNewRequest ? 'New Request Submitted' : ($data['activity'] ?? 'Request Update'));
+            $status = strtolower((string) ($data['status'] ?? ''));
+            $isNewRequest = $status === 'new_request';
+            $isSecurityAlert = ($data['category'] ?? '') === 'security_alert';
+            $statusLabels = [
+                'approved' => 'Approved',
+                'rejected' => 'Rejected',
+                'needs_reschedule' => 'Needs Reschedule',
+                'needs_revision' => 'Needs Revision',
+                'request_cancelled' => 'Request Cancelled',
+                'venue_approved' => 'Venue Approved',
+                'equipment_approved' => 'Equipment Approved',
+                'equipment_returned' => 'Equipment Returned',
+                'change_requested' => 'Request Updated',
+                'change_request_rejected' => 'Change Request Rejected',
+            ];
+            $statusTitle = $statusLabels[$status] ?? ($status !== '' ? ucfirst(str_replace('_', ' ', $status)) : 'Request Update');
+            $title = $isSecurityAlert
+                ? ($data['title'] ?? 'Security Alert')
+                : ($isNewRequest
+                ? ($data['title'] ?? 'New Request Submitted')
+                : ($status !== '' ? 'Request ' . $statusTitle : ($data['title'] ?? 'Request Update')));
+            $linkedRequest = !empty($data['request_id']) ? $requestDetails->get($data['request_id']) : null;
+            $requestorName = $data['requestor_name'] ?? $linkedRequest?->requester?->name ?? $linkedRequest?->requested_by;
+            $activityName = $data['activity'] ?? $linkedRequest?->name_of_activity;
+            $controlNumber = $data['control_number'] ?? $linkedRequest?->control_number;
             $notificationMessage = $data['body'] ?? ($isNewRequest
                 ? 'This request is waiting for your verification.'
-                : ($data['message'] ?? ('Status changed to ' . ucfirst(str_replace('_', ' ', $data['status'] ?? '')))));
-            $resource = $data['resource'] ?? null;
-            if (!$resource && $isNewRequest && auth()->user()?->isCustodian()) {
-                $resource = auth()->user()->assignedCustodianResourceLabel();
+                : ($data['message'] ?? ('Status changed to ' . $statusTitle)));
+            if ($isNewRequest && ($requestorName || $activityName)) {
+                $notificationMessage = 'A new request'
+                    . ($requestorName ? ' from ' . $requestorName : '')
+                    . ($activityName ? ' for "' . $activityName . '"' : '')
+                    . ' is waiting for your verification.';
             }
+            $notificationMessage = preg_replace_callback(
+                '/\b(?:needs_revision|needs_reschedule|venue_approved|equipment_approved|final_approved|request_cancelled|equipment_returned|change_requested|change_request_rejected)\b/i',
+                fn ($match) => $statusLabels[strtolower($match[0])] ?? ucfirst(str_replace('_', ' ', $match[0])),
+                $notificationMessage
+            );
         @endphp
         <a href="{{ !empty($data['request_id']) ? route('request.show', $data['request_id']) : route('notifications.index') }}" data-read-url="{{ route('notifications.read', $notification->id) }}" class="block p-4 flex items-start gap-4 {{ $notification->read_at ? 'bg-white' : 'bg-blue-50' }} hover:bg-gray-50 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500">
             <div class="shrink-0 mt-1">
-                @if(str_contains($data['status'] ?? '', 'approved'))
+                @if(str_contains($status, 'approved'))
                     <span class="text-2xl">✅</span>
-                @elseif(str_contains($data['status'] ?? '', 'rejected'))
+                @elseif(str_contains($status, 'rejected'))
                     <span class="text-2xl">❌</span>
-                @elseif(str_contains($data['status'] ?? '', 'resched'))
+                @elseif(str_contains($status, 'resched') || str_contains($status, 'revision'))
                     <span class="text-2xl">🔄</span>
+                @elseif($isSecurityAlert)
+                    <span class="text-2xl">🛡️</span>
                 @elseif($isNewRequest)
                     <span class="text-2xl">📨</span>
                 @else
@@ -43,17 +75,28 @@
                 <p class="mt-1 text-sm text-gray-600">
                     {{ $notificationMessage }}
                 </p>
-                @if(!empty($resource))
-                    <p class="text-xs text-gray-500 mt-1">Resource: <strong>{{ $resource }}</strong></p>
-                @endif
+                @unless($isSecurityAlert)
+                <p class="mt-1 text-xs text-gray-600">
+                    Requestor: <strong>{{ $requestorName ?: 'Details unavailable' }}</strong>
+                    @if($activityName)
+                        <span class="mx-1" aria-hidden="true">·</span>
+                        Activity: <strong>{{ $activityName }}</strong>
+                    @endif
+                    @if($controlNumber)
+                        <span class="mx-1" aria-hidden="true">·</span>
+                        Control No: <strong>{{ $controlNumber }}</strong>
+                    @endif
+                </p>
+                @endunless
                 @if(!empty($data['notes']))
                     <p class="text-xs text-gray-400 mt-1 italic">Note: {{ $data['notes'] }}</p>
                 @endif
-                <p class="text-xs text-gray-300 mt-2">{{ $notification->created_at->diffForHumans() }}</p>
+                <p class="text-xs text-gray-500 mt-2">{{ $notification->created_at->diffForHumans() }}</p>
             </div>
             @if(!$notification->read_at)
                 <span class="shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></span>
             @endif
+            <span class="hidden mt-2 text-sm text-red-700" data-read-error role="alert">Unable to mark this notification as read. Please try again.</span>
         </a>
         @empty
         <div class="py-16 text-center">
@@ -84,8 +127,16 @@
                     'X-Requested-With': 'XMLHttpRequest',
                     Accept: 'application/json'
                 }
-            }).finally(() => {
+            }).then((response) => {
+                if (!response.ok) {
+                    throw new Error('Unable to mark notification as read.');
+                }
                 window.location.href = destination;
+            }).catch(() => {
+                const error = notificationLink.querySelector('[data-read-error]');
+                if (error) {
+                    error.hidden = false;
+                }
             });
         });
     });

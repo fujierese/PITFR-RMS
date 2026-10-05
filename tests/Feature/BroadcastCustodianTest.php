@@ -45,6 +45,50 @@ class BroadcastCustodianTest extends TestCase
         });
     }
 
+    public function test_api_rejects_a_specific_time_starting_at_five_am(): void
+    {
+        $requestor = User::factory()->create(['role' => 'requestor']);
+
+        $this->actingAs($requestor)
+            ->postJson('/api/facility-requests', [
+                'name_of_activity' => 'All-day activity',
+                'expected_participants' => 10,
+                'start_date' => now()->addDay()->toDateString(),
+                'start_time' => '05:00',
+                'end_time' => '06:00',
+                'department' => 'IT',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('start_time');
+
+        $this->assertDatabaseCount('facility_requests', 0);
+    }
+
+    public function test_api_whole_day_duration_uses_the_supported_eight_am_start(): void
+    {
+        $requestor = User::factory()->create(['role' => 'requestor']);
+        $date = now()->addDay()->toDateString();
+
+        $this->actingAs($requestor)
+            ->postJson('/api/facility-requests', [
+                'reservation_duration' => 'whole_day',
+                'name_of_activity' => 'Whole-day activity',
+                'expected_participants' => 10,
+                'start_date' => $date,
+                'end_date' => $date,
+                'start_time' => '00:00',
+                'end_time' => '23:59',
+                'department' => 'IT',
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('facility_requests', [
+            'name_of_activity' => 'Whole-day activity',
+            'start_time' => '08:00',
+            'end_time' => '23:59',
+        ]);
+    }
+
     public function test_requestcreated_includes_authorized_alternate_custodian()
     {
         Event::fake();
