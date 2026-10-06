@@ -11,28 +11,34 @@
         @include('supply-office.partials.request-filters', ['action' => route('supply-office.requests.rejected')])
 
         <div class="overflow-x-auto">
-            <table class="min-w-full text-left text-sm text-slate-600">
+            <table class="min-w-[1050px] w-full text-left text-sm text-slate-600">
                 <thead class="border-b border-slate-200 text-slate-500">
                     <tr>
-                        <th class="px-4 py-3 font-medium">Reference ID</th>
-                        <th class="px-4 py-3 font-medium">Requestor</th>
-                        <th class="px-4 py-3 font-medium">Department</th>
+                        <th class="px-4 py-3 font-medium">Control Number</th>
+                        <th class="px-4 py-3 font-medium">Activity</th>
                         <th class="px-4 py-3 font-medium">Venue</th>
                         <th class="px-4 py-3 font-medium">Equipment</th>
-                        <th class="px-4 py-3 font-medium">Date</th>
+                        <th class="px-4 py-3 font-medium">Date and Time</th>
                         <th class="px-4 py-3 font-medium">Status</th>
+                        <th class="px-4 py-3 font-medium">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse($requests as $request)
                         <tr class="cursor-pointer transition hover:bg-slate-50 focus:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-rose-500" data-request-url="{{ route('request.show', $request->id) }}" role="link" tabindex="0" aria-label="Open request details for {{ $request->control_number }}">
                             <td class="px-4 py-4 font-medium text-slate-900">{{ $request->control_number }}</td>
-                            <td class="px-4 py-4">{{ $request->requester?->name ?? 'Unknown' }}</td>
-                            <td class="px-4 py-4">{{ $request->department ?? '—' }}</td>
+                            <td class="px-4 py-4">
+                                <p class="font-medium text-slate-900">{{ $request->name_of_activity ?? '—' }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ $request->requester?->name ?? 'Unknown' }}@if($request->department) <span aria-hidden="true">·</span> {{ $request->department }}@endif</p>
+                            </td>
                             <td class="px-4 py-4">{{ implode(', ', $request->getVenueNames()) ?: '—' }}</td>
                             <td class="px-4 py-4">{{ implode(', ', $request->getEquipmentItems()) ?: '—' }}</td>
-                            <td class="px-4 py-4">{{ $request->start_date ? \Carbon\Carbon::parse($request->start_date)->format('M d, Y') : '—' }}</td>
+                            <td class="px-4 py-4 whitespace-nowrap">
+                                <p>{{ $request->start_date ? \Carbon\Carbon::parse($request->start_date)->format('M d, Y') : '—' }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ $request->start_time ? \Carbon\Carbon::parse($request->start_time)->format('g:i A') : '—' }}@if($request->end_time) - {{ \Carbon\Carbon::parse($request->end_time)->format('g:i A') }}@endif</p>
+                            </td>
                             <td class="px-4 py-4"><x-request-status-badge :request="$request" /></td>
+                            <td class="px-4 py-4 whitespace-nowrap"><a href="{{ route('request.show', $request->id) }}" class="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 transition hover:bg-rose-100" aria-label="View request {{ $request->control_number }}">View</a></td>
                         </tr>
                     @empty
                         <tr><td colspan="7" class="px-4 py-12 text-center text-sm text-slate-500">No rejected requests found.</td></tr>

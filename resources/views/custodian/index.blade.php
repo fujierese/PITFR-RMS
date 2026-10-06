@@ -82,16 +82,16 @@
     </form>
 
     <div class="overflow-x-auto">
-        <table class="min-w-full text-left text-sm text-slate-600">
+        <table class="min-w-[1050px] w-full text-left text-sm text-slate-600">
             <thead class="border-b border-slate-200 text-slate-500">
                 <tr>
-                    <th class="px-4 py-3 font-medium">Reference ID</th>
+                    <th class="px-4 py-3 font-medium">Control Number</th>
                     <th class="px-4 py-3 font-medium">Activity</th>
-                    <th class="px-4 py-3 font-medium">Requestor</th>
-                    <th class="px-4 py-3 font-medium">Department</th>
-                    <th class="px-4 py-3 font-medium">{{ $custodianType === 'venue' ? 'Venue' : 'Equipment' }}</th>
-                    <th class="px-4 py-3 font-medium">Date</th>
+                    <th class="px-4 py-3 font-medium">Venue</th>
+                    <th class="px-4 py-3 font-medium">Equipment</th>
+                    <th class="px-4 py-3 font-medium">Date and Time</th>
                     <th class="px-4 py-3 font-medium">Status</th>
+                    <th class="px-4 py-3 font-medium">Actions</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
@@ -99,16 +99,15 @@
                     @php
                         $statusField = $custodianType . '_status';
                         $displayStatus = $custodianType === 'equipment' ? ($req->custodian_status ?? 'pending') : $req->$statusField;
-                        $resourceNames = $custodianType === 'venue' ? $req->getVenueNames() : $req->getEquipmentItems();
                     @endphp
                     <tr class="cursor-pointer transition hover:bg-slate-50 focus:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500" data-request-row data-request-url="{{ route('request.show', $req->id) }}" data-status="{{ $displayStatus }}" role="link" tabindex="0" aria-label="Open request details for {{ $req->control_number }}">
                         <td class="px-4 py-4 font-medium text-slate-900">{{ $req->control_number }}</td>
-                        <td class="px-4 py-4 text-slate-800">{{ $req->name_of_activity ?? '—' }}</td>
-                        <td class="px-4 py-4">{{ $req->requester?->name ?? $req->requested_by }}</td>
-                        <td class="px-4 py-4">{{ $req->department ?? '—' }}</td>
-                        <td class="px-4 py-4">
-                            <span>{{ implode(', ', $resourceNames) ?: '—' }}</span>
+                        <td class="px-4 py-4 text-slate-800">
+                            <p class="font-medium">{{ $req->name_of_activity ?? '—' }}</p>
+                            <p class="mt-1 text-xs text-slate-500">{{ $req->requester?->name ?? $req->requested_by }}@if($req->department) <span aria-hidden="true">·</span> {{ $req->department }}@endif</p>
                         </td>
+                        <td class="px-4 py-4">{{ implode(', ', $req->getVenueNames()) ?: '—' }}</td>
+                        <td class="px-4 py-4">{{ implode(', ', $req->getEquipmentItems()) ?: '—' }}</td>
                         <td class="px-4 py-4 whitespace-nowrap">
                             <p>{{ $req->start_date ? $req->start_date->format('M d, Y') : '—' }}</p>
                             <p class="mt-1 text-xs text-slate-500">{{ \Carbon\Carbon::parse($req->start_time)->format('g:i A') }}@if(!empty($req->end_time)) - {{ \Carbon\Carbon::parse($req->end_time)->format('g:i A') }}@endif</p>
@@ -124,6 +123,9 @@
                                     <p class="mt-2 max-w-xs text-xs text-rose-700">{{ $req->$notesField }}</p>
                                 @endif
                             @endif
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap">
+                            <a href="{{ route('request.show', $req->id) }}" class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100" aria-label="Review request {{ $req->control_number }}">Review</a>
                         </td>
                     </tr>
                 @empty
