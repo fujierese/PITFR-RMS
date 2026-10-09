@@ -121,7 +121,7 @@ class FinalApprovalTest extends TestCase
             'equipment_status' => 'pending',
         ]);
 
-        $response = $this->actingAs($this->supplyOffice())
+        $response = $this->actingAs(User::factory()->create(['role' => 'admin']))
             ->get(route('supply-office.requests.final-approval'));
 
         $response->assertOk()->assertSee($ready->control_number)->assertDontSee($incomplete->control_number);

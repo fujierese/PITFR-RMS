@@ -861,7 +861,7 @@ class RequestorController extends Controller
                 $rules['college_id'][] = 'required_without:department';
                 $rules['department_id'][] = 'required_without:department';
             }
-        } elseif (in_array($user->requestor_type, ['outsider', 'student_organization'], true)) {
+        } elseif (in_array($user->requestor_type, ['outsider'], true)) {
             $rules['organization_name'][] = $hasDepartmentDirectory ? 'required' : 'required_without:department';
         }
 
@@ -948,9 +948,9 @@ class RequestorController extends Controller
                 $profilePosition !== ''
                     ? 'Other'
                     : match ($user->requestor_type) {
-                        'student' => 'Student',
+                        'student' => 'Student Organization',
                         'faculty' => 'Faculty',
-                        'student_organization' => 'Student Organization',
+                        'staff' => 'Staff',
                         'outsider' => 'External Partner',
                         default => 'Requestor',
                     }
@@ -978,7 +978,7 @@ class RequestorController extends Controller
             if ($selectedDepartment) {
                 $validated['department'] = $selectedDepartment->name;
             }
-        } elseif (in_array($user->requestor_type, ['outsider', 'student_organization'], true)) {
+        } elseif (in_array($user->requestor_type, ['outsider'], true)) {
             $trustedOrganization = trim((string) ($user->office_or_organization ?? ''));
             if ($trustedOrganization === '') {
                 return back()->withErrors(['organization_name' => 'Please update your profile organization/office before submitting this request.'])->withInput();

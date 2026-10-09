@@ -7,6 +7,10 @@ use App\Models\User;
 use Database\Seeders\CollegeDepartmentSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use App\Notifications\ResetPasswordNotification;
 use Tests\TestCase;
 
 class AdminUserManagementTest extends TestCase
@@ -19,11 +23,12 @@ class AdminUserManagementTest extends TestCase
         $this->seed(CollegeDepartmentSeeder::class);
     }
 
-    public function test_combined_admin_role_can_access_user_management(): void
+    public function test_only_literal_admin_role_can_access_user_management(): void
     {
         $roles = [
             'admin' => ['role' => 'admin'],
             'supply_office' => ['role' => 'supply_office'],
+            'facility_admin' => ['role' => 'facility_admin'],
             'student' => ['role' => 'requestor', 'requestor_type' => 'student'],
             'external' => ['role' => 'requestor', 'requestor_type' => 'outsider'],
             'faculty' => ['role' => 'faculty', 'requestor_type' => 'faculty'],
@@ -35,7 +40,7 @@ class AdminUserManagementTest extends TestCase
 
             $response = $this->actingAs($user)->get(route('admin.users'));
 
-            if (in_array($name, ['admin', 'supply_office'], true)) {
+            if ($name === 'admin') {
                 $response->assertOk();
                 $this->assertSame(1, substr_count($response->getContent(), '+ Add User'));
             } else {
@@ -110,37 +115,136 @@ class AdminUserManagementTest extends TestCase
 
         $deleteResponse->assertRedirect(route('admin.users'));
         $this->assertDatabaseHas('users', ['id' => $user->id, 'is_active' => false]);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $admin->id,
+            'target_user_id' => $user->id,
+            'action' => 'user_deactivated',
+        ]);
     }
 
-    public function test_admin_can_create_all_supported_account_types(): void
+    public function test_admin_can_create_all_supported_insider_account_types_without_credentials(): void
     {
+        Notification::fake();
         $admin = User::factory()->createOne(['role' => 'admin']);
         $this->actingAs($admin);
 
         $accounts = [
-            ['account_type' => 'student', 'name' => 'Admin Student', 'school_id_number' => '23-0098-635', 'college_id' => 1, 'department_id' => 1],
-            ['account_type' => 'outsider', 'name' => 'Admin Outsider', 'office_or_organization' => 'External Company'],
-            ['account_type' => 'faculty', 'name' => 'Admin Faculty', 'faculty_id' => 'FAC-' . uniqid(), 'position' => 'Professor', 'college_id' => 1, 'department_id' => 1],
+            ['account_type' => 'student', 'name' => 'Admin Student', 'school_id_number' => '23-0098-635', 'college_id' => 1, 'department_id' => 1, 'role' => 'admin', 'requestor_type' => 'outsider'],
+            ['account_type' => 'faculty', 'name' => 'Admin Faculty', 'faculty_id' => 'FAC-' . uniqid(), 'position' => 'Professor', 'college_id' => 1, 'department_id' => 1, 'role' => 'custodian', 'requestor_type' => 'outsider'],
+            ['account_type' => 'staff', 'name' => 'Admin Staff', 'position' => 'Administrative Staff', 'role' => 'admin', 'requestor_type' => 'faculty'],
+            ['account_type' => 'custodian_venue', 'name' => 'Venue Custodian', 'role' => 'admin', 'requestor_type' => 'student'],
+            ['account_type' => 'custodian_equipment', 'name' => 'Equipment Custodian', 'role' => 'requestor', 'requestor_type' => 'staff'],
+        ];
+
+        $expectedMappings = [
+            ['role' => 'requestor', 'requestor_type' => 'student'],
+            ['role' => 'requestor', 'requestor_type' => 'faculty'],
+            ['role' => 'requestor', 'requestor_type' => 'staff'],
+            ['role' => 'custodian-venue', 'requestor_type' => null],
+            ['role' => 'custodian-equipment', 'requestor_type' => null],
         ];
 
         foreach ($accounts as $index => $account) {
             $email = "admin-created-{$index}-" . uniqid() . '@test.com';
             $response = $this->post(route('admin.users.store'), $account + [
                 'username' => $email,
-                'password' => 'password12345',
-                'password_confirmation' => 'password12345',
+                'password' => 'BrowserSuppliedPassword123!',
+                'google_id' => 'forged-google-id-' . $index,
             ]);
 
             $response->assertRedirect(route('admin.users'));
             $created = User::where('username', $email)->firstOrFail();
-            $this->assertSame('requestor', $created->role);
-            $this->assertTrue(Hash::check('password12345', $created->password));
-            $this->assertNotSame('password12345', $created->password);
+            $this->assertSame($expectedMappings[$index]['role'], $created->role);
+            $this->assertSame($expectedMappings[$index]['requestor_type'], $created->requestor_type);
+            $this->assertNull($created->password);
+            $this->assertNull($created->google_id);
+            $this->assertTrue($created->is_active);
             $this->assertNotNull($created->email_verified_at);
+            $this->assertDatabaseHas('audit_logs', [
+                'actor_id' => $admin->id,
+                'target_user_id' => $created->id,
+                'action' => 'user_created',
+            ]);
+            Notification::assertSentTo($created, ResetPasswordNotification::class);
         }
+    }
 
-        $this->assertDatabaseHas('users', ['requestor_type' => 'student']);
-        $this->assertDatabaseHas('users', ['requestor_type' => 'faculty']);
+    public function test_admin_created_passwordless_insider_can_set_initial_password_with_existing_reset_link(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $email = 'initial-setup-' . uniqid() . '@test.com';
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'account_type' => 'staff',
+                'username' => $email,
+                'name' => 'Initial Setup Staff',
+            ])
+            ->assertRedirect(route('admin.users'));
+
+        $user = User::where('username', $email)->firstOrFail();
+        $this->assertNull($user->password);
+        $this->assertTrue($user->is_active);
+        $token = null;
+        Notification::assertSentTo($user, ResetPasswordNotification::class, function (ResetPasswordNotification $notification) use (&$token): bool {
+            $token = $notification->token;
+            return true;
+        });
+
+        $this->post(route('password.update'), [
+            'token' => $token,
+            'email' => $email,
+            'password' => 'InitialSecurePassword123!',
+            'password_confirmation' => 'InitialSecurePassword123!',
+        ])->assertRedirect(route('login'));
+
+        $user->refresh();
+        $this->assertTrue(Hash::check('InitialSecurePassword123!', $user->password));
+        $this->assertTrue($user->is_active);
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $email]);
+        $this->assertDatabaseHas('audit_logs', [
+            'target_user_id' => $user->id,
+            'action' => 'password_setup_completed',
+        ]);
+        Notification::assertSentTo($user, \App\Notifications\PasswordChangedNotification::class);
+    }
+
+    public function test_setup_link_delivery_failure_removes_broker_token(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $email = 'failed-setup-' . uniqid() . '@test.com';
+        $resetNotification = null;
+        Log::spy();
+        Notification::shouldReceive('send')
+            ->once()
+            ->andReturnUsing(function ($notifiables, $notification) use (&$resetNotification): void {
+                $resetNotification = $notification;
+                throw new \RuntimeException('Mail transport failed.');
+            });
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'account_type' => 'staff',
+                'username' => $email,
+                'name' => 'Failed Setup Staff',
+            ])
+            ->assertRedirect(route('admin.users'))
+            ->assertSessionHas('warning', 'User account created, but the password setup link could not be sent.');
+
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $email]);
+        $user = User::where('username', $email)->firstOrFail();
+        $this->assertInstanceOf(ResetPasswordNotification::class, $resetNotification);
+        $resetToken = $resetNotification->token;
+        $resetUrl = $resetNotification->toMail($user)->actionUrl;
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(function (string $message, array $context) use ($resetToken, $resetUrl): bool {
+                $loggedData = json_encode([$message, $context], JSON_THROW_ON_ERROR);
+
+                return ! str_contains($loggedData, $resetToken)
+                    && ! str_contains($loggedData, $resetUrl);
+            });
     }
 
     public function test_admin_accounts_are_hidden_from_management_views_and_updates(): void
@@ -357,6 +461,45 @@ class AdminUserManagementTest extends TestCase
             ])->assertSessionHasErrors('username');
     }
 
+    public function test_duplicate_username_attempt_does_not_mutate_existing_account(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $existing = User::factory()->createOne([
+            'username' => 'protected-existing-' . uniqid() . '@test.com',
+            'name' => 'Existing Profile',
+            'role' => 'requestor',
+            'requestor_type' => 'outsider',
+            'password' => Hash::make('ExistingPassword123!'),
+            'google_id' => 'existing-google-id',
+            'is_active' => false,
+            'office_or_organization' => 'Existing Organization',
+        ]);
+        $original = $existing->only([
+            'name',
+            'role',
+            'requestor_type',
+            'password',
+            'google_id',
+            'is_active',
+            'office_or_organization',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'account_type' => 'staff',
+                'username' => $existing->username,
+                'name' => 'Replacement Profile',
+                'role' => 'admin',
+                'requestor_type' => 'student',
+                'password' => 'AttackerChosenPassword123!',
+                'google_id' => 'attacker-google-id',
+                'is_active' => true,
+            ])
+            ->assertSessionHasErrors('username');
+
+        $this->assertSame($original, $existing->fresh()->only(array_keys($original)));
+    }
+
     public function test_faculty_creation_requires_faculty_id(): void
     {
         $admin = User::factory()->createOne(['role' => 'admin']);
@@ -373,20 +516,19 @@ class AdminUserManagementTest extends TestCase
             ])->assertSessionHasErrors('faculty_id');
     }
 
-    public function test_admin_cannot_provision_student_organization_account_type(): void
+    public function test_admin_cannot_provision_outsider_or_other_unsupported_account_types(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $this->actingAs($admin)
-            ->post(route('admin.users.store'), [
-                'account_type' => 'student_organization',
-                'name' => 'Organization Account',
-                'username' => 'organization-' . uniqid() . '@test.com',
-                'password' => 'password12345',
-                'password_confirmation' => 'password12345',
-                'office_or_organization' => 'PIT Student Council',
-            ])
-            ->assertSessionHasErrors('account_type');
+        foreach (['outsider', 'admin', 'student_organization', 'invalid'] as $accountType) {
+            $this->actingAs($admin)
+                ->post(route('admin.users.store'), [
+                    'account_type' => $accountType,
+                    'name' => 'Unsupported Account',
+                    'username' => 'unsupported-' . uniqid() . '@test.com',
+                ])
+                ->assertSessionHasErrors('account_type');
+        }
     }
 
     public function test_admin_cannot_deactivate_or_demote_themselves(): void
@@ -407,10 +549,11 @@ class AdminUserManagementTest extends TestCase
             'department' => 'IT',
             'requestor_type' => 'student',
             'contact_number' => '09123456789',
+            'is_active' => '0',
         ])->assertRedirect(route('admin.users'))
             ->assertSessionHas('error');
 
-        $this->assertDatabaseHas('users', ['id' => $admin->id, 'role' => 'admin']);
+        $this->assertDatabaseHas('users', ['id' => $admin->id, 'role' => 'admin', 'is_active' => true]);
 
         $this->delete(route('admin.users.destroy', $admin))
             ->assertRedirect(route('admin.users'))
@@ -482,6 +625,121 @@ class AdminUserManagementTest extends TestCase
             ->assertRedirect(route('admin.users'));
 
         $this->assertDatabaseHas('users', ['id' => $user->id, 'is_active' => true]);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $admin->id,
+            'target_user_id' => $user->id,
+            'action' => 'user_reactivated',
+        ]);
+    }
+
+    public function test_admin_cannot_change_privileged_targets_role_or_status_using_direct_requests(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $targets = [];
+        foreach (['admin', 'facility_admin', 'supply_office'] as $role) {
+            $targets[] = User::factory()->createOne([
+                'role' => $role,
+                'is_active' => true,
+                'username' => $role . '-protected-' . uniqid() . '@test.com',
+            ]);
+        }
+
+        $this->actingAs($admin);
+        config(['session.driver' => 'database']);
+        $tokens = [];
+        $sessionIds = [];
+
+        foreach ($targets as $target) {
+            $auditCount = \App\Models\AuditLog::count();
+            $tokens[$target->id] = $target->createToken('protected-account')->accessToken;
+            $sessionIds[$target->id] = 'protected-session-' . $target->id;
+            \Illuminate\Support\Facades\DB::table('sessions')->insert([
+                'id' => $sessionIds[$target->id],
+                'user_id' => $target->id,
+                'ip_address' => '127.0.0.1',
+                'user_agent' => 'test',
+                'payload' => base64_encode(serialize([])),
+                'last_activity' => time(),
+            ]);
+
+            $this->delete(route('admin.users.destroy', $target))
+                ->assertRedirect(route('admin.users'))
+                ->assertSessionHas('error');
+
+            $this->put(route('admin.users.update', $target), [
+                'name' => $target->name,
+                'username' => $target->username,
+                'role' => 'requestor',
+                'requestor_type' => 'outsider',
+                'is_active' => '0',
+            ])->assertRedirect(route('admin.users'))
+                ->assertSessionHas('error');
+
+            $this->assertDatabaseHas('users', [
+                'id' => $target->id,
+                'role' => $target->role,
+                'is_active' => true,
+            ]);
+            $this->assertSame($auditCount, \App\Models\AuditLog::count());
+            $this->assertDatabaseHas('personal_access_tokens', ['id' => $tokens[$target->id]->id]);
+            $this->assertDatabaseHas('sessions', ['id' => $sessionIds[$target->id], 'user_id' => $target->id]);
+        }
+    }
+
+    public function test_normal_insider_and_outsider_accounts_remain_managed_through_existing_routes(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $accounts = [
+            ['role' => 'requestor', 'requestor_type' => 'student'],
+            ['role' => 'requestor', 'requestor_type' => 'faculty'],
+            ['role' => 'requestor', 'requestor_type' => 'staff'],
+            ['role' => 'requestor', 'requestor_type' => 'outsider'],
+            ['role' => 'custodian-venue', 'requestor_type' => null],
+            ['role' => 'custodian-equipment', 'requestor_type' => null],
+        ];
+
+        $this->actingAs($admin);
+        foreach ($accounts as $index => $attributes) {
+            $user = User::factory()->createOne($attributes + [
+                'username' => 'phase-four-account-' . $index . '-' . uniqid() . '@test.com',
+                'is_active' => true,
+            ]);
+
+            $this->put(route('admin.users.update', $user), [
+                'name' => $user->name,
+                'username' => $user->username,
+                'role' => $user->role,
+                'requestor_type' => $user->requestor_type,
+                'is_active' => '1',
+            ])->assertRedirect(route('admin.users'));
+
+            $this->delete(route('admin.users.destroy', $user))
+                ->assertRedirect(route('admin.users'));
+            $this->assertFalse($user->fresh()->is_active);
+
+            $this->post(route('admin.users.reactivate', $user))
+                ->assertRedirect(route('admin.users'));
+            $this->assertTrue($user->fresh()->is_active);
+        }
+    }
+
+    public function test_admin_cannot_reactivate_a_privileged_target(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $target = User::factory()->createOne([
+            'role' => 'supply_office',
+            'is_active' => false,
+            'username' => 'inactive-privileged-' . uniqid() . '@test.com',
+        ]);
+        $auditCount = \App\Models\AuditLog::count();
+
+        $this->actingAs($admin)
+            ->post(route('supply-office.users.reactivate', $target))
+            ->assertRedirect(route('admin.users'))
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('users', ['id' => $target->id, 'role' => 'supply_office', 'is_active' => false]);
+        $this->assertSame($auditCount, \App\Models\AuditLog::count());
     }
 
     public function test_admin_user_search_filters_by_name_only(): void

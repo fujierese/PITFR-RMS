@@ -27,21 +27,27 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
         ]);
     }
 
-    public function test_public_registration_rejects_all_institutional_classifications(): void
+    public function test_public_registration_forces_outsider_for_institutional_classifications(): void
     {
         foreach (['student', 'faculty', 'student_organization'] as $type) {
             $username = $type . '-' . uniqid() . '@test.com';
 
             $this->post(route('register.post'), [
+                'first_name' => 'Forged',
+                'surname' => 'Account',
                 'username' => $username,
-                'password' => 'password123',
-                'password_confirmation' => 'password123',
+                'password' => 'password12345',
+                'password_confirmation' => 'password12345',
                 'requestor_type' => $type,
-                'contact_person' => 'Forged Account',
                 'office_or_organization' => 'Forged Organization',
-            ])->assertSessionHasErrors('requestor_type');
+                'organization_type' => 'Company',
+            ])->assertRedirect(route('register.verify'));
 
-            $this->assertDatabaseMissing('users', ['username' => $username]);
+            $this->assertDatabaseHas('users', [
+                'username' => $username,
+                'role' => 'requestor',
+                'requestor_type' => 'outsider',
+            ]);
         }
     }
 

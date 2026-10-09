@@ -13,7 +13,7 @@
     if ($currentUser?->isFacilityAdministrator()) {
         $requestClassification = 'Institutional Priority';
         $classificationTone = 'amber';
-    } elseif ($currentUser?->isFaculty() || in_array($currentUser?->role, ['faculty', 'staff', 'office_staff'], true)) {
+    } elseif ($currentUser?->isFaculty() || $currentUser?->role === 'faculty') {
         $requestClassification = 'Institutional Priority';
         $classificationTone = 'amber';
     } elseif ($currentUser?->isOutsider() || $currentUser?->requestor_type === 'outsider' || $currentUser?->role === 'outsider') {
@@ -22,8 +22,8 @@
     }
 
     $isStudent = $effectiveRequestorType === 'student';
-    $isFaculty = $effectiveRequestorType === 'faculty' || in_array($currentUser?->role ?? null, ['faculty', 'staff', 'office_staff'], true);
-    $isExternal = in_array($effectiveRequestorType, ['outsider', 'student_organization'], true);
+    $isFaculty = $effectiveRequestorType === 'faculty' || ($currentUser?->role ?? null) === 'faculty';
+    $isExternal = in_array($effectiveRequestorType, ['outsider'], true);
     $selectedCollegeId = old('college_id', $profileCollegeId ?? null);
     $selectedDepartmentId = old('department_id', $profileDepartmentId ?? null);
     $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];

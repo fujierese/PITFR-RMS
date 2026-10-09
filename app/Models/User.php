@@ -264,6 +264,11 @@ class User extends Authenticatable implements CanResetPassword
         return $this->requestor_type === 'faculty';
     }
 
+    public function isStaff(): bool
+    {
+        return $this->requestor_type === 'staff';
+    }
+
     public function isOutsider(): bool
     {
         return $this->requestor_type === 'outsider';
@@ -277,8 +282,9 @@ class User extends Authenticatable implements CanResetPassword
     public function getAccountTypeLabelAttribute(): string
     {
         return match ($this->requestor_type) {
-            'student' => 'Student',
+            'student' => 'Student Organization',
             'faculty' => 'Faculty',
+            'staff' => 'Staff',
             'student_organization' => 'Student Organization',
             'outsider' => 'Outsider',
             default => $this->role_label,

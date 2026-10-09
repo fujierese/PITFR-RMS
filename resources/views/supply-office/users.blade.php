@@ -28,7 +28,7 @@
                 <p class="mt-1 text-sm text-emerald-50">Set the account type first to show only the fields that apply.</p>
             </div>
             <div class="p-5">
-            <p class="mb-4 rounded-xl border border-emerald-200 bg-white/80 px-3 py-2 text-sm text-emerald-800">Admin-created accounts are verified immediately. The user will receive an email with a secure link to set their password.</p>
+            <p class="mb-4 rounded-xl border border-emerald-200 bg-white/80 px-3 py-2 text-sm text-emerald-800">Admin-created accounts are verified immediately, but cannot sign in until the user completes password setup using the secure link sent to their registered email.</p>
             @if($errors->any())
                 <div class="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{{ $errors->first() }}</div>
             @endif
@@ -37,7 +37,7 @@
                 <div>
                     <label for="account_type" class="mb-1 block text-sm font-medium text-slate-700">Account type</label>
                     <select id="account_type" name="account_type" required class="w-full rounded-xl border border-emerald-300 bg-white px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
-                        @foreach(['student' => 'Student', 'outsider' => 'Outsider', 'faculty' => 'Faculty'] as $value => $label)
+                        @foreach(['student' => 'Student Organization', 'faculty' => 'Faculty', 'staff' => 'Staff', 'custodian_venue' => 'Venue Custodian', 'custodian_equipment' => 'Equipment Custodian'] as $value => $label)
                             <option value="{{ $value }}" @selected(old('account_type', 'student') === $value)>{{ $label }}</option>
                         @endforeach
                     </select>
@@ -166,15 +166,17 @@
             const updateAccountFields = () => {
                 const isStudent = accountType.value === 'student';
                 const isFaculty = accountType.value === 'faculty';
-                const isOutsider = accountType.value === 'outsider';
+                const isStaff = accountType.value === 'staff';
+                const isCustodianVenue = accountType.value === 'custodian_venue';
+                const isCustodianEquipment = accountType.value === 'custodian_equipment';
                 const isAcademic = isStudent || isFaculty;
                 const isFacultyAdviser = isFaculty && facultyAdviser && facultyAdviser.value === 'yes';
                 academicFields.forEach(field => field.classList.toggle('hidden', !isAcademic));
                 studentFields.forEach(field => field.classList.toggle('hidden', !isStudent));
                 facultyFields.forEach(field => field.classList.toggle('hidden', !isFaculty));
-                positionFields.forEach(field => field.classList.toggle('hidden', !(isStudent || isFaculty || isOutsider)));
+                positionFields.forEach(field => field.classList.toggle('hidden', !(isStudent || isFaculty || isStaff || isCustodianVenue || isCustodianEquipment)));
                 studentOrganizationFields.forEach(field => field.classList.toggle('hidden', !(isStudent || isFacultyAdviser)));
-                organizationFields.forEach(field => field.classList.toggle('hidden', !isOutsider));
+                organizationFields.forEach(field => field.classList.toggle('hidden', true));
             };
             accountType.addEventListener('change', updateAccountFields);
             collegeField?.addEventListener('change', updateDepartments);

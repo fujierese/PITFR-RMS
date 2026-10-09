@@ -22,7 +22,7 @@ class RoleMiddleware
                 return $next($request);
             }
 
-            if ($role === 'admin' && $user->isAdmin()) {
+            if ($role === 'admin' && $userRole === 'admin') {
                 return $next($request);
             }
 

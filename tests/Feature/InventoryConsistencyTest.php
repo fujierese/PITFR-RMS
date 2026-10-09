@@ -258,6 +258,7 @@ class InventoryConsistencyTest extends TestCase
 
     public function test_return_is_rejected_before_the_scheduled_end_time(): void
     {
+        $eventDate = now()->addDay()->toDateString();
         $custodian = User::factory()->create(['role' => 'custodian-equipment']);
         $equipment = Equipment::factory()->create([
             'name' => 'Sound System',
@@ -271,10 +272,10 @@ class InventoryConsistencyTest extends TestCase
             'department' => 'IT',
             'name_of_activity' => 'Early return test',
             'expected_participants' => 10,
-            'start_date' => now()->toDateString(),
-            'end_date' => now()->toDateString(),
-            'start_time' => now()->subHour()->format('H:i'),
-            'end_time' => now()->addHour()->format('H:i'),
+            'start_date' => $eventDate,
+            'end_date' => $eventDate,
+            'start_time' => '09:00',
+            'end_time' => '17:00',
             'venue' => [],
             'equipment' => ['Sound System'],
             'equipment_quantities' => ['Sound System' => 2],

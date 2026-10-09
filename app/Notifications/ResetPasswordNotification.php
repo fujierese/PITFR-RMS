@@ -21,10 +21,11 @@ class ResetPasswordNotification extends Notification
 
     public function toMail($notifiable): MailMessage
     {
-        $url = url(route('password.reset', [
+        $path = route('password.reset', [
             'token' => $this->token,
             'email' => $notifiable->getEmailForPasswordReset(),
-        ], false));
+        ], false);
+        $url = rtrim((string) config('app.url'), '/') . '/' . ltrim($path, '/');
 
         return (new MailMessage)
             ->subject('Reset Your PITFR-RMS Password')

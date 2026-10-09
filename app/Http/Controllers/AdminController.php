@@ -13,8 +13,8 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -171,16 +171,27 @@ class AdminController extends Controller
         return $query->orderBy('name')->value('id');
     }
 
+    private function resolveAdminCreatedAccountMap(string $accountType): array
+    {
+        return match ($accountType) {
+            'student' => ['role' => 'requestor', 'requestor_type' => 'student'],
+            'faculty' => ['role' => 'requestor', 'requestor_type' => 'faculty'],
+            'staff' => ['role' => 'requestor', 'requestor_type' => 'staff'],
+            'custodian_venue' => ['role' => 'custodian-venue', 'requestor_type' => null],
+            'custodian_equipment' => ['role' => 'custodian-equipment', 'requestor_type' => null],
+            default => throw new \InvalidArgumentException('Unsupported admin-created account type.'),
+        };
+    }
+
     public function storeUser(Request $request)
     {
         $validated = $request->validate([
-            'account_type' => ['required', 'in:student,outsider,faculty'],
+            'account_type' => ['required', 'in:student,faculty,staff,custodian_venue,custodian_equipment'],
             'surname' => ['nullable', 'string', 'max:100'],
             'first_name' => ['nullable', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
             'suffix' => ['nullable', 'string', 'max:50'],
             'username' => ['required', 'email', 'max:255', 'unique:users,username'],
-            'password' => ['nullable', 'string', 'min:12', 'confirmed'],
             'college_id' => ['required_if:account_type,student,faculty', 'nullable', 'exists:colleges,id'],
             'department_id' => ['required_if:account_type,student,faculty', 'nullable', 'exists:departments,id'],
             'school_id_number' => ['required_if:account_type,student', 'nullable', 'string', 'regex:/^\d{2}-\d{4}-\d{3}$/'],
@@ -188,13 +199,12 @@ class AdminController extends Controller
             'faculty_adviser' => ['nullable', 'in:yes,no'],
             'position' => ['nullable', 'string', 'max:100'],
             'student_organization_id' => ['nullable', 'integer', 'exists:student_organizations,id'],
-            'office_or_organization' => ['required_if:account_type,outsider', 'nullable', 'string', 'max:191'],
             'contact_number' => ['nullable', 'string', 'max:50'],
         ], [
             'school_id_number.regex' => 'Student ID must be in format: 23-0098-635 (2 digits - 4 digits - 3 digits).',
-            'office_or_organization.required_if' => 'Organization name is required for this account type.',
         ]);
 
+        $accountMapping = $this->resolveAdminCreatedAccountMap($validated['account_type']);
         $facultyAdviser = $request->input('faculty_adviser') === 'yes';
 
         if ($validated['account_type'] === 'student' && empty($validated['student_organization_id'])) {
@@ -244,31 +254,30 @@ class AdminController extends Controller
 
         $createdUser = User::create([
             'username' => strtolower(trim($validated['username'])),
-            'password' => Hash::make($validated['password'] ?? bin2hex(random_bytes(24))),
             'name' => $fullName,
             'surname' => trim((string) ($validated['surname'] ?? '')) ?: null,
             'first_name' => trim((string) ($validated['first_name'] ?? '')) ?: null,
             'middle_name' => trim((string) ($validated['middle_name'] ?? '')) ?: null,
             'suffix' => trim((string) ($validated['suffix'] ?? '')) ?: null,
-            'role' => 'requestor',
-            'requestor_type' => match ($validated['account_type']) {
-                'student' => 'student',
-                'faculty' => 'faculty',
-                default => 'outsider',
-            },
+            'role' => $accountMapping['role'],
+            'requestor_type' => $accountMapping['requestor_type'],
             'school_id_number' => $isStudent ? $validated['school_id_number'] : null,
             'faculty_id' => $validated['account_type'] === 'faculty' ? $validated['faculty_id'] : null,
             'position' => $position !== '' ? $position : match ($validated['account_type']) {
-                'student' => 'Student',
+                'student' => 'Student Organization',
                 'faculty' => 'Faculty',
-                'outsider' => 'External Partner',
+                'staff' => 'Staff',
+                'custodian_venue' => 'Venue Custodian',
+                'custodian_equipment' => 'Equipment Custodian',
                 default => null,
             },
-            'office_or_organization' => !$isStudent ? ($validated['office_or_organization'] ?? null) : null,
+            'office_or_organization' => $validated['account_type'] === 'staff' ? null : ( ! $isStudent && ($validated['office_or_organization'] ?? null) ),
             'contact_number' => $validated['contact_number'] ?? null,
             'department' => $isAcademic ? $department?->name : null,
             'college_id' => $isAcademic ? $validated['college_id'] : null,
             'department_id' => $isAcademic ? $validated['department_id'] : null,
+            'is_active' => true,
+            'google_id' => null,
             'email_verified_at' => now(),
         ]);
 
@@ -293,19 +302,21 @@ class AdminController extends Controller
             'requestor_type' => $createdUser->requestor_type,
         ]);
 
-        $redirect = redirect()->route('admin.users')->with('success', 'User account created successfully.');
+        $redirect = redirect()->route('admin.users')
+            ->with('success', 'User account created. A secure password setup link will be sent to the registered email address.');
 
         try {
-            $setupToken = Password::broker()->createToken($createdUser);
-            $createdUser->notify(new \App\Notifications\WelcomeUserAccountNotification($setupToken));
-            $redirect->with('status', 'A password setup link was sent to the email address.');
-        } catch (\Throwable $e) {
-            Log::warning('Failed to send welcome email for admin-created user.', [
+            $status = Password::sendResetLink(['username' => $createdUser->username]);
+            if ($status !== Password::RESET_LINK_SENT) {
+                $redirect->with('warning', 'User account created, but the password setup link could not be sent.');
+            }
+        } catch (\Throwable $exception) {
+            Password::broker()->deleteToken($createdUser);
+            Log::warning('Failed to send password setup link for admin-created user.', [
                 'user_id' => $createdUser->id,
-                'username' => $createdUser->username,
-                'exception' => $e->getMessage(),
+                'exception' => $exception::class,
             ]);
-            $redirect->with('warning', 'User account created, but the welcome email could not be sent.');
+            $redirect->with('warning', 'User account created, but the password setup link could not be sent.');
         }
 
         return $redirect;
@@ -328,7 +339,7 @@ class AdminController extends Controller
             'role' => ['required', 'in:requestor,student,faculty,outsider,custodian,custodian-venue,custodian-equipment,admin,supply_office'],
             'is_active' => ['sometimes', 'boolean'],
             'department' => ['nullable', 'string', 'max:255'],
-            'requestor_type' => ['nullable', 'in:student,faculty,outsider'],
+            'requestor_type' => ['nullable', 'in:student,faculty,staff,outsider'],
             'college_id' => ['nullable', 'exists:colleges,id'],
             'department_id' => ['nullable', 'exists:departments,id'],
             'school_id_number' => ['nullable', 'string', 'max:255'],
@@ -368,6 +379,13 @@ class AdminController extends Controller
         $previousRole = $user->role;
         $newRole = $validated['role'];
         $adminRoles = ['admin', 'supply_office'];
+        $newIsActive = $request->boolean('is_active', $user->is_active ?? true);
+        $privilegedRoles = ['admin', 'facility_admin', 'supply_office'];
+        $isPrivilegedTarget = in_array($previousRole, $privilegedRoles, true);
+
+        if ($isPrivilegedTarget && ($newRole !== $previousRole || $newIsActive !== (bool) $user->is_active)) {
+            return redirect()->route('admin.users')->with('error', 'Privileged administrator roles and account status cannot be changed through user management.');
+        }
 
         if ($currentUser && in_array($currentUser->role, $adminRoles, true) && in_array($newRole, $adminRoles, true)) {
             return redirect()->route('admin.users')->with('error', 'Admin role assignment is restricted. Please keep the existing privilege model unchanged.');
@@ -395,59 +413,61 @@ class AdminController extends Controller
             'is_active' => $user->is_active,
         ];
 
-        $user->fill([
-            'name' => $nameToStore,
-            'surname' => trim((string) ($validated['surname'] ?? '')) ?: null,
-            'first_name' => trim((string) ($validated['first_name'] ?? '')) ?: null,
-            'middle_name' => trim((string) ($validated['middle_name'] ?? '')) ?: null,
-            'suffix' => trim((string) ($validated['suffix'] ?? '')) ?: null,
-            'username' => strtolower(trim($validated['username'])),
-            'role' => $newRole,
-            'is_active' => $request->boolean('is_active', $user->is_active ?? true),
-            'department' => $validated['department'] ?? null,
-            'requestor_type' => $validated['requestor_type'] ?? $user->requestor_type,
-            'school_id_number' => $validated['school_id_number'] ?? null,
-            'college_id' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($validated['college_id'] ?? null) : null,
-            'department_id' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($validated['department_id'] ?? null) : null,
-            'department' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($department?->name ?? $validated['department'] ?? null) : null,
-            'faculty_id' => $validated['faculty_id'] ?? null,
-            'position' => $validated['position'] ?? null,
-            'office_or_organization' => $validated['office_or_organization'] ?? null,
-            'contact_number' => $validated['contact_number'] ?? null,
-        ]);
         $passwordChanged = ! empty($validated['password']);
-        if ($passwordChanged) {
-            $user->password = Hash::make($validated['password']);
-        }
-        $user->save();
-        if ($passwordChanged) {
-            $user->tokens()->delete();
-        }
-        if (! $user->is_active) {
-            $this->revokeUserAccess($user);
-        }
+        DB::transaction(function () use ($user, $nameToStore, $validated, $newRole, $newIsActive, $department, $passwordChanged, $facultyAdviser, $selectedOrganizationId, $currentUser, $oldValues): void {
+            $user->fill([
+                'name' => $nameToStore,
+                'surname' => trim((string) ($validated['surname'] ?? '')) ?: null,
+                'first_name' => trim((string) ($validated['first_name'] ?? '')) ?: null,
+                'middle_name' => trim((string) ($validated['middle_name'] ?? '')) ?: null,
+                'suffix' => trim((string) ($validated['suffix'] ?? '')) ?: null,
+                'username' => strtolower(trim($validated['username'])),
+                'role' => $newRole,
+                'is_active' => $newIsActive,
+                'department' => $validated['department'] ?? null,
+                'requestor_type' => $validated['requestor_type'] ?? $user->requestor_type,
+                'school_id_number' => $validated['school_id_number'] ?? null,
+                'college_id' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($validated['college_id'] ?? null) : null,
+                'department_id' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($validated['department_id'] ?? null) : null,
+                'department' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($department?->name ?? $validated['department'] ?? null) : null,
+                'faculty_id' => $validated['faculty_id'] ?? null,
+                'position' => $validated['position'] ?? null,
+                'office_or_organization' => $validated['office_or_organization'] ?? null,
+                'contact_number' => $validated['contact_number'] ?? null,
+            ]);
+            if ($passwordChanged) {
+                $user->password = Hash::make($validated['password']);
+            }
+            $user->save();
+            if ($passwordChanged) {
+                $user->tokens()->delete();
+            }
+            if (! $user->is_active) {
+                $this->revokeUserAccess($user);
+            }
 
-        if ($user->isStudent() && !empty($validated['student_organization_id'])) {
-            StudentOrganizationMember::updateOrCreate(
-                ['user_id' => $user->id, 'student_organization_id' => $validated['student_organization_id']],
-                ['membership_role' => 'Member', 'can_submit_requests' => true, 'is_active' => true],
-            );
-        }
+            if ($user->isStudent() && !empty($validated['student_organization_id'])) {
+                StudentOrganizationMember::updateOrCreate(
+                    ['user_id' => $user->id, 'student_organization_id' => $validated['student_organization_id']],
+                    ['membership_role' => 'Member', 'can_submit_requests' => true, 'is_active' => true],
+                );
+            }
 
-        if ($user->isFaculty() && $facultyAdviser && $selectedOrganizationId > 0) {
-            StudentOrganizationMember::updateOrCreate(
-                ['user_id' => $user->id, 'student_organization_id' => $selectedOrganizationId],
-                ['membership_role' => 'Adviser', 'can_submit_requests' => false, 'is_active' => true],
-            );
-        }
+            if ($user->isFaculty() && $facultyAdviser && $selectedOrganizationId > 0) {
+                StudentOrganizationMember::updateOrCreate(
+                    ['user_id' => $user->id, 'student_organization_id' => $selectedOrganizationId],
+                    ['membership_role' => 'Adviser', 'can_submit_requests' => false, 'is_active' => true],
+                );
+            }
 
-        $this->recordUserAudit($currentUser, $user, 'user_updated', 'Updated user account details.', $oldValues, [
-            'name' => $user->name,
-            'username' => $user->username,
-            'role' => $user->role,
-            'requestor_type' => $user->requestor_type,
-            'is_active' => $user->is_active,
-        ]);
+            $this->recordUserAudit($currentUser, $user, 'user_updated', 'Updated user account details.', $oldValues, [
+                'name' => $user->name,
+                'username' => $user->username,
+                'role' => $user->role,
+                'requestor_type' => $user->requestor_type,
+                'is_active' => $user->is_active,
+            ]);
+        });
 
         return redirect()->route('admin.users')->with('success', 'User updated successfully.');
     }
@@ -457,6 +477,9 @@ class AdminController extends Controller
         $currentUser = Auth::user();
         if ($currentUser && $currentUser->id === $user->id) {
             return redirect()->route('admin.users')->with('error', 'You cannot deactivate your own account.');
+        }
+        if (in_array($user->role, ['admin', 'facility_admin', 'supply_office'], true)) {
+            return redirect()->route('admin.users')->with('error', 'Privileged administrator accounts cannot be deactivated through user management.');
         }
 
         $venueAssignments = $user->venues()->where('is_active', true)->pluck('name')->filter()->all();
@@ -472,12 +495,14 @@ class AdminController extends Controller
             'is_active' => $user->is_active,
         ];
 
-        $user->update(['is_active' => false]);
-        $this->revokeUserAccess($user);
+        DB::transaction(function () use ($user, $currentUser, $oldValues): void {
+            $user->update(['is_active' => false]);
+            $this->revokeUserAccess($user);
 
-        $this->recordUserAudit($currentUser, $user, 'user_deactivated', 'Deactivated the user account.', $oldValues, [
-            'is_active' => $user->fresh()->is_active,
-        ]);
+            $this->recordUserAudit($currentUser, $user, 'user_deactivated', 'Deactivated the user account.', $oldValues, [
+                'is_active' => $user->fresh()->is_active,
+            ]);
+        });
 
         return redirect()->route('admin.users')->with('success', 'User deactivated successfully.');
     }
@@ -498,15 +523,21 @@ class AdminController extends Controller
 
     public function reactivateUser(User $user)
     {
+        if (in_array($user->role, ['admin', 'facility_admin', 'supply_office'], true)) {
+            return redirect()->route('admin.users')->with('error', 'Privileged administrator account status cannot be changed through user management.');
+        }
+
         $oldValues = [
             'is_active' => $user->is_active,
         ];
 
-        $user->update(['is_active' => true]);
+        DB::transaction(function () use ($user, $oldValues): void {
+            $user->update(['is_active' => true]);
 
-        $this->recordUserAudit(Auth::user(), $user, 'user_reactivated', 'Reactivated a deactivated user account.', $oldValues, [
-            'is_active' => $user->fresh()->is_active,
-        ]);
+            $this->recordUserAudit(Auth::user(), $user, 'user_reactivated', 'Reactivated a deactivated user account.', $oldValues, [
+                'is_active' => $user->fresh()->is_active,
+            ]);
+        });
 
         return redirect()->route('admin.users')->with('success', 'User reactivated successfully.');
     }

@@ -28,7 +28,7 @@
 
     if ($user && ($user->isStudentOrganization() || $user->studentOrganizations()->exists())) {
         $displayContext = $meaningfulValue($user->studentOrganizations()->first()?->name) ?? $meaningfulValue($user->office_or_organization) ?? $displayContext;
-    } elseif ($user && ($user->isFaculty() || in_array($user->role, ['faculty', 'staff', 'office_staff'], true))) {
+    } elseif ($user && ($user->isFaculty() || $user->role === 'faculty')) {
         $displayContext = $meaningfulValue($user->departmentRecord?->name) ?? $meaningfulValue($user->department) ?? $displayContext;
     }
     if ($user && $user->isCustodian()) {

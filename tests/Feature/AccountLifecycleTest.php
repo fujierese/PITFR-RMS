@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\FacilityRequest;
+use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Socialite\Facades\Socialite;
+use RuntimeException;
 use Tests\TestCase;
 
 class AccountLifecycleTest extends TestCase
@@ -152,6 +154,72 @@ class AccountLifecycleTest extends TestCase
             ->assertRedirect(route('admin.users'));
 
         $this->assertDatabaseMissing('personal_access_tokens', ['id' => $token->id]);
+    }
+
+    public function test_deactivation_and_access_revocation_roll_back_if_audit_creation_fails(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $user = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student', 'is_active' => true]);
+        $token = $user->createToken('retain-on-audit-failure')->accessToken;
+        $sessionId = 'session-retain-on-audit-failure';
+        DB::table('sessions')->insert([
+            'id' => $sessionId,
+            'user_id' => $user->id,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'test',
+            'payload' => base64_encode(serialize([])),
+            'last_activity' => time(),
+        ]);
+        config(['session.driver' => 'database']);
+
+        AuditLog::creating(function (): void {
+            throw new RuntimeException('Simulated audit persistence failure.');
+        });
+
+        $this->withoutExceptionHandling();
+        try {
+            $this->actingAs($admin)->delete(route('admin.users.destroy', $user));
+            $this->fail('Expected audit creation failure to be propagated.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Simulated audit persistence failure.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'is_active' => true]);
+        $this->assertDatabaseHas('personal_access_tokens', ['id' => $token->id]);
+        $this->assertDatabaseHas('sessions', ['id' => $sessionId, 'user_id' => $user->id]);
+        $this->assertDatabaseMissing('audit_logs', [
+            'target_user_id' => $user->id,
+            'action' => 'user_deactivated',
+        ]);
+
+        $updatedUser = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'staff', 'is_active' => true]);
+        $updatedToken = $updatedUser->createToken('retain-on-update-audit-failure')->accessToken;
+        $updatedSessionId = 'session-update-audit-failure';
+        DB::table('sessions')->insert([
+            'id' => $updatedSessionId,
+            'user_id' => $updatedUser->id,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'test',
+            'payload' => base64_encode(serialize([])),
+            'last_activity' => time(),
+        ]);
+
+        try {
+            $this->put(route('admin.users.update', $updatedUser), [
+                'name' => $updatedUser->name,
+                'username' => $updatedUser->username,
+                'role' => 'requestor',
+                'requestor_type' => 'staff',
+                'is_active' => '0',
+            ]);
+            $this->fail('Expected audit creation failure to be propagated for account editing.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Simulated audit persistence failure.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('users', ['id' => $updatedUser->id, 'is_active' => true]);
+        $this->assertDatabaseHas('personal_access_tokens', ['id' => $updatedToken->id]);
+        $this->assertDatabaseHas('sessions', ['id' => $updatedSessionId, 'user_id' => $updatedUser->id]);
     }
 
     public function test_admin_can_reactivate_account_without_replacing_identity(): void

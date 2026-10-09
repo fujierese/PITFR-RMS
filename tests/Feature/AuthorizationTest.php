@@ -78,15 +78,28 @@ class AuthorizationTest extends TestCase
         $response->assertOk();
     }
 
-    public function test_staff_role_remains_unauthorized_for_reschedule_flow(): void
+    public function test_staff_requestor_type_receives_normal_requestor_authorization(): void
     {
-        $requester = User::factory()->create(['role' => 'staff']);
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'staff']);
         $request = $this->createNeedsRescheduleRequest($requester);
 
         $response = $this->actingAs($requester)
             ->get(route('requestor.edit', $request));
 
-        $response->assertForbidden();
+        $response->assertOk();
+        $this->assertTrue($requester->isRequestee());
+        $this->assertFalse($requester->isAdmin());
+        $this->assertFalse($requester->isCustodian());
+    }
+
+    public function test_staff_requestor_type_is_not_admin_or_custodian(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'staff']);
+
+        $this->assertFalse($requester->isAdmin());
+        $this->assertFalse($requester->isCustodian());
+        $this->assertSame('requestor', $requester->role);
+        $this->assertSame('staff', $requester->requestor_type);
     }
 
     public function test_custodian_cannot_access_requestor_reschedule_flow(): void
@@ -111,5 +124,16 @@ class AuthorizationTest extends TestCase
             ->get(route('requestor.edit', $request));
 
         $response->assertForbidden();
+    }
+
+    public function test_legacy_admin_aliases_cannot_access_literal_admin_routes(): void
+    {
+        foreach (['facility_admin', 'supply_office'] as $role) {
+            $legacyUser = User::factory()->create(['role' => $role]);
+
+            $this->actingAs($legacyUser)
+                ->get(route('admin.users'))
+                ->assertForbidden();
+        }
     }
 }

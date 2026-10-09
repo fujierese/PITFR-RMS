@@ -3,15 +3,19 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\LoginRequest;
 use App\Mail\RegistrationOtp;
+use App\Models\AuditLog;
 use App\Models\College;
 use App\Models\Department;
+use App\Notifications\PasswordChangedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use App\Models\User;
 
@@ -42,7 +46,12 @@ class AuthController extends Controller
             'password' => $request->input('password'),
         ];
 
-        if (!Auth::guard('web')->attempt($credentials, $request->boolean('remember'))) {
+        $hasUsablePassword = User::query()
+            ->where('username', $email)
+            ->whereNotNull('password')
+            ->exists();
+
+        if (!$hasUsablePassword || !Auth::guard('web')->attempt($credentials, $request->boolean('remember'))) {
             RateLimiter::hit($accountKey, 60);
             RateLimiter::hit($ipKey, 60);
             return back()->withErrors(['email' => 'Invalid email or password.'])->withInput($request->except('password'));
@@ -55,7 +64,7 @@ class AuthController extends Controller
             Auth::logout();
             return back()->withErrors(['email' => 'This account is deactivated. Contact an administrator.']);
         }
-        if ($user->role === 'requestor' && in_array($user->requestor_type, ['student', 'faculty', 'student_organization', 'outsider'], true) && !$user->email_verified_at) {
+        if ($user->role === 'requestor' && in_array($user->requestor_type, ['student', 'faculty', 'staff', 'outsider'], true) && !$user->email_verified_at) {
             Auth::logout();
             $request->session()->put('registration_user_id', $user->id);
             return redirect()->route('register.verify');
@@ -99,18 +108,38 @@ class AuthController extends Controller
         try {
             $googleUser = Socialite::driver('google')->user();
         } catch (\Throwable) {
-            return redirect()->route('register')->withErrors(['username' => 'Google authentication could not be completed.']);
+            return redirect()->route('login')->withErrors(['username' => 'Google authentication was not completed. Please try again.']);
         }
 
+        $googleId = trim((string) ($googleUser->getId() ?? ''));
         $email = strtolower(trim((string) $googleUser->getEmail()));
-        if ($email === '') {
-            return redirect()->route('register')->withErrors(['username' => 'Google did not provide an email address.']);
+
+        if ($googleId === '' || $email === '') {
+            return redirect()->route('login')->withErrors(['username' => 'Google authentication could not be completed because the required account information was unavailable.']);
         }
 
-        $existing = User::where('google_id', $googleUser->getId())->first();
+        $googleProfile = $googleUser->user ?? [];
+        $emailVerified = $googleProfile['email_verified'] ?? $googleProfile['verified_email'] ?? null;
+        if ($emailVerified === null || filter_var($emailVerified, FILTER_VALIDATE_BOOLEAN) === false) {
+            return redirect()->route('login')->withErrors(['username' => 'Your Google email address must be verified before you can continue.']);
+        }
+
+        $existing = User::where('google_id', $googleId)->first();
         if ($existing) {
+            if (strtolower(trim((string) $existing->username)) !== $email) {
+                return redirect()->route('login')->withErrors(['username' => 'Google authentication could not be completed because the account information does not match.']);
+            }
+
+            if (! $this->isGoogleEligibleRequestor($existing)) {
+                return redirect()->route('login')->withErrors(['username' => 'This PITFR account cannot be linked to Google authentication. Please use the available account login method or contact the administrator.']);
+            }
+
             if (! $existing->is_active) {
-                return redirect()->route('login')->withErrors(['username' => 'This account is deactivated. Contact an administrator.']);
+                return redirect()->route('login')->withErrors(['username' => 'This PITFR account is currently inactive. Please contact the appropriate administrator.']);
+            }
+
+            if ($existing->password === null) {
+                return redirect()->route('login')->withErrors(['username' => 'This PITFR account must complete initial password setup before Google sign-in is available.']);
             }
 
             Auth::login($existing);
@@ -119,23 +148,36 @@ class AuthController extends Controller
 
         $existing = User::where('username', $email)->first();
         if ($existing) {
-            if ($existing->role !== 'requestor') {
-                return redirect()->route('register')->withErrors(['username' => 'This email belongs to an administrator-managed account.']);
-            }
-            if (! $existing->is_active) {
-                return redirect()->route('login')->withErrors(['username' => 'This account is deactivated. Contact an administrator.']);
+            if ($existing->google_id && $existing->google_id !== $googleId) {
+                return redirect()->route('login')->withErrors(['username' => 'Google authentication could not be completed because of an account identity conflict. Please contact the administrator.']);
             }
 
-            $existing->forceFill(['google_id' => $googleUser->getId(), 'email_verified_at' => $existing->email_verified_at ?: now()])->save();
+            if (! $this->isGoogleEligibleRequestor($existing)) {
+                $message = ($existing->role === 'requestor' && $existing->requestor_type === 'outsider')
+                    ? 'This Google account cannot be linked to the existing PITFR account. Please use the available account login method or contact the administrator.'
+                    : 'This PITFR account cannot be linked to Google authentication. Please use the available account login method or contact the administrator.';
+
+                return redirect()->route('login')->withErrors(['username' => $message]);
+            }
+
+            if (! $existing->is_active) {
+                return redirect()->route('login')->withErrors(['username' => 'This PITFR account is currently inactive. Please contact the appropriate administrator.']);
+            }
+
+            if ($existing->password === null) {
+                return redirect()->route('login')->withErrors(['username' => 'This PITFR account must complete initial password setup before Google sign-in is available.']);
+            }
+
+            $existing->forceFill(['google_id' => $googleId, 'email_verified_at' => $existing->email_verified_at ?: now()])->save();
             Auth::login($existing);
             return $this->redirectByRole($existing->role);
         }
 
         $request->session()->put('google_registration_profile', [
-            'google_id' => $googleUser->getId(),
+            'google_id' => $googleId,
             'email' => $email,
-            'first_name' => $googleUser->user['given_name'] ?? '',
-            'last_name' => $googleUser->user['family_name'] ?? '',
+            'first_name' => $googleProfile['given_name'] ?? '',
+            'last_name' => $googleProfile['family_name'] ?? '',
             'name' => $googleUser->getName() ?: $email,
         ]);
 
@@ -150,11 +192,20 @@ class AuthController extends Controller
     public function sendResetLink(Request $request)
     {
         $data = $request->validate(['email' => ['required', 'email']]);
-        $status = Password::sendResetLink(['username' => strtolower(trim($data['email']))]);
+        $username = strtolower(trim($data['email']));
+        $user = User::query()->where('username', $username)->where('is_active', true)->first();
 
-        return $status === Password::RESET_LINK_SENT
-            ? back()->with('status', __($status))
-            : back()->withErrors(['email' => __($status)]);
+        if ($user) {
+            try {
+                Password::sendResetLink(['username' => $username]);
+            } catch (\Throwable $exception) {
+                Log::warning('Unable to deliver a password reset link.', [
+                    'exception' => $exception::class,
+                ]);
+            }
+        }
+
+        return back()->with('status', 'If an active account matches that email address, a password reset link will be sent.');
     }
 
     public function showResetPassword(string $token)
@@ -172,44 +223,90 @@ class AuthController extends Controller
             'email' => ['required', 'email'],
             'password' => ['required', 'string', 'min:12', 'confirmed'],
         ]);
+        $inactiveAccount = false;
+        $changedUserId = null;
         $status = Password::reset(
             ['username' => strtolower(trim($data['email'])), 'password' => $data['password'], 'password_confirmation' => $request->input('password_confirmation'), 'token' => $data['token']],
-            function (User $user, string $password): void {
-                $user->forceFill(['password' => Hash::make($password)])->save();
-                $user->tokens()->delete();
+            function (User $user, string $password) use (&$inactiveAccount, &$changedUserId): void {
+                DB::transaction(function () use ($user, $password, &$inactiveAccount, &$changedUserId): void {
+                    $currentUser = User::query()->lockForUpdate()->findOrFail($user->getKey());
+                    if (! $currentUser->is_active) {
+                        $inactiveAccount = true;
+                        return;
+                    }
+
+                    $wasPasswordless = $currentUser->password === null;
+                    $currentUser->forceFill([
+                        'password' => Hash::make($password),
+                        'remember_token' => Str::random(60),
+                    ])->save();
+                    $currentUser->tokens()->delete();
+                    if (config('session.driver') === 'database') {
+                        DB::table(config('session.table', 'sessions'))
+                            ->where('user_id', $currentUser->id)
+                            ->delete();
+                    }
+                    AuditLog::create([
+                        'actor_id' => null,
+                        'target_user_id' => $currentUser->id,
+                        'action' => $wasPasswordless ? 'password_setup_completed' : 'password_recovered',
+                        'details' => $wasPasswordless
+                            ? 'Initial password setup completed through the password broker.'
+                            : 'Password recovered through the password broker.',
+                        'old_values' => [],
+                        'new_values' => [],
+                    ]);
+                    Password::broker()->deleteToken($currentUser);
+                    $changedUserId = $currentUser->id;
+                });
             }
         );
 
-        return $status === Password::PASSWORD_RESET
-            ? redirect()->route('login')->with('status', __($status))
-            : back()->withErrors(['email' => __($status)]);
+        if ($inactiveAccount) {
+            return back()->withErrors(['email' => 'This account is inactive. Contact an administrator.']);
+        }
+
+        if ($status !== Password::PASSWORD_RESET) {
+            return back()->withErrors(['email' => __($status)]);
+        }
+
+        try {
+            User::findOrFail($changedUserId)->notify(new PasswordChangedNotification());
+        } catch (\Throwable $exception) {
+            Log::warning('Unable to deliver password reset confirmation.', [
+                'user_id' => $changedUserId,
+                'exception' => $exception::class,
+            ]);
+        }
+
+        return redirect()->route('login')->with('status', __($status));
     }
 
     public function register(Request $request)
     {
         $googleProfile = $request->session()->get('google_registration_profile');
         $isGoogleRegistration = is_array($googleProfile);
+        if ($isGoogleRegistration) {
+            $request->merge(['username' => strtolower(trim((string) ($googleProfile['email'] ?? '')))]);
+        }
+
         $data = $request->validate([
-            'requestor_type' => ['required', 'in:outsider'],
             'first_name' => ['required', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
             'surname' => ['required', 'string', 'max:100'],
-            'username' => ['required', 'email', 'max:255', 'unique:users,username'],
+            'username' => ['required', 'email', 'max:50', 'unique:users,username'],
             'password' => [$isGoogleRegistration ? 'nullable' : 'required', 'string', 'min:12', 'confirmed'],
             'office_or_organization' => ['required', 'string', 'max:191'],
             'organization_acronym' => ['nullable', 'string', 'max:50'],
             'organization_type' => ['required', 'string', 'max:100'],
             'contact_number' => ['nullable', 'string', 'max:50'],
         ], [
+            'username.unique' => 'Unable to complete registration with the provided details.',
             'school_id_number.regex' => 'Student ID must be in format: 23-0098-635 (2 digits - 4 digits - 3 digits)',
             'college_id.required_if' => 'College is required for student registration',
             'department_id.required_if' => 'Department is required for student registration',
             'office_or_organization.required_if' => 'Organization name is required for this account type.',
         ]);
-
-        if ($isGoogleRegistration) {
-            $data['username'] = $googleProfile['email'];
-        }
 
         $fullName = User::formatFullName(
             $data['surname'],
@@ -239,23 +336,35 @@ class AuthController extends Controller
         // Get department name for storage
         $departmentName = $department ? $department->name : null;
 
-        $user = DB::transaction(fn () => User::create([
-            'username' => strtolower(trim($data['username'])),
-            'password' => Hash::make($data['password'] ?? bin2hex(random_bytes(24))),
-            'name' => $fullName,
-            'role' => 'requestor',
-            'requestor_type' => $data['requestor_type'],
-            'school_id_number' => $data['school_id_number'] ?? null,
-            'office_or_organization' => $org,
-            'organization_acronym' => $data['organization_acronym'] ?? null,
-            'organization_type' => $data['organization_type'],
-            'contact_number' => $data['contact_number'] ?? null,
-            'department' => $departmentName,
-            'college_id' => $data['college_id'] ?? null,
-            'department_id' => $data['department_id'] ?? null,
-            'google_id' => $googleProfile['google_id'] ?? null,
-            'email_verified_at' => $isGoogleRegistration ? now() : null,
-        ]));
+        $user = DB::transaction(function () use ($data, $fullName, $org, $departmentName, $googleProfile, $isGoogleRegistration): User {
+            $user = User::create([
+                'username' => strtolower(trim($data['username'])),
+                'password' => Hash::make($data['password'] ?? bin2hex(random_bytes(24))),
+                'name' => $fullName,
+                'role' => 'requestor',
+                'requestor_type' => 'outsider',
+                'is_active' => true,
+                'school_id_number' => $data['school_id_number'] ?? null,
+                'office_or_organization' => $org,
+                'organization_acronym' => $data['organization_acronym'] ?? null,
+                'organization_type' => $data['organization_type'],
+                'contact_number' => $data['contact_number'] ?? null,
+                'department' => $departmentName,
+                'college_id' => $data['college_id'] ?? null,
+                'department_id' => $data['department_id'] ?? null,
+                'google_id' => $isGoogleRegistration ? ($googleProfile['google_id'] ?? null) : null,
+                'email_verified_at' => $isGoogleRegistration ? now() : null,
+            ]);
+
+            $this->recordUserAudit(null, $user, 'user_created', 'Created a new outsider account.', [], [
+                'name' => $user->name,
+                'username' => $user->username,
+                'role' => $user->role,
+                'requestor_type' => $user->requestor_type,
+            ]);
+
+            return $user;
+        });
 
         if ($isGoogleRegistration) {
             $request->session()->forget(['google_registration_profile', 'google_registration_type']);
@@ -286,6 +395,7 @@ class AuthController extends Controller
         if ($user->otp_expires_at?->isPast() || !$user->otp_hash) {
             return back()->withErrors(['otp' => 'This code has expired. Request a new code.']);
         }
+
         if ($user->otp_attempts >= 5) {
             return back()->withErrors(['otp' => 'Too many attempts. Request a new code.']);
         }
@@ -305,6 +415,18 @@ class AuthController extends Controller
         Auth::login($user);
 
         return redirect()->route('requestor.index')->with('success', 'Your email has been verified.');
+    }
+
+    private function recordUserAudit(?User $actor, User $targetUser, string $action, string $details, array $oldValues, array $newValues): void
+    {
+        AuditLog::create([
+            'actor_id' => $actor?->id,
+            'target_user_id' => $targetUser->id,
+            'action' => $action,
+            'details' => $details,
+            'old_values' => $oldValues,
+            'new_values' => $newValues,
+        ]);
     }
 
     public function resendOtp(Request $request)
@@ -352,6 +474,13 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         return redirect()->route('login');
+    }
+
+    private function isGoogleEligibleRequestor(?User $user): bool
+    {
+        return $user instanceof User
+            && $user->role === 'requestor'
+            && in_array($user->requestor_type, ['student', 'faculty', 'staff', 'outsider'], true);
     }
 
     private function redirectByRole(string $role)
