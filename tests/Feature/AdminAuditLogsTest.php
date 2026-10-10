@@ -6,6 +6,10 @@ use App\Models\AuditLog;
 use App\Models\FacilityRequest;
 use App\Models\RequestHistory;
 use App\Models\User;
+use App\Models\StudentOrganization;
+use App\Models\StudentOrganizationMember;
+use App\Models\Venue;
+use App\Models\Equipment;
 use App\Http\Middleware\RoleMiddleware;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -145,6 +149,39 @@ class AdminAuditLogsTest extends TestCase
             ->assertSee('Custodian');
     }
 
+    public function test_custodian_sidebar_shows_person_name_assigned_resource_and_custodian_type(): void
+    {
+        $venueCustodian = User::factory()->create([
+            'role' => 'custodian-venue',
+            'first_name' => 'Juan',
+            'middle_name' => null,
+            'surname' => 'Dela Cruz',
+        ]);
+        Venue::create([
+            'name' => 'Main Auditorium',
+            'custodian_id' => $venueCustodian->id,
+        ]);
+
+        $this->view('components.dashboard-sidebar', ['user' => $venueCustodian])
+            ->assertSee('Juan Dela Cruz')
+            ->assertSee('Main Auditorium — Venue Custodian');
+
+        $equipmentCustodian = User::factory()->create([
+            'role' => 'custodian-equipment',
+            'first_name' => 'Maria',
+            'middle_name' => null,
+            'surname' => 'Santos',
+        ]);
+        Equipment::create([
+            'name' => 'Sound System',
+            'custodian_id' => $equipmentCustodian->id,
+        ]);
+
+        $this->view('components.dashboard-sidebar', ['user' => $equipmentCustodian])
+            ->assertSee('Maria Santos')
+            ->assertSee('Sound System — Equipment Custodian');
+    }
+
     public function test_supply_office_user_receives_supply_office_navigation(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
@@ -153,5 +190,56 @@ class AdminAuditLogsTest extends TestCase
             ->assertSee('Supply Office')
             ->assertSee('Audit Logs')
             ->assertSee(route('supply-office.index'));
+    }
+
+    public function test_student_representative_sidebar_shows_person_organization_and_representative_role(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'student',
+            'first_name' => 'Maria',
+            'middle_name' => 'Santos',
+            'surname' => 'Dela Cruz',
+            'position' => 'Student Organization',
+        ]);
+        $organization = StudentOrganization::create([
+            'name' => 'Computer Science Society',
+            'is_active' => true,
+        ]);
+        StudentOrganizationMember::create([
+            'user_id' => $user->id,
+            'student_organization_id' => $organization->id,
+            'membership_role' => 'Member',
+            'can_submit_requests' => true,
+            'is_active' => true,
+        ]);
+
+        $this->view('components.dashboard-sidebar', ['user' => $user])
+            ->assertSee('Maria Santos Dela Cruz')
+            ->assertSee('Computer Science Society — Student Representative');
+    }
+
+    public function test_student_representative_sidebar_preserves_custom_organization_position(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'student',
+            'name' => 'Student President',
+            'position' => 'President',
+        ]);
+        $organization = StudentOrganization::create([
+            'name' => 'Student Council',
+            'is_active' => true,
+        ]);
+        StudentOrganizationMember::create([
+            'user_id' => $user->id,
+            'student_organization_id' => $organization->id,
+            'membership_role' => 'President',
+            'can_submit_requests' => true,
+            'is_active' => true,
+        ]);
+
+        $this->view('components.dashboard-sidebar', ['user' => $user])
+            ->assertSee('Student Council — President');
     }
 }

@@ -27,11 +27,7 @@
     </section>
     <section>
         <h3 class="text-lg font-semibold text-slate-900">Your privacy questions and requests</h3>
-        <p class="mt-2">The Data Privacy Act of 2012 provides rights and protections for personal information, subject to the law’s conditions and exceptions. To ask about your information or exercise a privacy right, contact PIT’s official Data Protection Officer.</p>
-        <dl class="mt-3 grid gap-3 sm:grid-cols-2">
-            <div class="rounded-xl border border-slate-200 p-3"><dt class="font-semibold text-slate-900">DPO name</dt><dd>[To be confirmed by PIT]</dd></div>
-            <div class="rounded-xl border border-slate-200 p-3"><dt class="font-semibold text-slate-900">Official email or contact channel</dt><dd>[To be confirmed by PIT]</dd></div>
-        </dl>
+        <p class="mt-2">The Data Privacy Act of 2012 provides rights and protections for personal information, subject to the law’s conditions and exceptions. PIT has not provided an official privacy contact or process for questions and requests. Confirm the appropriate contact channel with the institution.</p>
     </section>
     <p class="border-t border-slate-200 pt-4 text-xs text-slate-500">This draft is informational and is not legal advice. The institution must review and approve the final notice, lawful bases, contact details, recipients, retention, and complaint process.</p>
 </article>

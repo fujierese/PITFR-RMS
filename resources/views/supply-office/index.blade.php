@@ -25,11 +25,11 @@
     <div class="grid gap-4 md:grid-cols-3">
         <div class="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm ring-1 ring-emerald-50">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Venues</p>
-            <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $venues->count() }}</p>
+            <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $venuesCount }}</p>
         </div>
         <div class="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm ring-1 ring-emerald-50">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Equipment Items</p>
-            <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $equipmentItems->count() }}</p>
+            <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $equipmentCount }}</p>
         </div>
         <div class="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm ring-1 ring-emerald-50">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Availability Status</p>
@@ -175,169 +175,6 @@
         @endif
     </div>
 
-    @if(auth()->user()?->isCustodian())
-    <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/50">
-        <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h2 class="text-xl font-semibold text-slate-900">Venue Management</h2>
-                <p class="mt-1 text-sm text-slate-500">Add, edit, and remove venue records using the existing venue fields.</p>
-            </div>
-            <form method="GET" action="{{ route('supply-office.index') }}" class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <input type="text" name="venue_search" value="{{ $venueSearch }}" placeholder="Search venues or custodians" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm sm:w-56">
-                <button type="submit" class="w-full rounded-xl bg-slate-700 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto">Search</button>
-            </form>
-        </div>
-
-        <form method="POST" action="{{ route('supply-office.venues.store') }}" class="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-5">
-            @csrf
-            <input type="text" name="name" placeholder="Venue name" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
-            <input type="number" name="capacity" placeholder="Capacity" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" min="1" required>
-            <select name="custodian_id" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
-                <option value="">Assign custodian</option>
-                @foreach($custodians as $custodian)
-                    <option value="{{ $custodian->id }}">{{ $custodian->name }}</option>
-                @endforeach
-            </select>
-            <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Add Venue</button>
-        </form>
-
-        <div class="overflow-x-auto">
-            <table class="min-w-full text-left text-sm text-slate-600">
-                <thead class="border-b border-slate-200 text-slate-500">
-                    <tr>
-                        <th class="px-4 py-3 font-medium">Venue Name</th>
-                        <th class="px-4 py-3 font-medium">Capacity</th>
-                        <th class="px-4 py-3 font-medium">Assigned Custodian</th>
-                        <th class="px-4 py-3 font-medium text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    @forelse($venues as $venue)
-                        <tr>
-                            <td class="px-4 py-4 font-medium text-slate-900">{{ $venue->name }}</td>
-                            <td class="px-4 py-4">{{ $venue->capacity ?? '—' }}</td>
-                            <td class="px-4 py-4">{{ $venue->custodian?->name ?? '—' }}</td>
-                            <td class="px-4 py-4 text-right">
-                                <a href="{{ route('supply-office.index', ['edit_venue' => $venue->id]) }}" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</a>
-                                <form method="POST" action="{{ route('supply-office.venues.destroy', $venue) }}" class="inline-block" data-swal-confirm data-swal-title="Delete this venue?" data-swal-text="This action removes the venue record from the administration list." data-swal-confirm-text="Yes, delete it" data-swal-confirm-color="#dc2626">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Delete</button>
-                                </form>
-                            </td>
-                        </tr>
-
-                        @if($editVenueId === $venue->id)
-                            <tr>
-                                <td colspan="4" class="px-4 py-4 bg-slate-50">
-                                    <form method="POST" action="{{ route('supply-office.venues.update', $venue) }}" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                                        @csrf
-                                        @method('PUT')
-                                        <input type="text" name="name" value="{{ old('name', $venue->name) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
-                                        <input type="number" name="capacity" value="{{ old('capacity', $venue->capacity) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" min="1" required>
-                                        <select name="custodian_id" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
-                                            <option value="">Assign custodian</option>
-                                            @foreach($custodians as $custodian)
-                                                <option value="{{ $custodian->id }}" {{ (old('custodian_id', $venue->custodian_id) == $custodian->id) ? 'selected' : '' }}>{{ $custodian->name }}</option>
-                                            @endforeach
-                                        </select>
-                                        <button type="submit" class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Save Venue</button>
-                                        <a href="{{ route('supply-office.index') }}" class="rounded-xl border border-slate-300 px-3 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Cancel</a>
-                                    </form>
-                                </td>
-                            </tr>
-                        @endif
-                    @empty
-                        <tr><td colspan="4" class="px-4 py-12 text-center text-sm text-slate-500">No venues found.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/50">
-        <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h2 class="text-xl font-semibold text-slate-900">Equipment Management</h2>
-                <p class="mt-1 text-sm text-slate-500">Track equipment quantity, availability, and custodial assignments.</p>
-            </div>
-            <form method="GET" action="{{ route('supply-office.index') }}" class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <input type="text" name="equipment_search" value="{{ $equipmentSearch }}" placeholder="Search equipment or custodians" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm sm:w-56">
-                <button type="submit" class="w-full rounded-xl bg-slate-700 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto">Search</button>
-            </form>
-        </div>
-
-        <form method="POST" action="{{ route('supply-office.equipment.store') }}" class="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-6">
-            @csrf
-            <input type="text" name="name" placeholder="Equipment name" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
-            <input type="number" name="quantity" placeholder="Capacity / Total" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" min="1" required>
-            <input type="number" name="quantity_available" placeholder="Available" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" min="0">
-            <select name="custodian_id" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
-                <option value="">Assign custodian</option>
-                @foreach($custodians as $custodian)
-                    <option value="{{ $custodian->id }}">{{ $custodian->name }}</option>
-                @endforeach
-            </select>
-            <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Add Equipment</button>
-        </form>
-
-        <div class="overflow-x-auto">
-            <table class="min-w-full text-left text-sm text-slate-600">
-                <thead class="border-b border-slate-200 text-slate-500">
-                    <tr>
-                        <th class="px-4 py-3 font-medium">Equipment Name</th>
-                        <th class="px-4 py-3 font-medium">Capacity</th>
-                        <th class="px-4 py-3 font-medium">Available</th>
-                        <th class="px-4 py-3 font-medium">Assigned Custodian</th>
-                        <th class="px-4 py-3 font-medium text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    @forelse($equipmentItems as $equipment)
-                        <tr>
-                            <td class="px-4 py-4 font-medium text-slate-900">{{ $equipment->name }}</td>
-                            <td class="px-4 py-4">{{ $equipment->quantity }}</td>
-                            <td class="px-4 py-4">{{ $equipment->quantity_available }}</td>
-                            <td class="px-4 py-4">{{ $equipment->custodian?->name ?? '—' }}</td>
-                            <td class="px-4 py-4 text-right">
-                                <a href="{{ route('supply-office.index', ['edit_equipment' => $equipment->id]) }}" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</a>
-                                <form method="POST" action="{{ route('supply-office.equipment.destroy', $equipment) }}" class="inline-block" data-swal-confirm data-swal-title="Delete this equipment item?" data-swal-text="This action removes the equipment record from inventory management." data-swal-confirm-text="Yes, delete it" data-swal-confirm-color="#dc2626">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Delete</button>
-                                </form>
-                            </td>
-                        </tr>
-
-                        @if($editEquipmentId === $equipment->id)
-                            <tr>
-                                <td colspan="5" class="px-4 py-4 bg-slate-50">
-                                    <form method="POST" action="{{ route('supply-office.equipment.update', $equipment) }}" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
-                                        @csrf
-                                        @method('PUT')
-                                        <input type="text" name="name" value="{{ old('name', $equipment->name) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
-                                        <input type="number" name="quantity" value="{{ old('quantity', $equipment->quantity) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" min="1" required>
-                                        <input type="number" name="quantity_available" value="{{ old('quantity_available', $equipment->quantity_available) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" min="0">
-                                        <select name="custodian_id" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" required>
-                                            <option value="">Assign custodian</option>
-                                            @foreach($custodians as $custodian)
-                                                <option value="{{ $custodian->id }}" {{ (old('custodian_id', $equipment->custodian_id) == $custodian->id) ? 'selected' : '' }}>{{ $custodian->name }}</option>
-                                            @endforeach
-                                        </select>
-                                        <button type="submit" class="rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-700">Save Equipment</button>
-                                        <a href="{{ route('supply-office.index') }}" class="rounded-xl border border-slate-300 px-3 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Cancel</a>
-                                    </form>
-                                </td>
-                            </tr>
-                        @endif
-                    @empty
-                        <tr><td colspan="5" class="px-4 py-12 text-center text-sm text-slate-500">No equipment found.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-    @endif
 </div>
 <script>
     (() => {

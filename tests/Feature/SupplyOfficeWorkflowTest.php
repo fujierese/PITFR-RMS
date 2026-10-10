@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\FacilityRequest;
+use App\Models\Equipment;
 use App\Models\User;
+use App\Models\Venue;
 use App\Notifications\RequestStatusChanged;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -43,6 +45,84 @@ class SupplyOfficeWorkflowTest extends TestCase
             'priority' => 'regular',
             'is_emergency' => false,
         ], $overrides));
+    }
+
+    public function test_supply_office_assigns_each_resource_only_to_matching_custodian_types(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $venueCustodian = User::factory()->create([
+            'role' => 'custodian-venue',
+            'name' => 'Venue Custodian Person',
+        ]);
+        $equipmentCustodian = User::factory()->create([
+            'role' => 'custodian-equipment',
+            'name' => 'Equipment Custodian Person',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('supply-office.venues.index'))
+            ->assertOk()
+            ->assertSee('Venue Custodian Person — Venue Custodian');
+        $this->get(route('supply-office.equipment.index'))
+            ->assertOk()
+            ->assertSee('Equipment Custodian Person — Equipment Custodian');
+
+        $this->from(route('supply-office.venues.index'))
+            ->post(route('supply-office.venues.store'), [
+                'name' => 'Main Auditorium',
+                'capacity' => 500,
+                'custodian_id' => $venueCustodian->id,
+            ])
+            ->assertRedirect(route('supply-office.venues.index'));
+        $this->assertDatabaseHas('venues', [
+            'name' => 'Main Auditorium',
+            'custodian_id' => $venueCustodian->id,
+        ]);
+        $venue = Venue::where('name', 'Main Auditorium')->firstOrFail();
+        $this->get(route('supply-office.venues.index', ['edit_venue' => $venue->id]))
+            ->assertOk()
+            ->assertSee('Editing: Main Auditorium')
+            ->assertSee('Assigned venue custodian')
+            ->assertSee('Save changes')
+            ->assertSee('Cancel');
+
+        $this->from(route('supply-office.venues.index'))
+            ->post(route('supply-office.venues.store'), [
+                'name' => 'Wrong Type Venue',
+                'capacity' => 100,
+                'custodian_id' => $equipmentCustodian->id,
+            ])
+            ->assertRedirect(route('supply-office.venues.index'))
+            ->assertSessionHasErrors('custodian_id');
+        $this->assertDatabaseMissing('venues', ['name' => 'Wrong Type Venue']);
+
+        $this->from(route('supply-office.equipment.index'))
+            ->post(route('supply-office.equipment.store'), [
+            'name' => 'Sound System',
+            'quantity' => 4,
+            'custodian_id' => $equipmentCustodian->id,
+            ])->assertRedirect(route('supply-office.equipment.index'));
+        $this->assertDatabaseHas('equipment', [
+            'name' => 'Sound System',
+            'custodian_id' => $equipmentCustodian->id,
+        ]);
+        $equipment = Equipment::where('name', 'Sound System')->firstOrFail();
+        $this->get(route('supply-office.equipment.index', ['edit_equipment' => $equipment->id]))
+            ->assertOk()
+            ->assertSee('Editing: Sound System')
+            ->assertSee('Assigned equipment custodian')
+            ->assertSee('Save changes')
+            ->assertSee('Cancel');
+
+        $this->from(route('supply-office.equipment.index'))
+            ->post(route('supply-office.equipment.store'), [
+                'name' => 'Wrong Type Equipment',
+                'quantity' => 2,
+                'custodian_id' => $venueCustodian->id,
+            ])
+            ->assertRedirect(route('supply-office.equipment.index'))
+            ->assertSessionHasErrors('custodian_id');
+        $this->assertDatabaseMissing('equipment', ['name' => 'Wrong Type Equipment']);
     }
 
     public function test_supply_office_can_view_ready_requests_and_finalize_through_the_dashboard_route(): void

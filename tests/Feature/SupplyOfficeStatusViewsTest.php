@@ -73,6 +73,34 @@ class SupplyOfficeStatusViewsTest extends TestCase
         $response->assertSee('Scheduling', false);
         $response->assertSee('Management', false);
         $response->assertSee('Monitoring', false);
+        $response->assertSee('Venue Management')
+            ->assertSee(route('supply-office.venues.index'))
+            ->assertSee('Equipment Management')
+            ->assertSee(route('supply-office.equipment.index'))
+            ->assertDontSee('id="venue-management"', false)
+            ->assertDontSee('id="equipment-management"', false);
+    }
+
+    public function test_resource_management_pages_are_separate_from_supply_office_dashboard(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('supply-office.venues.index'))
+            ->assertOk()
+            ->assertViewIs('supply-office.venue-management')
+            ->assertSee('Venue Management')
+            ->assertSee('Venue Custodian')
+            ->assertSee('background: linear-gradient(115deg, #065f46', false)
+            ->assertSee('style="color: #fff;"', false)
+            ->assertDontSee('Supply Office Review Queue');
+
+        $this->get(route('supply-office.equipment.index'))
+            ->assertOk()
+            ->assertViewIs('supply-office.equipment-management')
+            ->assertSee('Equipment Management')
+            ->assertSee('Equipment Custodian')
+            ->assertSee('background: linear-gradient(115deg, #075985', false)
+            ->assertSee('style="color: #fff;"', false)
+            ->assertDontSee('Supply Office Review Queue');
     }
 
     public function test_pending_requests_link_in_sidebar()

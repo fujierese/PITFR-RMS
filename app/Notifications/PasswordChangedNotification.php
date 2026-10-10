@@ -23,8 +23,8 @@ class PasswordChangedNotification extends Notification
             ->subject('Your PITFR-RMS password was changed')
             ->greeting('Hello ' . ($notifiable->name ?? 'there') . '!')
             ->line('Your PITFR-RMS account password was changed.')
-            ->line('If you did not make this change, reset your password immediately.')
-            ->action('Reset Password', route('password.request'));
+            ->line('If you did not make this change, use the button below to request a password reset immediately.')
+            ->action('Request Password Reset', route('password.request'));
     }
 
     public function toArray(object $notifiable): array

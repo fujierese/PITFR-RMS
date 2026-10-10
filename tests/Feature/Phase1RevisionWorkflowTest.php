@@ -70,6 +70,15 @@ class Phase1RevisionWorkflowTest extends TestCase
         return $request;
     }
 
+    private function acceptPendingRevision(FacilityRequest $request, User $requester): void
+    {
+        $revision = RevisionHistory::where('facility_request_id', $request->id)->where('status', 'pending')->firstOrFail();
+
+        $this->actingAs($requester)
+            ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
+            ->assertRedirect(route('request.show', $request));
+    }
+
     public function test_admin_can_revise_approved_request(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
@@ -93,9 +102,19 @@ class Phase1RevisionWorkflowTest extends TestCase
         $response->assertSessionHas('success');
 
         $request->refresh();
+        $this->assertSame(now()->addDay()->toDateString(), $request->start_date->toDateString());
+        $this->assertSame('09:00', $request->start_time);
+
+        $this->acceptPendingRevision($request, $requester);
+        $request->refresh();
         $this->assertSame(now()->addDays(2)->toDateString(), $request->start_date->toDateString());
         $this->assertSame('10:00', $request->start_time);
         $this->assertSame('13:00', $request->end_time);
+        Notification::assertSentTo([$requester], \App\Notifications\ReservationRevised::class);
+        Notification::assertSentTo(
+            User::where('role', 'custodian-venue')->get(),
+            \App\Notifications\ReservationRevised::class
+        );
     }
 
     public function test_revision_creates_history_record(): void
@@ -127,6 +146,7 @@ class Phase1RevisionWorkflowTest extends TestCase
 
         $revision = RevisionHistory::where('facility_request_id', $request->id)->first();
         $this->assertNotNull($revision);
+        $this->assertSame('pending', $revision->status);
         $this->assertSame($newDate, \Carbon\Carbon::parse($revision->new_start_date)->toDateString());
     }
 
@@ -356,8 +376,192 @@ class Phase1RevisionWorkflowTest extends TestCase
 
         Notification::assertSentTo(
             [$requester],
-            \App\Notifications\ReservationRevised::class
+            \App\Notifications\ReservationRescheduleProposed::class
         );
+    }
+
+    public function test_requestor_can_decline_proposal_without_changing_current_schedule(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $request = $this->createApprovedRequest($requester);
+        $oldDate = $request->start_date->toDateString();
+
+        $this->actingAs($admin)->post(route('supply-office.requests.revise'), [
+            'facility_request_id' => $request->id,
+            'start_date' => now()->addDays(3)->toDateString(),
+            'end_date' => now()->addDays(3)->toDateString(),
+            'start_time' => '14:00',
+            'end_time' => '17:00',
+            'venue' => ['Test Venue'],
+            'equipment' => ['Test Equipment'],
+            'equipment_quantities' => ['Test Equipment' => 2],
+            'revision_reason' => 'Schedule change requested by office.',
+        ])->assertRedirect(route('supply-office.index'));
+
+        $revision = RevisionHistory::where('facility_request_id', $request->id)->firstOrFail();
+        $this->actingAs($requester)
+            ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'decline'])
+            ->assertRedirect(route('request.show', $request))
+            ->assertSessionHas('success');
+
+        $this->assertSame('rejected', $revision->fresh()->status);
+        $this->assertSame($oldDate, $request->fresh()->start_date->toDateString());
+        $this->assertSame('09:00', $request->fresh()->start_time);
+    }
+
+    public function test_requestor_cannot_accept_proposal_if_availability_changed(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $otherRequester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $request = $this->createApprovedRequest($requester);
+        $proposalDate = now()->addDays(4)->toDateString();
+
+        $this->actingAs($admin)->post(route('supply-office.requests.revise'), [
+            'facility_request_id' => $request->id,
+            'start_date' => $proposalDate,
+            'end_date' => $proposalDate,
+            'start_time' => '14:00',
+            'end_time' => '17:00',
+            'venue' => ['Test Venue'],
+            'equipment' => ['Test Equipment'],
+            'equipment_quantities' => ['Test Equipment' => 2],
+            'revision_reason' => 'Schedule change requested by office.',
+        ]);
+
+        FacilityRequest::create([
+            'control_number' => 'FER-CONFLICT-' . uniqid(),
+            'date_requested' => now()->toDateString(),
+            'department' => 'Test Department',
+            'name_of_activity' => 'New conflicting reservation',
+            'expected_participants' => 30,
+            'start_date' => $proposalDate,
+            'end_date' => $proposalDate,
+            'start_time' => '14:00',
+            'end_time' => '17:00',
+            'venue' => ['Test Venue'],
+            'equipment' => ['Test Equipment'],
+            'equipment_quantities' => ['Test Equipment' => 9],
+            'requested_by_id' => $otherRequester->id,
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ])->syncRelationalItems();
+
+        $revision = RevisionHistory::where('facility_request_id', $request->id)->firstOrFail();
+        $this->actingAs($requester)
+            ->from(route('request.show', $request))
+            ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
+            ->assertRedirect(route('request.show', $request))
+            ->assertSessionHasErrors('revision');
+
+        $this->assertSame('pending', $revision->fresh()->status);
+        $this->assertSame(now()->addDay()->toDateString(), $request->fresh()->start_date->toDateString());
+    }
+
+    public function test_accepting_venue_change_notifies_both_previous_and_new_custodians(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $request = $this->createApprovedRequest($requester);
+        $previousCustodianId = Venue::where('name', 'Test Venue')->value('custodian_id');
+        $newCustodian = User::factory()->create(['role' => 'custodian-venue']);
+        Venue::create([
+            'name' => 'Alternate Venue',
+            'custodian_id' => $newCustodian->id,
+            'capacity' => 100,
+        ]);
+
+        $this->actingAs($admin)->post(route('supply-office.requests.revise'), [
+            'facility_request_id' => $request->id,
+            'start_date' => now()->addDays(3)->toDateString(),
+            'end_date' => now()->addDays(3)->toDateString(),
+            'start_time' => '14:00',
+            'end_time' => '17:00',
+            'venue' => ['Alternate Venue'],
+            'equipment' => ['Test Equipment'],
+            'equipment_quantities' => ['Test Equipment' => 2],
+            'revision_reason' => 'The original venue is no longer available.',
+        ]);
+        $revision = RevisionHistory::where('facility_request_id', $request->id)->firstOrFail();
+
+        $this->actingAs($requester)
+            ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
+            ->assertRedirect(route('request.show', $request));
+
+        $previousCustodian = User::findOrFail($previousCustodianId);
+        Notification::assertSentTo([$previousCustodian], \App\Notifications\ReservationRevised::class);
+        Notification::assertSentTo([$newCustodian], \App\Notifications\ReservationRevised::class);
+    }
+
+    public function test_only_reservation_owner_can_respond_to_a_pending_proposal(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $otherRequestor = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $request = $this->createApprovedRequest($requester);
+
+        $this->actingAs($admin)->post(route('supply-office.requests.revise'), [
+            'facility_request_id' => $request->id,
+            'start_date' => now()->addDays(3)->toDateString(),
+            'end_date' => now()->addDays(3)->toDateString(),
+            'start_time' => '14:00',
+            'end_time' => '17:00',
+            'venue' => ['Test Venue'],
+            'equipment' => ['Test Equipment'],
+            'equipment_quantities' => ['Test Equipment' => 2],
+            'revision_reason' => 'Schedule change requested by office.',
+        ]);
+        $revision = RevisionHistory::where('facility_request_id', $request->id)->firstOrFail();
+
+        $this->actingAs($otherRequestor)
+            ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
+            ->assertForbidden();
+
+        $this->assertSame('pending', $revision->fresh()->status);
+    }
+
+    public function test_pending_proposal_is_shown_to_requestor_and_blocks_another_proposal(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $request = $this->createApprovedRequest($requester);
+        $proposal = [
+            'facility_request_id' => $request->id,
+            'start_date' => now()->addDays(3)->toDateString(),
+            'end_date' => now()->addDays(3)->toDateString(),
+            'start_time' => '14:00',
+            'end_time' => '17:00',
+            'venue' => ['Test Venue'],
+            'equipment' => ['Test Equipment'],
+            'equipment_quantities' => ['Test Equipment' => 2],
+            'revision_reason' => 'Schedule change requested by office.',
+        ];
+
+        $this->actingAs($admin)->post(route('supply-office.requests.revise'), $proposal);
+        $revision = RevisionHistory::where('facility_request_id', $request->id)->firstOrFail();
+        $this->assertSame('pending', $revision->status);
+        $this->assertSame($requester->id, $request->fresh()->requested_by_id);
+        $this->assertTrue($requester->isRequestee());
+
+        $this->actingAs($requester)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertViewHas('pendingRevision', fn ($pendingRevision) => $pendingRevision?->id === $revision->id)
+            ->assertSee('Schedule change proposed')
+            ->assertSee('Accept proposed schedule')
+            ->assertSee('Decline proposal')
+            ->assertSee($proposal['revision_reason']);
+
+        $this->actingAs($admin)
+            ->from(route('supply-office.index'))
+            ->post(route('supply-office.requests.revise'), $proposal)
+            ->assertRedirect(route('supply-office.index'))
+            ->assertSessionHasErrors('revision');
+
+        $this->assertSame(1, RevisionHistory::where('facility_request_id', $request->id)->count());
+        $this->assertSame('pending', $revision->fresh()->status);
     }
 
     public function test_multiple_revisions_create_separate_history_records(): void
@@ -379,6 +583,11 @@ class Phase1RevisionWorkflowTest extends TestCase
                 'equipment_quantities' => ['Test Equipment' => 2],
                 'revision_reason' => 'First revision.',
             ]);
+
+        $pendingRevision = RevisionHistory::where('facility_request_id', $request->id)->where('status', 'pending')->firstOrFail();
+        $this->actingAs($requester)
+            ->post(route('request.revision.respond', [$request, $pendingRevision]), ['response' => 'accept'])
+            ->assertRedirect(route('request.show', $request));
 
         // Second revision
         $this->actingAs($admin)
@@ -448,6 +657,7 @@ class Phase1RevisionWorkflowTest extends TestCase
                 'revision_reason' => 'Reschedule.',
             ]);
 
+        $this->acceptPendingRevision($request, $requester);
         $request->refresh();
         $newSchedule = $request->reservationSchedule;
 

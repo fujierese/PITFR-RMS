@@ -11,6 +11,7 @@ use App\Notifications\ResetPasswordNotification;
 use App\Notifications\RequestStatusChanged;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -325,6 +326,53 @@ class NotificationTest extends TestCase
             ->assertSee('Your PITFR-RMS account password was changed.')
             ->assertSee('🛡️')
             ->assertDontSee('Requestor:');
+    }
+
+    public function test_password_security_emails_use_flow_appropriate_copy_and_actions(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'PITFR Email Test',
+            'username' => 'password-email-' . uniqid() . '@test.com',
+            'password' => Hash::make('ExistingPassword123!'),
+        ]);
+        $resetMail = (new ResetPasswordNotification('reset-token'))->toMail($user);
+        $passwordChangedMail = (new PasswordChangedNotification())->toMail($user);
+
+        $this->assertSame('Reset Your PITFR-RMS Password', $resetMail->subject);
+        $this->assertSame('Reset Password', $resetMail->actionText);
+        $this->assertSame(route('password.reset', [
+            'token' => 'reset-token',
+            'email' => $user->username,
+        ]), $resetMail->actionUrl);
+        $this->assertContains(
+            'You are receiving this email because we received a request to reset your PITFR-RMS account password.',
+            $resetMail->introLines,
+        );
+
+        $this->assertSame('Request Password Reset', $passwordChangedMail->actionText);
+        $this->assertSame(route('password.request'), $passwordChangedMail->actionUrl);
+        $this->assertContains(
+            'If you did not make this change, use the button below to request a password reset immediately.',
+            $passwordChangedMail->introLines,
+        );
+
+        $newUser = User::factory()->create([
+            'name' => 'New PITFR User',
+            'username' => 'password-setup-' . uniqid() . '@test.com',
+            'password' => null,
+        ]);
+        $setupMail = (new ResetPasswordNotification('setup-token'))->toMail($newUser);
+
+        $this->assertSame('Set Up Your PITFR-RMS Password', $setupMail->subject);
+        $this->assertSame('Set Password', $setupMail->actionText);
+        $this->assertSame(route('password.reset', [
+            'token' => 'setup-token',
+            'email' => $newUser->username,
+        ]), $setupMail->actionUrl);
+        $this->assertContains(
+            'A PITFR-RMS account has been created for you. Use the button below to set your password.',
+            $setupMail->introLines,
+        );
     }
 
     public function test_legacy_new_request_notification_shows_details_from_linked_request(): void

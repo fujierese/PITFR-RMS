@@ -22,12 +22,16 @@
     </form>
 
     @if($showAddUser)
-        <div class="mb-6 overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 shadow-sm">
-            <div class="border-b border-emerald-100 bg-emerald-600 px-5 py-4 text-white">
-                <h2 class="text-lg font-semibold">Create user account</h2>
-                <p class="mt-1 text-sm text-emerald-50">Set the account type first to show only the fields that apply.</p>
-            </div>
-            <div class="p-5">
+        <div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/65 p-3 backdrop-blur-sm sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="create-user-title" data-create-user-modal>
+            <div class="my-auto flex max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl ring-1 ring-slate-900/10 sm:max-h-[calc(100vh-3rem)]">
+                <div class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-emerald-700 bg-emerald-600 px-5 py-4 text-white sm:px-7">
+                    <div>
+                        <h2 id="create-user-title" class="text-lg font-semibold">Create user account</h2>
+                        <p class="mt-1 text-sm text-emerald-50">Set the account type first to show only the fields that apply.</p>
+                    </div>
+                    <a href="{{ route('admin.users') }}" class="rounded-xl p-2 text-2xl leading-none text-white/90 transition hover:bg-emerald-700 hover:text-white" aria-label="Close create user dialog">&times;</a>
+                </div>
+                <div class="overflow-y-auto p-4 sm:p-6">
             <p class="mb-4 rounded-xl border border-emerald-200 bg-white/80 px-3 py-2 text-sm text-emerald-800">Admin-created accounts are verified immediately, but cannot sign in until the user completes password setup using the secure link sent to their registered email.</p>
             @if($errors->any())
                 <div class="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{{ $errors->first() }}</div>
@@ -37,18 +41,20 @@
                 <div>
                     <label for="account_type" class="mb-1 block text-sm font-medium text-slate-700">Account type</label>
                     <select id="account_type" name="account_type" required class="w-full rounded-xl border border-emerald-300 bg-white px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
-                        @foreach(['student' => 'Student Organization', 'faculty' => 'Faculty', 'staff' => 'Staff', 'custodian_venue' => 'Venue Custodian', 'custodian_equipment' => 'Equipment Custodian'] as $value => $label)
+                        @foreach(['student' => 'Student Organization Representative', 'faculty' => 'Faculty', 'staff' => 'Staff', 'custodian_venue' => 'Venue Custodian', 'custodian_equipment' => 'Equipment Custodian'] as $value => $label)
                             <option value="{{ $value }}" @selected(old('account_type', 'student') === $value)>{{ $label }}</option>
                         @endforeach
                     </select>
+                    <p data-student-account-note class="mt-1 text-xs text-slate-500">This is an individual student account. Enter the representative's name below and select their organization separately.</p>
+                    <p data-custodian-account-note class="mt-1 hidden text-xs text-slate-500">This is an individual custodian account. Resource assignments are managed separately from account creation.</p>
                 </div>
                 <div>
-                    <label for="add-user-surname" class="mb-1 block text-sm font-medium text-slate-700">Surname</label>
-                    <input id="add-user-surname" type="text" name="surname" value="{{ old('surname') }}" maxlength="100" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                    <label for="add-user-surname" class="mb-1 block text-sm font-medium text-slate-700"><span data-person-name-label>Surname</span></label>
+                    <input id="add-user-surname" type="text" name="surname" value="{{ old('surname') }}" maxlength="100" data-person-name-required class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                 </div>
                 <div>
-                    <label for="add-user-first-name" class="mb-1 block text-sm font-medium text-slate-700">First name</label>
-                    <input id="add-user-first-name" type="text" name="first_name" value="{{ old('first_name') }}" maxlength="100" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                    <label for="add-user-first-name" class="mb-1 block text-sm font-medium text-slate-700"><span data-person-name-label>First name</span></label>
+                    <input id="add-user-first-name" type="text" name="first_name" value="{{ old('first_name') }}" maxlength="100" data-person-name-required class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                 </div>
                 <div>
                     <label for="add-user-middle-name" class="mb-1 block text-sm font-medium text-slate-700">Middle name</label>
@@ -111,14 +117,28 @@
                     <label for="add-user-student-organization" class="mb-1 block text-sm font-medium text-slate-700">Student organization</label>
                     <select id="add-user-student-organization" name="student_organization_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
                         <option value="">Select organization</option>
-                        @foreach(App\Models\StudentOrganization::query()->where('is_active', true)->orderBy('name')->get() as $organization)
+                        @foreach($studentOrganizations as $organization)
                             <option value="{{ $organization->id }}" @selected(old('student_organization_id') == $organization->id)>{{ $organization->name }}</option>
                         @endforeach
+                        <option value="__new__" @selected(old('student_organization_id') === '__new__')>+ Add new student organization</option>
                     </select>
                 </div>
-                <div data-organization-field class="hidden">
-                    <label for="add-user-organization" class="mb-1 block text-sm font-medium text-slate-700">Office / organization</label>
-                    <input id="add-user-organization" type="text" name="office_or_organization" value="{{ old('office_or_organization') }}" maxlength="191" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                <div data-new-student-organization-field class="hidden md:col-span-2 rounded-xl border border-emerald-200 bg-white p-4">
+                    <p class="mb-3 text-sm font-medium text-slate-700">New student organization details</p>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                            <label for="add-user-new-organization-name" class="mb-1 block text-sm font-medium text-slate-700">Organization name</label>
+                            <input id="add-user-new-organization-name" type="text" name="new_student_organization_name" value="{{ old('new_student_organization_name') }}" maxlength="191" data-new-organization-name-required class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label for="add-user-new-organization-acronym" class="mb-1 block text-sm font-medium text-slate-700">Acronym (optional)</label>
+                            <input id="add-user-new-organization-acronym" type="text" name="new_student_organization_acronym" value="{{ old('new_student_organization_acronym') }}" maxlength="50" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                </div>
+                <div data-staff-office-field class="hidden">
+                    <label for="add-user-office-unit" class="mb-1 block text-sm font-medium text-slate-700">Office / unit (optional)</label>
+                    <input id="add-user-office-unit" type="text" name="office_or_organization" value="{{ old('office_or_organization') }}" maxlength="191" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                 </div>
                 <div class="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
                     The user will create their password from the secure setup link sent to the email address above.
@@ -134,12 +154,17 @@
             const facultyAdviser = document.getElementById('add-user-faculty-adviser');
             const collegeField = document.getElementById('add-user-college');
             const departmentField = document.getElementById('add-user-department');
+            const studentOrganizationField = document.getElementById('add-user-student-organization');
             const academicFields = document.querySelectorAll('[data-academic-field]');
             const studentFields = document.querySelectorAll('[data-student-field]');
             const facultyFields = document.querySelectorAll('[data-faculty-field]');
             const positionFields = document.querySelectorAll('[data-position-field]');
             const studentOrganizationFields = document.querySelectorAll('[data-student-organization-field]');
-            const organizationFields = document.querySelectorAll('[data-organization-field]');
+            const newStudentOrganizationFields = document.querySelectorAll('[data-new-student-organization-field]');
+            const personNameInputs = document.querySelectorAll('[data-person-name-required]');
+            const studentAccountNotes = document.querySelectorAll('[data-student-account-note]');
+            const custodianAccountNotes = document.querySelectorAll('[data-custodian-account-note]');
+            const staffOfficeFields = document.querySelectorAll('[data-staff-office-field]');
             const updateDepartments = () => {
                 const collegeId = collegeField?.value || '';
                 let selectedDepartmentIsVisible = false;
@@ -169,23 +194,40 @@
                 const isStaff = accountType.value === 'staff';
                 const isCustodianVenue = accountType.value === 'custodian_venue';
                 const isCustodianEquipment = accountType.value === 'custodian_equipment';
+                const isCustodian = isCustodianVenue || isCustodianEquipment;
                 const isAcademic = isStudent || isFaculty;
                 const isFacultyAdviser = isFaculty && facultyAdviser && facultyAdviser.value === 'yes';
+                const isCreatingStudentOrganization = isStudent && studentOrganizationField?.value === '__new__';
                 academicFields.forEach(field => field.classList.toggle('hidden', !isAcademic));
                 studentFields.forEach(field => field.classList.toggle('hidden', !isStudent));
                 facultyFields.forEach(field => field.classList.toggle('hidden', !isFaculty));
-                positionFields.forEach(field => field.classList.toggle('hidden', !(isStudent || isFaculty || isStaff || isCustodianVenue || isCustodianEquipment)));
+                positionFields.forEach(field => field.classList.toggle('hidden', !(isStudent || isFaculty || isStaff)));
                 studentOrganizationFields.forEach(field => field.classList.toggle('hidden', !(isStudent || isFacultyAdviser)));
-                organizationFields.forEach(field => field.classList.toggle('hidden', true));
+                newStudentOrganizationFields.forEach(field => field.classList.toggle('hidden', !isCreatingStudentOrganization));
+                personNameInputs.forEach(input => input.required = isStudent || isStaff || isCustodian);
+                studentAccountNotes.forEach(note => note.classList.toggle('hidden', !isStudent));
+                custodianAccountNotes.forEach(note => note.classList.toggle('hidden', !isCustodian));
+                staffOfficeFields.forEach(field => field.classList.toggle('hidden', !isStaff));
+                if (studentOrganizationField) {
+                    studentOrganizationField.required = isStudent;
+                }
+                document.querySelectorAll('[data-new-organization-name-required]').forEach(input => input.required = isCreatingStudentOrganization);
             };
             accountType.addEventListener('change', updateAccountFields);
             collegeField?.addEventListener('change', updateDepartments);
+            studentOrganizationField?.addEventListener('change', updateAccountFields);
             if (facultyAdviser) {
                 facultyAdviser.addEventListener('change', updateAccountFields);
             }
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape') {
+                    window.location.href = @json(route('admin.users'));
+                }
+            });
             updateDepartments();
             updateAccountFields();
         </script>
+        </div>
         </div>
     @endif
 

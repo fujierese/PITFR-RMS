@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SupplyOfficeController extends Controller
@@ -69,32 +70,6 @@ class SupplyOfficeController extends Controller
         $approvedCount = (clone $baseQuery)->where('status', 'approved')->count();
         $finalApprovalQueue = $pendingReviewQueue;
 
-        $venueSearch = trim((string) $request->get('venue_search', ''));
-        $equipmentSearch = trim((string) $request->get('equipment_search', ''));
-
-        $venues = Venue::with('custodian')
-            ->when($venueSearch !== '', function ($query) use ($venueSearch) {
-                $query->where('name', 'like', '%' . $venueSearch . '%')
-                    ->orWhereHas('custodian', function ($custodianQuery) use ($venueSearch) {
-                        $custodianQuery->where('name', 'like', '%' . $venueSearch . '%');
-                    });
-            })
-            ->orderBy('name')
-            ->get();
-
-        $equipmentItems = Equipment::with('custodian')
-            ->when($equipmentSearch !== '', function ($query) use ($equipmentSearch) {
-                $query->where('name', 'like', '%' . $equipmentSearch . '%')
-                    ->orWhere('quantity', 'like', '%' . $equipmentSearch . '%')
-                    ->orWhereHas('custodian', function ($custodianQuery) use ($equipmentSearch) {
-                        $custodianQuery->where('name', 'like', '%' . $equipmentSearch . '%');
-                    });
-            })
-            ->orderBy('name')
-            ->get();
-
-        $custodians = \App\Models\User::where('role', 'custodian')->orderBy('name')->get();
-
         $filterOptions = $this->getFilterOptions();
 
         return view('supply-office.index', [
@@ -108,15 +83,53 @@ class SupplyOfficeController extends Controller
             'priority'          => $request->get('priority', 'all'),
             'searchQuery'       => $request->get('search', ''),
             'reviewRequest'     => $request->has('review') ? FacilityRequest::find($request->review) : null,
-            'venues'            => $venues,
-            'equipmentItems'    => $equipmentItems,
-            'custodians'        => $custodians,
-            'venueSearch'       => $venueSearch,
-            'equipmentSearch'   => $equipmentSearch,
+            'venuesCount'       => Venue::count(),
+            'equipmentCount'    => Equipment::count(),
             'allDepartments'    => $filterOptions['departments'],
             'allVenues'         => $filterOptions['venues'],
-            'editVenueId'       => (int) $request->get('edit_venue', 0),
-            'editEquipmentId'   => (int) $request->get('edit_equipment', 0),
+        ]);
+    }
+
+    public function venueManagement(Request $request)
+    {
+        $this->ensureAdminAccess();
+
+        $search = trim((string) $request->query('search', ''));
+        $venues = Venue::with('custodian')
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where('name', 'like', '%' . $search . '%')
+                    ->orWhereHas('custodian', fn ($custodianQuery) => $custodianQuery->where('name', 'like', '%' . $search . '%'));
+            })
+            ->orderBy('name')
+            ->get();
+
+        return view('supply-office.venue-management', [
+            'venues' => $venues,
+            'venueCustodians' => User::whereIn('role', ['custodian-venue', 'custodian'])->orderBy('name')->get(),
+            'search' => $search,
+            'editVenueId' => (int) $request->query('edit_venue', 0),
+        ]);
+    }
+
+    public function equipmentManagement(Request $request)
+    {
+        $this->ensureAdminAccess();
+
+        $search = trim((string) $request->query('search', ''));
+        $equipmentItems = Equipment::with('custodian')
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where('name', 'like', '%' . $search . '%')
+                    ->orWhere('quantity', 'like', '%' . $search . '%')
+                    ->orWhereHas('custodian', fn ($custodianQuery) => $custodianQuery->where('name', 'like', '%' . $search . '%'));
+            })
+            ->orderBy('name')
+            ->get();
+
+        return view('supply-office.equipment-management', [
+            'equipmentItems' => $equipmentItems,
+            'equipmentCustodians' => User::whereIn('role', ['custodian-equipment', 'custodian'])->orderBy('name')->get(),
+            'search' => $search,
+            'editEquipmentId' => (int) $request->query('edit_equipment', 0),
         ]);
     }
 
@@ -377,8 +390,8 @@ class SupplyOfficeController extends Controller
     }
 
     /**
-     * Admin/Supply Office directly revises a reservation
-     * Checks availability, detects conflicts, and allows override
+     * Admin/Supply Office proposes a reservation revision for requestor approval.
+     * Checks availability, detects conflicts, and allows authorized overrides.
      */
     public function reviseReservation(Request $request)
     {
@@ -406,6 +419,12 @@ class SupplyOfficeController extends Controller
         if (!$facilityRequest->canBeRevised()) {
             return redirect()->back()->withErrors([
                 'revision' => $facilityRequest->getRevisionLockReason() ?? 'Cannot revise this reservation.',
+            ]);
+        }
+
+        if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
+            return redirect()->back()->withErrors([
+                'revision' => 'A schedule change proposal is already waiting for the requestor to respond.',
             ]);
         }
 
@@ -474,18 +493,21 @@ class SupplyOfficeController extends Controller
         }
 
         try {
-            DB::transaction(function () use (
+            $revision = DB::transaction(function () use (
                 $facilityRequest,
                 $oldState,
                 $newState,
                 $validated,
                 $user,
                 $conflictDetected,
-                $conflictDetails,
-                $range
-            ): void {
-                // Create revision history record
-                $revision = $facilityRequest->revisionHistories()->create([
+                $conflictDetails
+            ): \App\Models\RevisionHistory {
+                $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
+                if ($lockedRequest->revisionHistories()->where('status', 'pending')->exists()) {
+                    throw new \RuntimeException('A schedule change proposal is already waiting for the requestor to respond.');
+                }
+
+                return $lockedRequest->revisionHistories()->create([
                     'revised_by_id' => $user->id,
                     'old_start_date' => $oldState['start_date'],
                     'old_end_date' => $oldState['end_date'],
@@ -502,147 +524,93 @@ class SupplyOfficeController extends Controller
                     'new_equipment' => $newState['equipment'],
                     'new_equipment_quantities' => $newState['equipment_quantities'],
                     'revision_reason' => $validated['revision_reason'],
+                    'status' => 'pending',
                     'conflict_detected' => $conflictDetected,
                     'conflict_details' => $conflictDetails,
                     'override_conflict' => $validated['override_conflict'] ?? false,
                     'override_reason' => $validated['override_reason'] ?? null,
                 ]);
-
-                // Update facility request with new schedule
-                $facilityRequest->update([
-                    'start_date' => $newState['start_date'],
-                    'end_date' => $newState['end_date'],
-                    'start_time' => $newState['start_time'],
-                    'end_time' => $newState['end_time'],
-                    'venue' => $newState['venue'],
-                    'equipment' => $newState['equipment'],
-                    'equipment_quantities' => $newState['equipment_quantities'],
-                ]);
-
-                // Update reservation schedule
-                $facilityRequest->reservationSchedule()->delete();
-                $facilityRequest->reservationSchedule()->create([
-                    'start_datetime' => $range['start'],
-                    'end_datetime' => $range['end'],
-                ]);
-
-                // Add to request history
-                $facilityRequest->addHistory(
-                    'revision_applied',
-                    "Reservation revised by {$user->name}. {$revision->getSummary()}",
-                    $user->id
-                );
-
-                // Notify requestor with revision details
-                $requestor = $facilityRequest->requester;
-                if ($requestor) {
-                    $requestor->notify(new \App\Notifications\ReservationRevised(
-                        $facilityRequest,
-                        $oldState,
-                        $newState,
-                        $validated['revision_reason'],
-                        $user->name,
-                        $conflictDetected,
-                        $validated['override_conflict'] ?? false,
-                        $conflictDetails
-                    ));
-                    $revision->markRequestorNotified();
-                }
-
-                // Notify custodians with revision details
-                $notifiedCustodians = [];
-
-                // Notify venue custodians
-                foreach ($facilityRequest->requestVenues as $requestVenue) {
-                    if ($requestVenue->venue && $requestVenue->venue->custodian) {
-                        $custodian = $requestVenue->venue->custodian;
-                        if (!in_array($custodian->id, $notifiedCustodians)) {
-                            $custodian->notify(new \App\Notifications\ReservationRevised(
-                                $facilityRequest,
-                                $oldState,
-                                $newState,
-                                $validated['revision_reason'],
-                                $user->name,
-                                $conflictDetected,
-                                $validated['override_conflict'] ?? false,
-                                $conflictDetails
-                            ));
-                            $notifiedCustodians[] = $custodian->id;
-                        }
-                    }
-                }
-
-                // Notify equipment custodians
-                foreach ($facilityRequest->getAssignedEquipmentCustodianIds() as $custodianId) {
-                    $custodian = User::find($custodianId);
-                    if ($custodian && !in_array($custodianId, $notifiedCustodians)) {
-                        $custodian->notify(new \App\Notifications\ReservationRevised(
-                            $facilityRequest,
-                            $oldState,
-                            $newState,
-                            $validated['revision_reason'],
-                            $user->name,
-                            $conflictDetected,
-                            $validated['override_conflict'] ?? false,
-                            $conflictDetails
-                        ));
-                        $notifiedCustodians[] = $custodianId;
-                    }
-                }
-
-                $revision->markCustodianNotified();
             });
+
+            $requestor = $facilityRequest->requester;
+            if ($requestor) {
+                $requestor->notify(new \App\Notifications\ReservationRescheduleProposed($revision));
+                $revision->markRequestorNotified();
+            }
 
             if ($request->expectsJson()) {
                 return response()->json([
-                    'message' => 'Reservation rescheduled successfully. Requestor and custodians have been notified.',
+                    'message' => 'Schedule change proposal sent to the requestor for approval.',
                 ]);
             }
 
             return redirect()->route('supply-office.index')
-                ->with('success', 'Reservation revised successfully. Requestor and custodians have been notified.');
+                ->with('success', 'Schedule change proposal sent to the requestor for approval.');
+        } catch (\RuntimeException $e) {
+            if (str_contains($e->getMessage(), 'already waiting')) {
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => $e->getMessage()], 422);
+                }
+
+                return redirect()->back()->withInput()->withErrors(['revision' => $e->getMessage()]);
+            }
+
+            Log::error('Revision proposal failed', ['error' => $e->getMessage()]);
+            return redirect()->back()->withInput()->withErrors(['revision' => 'Failed to send the schedule proposal. Please try again.']);
         } catch (\Exception $e) {
-            Log::error('Revision failed', ['error' => $e->getMessage()]);
+            Log::error('Revision proposal failed', ['error' => $e->getMessage()]);
             if ($request->expectsJson()) {
                 return response()->json([
-                    'message' => 'Failed to reschedule reservation. Please try again.',
+                    'message' => 'Failed to send the schedule proposal. Please try again.',
                 ], 422);
             }
 
             return redirect()->back()
                 ->withInput()
-                ->withErrors(['revision' => 'Failed to revise reservation. Please try again.']);
+                ->withErrors(['revision' => 'Failed to send the schedule proposal. Please try again.']);
         }
     }
 
     public function storeVenue(Request $request)
     {
+        $this->ensureAdminAccess();
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
-            'custodian_id' => ['required', 'exists:users,id'],
+            'custodian_id' => [
+                'required',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->whereIn('role', ['custodian-venue', 'custodian'])),
+            ],
             'capacity' => ['nullable', 'integer', 'min:1'],
         ]);
 
         Venue::create($validated);
 
-        return redirect()->route('supply-office.index')->with('success', 'Venue created successfully.');
+        return back()->with('success', 'Venue created successfully.');
     }
 
     public function updateVenue(Request $request, Venue $venue)
     {
+        $this->ensureAdminAccess();
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
-            'custodian_id' => ['required', 'exists:users,id'],
+            'custodian_id' => [
+                'required',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->whereIn('role', ['custodian-venue', 'custodian'])),
+            ],
             'capacity' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $venue->update($validated);
 
-        return redirect()->route('supply-office.index')->with('success', 'Venue updated successfully.');
+        return back()->with('success', 'Venue updated successfully.');
     }
 
     public function destroyVenue(Request $request, Venue $venue)
     {
+        $this->ensureAdminAccess();
+
         $hasActiveReservation = FacilityRequest::whereIn('status', ['pending', 'approved'])
             ->where(fn ($query) => $query->matchesVenue($venue->name))
             ->exists();
@@ -653,14 +621,19 @@ class SupplyOfficeController extends Controller
 
         $venue->delete();
 
-        return redirect()->route('supply-office.index')->with('success', 'Venue deleted successfully.');
+        return back()->with('success', 'Venue deleted successfully.');
     }
 
     public function storeEquipment(Request $request)
     {
+        $this->ensureAdminAccess();
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
-            'custodian_id' => ['required', 'exists:users,id'],
+            'custodian_id' => [
+                'required',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->whereIn('role', ['custodian-equipment', 'custodian'])),
+            ],
             'quantity' => ['required', 'integer', 'min:1'],
             'quantity_available' => ['nullable', 'integer', 'min:0'],
         ]);
@@ -668,14 +641,19 @@ class SupplyOfficeController extends Controller
         $validated['quantity_available'] = $validated['quantity_available'] ?? $validated['quantity'];
         Equipment::create($validated);
 
-        return redirect()->route('supply-office.index')->with('success', 'Equipment created successfully.');
+        return back()->with('success', 'Equipment created successfully.');
     }
 
     public function updateEquipment(Request $request, Equipment $equipment)
     {
+        $this->ensureAdminAccess();
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
-            'custodian_id' => ['required', 'exists:users,id'],
+            'custodian_id' => [
+                'required',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->whereIn('role', ['custodian-equipment', 'custodian'])),
+            ],
             'quantity' => ['required', 'integer', 'min:1'],
             'quantity_available' => ['nullable', 'integer', 'min:0'],
         ]);
@@ -683,11 +661,13 @@ class SupplyOfficeController extends Controller
         $validated['quantity_available'] = $validated['quantity_available'] ?? $validated['quantity'];
         $equipment->update($validated);
 
-        return redirect()->route('supply-office.index')->with('success', 'Equipment updated successfully.');
+        return back()->with('success', 'Equipment updated successfully.');
     }
 
     public function destroyEquipment(Request $request, Equipment $equipment)
     {
+        $this->ensureAdminAccess();
+
         $hasActiveReservation = FacilityRequest::whereIn('status', ['pending', 'approved'])
             ->where(fn ($query) => $query->matchesEquipment($equipment->name))
             ->exists();
@@ -698,7 +678,7 @@ class SupplyOfficeController extends Controller
 
         $equipment->delete();
 
-        return redirect()->route('supply-office.index')->with('success', 'Equipment deleted successfully.');
+        return back()->with('success', 'Equipment deleted successfully.');
     }
 
     public function update(Request $request)

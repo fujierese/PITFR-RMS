@@ -223,10 +223,10 @@
 
 @section('content')
 
-<div class="space-y-8">
+<div class="request-details-stack">
 
     {{-- Header --}}
-    <div class="rounded-[32px] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:p-8">
+    <div style="margin-bottom: 24px !important;" class="rounded-[32px] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:p-8">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div class="flex items-center gap-4">
                 <a href="{{ $dashboardRoute }}" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
@@ -303,8 +303,53 @@
         </div>
     </div>
 
+    @if($pendingRevision && $currentUser && $currentUser->id == $request->requested_by_id)
+        <section style="margin-bottom: 24px !important;" class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm" aria-labelledby="schedule-proposal-title">
+            <div class="flex items-start gap-3">
+                <div class="min-w-0 flex-1">
+                    <h2 id="schedule-proposal-title" class="text-lg font-semibold text-amber-950">Schedule change proposed</h2>
+                    <p class="mt-1 text-sm text-amber-900">The Supply Office is asking to change your reservation. Your current schedule stays in place until you respond.</p>
+                </div>
+                <span class="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">Your response needed</span>
+            </div>
+            <dl class="mt-4 grid gap-3 rounded-2xl border border-amber-200 bg-white p-4 text-sm sm:grid-cols-2">
+                <div>
+                    <dt class="font-medium text-slate-500">Proposed date</dt>
+                    <dd class="mt-1 text-slate-900">{{ $pendingRevision->new_start_date?->format('M j, Y') }}@if($pendingRevision->new_end_date && $pendingRevision->new_end_date->toDateString() !== $pendingRevision->new_start_date?->toDateString()) – {{ $pendingRevision->new_end_date->format('M j, Y') }}@endif</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-slate-500">Proposed time</dt>
+                    <dd class="mt-1 text-slate-900">{{ $pendingRevision->new_start_time }} – {{ $pendingRevision->new_end_time }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-slate-500">Venue</dt>
+                    <dd class="mt-1 text-slate-900">{{ implode(', ', $pendingRevision->new_venue ?? []) }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-slate-500">Reason from Supply Office</dt>
+                    <dd class="mt-1 text-slate-900">{{ $pendingRevision->revision_reason }}</dd>
+                </div>
+            </dl>
+            @if($pendingRevision->conflict_detected && $pendingRevision->override_conflict)
+                <p class="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">The proposed schedule has a resource conflict that the Supply Office chose to override. Please consider this before accepting.</p>
+            @endif
+            <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <form method="POST" action="{{ route('request.revision.respond', [$request, $pendingRevision]) }}" data-swal-confirm data-swal-title="Decline this schedule proposal?" data-swal-text="Your existing reservation schedule will remain unchanged." data-swal-confirm-text="Yes, decline" data-swal-confirm-color="#dc2626">
+                    @csrf
+                    <input type="hidden" name="response" value="decline">
+                    <button type="submit" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:w-auto">Decline proposal</button>
+                </form>
+                <form method="POST" action="{{ route('request.revision.respond', [$request, $pendingRevision]) }}" data-swal-confirm data-swal-title="Accept this schedule proposal?" data-swal-text="Accepting will update your reservation to the proposed schedule and notify the custodians." data-swal-confirm-text="Yes, accept schedule" data-swal-confirm-color="#059669">
+                    @csrf
+                    <input type="hidden" name="response" value="accept">
+                    <button type="submit" class="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 sm:w-auto">Accept proposed schedule</button>
+                </form>
+            </div>
+        </section>
+    @endif
+
     {{-- Role-Based Actions --}}
-    <div class="grid gap-4">
+    <div style="display: grid; gap: 16px; margin-bottom: 24px !important;">
         @if(auth()->check() && auth()->user()->isRequestee() && auth()->id() === $request->requested_by_id && $hasCustodianApproval)
             <div class="bg-amber-50 border border-amber-200 rounded-3xl p-5 shadow-sm">
                 <div class="flex items-start justify-between gap-4">
@@ -517,6 +562,10 @@
 
                         <form id="reschedule-form" method="POST" action="{{ route('supply-office.requests.revise') }}" class="hidden rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-4">
                             @csrf
+                            <div>
+                                <h3 class="font-semibold text-amber-950">Propose a schedule change</h3>
+                                <p class="mt-1 text-sm text-amber-900">The current schedule will stay active until the requestor accepts this proposal.</p>
+                            </div>
                             <input type="hidden" name="facility_request_id" value="{{ $request->id }}">
                             @foreach($venueNames as $venueName)
                                 <input type="hidden" name="venue[]" value="{{ $venueName }}">
@@ -544,7 +593,7 @@
                             </label>
                             <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
                                 <button type="button" id="cancel-reschedule-form" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
-                                <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Reschedule</button>
+                                <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Send schedule proposal</button>
                             </div>
                             <p id="reschedule-feedback" class="hidden text-sm" role="status"></p>
                         </form>
@@ -576,7 +625,7 @@
                     @endif
                 </div>
 
-                    <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                    <div style="margin-top: 16px;" class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
                         <p class="text-sm font-semibold text-slate-700">Custodial Endorsement Summary</p>
                         <div class="mt-3 space-y-2">
                             @forelse($custodialEndorsements as $endorsement)
@@ -605,7 +654,7 @@
         @endif
     </div>
 
-    <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+    <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                 <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Overall Status</p>
@@ -626,7 +675,7 @@
         </div>
     </div>
 
-    <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+    <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <div class="space-y-4">
                 <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -687,7 +736,7 @@
         </div>
     </div>
 
-    <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+    <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
             <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             Activity Details
@@ -725,7 +774,7 @@
         </div>
     </div>
 
-    <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+    <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
             <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 011.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
             Equipment
@@ -752,7 +801,7 @@
     </div>
 
     @if($proposalFilename || $request->igp_receipt_file)
-        <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+        <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div class="flex items-start gap-3">
                     <div class="rounded-2xl bg-blue-100 p-3 text-blue-700">
@@ -795,7 +844,7 @@
         </div>
     </div>
 
-    <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+    <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
             <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
             Approval Information
@@ -820,7 +869,7 @@
         </div>
     </div>
 
-    <div class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+    <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
             <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             Activity History
@@ -935,7 +984,7 @@
             rescheduleFeedback.textContent = error.message;
             rescheduleFeedback.className = 'text-sm text-red-700';
             submitButton.disabled = false;
-            submitButton.textContent = 'Save Reschedule';
+            submitButton.textContent = 'Send schedule proposal';
         }
     });
 

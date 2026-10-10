@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use App\Http\Controllers\Concerns\ManagesAccountSettings;
 
@@ -73,6 +74,7 @@ class AdminController extends Controller
             'editUserId' => $editUserId,
             'showAddUser' => $request->boolean('add_user'),
             'colleges' => College::with('departments')->orderBy('name')->get(),
+            'studentOrganizations' => StudentOrganization::query()->where('is_active', true)->orderBy('name')->get(),
             'searchQuery' => $search,
         ]);
     }
@@ -185,10 +187,21 @@ class AdminController extends Controller
 
     public function storeUser(Request $request)
     {
+        $isStudentSubmission = $request->input('account_type') === 'student';
+        $isStaffSubmission = $request->input('account_type') === 'staff';
+        $isVenueCustodianSubmission = $request->input('account_type') === 'custodian_venue';
+        $isEquipmentCustodianSubmission = $request->input('account_type') === 'custodian_equipment';
+        $requiresPersonName = $isStudentSubmission
+            || $isStaffSubmission
+            || $isVenueCustodianSubmission
+            || $isEquipmentCustodianSubmission;
+        $isCreatingStudentOrganization = $isStudentSubmission
+            && $request->input('student_organization_id') === '__new__';
+
         $validated = $request->validate([
             'account_type' => ['required', 'in:student,faculty,staff,custodian_venue,custodian_equipment'],
-            'surname' => ['nullable', 'string', 'max:100'],
-            'first_name' => ['nullable', 'string', 'max:100'],
+            'surname' => [$requiresPersonName ? 'required' : 'nullable', 'string', 'max:100'],
+            'first_name' => [$requiresPersonName ? 'required' : 'nullable', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
             'suffix' => ['nullable', 'string', 'max:50'],
             'username' => ['required', 'email', 'max:255', 'unique:users,username'],
@@ -198,21 +211,28 @@ class AdminController extends Controller
             'faculty_id' => ['required_if:account_type,faculty', 'nullable', 'string', 'max:50', 'unique:users,faculty_id'],
             'faculty_adviser' => ['nullable', 'in:yes,no'],
             'position' => ['nullable', 'string', 'max:100'],
-            'student_organization_id' => ['nullable', 'integer', 'exists:student_organizations,id'],
+            'student_organization_id' => $isCreatingStudentOrganization
+                ? ['required', 'in:__new__']
+                : [
+                    $isStudentSubmission ? 'required' : 'nullable',
+                    'integer',
+                    Rule::exists('student_organizations', 'id')->where('is_active', true),
+                ],
+            'new_student_organization_name' => [
+                $isCreatingStudentOrganization ? 'required' : 'nullable',
+                'string',
+                'max:191',
+                Rule::unique('student_organizations', 'name'),
+            ],
+            'new_student_organization_acronym' => ['nullable', 'string', 'max:50'],
             'contact_number' => ['nullable', 'string', 'max:50'],
+            'office_or_organization' => ['nullable', 'string', 'max:191'],
         ], [
             'school_id_number.regex' => 'Student ID must be in format: 23-0098-635 (2 digits - 4 digits - 3 digits).',
         ]);
 
         $accountMapping = $this->resolveAdminCreatedAccountMap($validated['account_type']);
         $facultyAdviser = $request->input('faculty_adviser') === 'yes';
-
-        if ($validated['account_type'] === 'student' && empty($validated['student_organization_id'])) {
-            $validated['student_organization_id'] = $this->resolvePreferredStudentOrganizationId(
-                $validated['college_id'] ?? null,
-                $validated['department_id'] ?? null,
-            );
-        }
 
         if ($validated['account_type'] === 'faculty' && $facultyAdviser && empty($validated['student_organization_id'])) {
             $validated['student_organization_id'] = $this->resolvePreferredStudentOrganizationId(
@@ -249,58 +269,93 @@ class AdminController extends Controller
         }
 
         $isStudent = $validated['account_type'] === 'student';
+        $isStaff = $validated['account_type'] === 'staff';
         $isAcademic = in_array($validated['account_type'], ['student', 'faculty'], true);
         $position = trim((string) ($validated['position'] ?? ''));
+        $actor = Auth::user();
 
-        $createdUser = User::create([
-            'username' => strtolower(trim($validated['username'])),
-            'name' => $fullName,
-            'surname' => trim((string) ($validated['surname'] ?? '')) ?: null,
-            'first_name' => trim((string) ($validated['first_name'] ?? '')) ?: null,
-            'middle_name' => trim((string) ($validated['middle_name'] ?? '')) ?: null,
-            'suffix' => trim((string) ($validated['suffix'] ?? '')) ?: null,
-            'role' => $accountMapping['role'],
-            'requestor_type' => $accountMapping['requestor_type'],
-            'school_id_number' => $isStudent ? $validated['school_id_number'] : null,
-            'faculty_id' => $validated['account_type'] === 'faculty' ? $validated['faculty_id'] : null,
-            'position' => $position !== '' ? $position : match ($validated['account_type']) {
-                'student' => 'Student Organization',
-                'faculty' => 'Faculty',
-                'staff' => 'Staff',
-                'custodian_venue' => 'Venue Custodian',
-                'custodian_equipment' => 'Equipment Custodian',
-                default => null,
-            },
-            'office_or_organization' => $validated['account_type'] === 'staff' ? null : ( ! $isStudent && ($validated['office_or_organization'] ?? null) ),
-            'contact_number' => $validated['contact_number'] ?? null,
-            'department' => $isAcademic ? $department?->name : null,
-            'college_id' => $isAcademic ? $validated['college_id'] : null,
-            'department_id' => $isAcademic ? $validated['department_id'] : null,
-            'is_active' => true,
-            'google_id' => null,
-            'email_verified_at' => now(),
-        ]);
+        $createdUser = DB::transaction(function () use (
+            $validated,
+            $accountMapping,
+            $fullName,
+            $position,
+            $department,
+            $isStudent,
+            $isStaff,
+            $isAcademic,
+            $facultyAdviser,
+            $isCreatingStudentOrganization,
+            $actor,
+        ): User {
+            $studentOrganizationId = $validated['student_organization_id'] ?? null;
+            if ($isCreatingStudentOrganization) {
+                $organization = StudentOrganization::create([
+                    'name' => trim($validated['new_student_organization_name']),
+                    'acronym' => trim((string) ($validated['new_student_organization_acronym'] ?? '')) ?: null,
+                    'college_id' => $validated['college_id'] ?? null,
+                    'department_id' => $validated['department_id'] ?? null,
+                    'organization_type' => 'Student Organization',
+                    'is_active' => true,
+                ]);
+                $studentOrganizationId = $organization->id;
+            }
 
-        if ($isStudent && !empty($validated['student_organization_id'])) {
-            StudentOrganizationMember::updateOrCreate(
-                ['user_id' => $createdUser->id, 'student_organization_id' => $validated['student_organization_id']],
-                ['membership_role' => 'Member', 'can_submit_requests' => true, 'is_active' => true],
-            );
-        }
+            $createdUser = User::create([
+                'username' => strtolower(trim($validated['username'])),
+                'name' => $fullName,
+                'surname' => trim((string) ($validated['surname'] ?? '')) ?: null,
+                'first_name' => trim((string) ($validated['first_name'] ?? '')) ?: null,
+                'middle_name' => trim((string) ($validated['middle_name'] ?? '')) ?: null,
+                'suffix' => trim((string) ($validated['suffix'] ?? '')) ?: null,
+                'role' => $accountMapping['role'],
+                'requestor_type' => $accountMapping['requestor_type'],
+                'school_id_number' => $isStudent ? $validated['school_id_number'] : null,
+                'faculty_id' => $validated['account_type'] === 'faculty' ? $validated['faculty_id'] : null,
+                'position' => match ($validated['account_type']) {
+                    'custodian_venue' => 'Venue Custodian',
+                    'custodian_equipment' => 'Equipment Custodian',
+                    default => $position !== '' ? $position : match ($validated['account_type']) {
+                        'student' => 'Student Representative',
+                        'faculty' => 'Faculty',
+                        'staff' => null,
+                        default => null,
+                    },
+                },
+                'office_or_organization' => $isStaff
+                    ? (trim((string) ($validated['office_or_organization'] ?? '')) ?: null)
+                    : (! $isStudent && ($validated['office_or_organization'] ?? null)),
+                'contact_number' => $validated['contact_number'] ?? null,
+                'department' => $isAcademic ? $department?->name : null,
+                'college_id' => $isAcademic ? $validated['college_id'] : null,
+                'department_id' => $isAcademic ? $validated['department_id'] : null,
+                'is_active' => true,
+                'google_id' => null,
+                'email_verified_at' => now(),
+            ]);
 
-        if ($validated['account_type'] === 'faculty' && $facultyAdviser && !empty($validated['student_organization_id'])) {
-            StudentOrganizationMember::updateOrCreate(
-                ['user_id' => $createdUser->id, 'student_organization_id' => $validated['student_organization_id']],
-                ['membership_role' => 'Adviser', 'can_submit_requests' => false, 'is_active' => true],
-            );
-        }
+            if ($isStudent && $studentOrganizationId) {
+                StudentOrganizationMember::updateOrCreate(
+                    ['user_id' => $createdUser->id, 'student_organization_id' => $studentOrganizationId],
+                    ['membership_role' => 'Member', 'can_submit_requests' => true, 'is_active' => true],
+                );
+            }
 
-        $this->recordUserAudit(Auth::user(), $createdUser, 'user_created', 'Created a new user account.', [], [
-            'name' => $createdUser->name,
-            'username' => $createdUser->username,
-            'role' => $createdUser->role,
-            'requestor_type' => $createdUser->requestor_type,
-        ]);
+            if ($validated['account_type'] === 'faculty' && $facultyAdviser && ! empty($studentOrganizationId)) {
+                StudentOrganizationMember::updateOrCreate(
+                    ['user_id' => $createdUser->id, 'student_organization_id' => $studentOrganizationId],
+                    ['membership_role' => 'Adviser', 'can_submit_requests' => false, 'is_active' => true],
+                );
+            }
+
+            $this->recordUserAudit($actor, $createdUser, 'user_created', 'Created a new user account.', [], [
+                'name' => $createdUser->name,
+                'username' => $createdUser->username,
+                'role' => $createdUser->role,
+                'requestor_type' => $createdUser->requestor_type,
+            ]);
+
+            return $createdUser;
+        });
 
         $redirect = redirect()->route('admin.users')
             ->with('success', 'User account created. A secure password setup link will be sent to the registered email address.');
@@ -329,6 +384,8 @@ class AdminController extends Controller
             return redirect()->route('admin.users')->with('error', 'You cannot change your own admin account.');
         }
 
+        $editableRoles = ['requestor', 'custodian-venue', 'custodian-equipment', 'admin', 'supply_office', $user->role];
+
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
             'surname' => ['nullable', 'string', 'max:100'],
@@ -336,7 +393,7 @@ class AdminController extends Controller
             'middle_name' => ['nullable', 'string', 'max:100'],
             'suffix' => ['nullable', 'string', 'max:50'],
             'username' => ['required', 'string', 'max:255', 'unique:users,username,' . $user->id],
-            'role' => ['required', 'in:requestor,student,faculty,outsider,custodian,custodian-venue,custodian-equipment,admin,supply_office'],
+            'role' => ['required', 'in:' . implode(',', $editableRoles)],
             'is_active' => ['sometimes', 'boolean'],
             'department' => ['nullable', 'string', 'max:255'],
             'requestor_type' => ['nullable', 'in:student,faculty,staff,outsider'],
@@ -352,17 +409,28 @@ class AdminController extends Controller
             'contact_number' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $facultyAdviser = $request->input('faculty_adviser') === 'yes';
+        $previousRole = $user->role;
+        $newRole = $validated['role'];
+        $newRequestorType = match ($newRole) {
+            'requestor' => $validated['requestor_type'] ?? $user->requestor_type,
+            'student', 'faculty', 'outsider' => $newRole,
+            default => null,
+        };
+        $facultyAdviser = $newRequestorType === 'faculty' && $request->input('faculty_adviser') === 'yes';
         $selectedOrganizationId = (int) ($validated['student_organization_id'] ?? 0);
         $department = !empty($validated['department_id']) ? Department::find($validated['department_id']) : null;
         if ($department && !empty($validated['college_id']) && (int) $department->college_id !== (int) $validated['college_id']) {
             return redirect()->route('admin.users')->withErrors(['department_id' => 'Please select a department under the selected college.'])->withInput();
         }
-        if ($user->isFaculty() && $facultyAdviser && empty($selectedOrganizationId)) {
-            $selectedOrganizationId = (int) $this->resolvePreferredStudentOrganizationId($user->college_id, $user->department_id, null) ?: 0;
+        if ($newRequestorType === 'faculty' && $facultyAdviser && empty($selectedOrganizationId)) {
+            $selectedOrganizationId = (int) $this->resolvePreferredStudentOrganizationId(
+                $validated['college_id'] ?? $user->college_id,
+                $validated['department_id'] ?? $user->department_id,
+                null,
+            ) ?: 0;
         }
 
-        if ($user->isFaculty() && $facultyAdviser && $selectedOrganizationId <= 0) {
+        if ($newRequestorType === 'faculty' && $facultyAdviser && $selectedOrganizationId <= 0) {
             return redirect()->route('admin.users')->withErrors(['student_organization_id' => 'Faculty advisers must be linked to a student organization.'])->withInput();
         }
 
@@ -376,8 +444,6 @@ class AdminController extends Controller
                 $validated['suffix'] ?? null,
             );
 
-        $previousRole = $user->role;
-        $newRole = $validated['role'];
         $adminRoles = ['admin', 'supply_office'];
         $newIsActive = $request->boolean('is_active', $user->is_active ?? true);
         $privilegedRoles = ['admin', 'facility_admin', 'supply_office'];
@@ -414,7 +480,7 @@ class AdminController extends Controller
         ];
 
         $passwordChanged = ! empty($validated['password']);
-        DB::transaction(function () use ($user, $nameToStore, $validated, $newRole, $newIsActive, $department, $passwordChanged, $facultyAdviser, $selectedOrganizationId, $currentUser, $oldValues): void {
+        DB::transaction(function () use ($user, $nameToStore, $validated, $newRole, $newRequestorType, $newIsActive, $department, $passwordChanged, $facultyAdviser, $selectedOrganizationId, $currentUser, $oldValues): void {
             $user->fill([
                 'name' => $nameToStore,
                 'surname' => trim((string) ($validated['surname'] ?? '')) ?: null,
@@ -425,14 +491,14 @@ class AdminController extends Controller
                 'role' => $newRole,
                 'is_active' => $newIsActive,
                 'department' => $validated['department'] ?? null,
-                'requestor_type' => $validated['requestor_type'] ?? $user->requestor_type,
-                'school_id_number' => $validated['school_id_number'] ?? null,
-                'college_id' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($validated['college_id'] ?? null) : null,
-                'department_id' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($validated['department_id'] ?? null) : null,
-                'department' => in_array($validated['requestor_type'] ?? $user->requestor_type, ['student', 'faculty'], true) ? ($department?->name ?? $validated['department'] ?? null) : null,
-                'faculty_id' => $validated['faculty_id'] ?? null,
+                'requestor_type' => $newRequestorType,
+                'school_id_number' => $newRequestorType === 'student' ? ($validated['school_id_number'] ?? null) : null,
+                'college_id' => in_array($newRequestorType, ['student', 'faculty'], true) ? ($validated['college_id'] ?? null) : null,
+                'department_id' => in_array($newRequestorType, ['student', 'faculty'], true) ? ($validated['department_id'] ?? null) : null,
+                'department' => in_array($newRequestorType, ['student', 'faculty'], true) ? ($department?->name ?? $validated['department'] ?? null) : null,
+                'faculty_id' => $newRequestorType === 'faculty' ? ($validated['faculty_id'] ?? null) : null,
                 'position' => $validated['position'] ?? null,
-                'office_or_organization' => $validated['office_or_organization'] ?? null,
+                'office_or_organization' => in_array($newRequestorType, ['staff', 'outsider'], true) ? ($validated['office_or_organization'] ?? null) : null,
                 'contact_number' => $validated['contact_number'] ?? null,
             ]);
             if ($passwordChanged) {

@@ -576,7 +576,10 @@ const initializeRequestForm = function () {
                 localStorage.setItem('pitfr-request-draft', JSON.stringify(draft));
                 sessionStorage.setItem('pitfr-request-draft', JSON.stringify(draft));
                 if (draftStatus) {
-                    draftStatus.textContent = 'Draft saved just now';
+                    const label = draftStatus.querySelector('[data-draft-status-label]');
+                    if (label) {
+                        label.textContent = 'Draft saved just now';
+                    }
                 }
             } catch (error) {
                 console.warn('Draft autosave failed', error);

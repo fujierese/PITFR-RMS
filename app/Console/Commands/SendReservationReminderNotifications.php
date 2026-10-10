@@ -24,6 +24,7 @@ class SendReservationReminderNotifications extends Command
         $now = Carbon::now();
         $comparisonNow = $now->copy()->startOfMinute();
         $reminders = [
+            'two_days_before' => $comparisonNow->copy()->addDays(2),
             'one_day_before' => $comparisonNow->copy()->addDay(),
             'two_hours_before' => $comparisonNow->copy()->addHours(2),
             'start_time' => $comparisonNow,

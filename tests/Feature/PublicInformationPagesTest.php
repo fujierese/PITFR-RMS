@@ -19,11 +19,13 @@ class PublicInformationPagesTest extends TestCase
         $this->get(route('privacy.policy'))
             ->assertOk()
             ->assertSee('Draft — not an approved institutional policy.')
-            ->assertSee('[To be confirmed by PIT]');
+            ->assertSee('PIT has not provided an official privacy contact or process')
+            ->assertDontSee('[To be confirmed by PIT]');
 
         $this->get(route('privacy.data-act'))
             ->assertOk()
             ->assertSee('Republic Act No. 10173')
+            ->assertSee('Contact the institution through its established communication channels')
             ->assertSee('not legal advice');
     }
 

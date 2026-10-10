@@ -12,8 +12,8 @@
                     <span class="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
                         Equipment Management
                     </span>
-                    <h1 class="mt-3 text-3xl font-semibold tracking-tight">Manage Your Equipment</h1>
-                    <p class="mt-2 max-w-2xl text-sm text-slate-300">Add, edit, or manage the status of your assigned equipment.</p>
+                    <h1 class="mt-4 text-3xl font-semibold tracking-tight">Manage Your Equipment</h1>
+                    <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Add, edit, or manage the status of your assigned equipment.</p>
                 </div>
                 <span class="inline-flex items-center rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-slate-100 ring-1 ring-white/10">
                     {{ $equipment->count() }} {{ $equipment->count() === 1 ? 'item assigned' : 'items assigned' }}

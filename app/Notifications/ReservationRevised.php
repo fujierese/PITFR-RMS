@@ -45,7 +45,7 @@ class ReservationRevised extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return $this->channelsWithPreference($notifiable, 'request_updates', ['database']);
+        return $this->channelsWithPreference($notifiable, 'request_updates', ['mail', 'database']);
     }
 
     public function toDatabase(object $notifiable): array
@@ -64,6 +64,20 @@ class ReservationRevised extends Notification implements ShouldQueue
             'conflict_details' => $this->conflictDetails,
             'route' => route('request.show', $this->facilityRequest),
         ];
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        $title = $this->isRequestor($notifiable)
+            ? 'Your accepted schedule change is now active.'
+            : 'A reservation schedule change has been accepted.';
+
+        return (new MailMessage)
+            ->subject('Reservation schedule updated: ' . $this->facilityRequest->control_number)
+            ->greeting('Hello ' . ($notifiable->name ?? 'there') . '!')
+            ->line($title)
+            ->line($this->getMessage($notifiable))
+            ->action('View Reservation', route('request.show', $this->facilityRequest));
     }
 
     /**

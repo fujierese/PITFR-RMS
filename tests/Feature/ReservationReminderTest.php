@@ -104,6 +104,29 @@ class ReservationReminderTest extends TestCase
         $this->assertSame(1, DB::table('reservation_reminder_logs')->where('facility_request_id', $request->id)->count());
     }
 
+    public function test_it_sends_two_days_before_reminder_once_with_mail_and_database_channels(): void
+    {
+        Notification::fake();
+        Carbon::setTestNow(Carbon::parse('2026-01-01 10:00:00'));
+        $request = $this->createApprovedReservation(now()->copy()->addDays(2));
+
+        $this->artisan('facility-requests:send-reminders')->assertSuccessful();
+        $this->artisan('facility-requests:send-reminders')->assertSuccessful();
+
+        Notification::assertSentTo($request->requester, ReservationReminderNotification::class, function ($notification) use ($request): bool {
+            return $notification->facilityRequest->is($request)
+                && $notification->reminderType === 'two_days_before'
+                && in_array('mail', $notification->via($request->requester), true)
+                && in_array('database', $notification->via($request->requester), true)
+                && $notification->toArray($request->requester)['body'] === 'Your reservation is scheduled in 2 days.';
+        });
+        Notification::assertSentToTimes($request->requester, ReservationReminderNotification::class, 1);
+        $this->assertSame(1, DB::table('reservation_reminder_logs')
+            ->where('facility_request_id', $request->id)
+            ->where('reminder_type', 'two_days_before')
+            ->count());
+    }
+
     public function test_it_sends_start_time_reminder_when_the_command_runs_after_start(): void
     {
         Notification::fake();

@@ -25,8 +25,20 @@
         : trim((string) preg_replace('/\s+(?:n\/a|na|null|undefined|none)$/i', '', (string) ($user?->name ?? 'Guest')));
     $displayPosition = $meaningfulValue($user?->position);
     $displayContext = $user?->role_label ?? 'Requestor';
+    $isStudentRepresentative = $user?->role === 'requestor' && $user?->requestor_type === 'student';
+    $isStaffAccount = $user?->role === 'requestor' && $user?->requestor_type === 'staff';
 
-    if ($user && ($user->isStudentOrganization() || $user->studentOrganizations()->exists())) {
+    if ($isStudentRepresentative) {
+        $displayContext = $meaningfulValue($user->studentOrganizations()->first()?->name) ?? 'Student Organization';
+        if ($displayPosition === null || strcasecmp($displayPosition, 'Student Organization') === 0) {
+            $displayPosition = 'Student Representative';
+        }
+    } elseif ($isStaffAccount) {
+        $displayContext = 'Staff';
+        if ($displayPosition !== null && strcasecmp($displayPosition, 'Staff') === 0) {
+            $displayPosition = null;
+        }
+    } elseif ($user && ($user->isStudentOrganization() || $user->studentOrganizations()->exists())) {
         $displayContext = $meaningfulValue($user->studentOrganizations()->first()?->name) ?? $meaningfulValue($user->office_or_organization) ?? $displayContext;
     } elseif ($user && ($user->isFaculty() || $user->role === 'faculty')) {
         $displayContext = $meaningfulValue($user->departmentRecord?->name) ?? $meaningfulValue($user->department) ?? $displayContext;
@@ -34,6 +46,11 @@
     if ($user && $user->isCustodian()) {
         $assignedResource = $meaningfulValue($user->assignedCustodianResourceLabel());
         $displayIdentity = ($assignedResource ?? 'No assigned resource') . ' — ' . ($user->role_label ?? 'Custodian');
+    } elseif ($isStaffAccount) {
+        $displayOffice = $meaningfulValue($user->office_or_organization);
+        $displayIdentity = $displayContext
+            . ($displayOffice ? ' · ' . $displayOffice : '')
+            . ($displayPosition ? ' — ' . $displayPosition : '');
     } else {
         $displayIdentity = $displayContext . ($displayPosition ? ' — ' . $displayPosition : '');
     }
@@ -137,6 +154,20 @@
                         'route' => route('supply-office.usage-reports'),
                         'route_name' => 'supply-office.usage-reports',
                         'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M7 16V8m5 8V5m5 11v-6"/></svg>',
+                    ];
+                    $navigation[] = [
+                        'key' => 'venue-management',
+                        'label' => 'Venue Management',
+                        'route' => route('supply-office.venues.index'),
+                        'route_name' => 'supply-office.venues.index',
+                        'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21h18M5 21V7l8-4v18m6 0V11l-6-4M9 9v.01M9 12v.01M9 15v.01M9 18v.01"/></svg>',
+                    ];
+                    $navigation[] = [
+                        'key' => 'equipment-management',
+                        'label' => 'Equipment Management',
+                        'route' => route('supply-office.equipment.index'),
+                        'route_name' => 'supply-office.equipment.index',
+                        'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m-1 0V3m0 2h-2"/></svg>',
                     ];
                 }
             // Account & Administration
@@ -371,6 +402,10 @@
         $activeKey = 'calendar';
     } elseif ($currentRoute === 'supply-office.index') {
         $activeKey = 'dashboard';
+    } elseif ($currentRoute === 'supply-office.venues.index') {
+        $activeKey = 'venue-management';
+    } elseif ($currentRoute === 'supply-office.equipment.index') {
+        $activeKey = 'equipment-management';
     } elseif ($currentRoute === 'supply-office.requests.pending') {
         $activeKey = 'pending-requests';
     } elseif ($currentRoute === 'supply-office.requests.needs-reschedule') {

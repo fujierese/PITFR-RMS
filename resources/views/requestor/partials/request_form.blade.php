@@ -57,10 +57,10 @@
                     <h2 class="mt-2 text-2xl font-semibold text-slate-950">Request for the Use of Facility and Equipment</h2>
                     <p class="mt-3 text-sm leading-6 text-slate-600">Please complete all required fields before submitting your request. Fields marked with <span class="required-asterisk">*</span> are required.</p>
                 </div>
-                <div class="flex items-center sm:justify-end">
-                    <span id="draft-status" class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm ring-1 ring-amber-200">
-                        <span class="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-                        Draft autosave
+                <div class="flex shrink-0 items-center sm:justify-end">
+                    <span id="draft-status" class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm ring-1 ring-amber-200">
+                        <span data-draft-status-indicator class="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500 animate-pulse"></span>
+                        <span data-draft-status-label>Draft autosave</span>
                     </span>
                 </div>
             </div>
@@ -955,8 +955,8 @@
         const updateDraftStatus = (dirty) => {
             if (!draftStatus) return;
 
-            const indicator = draftStatus.querySelector('span');
-            const label = draftStatus.querySelector('span:last-child');
+            const indicator = draftStatus.querySelector('[data-draft-status-indicator]');
+            const label = draftStatus.querySelector('[data-draft-status-label]');
 
             if (indicator) {
                 indicator.className = dirty

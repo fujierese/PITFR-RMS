@@ -83,6 +83,14 @@ Route::middleware(['auth', 'role:requestor'])->prefix('requestor')->group(functi
 Route::middleware(['auth', 'role:admin'])->prefix('supply-office')->group(function () {
     Route::get('/',         fn () => redirect()->route('supply-office.index'));
     Route::get('/dashboard', [SupplyOfficeController::class, 'index'])->name('supply-office.index');
+    Route::get('/venues', [SupplyOfficeController::class, 'venueManagement'])->name('supply-office.venues.index');
+    Route::get('/equipment', [SupplyOfficeController::class, 'equipmentManagement'])->name('supply-office.equipment.index');
+    Route::post('/venues', [SupplyOfficeController::class, 'storeVenue'])->name('supply-office.venues.store');
+    Route::put('/venues/{venue}', [SupplyOfficeController::class, 'updateVenue'])->name('supply-office.venues.update');
+    Route::delete('/venues/{venue}', [SupplyOfficeController::class, 'destroyVenue'])->name('supply-office.venues.destroy');
+    Route::post('/equipment', [SupplyOfficeController::class, 'storeEquipment'])->name('supply-office.equipment.store');
+    Route::put('/equipment/{equipment}', [SupplyOfficeController::class, 'updateEquipment'])->name('supply-office.equipment.update');
+    Route::delete('/equipment/{equipment}', [SupplyOfficeController::class, 'destroyEquipment'])->name('supply-office.equipment.destroy');
     Route::get('/requests/pending', [SupplyOfficeController::class, 'pendingRequests'])->name('supply-office.requests.pending');
     Route::get('/requests/final-approval', [SupplyOfficeController::class, 'finalApprovalRequests'])->name('supply-office.requests.final-approval');
     Route::get('/requests/approved', [SupplyOfficeController::class, 'approvedRequests'])->name('supply-office.requests.approved');
@@ -197,6 +205,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/request/{facilityRequest}/change-request', [RequestActionController::class, 'submitChangeRequest'])->name('request.change.submit');
     Route::post('/request/{facilityRequest}/change-request/approve', [RequestActionController::class, 'approveChangeRequest'])->name('request.change.approve');
     Route::post('/request/{facilityRequest}/change-request/reject', [RequestActionController::class, 'rejectChangeRequest'])->name('request.change.reject');
+    Route::post('/request/{facilityRequest}/revision/{revision}/respond', [RequestorController::class, 'respondToRevision'])->name('request.revision.respond');
     Route::post('/request/{facilityRequest}/supply/final-approval', [RequestActionController::class, 'supplyFinalApproval'])->name('request.supply.final-approval');
     Route::post('/request/{facilityRequest}/supply/decline', [RequestActionController::class, 'supplyDecline'])->name('request.supply.decline');
 });

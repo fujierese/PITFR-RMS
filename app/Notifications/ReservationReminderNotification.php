@@ -28,6 +28,7 @@ class ReservationReminderNotification extends Notification
     public function toMail($notifiable): MailMessage
     {
         $label = match ($this->reminderType) {
+            'two_days_before' => '2 days before the reservation',
             'one_day_before' => '1 day before the reservation',
             'two_hours_before' => '2 hours before the reservation',
             'start_time' => 'now that the reservation has started',
@@ -47,6 +48,7 @@ class ReservationReminderNotification extends Notification
     public function toArray($notifiable): array
     {
         $title = match ($this->reminderType) {
+            'two_days_before' => 'Reservation Reminder',
             'one_day_before' => 'Reservation Reminder',
             'two_hours_before' => 'Reservation Reminder',
             'start_time' => 'Reservation Started',
@@ -54,6 +56,7 @@ class ReservationReminderNotification extends Notification
         };
 
         $body = match ($this->reminderType) {
+            'two_days_before' => 'Your reservation is scheduled in 2 days.',
             'one_day_before' => 'Your reservation is scheduled for tomorrow.',
             'two_hours_before' => 'Your reservation begins in 2 hours.',
             'start_time' => 'Your reservation has started.',

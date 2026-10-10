@@ -58,12 +58,105 @@ class AdminUserManagementTest extends TestCase
         $response->assertOk();
         $response->assertSee('data-college="1"', false);
         $response->assertSee('data-college="2"', false);
+        $response->assertSee('Student Organization Representative');
+        $response->assertSee('+ Add new student organization');
+        $response->assertSee('role="dialog"', false);
+        $response->assertSee('aria-modal="true"', false);
+        $response->assertSee('max-h-[calc(100vh-1.5rem)]', false);
+        $response->assertSee('Close create user dialog');
 
         $html = $response->getContent();
         $this->assertLessThan(
             strpos($html, '>Faculty adviser</label>'),
             strpos($html, '>Position</label>')
         );
+    }
+
+    public function test_edit_user_dialog_uses_role_specific_fields_and_includes_custodian_roles(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $user = User::factory()->createOne([
+            'role' => 'custodian-equipment',
+            'first_name' => 'Equipment',
+            'surname' => 'Custodian',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.users', ['edit_user' => $user->id]))
+            ->assertOk()
+            ->assertSee('Name')
+            ->assertSee('Sign-in and role')
+            ->assertSee('Password and sign-in access')
+            ->assertSee('Venue Custodian')
+            ->assertSee('Equipment Custodian')
+            ->assertSee('Requestor category')
+            ->assertSee('data-edit-field="student"', false)
+            ->assertSee('data-edit-field="faculty-adviser"', false)
+            ->assertSee('sm:grid-cols-2 lg:grid-cols-3', false)
+            ->assertSee('max-h-[calc(100vh-1.5rem)]', false)
+            ->assertSee('Save changes');
+    }
+
+    public function test_edit_role_menu_uses_current_roles_and_keeps_legacy_role_as_existing_only(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $user = User::factory()->createOne(['role' => 'custodian']);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.users', ['edit_user' => $user->id]))
+            ->assertOk();
+
+        preg_match('/<select name="role"[^>]*>(.*?)<\/select>/s', $response->getContent(), $matches);
+        $this->assertCount(2, $matches);
+        $roleOptions = $matches[1];
+        $this->assertStringContainsString('value="requestor"', $roleOptions);
+        $this->assertStringContainsString('value="custodian-venue"', $roleOptions);
+        $this->assertStringContainsString('value="custodian-equipment"', $roleOptions);
+        $this->assertStringContainsString('Custodian (existing legacy role)', $roleOptions);
+        $this->assertStringNotContainsString('value="student"', $roleOptions);
+        $this->assertStringNotContainsString('value="facility_admin"', $roleOptions);
+        $this->assertStringNotContainsString('value="admin"', $roleOptions);
+        $this->assertStringNotContainsString('value="supply_office"', $roleOptions);
+    }
+
+    public function test_privileged_account_edit_shows_no_admin_role_choices(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $facilityAdmin = User::factory()->createOne(['role' => 'facility_admin']);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.users', ['edit_user' => $facilityAdmin->id]))
+            ->assertOk()
+            ->assertSee('Protected administrator account')
+            ->assertSee('The system role and access for this account cannot be changed here.')
+            ->assertSee('name="role" value="facility_admin"', false)
+            ->assertDontSee('Facility administrator (existing account)');
+
+        preg_match('/<select name="role"[^>]*>/', $response->getContent(), $matches);
+        $this->assertSame([], $matches);
+    }
+
+    public function test_legacy_roles_cannot_be_assigned_to_another_account(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $user = User::factory()->createOne([
+            'role' => 'requestor',
+            'requestor_type' => 'student',
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('admin.users.update', $user), [
+                'name' => $user->name,
+                'username' => $user->username,
+                'role' => 'student',
+            ])
+            ->assertSessionHasErrors('role');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'role' => 'requestor',
+            'requestor_type' => 'student',
+        ]);
     }
 
     public function test_admin_can_update_and_delete_a_user(): void
@@ -106,6 +199,8 @@ class AdminUserManagementTest extends TestCase
             'id' => $user->id,
             'name' => 'Updated User',
             'role' => 'custodian-equipment',
+            'requestor_type' => null,
+            'school_id_number' => null,
         ]);
         $this->assertTrue(Hash::check('new-password12345', $user->fresh()->password));
 
@@ -122,18 +217,56 @@ class AdminUserManagementTest extends TestCase
         ]);
     }
 
+    public function test_editing_requestor_category_to_faculty_saves_faculty_fields(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $user = User::factory()->createOne([
+            'role' => 'requestor',
+            'requestor_type' => 'student',
+            'school_id_number' => 'OLD-STUDENT-ID',
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('admin.users.update', $user), [
+                'name' => $user->name,
+                'username' => $user->username,
+                'role' => 'requestor',
+                'requestor_type' => 'faculty',
+                'faculty_id' => 'FAC-EDIT-123',
+                'position' => 'Professor',
+                'college_id' => 1,
+                'department_id' => 1,
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('admin.users'));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'role' => 'requestor',
+            'requestor_type' => 'faculty',
+            'faculty_id' => 'FAC-EDIT-123',
+            'school_id_number' => null,
+            'college_id' => 1,
+            'department_id' => 1,
+        ]);
+    }
+
     public function test_admin_can_create_all_supported_insider_account_types_without_credentials(): void
     {
         Notification::fake();
         $admin = User::factory()->createOne(['role' => 'admin']);
         $this->actingAs($admin);
+        $organization = StudentOrganization::create([
+            'name' => 'Supported Test Student Organization',
+            'is_active' => true,
+        ]);
 
         $accounts = [
-            ['account_type' => 'student', 'name' => 'Admin Student', 'school_id_number' => '23-0098-635', 'college_id' => 1, 'department_id' => 1, 'role' => 'admin', 'requestor_type' => 'outsider'],
+            ['account_type' => 'student', 'surname' => 'Student', 'first_name' => 'Admin', 'school_id_number' => '23-0098-635', 'college_id' => 1, 'department_id' => 1, 'student_organization_id' => $organization->id, 'role' => 'admin', 'requestor_type' => 'outsider'],
             ['account_type' => 'faculty', 'name' => 'Admin Faculty', 'faculty_id' => 'FAC-' . uniqid(), 'position' => 'Professor', 'college_id' => 1, 'department_id' => 1, 'role' => 'custodian', 'requestor_type' => 'outsider'],
-            ['account_type' => 'staff', 'name' => 'Admin Staff', 'position' => 'Administrative Staff', 'role' => 'admin', 'requestor_type' => 'faculty'],
-            ['account_type' => 'custodian_venue', 'name' => 'Venue Custodian', 'role' => 'admin', 'requestor_type' => 'student'],
-            ['account_type' => 'custodian_equipment', 'name' => 'Equipment Custodian', 'role' => 'requestor', 'requestor_type' => 'staff'],
+            ['account_type' => 'staff', 'surname' => 'Staff', 'first_name' => 'Admin', 'position' => 'Administrative Staff', 'role' => 'admin', 'requestor_type' => 'faculty'],
+            ['account_type' => 'custodian_venue', 'surname' => 'Venue', 'first_name' => 'Custodian', 'role' => 'admin', 'requestor_type' => 'student'],
+            ['account_type' => 'custodian_equipment', 'surname' => 'Equipment', 'first_name' => 'Custodian', 'role' => 'requestor', 'requestor_type' => 'staff'],
         ];
 
         $expectedMappings = [
@@ -160,6 +293,17 @@ class AdminUserManagementTest extends TestCase
             $this->assertNull($created->google_id);
             $this->assertTrue($created->is_active);
             $this->assertNotNull($created->email_verified_at);
+            if ($account['account_type'] === 'staff') {
+                $this->assertSame('Administrative Staff', $created->position);
+                $this->assertNull($created->office_or_organization);
+            }
+            if (str_starts_with($account['account_type'], 'custodian_')) {
+                $this->assertSame($account['first_name'] . ' ' . $account['surname'], $created->name);
+                $this->assertSame(
+                    $account['account_type'] === 'custodian_venue' ? 'Venue Custodian' : 'Equipment Custodian',
+                    $created->position,
+                );
+            }
             $this->assertDatabaseHas('audit_logs', [
                 'actor_id' => $admin->id,
                 'target_user_id' => $created->id,
@@ -178,8 +322,9 @@ class AdminUserManagementTest extends TestCase
         $this->actingAs($admin)
             ->post(route('admin.users.store'), [
                 'account_type' => 'staff',
+                'surname' => 'Setup',
+                'first_name' => 'Initial',
                 'username' => $email,
-                'name' => 'Initial Setup Staff',
             ])
             ->assertRedirect(route('admin.users'));
 
@@ -226,8 +371,9 @@ class AdminUserManagementTest extends TestCase
         $this->actingAs($admin)
             ->post(route('admin.users.store'), [
                 'account_type' => 'staff',
+                'surname' => 'Setup',
+                'first_name' => 'Failed',
                 'username' => $email,
-                'name' => 'Failed Setup Staff',
             ])
             ->assertRedirect(route('admin.users'))
             ->assertSessionHas('warning', 'User account created, but the password setup link could not be sent.');
@@ -344,6 +490,9 @@ class AdminUserManagementTest extends TestCase
                 'department_id' => 1,
                 'school_id_number' => '23-0098-635',
                 'contact_number' => '09123456789',
+                'student_organization_id' => '__new__',
+                'new_student_organization_name' => 'Maria Dela Cruz Student Council',
+                'new_student_organization_acronym' => 'MDSC',
             ]);
 
         $response->assertRedirect(route('admin.users'));
@@ -354,6 +503,105 @@ class AdminUserManagementTest extends TestCase
         $this->assertSame('Maria', $created->first_name);
         $this->assertSame('Santos', $created->middle_name);
         $this->assertSame('Jr.', $created->suffix);
+        $organization = StudentOrganization::where('name', 'Maria Dela Cruz Student Council')->firstOrFail();
+        $this->assertSame('MDSC', $organization->acronym);
+        $this->assertSame(1, $organization->college_id);
+        $this->assertSame(1, $organization->department_id);
+        $this->assertDatabaseHas('student_organization_members', [
+            'user_id' => $created->id,
+            'student_organization_id' => $organization->id,
+            'membership_role' => 'Member',
+        ]);
+    }
+
+    public function test_staff_account_requires_person_name_and_stores_optional_office_and_position(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        $this->from(route('admin.users', ['add_user' => 1]))
+            ->post(route('admin.users.store'), [
+                'account_type' => 'staff',
+                'username' => 'missing-staff-name-' . uniqid() . '@test.com',
+            ])
+            ->assertRedirect(route('admin.users', ['add_user' => 1]))
+            ->assertSessionHasErrors(['surname', 'first_name']);
+
+        $email = 'staff-profile-' . uniqid() . '@test.com';
+        $this->post(route('admin.users.store'), [
+            'account_type' => 'staff',
+            'surname' => 'Dela Cruz',
+            'first_name' => 'Juan',
+            'middle_name' => 'Santos',
+            'username' => $email,
+            'position' => 'Administrative Assistant',
+            'office_or_organization' => 'Registrar Office',
+            'contact_number' => '09123456789',
+        ])->assertRedirect(route('admin.users'));
+
+        $staff = User::where('username', $email)->firstOrFail();
+        $this->assertSame('Juan Santos Dela Cruz', $staff->name);
+        $this->assertSame('staff', $staff->requestor_type);
+        $this->assertSame('Administrative Assistant', $staff->position);
+        $this->assertSame('Registrar Office', $staff->office_or_organization);
+        $this->assertSame('09123456789', $staff->contact_number);
+
+        $this->view('components.dashboard-sidebar', ['user' => $staff])
+            ->assertSee('Juan Santos Dela Cruz')
+            ->assertSee('Staff · Registrar Office — Administrative Assistant');
+    }
+
+    public function test_custodian_accounts_require_person_name_and_use_role_based_positions(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        foreach ([
+            'custodian_venue' => ['surname' => 'Venue', 'first_name' => 'Custodian', 'position' => 'Forged Position', 'expected_position' => 'Venue Custodian'],
+            'custodian_equipment' => ['surname' => 'Equipment', 'first_name' => 'Custodian', 'position' => 'Forged Position', 'expected_position' => 'Equipment Custodian'],
+        ] as $accountType => $details) {
+            $this->from(route('admin.users', ['add_user' => 1]))
+                ->post(route('admin.users.store'), [
+                    'account_type' => $accountType,
+                    'username' => "missing-name-{$accountType}-" . uniqid() . '@test.com',
+                ])
+                ->assertRedirect(route('admin.users', ['add_user' => 1]))
+                ->assertSessionHasErrors(['surname', 'first_name']);
+
+            $email = "custodian-{$accountType}-" . uniqid() . '@test.com';
+            $this->post(route('admin.users.store'), [
+                'account_type' => $accountType,
+                'surname' => $details['surname'],
+                'first_name' => $details['first_name'],
+                'username' => $email,
+                'position' => $details['position'],
+            ])->assertRedirect(route('admin.users'));
+
+            $custodian = User::where('username', $email)->firstOrFail();
+            $this->assertSame($details['first_name'] . ' ' . $details['surname'], $custodian->name);
+            $this->assertSame($details['surname'], $custodian->surname);
+            $this->assertSame($details['first_name'], $custodian->first_name);
+            $this->assertSame($details['expected_position'], $custodian->position);
+            $this->assertNull($custodian->contact_number);
+        }
+    }
+
+    public function test_student_representative_requires_person_name_and_explicit_organization(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $this->actingAs($admin)
+            ->from(route('admin.users', ['add_user' => 1]))
+            ->post(route('admin.users.store'), [
+                'account_type' => 'student',
+                'username' => 'missing-student-profile-' . uniqid() . '@test.com',
+                'college_id' => 1,
+                'department_id' => 1,
+                'school_id_number' => '23-0098-635',
+            ])
+            ->assertRedirect(route('admin.users', ['add_user' => 1]))
+            ->assertSessionHasErrors(['surname', 'first_name', 'student_organization_id']);
     }
 
     public function test_admin_can_create_student_requestor_with_position_and_organization_membership(): void
@@ -487,8 +735,9 @@ class AdminUserManagementTest extends TestCase
         $this->actingAs($admin)
             ->post(route('admin.users.store'), [
                 'account_type' => 'staff',
+                'surname' => 'Replacement',
+                'first_name' => 'Profile',
                 'username' => $existing->username,
-                'name' => 'Replacement Profile',
                 'role' => 'admin',
                 'requestor_type' => 'student',
                 'password' => 'AttackerChosenPassword123!',

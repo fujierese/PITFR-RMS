@@ -402,8 +402,8 @@
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div class="max-w-2xl">
                     <p class="text-sm font-semibold uppercase tracking-[0.3em] text-emerald-600">Overview</p>
-                    <h2 class="mt-3 text-2xl font-semibold text-slate-950 sm:text-3xl">Welcome, {{ $firstName }}</h2>
-                    <p class="mt-3 text-sm leading-6 text-slate-600">Monitor your reservation requests and upcoming bookings from one centralized workspace.</p>
+                    <h2 class="mt-4 text-2xl font-semibold text-slate-950 sm:text-3xl">Welcome, {{ $firstName }}</h2>
+                    <p class="mt-4 text-sm leading-6 text-slate-600">Monitor your reservation requests and upcoming bookings from one centralized workspace.</p>
                 </div>
                 <div class="flex flex-wrap gap-3">
                     <a href="{{ route('requestor.index', ['tab' => 'requests']) }}" class="inline-flex items-center justify-center rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700">View All Requests</a>

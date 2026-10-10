@@ -12,8 +12,8 @@
                     <span class="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
                         Venue Management
                     </span>
-                    <h1 class="mt-3 text-3xl font-semibold tracking-tight">Manage Your Venues</h1>
-                    <p class="mt-2 max-w-2xl text-sm text-slate-300">Add, edit, or manage the status of your assigned venues.</p>
+                    <h1 class="mt-4 text-3xl font-semibold tracking-tight">Manage Your Venues</h1>
+                    <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Add, edit, or manage the status of your assigned venues.</p>
                 </div>
                 <span class="inline-flex items-center rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-slate-100 ring-1 ring-white/10">
                     {{ $venues->count() }} {{ $venues->count() === 1 ? 'venue assigned' : 'venues assigned' }}

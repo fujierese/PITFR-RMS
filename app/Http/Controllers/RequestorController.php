@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
  
 use App\Models\Equipment;
 use App\Models\FacilityRequest;
+use App\Models\RevisionHistory;
 use App\Models\College;
 use App\Models\Department;
 use App\Models\User;
@@ -37,6 +38,217 @@ class RequestorController extends Controller
         }
 
         return $user;
+    }
+
+    public function respondToRevision(Request $request, FacilityRequest $facilityRequest, RevisionHistory $revision)
+    {
+        $user = $this->currentUser();
+        abort_unless((int) $facilityRequest->requested_by_id === (int) $user->id, 403);
+        abort_unless((int) $revision->facility_request_id === (int) $facilityRequest->id, 404);
+
+        $validated = $request->validate([
+            'response' => ['required', 'in:accept,decline'],
+        ]);
+
+        if ($revision->status !== 'pending') {
+            return back()->withErrors(['revision' => 'This schedule proposal has already been answered.']);
+        }
+
+        if ($validated['response'] === 'decline') {
+            $declined = DB::transaction(function () use ($facilityRequest, $revision, $user): bool {
+                $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
+                $lockedRevision = RevisionHistory::query()->lockForUpdate()->findOrFail($revision->id);
+                if ($lockedRevision->status !== 'pending' || $lockedRevision->facility_request_id !== $lockedRequest->id) {
+                    return false;
+                }
+
+                $lockedRevision->update([
+                    'status' => 'rejected',
+                    'responded_at' => now(),
+                ]);
+                $lockedRequest->addHistory('revision_declined', 'Requestor declined the proposed schedule change.', $user->id);
+                return true;
+            });
+            if (!$declined) {
+                return back()->withErrors(['revision' => 'This schedule proposal has already been answered.']);
+            }
+
+            $revision->refresh();
+            $revision->revisedBy?->notify(new \App\Notifications\ReservationRescheduleResponse($revision));
+
+            return redirect()->route('request.show', $facilityRequest)
+                ->with('success', 'You declined the schedule proposal. Your current reservation remains unchanged.');
+        }
+
+        if (!$facilityRequest->canBeRevised()) {
+            return back()->withErrors([
+                'revision' => $facilityRequest->getRevisionLockReason() ?? 'This reservation can no longer be rescheduled.',
+            ]);
+        }
+
+        $newState = [
+            'start_date' => $revision->new_start_date?->toDateString(),
+            'end_date' => $revision->new_end_date?->toDateString(),
+            'start_time' => $revision->new_start_time,
+            'end_time' => $revision->new_end_time,
+            'venue' => $revision->new_venue ?? [],
+            'equipment' => $revision->new_equipment ?? [],
+            'equipment_quantities' => $revision->new_equipment_quantities ?? [],
+        ];
+        $range = FacilityRequest::normalizeScheduleRange(
+            $newState['start_date'],
+            $newState['start_time'],
+            $newState['end_date'],
+            $newState['end_time']
+        );
+        $availabilityService = $this->availabilityService;
+        $venueConflict = !$availabilityService->checkVenueAvailability(
+            $newState['venue'][0] ?? '',
+            $range['start'],
+            $range['end'],
+            $facilityRequest->id
+        )['available'];
+        $equipmentConflict = false;
+        foreach ($newState['equipment'] as $equipment) {
+            $quantity = (int) ($newState['equipment_quantities'][$equipment] ?? 1);
+            if (!$availabilityService->checkEquipmentAvailability(
+                $equipment,
+                $quantity,
+                $range['start'],
+                $range['end'],
+                $facilityRequest->id
+            )['available']) {
+                $equipmentConflict = true;
+                break;
+            }
+        }
+
+        if (($venueConflict || $equipmentConflict) && !$revision->override_conflict) {
+            return back()->withErrors([
+                'revision' => 'The proposed schedule is no longer available. Contact the Supply Office for an updated proposal.',
+            ]);
+        }
+
+        $oldState = $facilityRequest->getCurrentState();
+        $oldCustodianIds = Venue::query()
+            ->whereIn('name', $oldState['venue'])
+            ->pluck('custodian_id')
+            ->merge(Equipment::query()->whereIn('name', $oldState['equipment'])->pluck('custodian_id'))
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+        $accepted = DB::transaction(function () use ($facilityRequest, $revision, $user, $newState, $range): bool {
+            $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
+            $lockedRevision = RevisionHistory::query()->lockForUpdate()->findOrFail($revision->id);
+            if ($lockedRevision->status !== 'pending' || $lockedRevision->facility_request_id !== $lockedRequest->id) {
+                return false;
+            }
+            if (!$lockedRequest->canBeRevised()) {
+                return false;
+            }
+            $currentQuantities = array_map('intval', $lockedRequest->getEquipmentQuantities());
+            $proposedFromQuantities = array_map('intval', $lockedRevision->old_equipment_quantities ?? []);
+            ksort($currentQuantities);
+            ksort($proposedFromQuantities);
+            if (
+                $lockedRequest->start_date?->toDateString() !== $lockedRevision->old_start_date?->toDateString()
+                || $lockedRequest->end_date?->toDateString() !== $lockedRevision->old_end_date?->toDateString()
+                || $lockedRequest->start_time !== $lockedRevision->old_start_time
+                || $lockedRequest->end_time !== $lockedRevision->old_end_time
+                || $lockedRequest->getVenueNames() !== ($lockedRevision->old_venue ?? [])
+                || $lockedRequest->getEquipmentItems() !== ($lockedRevision->old_equipment ?? [])
+                || $currentQuantities !== $proposedFromQuantities
+            ) {
+                return false;
+            }
+
+            $availabilityService = app(AvailabilityService::class);
+            $venueAvailable = $availabilityService->checkVenueAvailability(
+                $newState['venue'][0] ?? '',
+                $range['start'],
+                $range['end'],
+                $lockedRequest->id
+            )['available'];
+            $equipmentAvailable = true;
+            foreach ($newState['equipment'] as $equipment) {
+                $quantity = (int) ($newState['equipment_quantities'][$equipment] ?? 1);
+                if (!$availabilityService->checkEquipmentAvailability(
+                    $equipment,
+                    $quantity,
+                    $range['start'],
+                    $range['end'],
+                    $lockedRequest->id
+                )['available']) {
+                    $equipmentAvailable = false;
+                    break;
+                }
+            }
+            if ((!$venueAvailable || !$equipmentAvailable) && !$lockedRevision->override_conflict) {
+                return false;
+            }
+
+            $lockedRequest->update([
+                'start_date' => $newState['start_date'],
+                'end_date' => $newState['end_date'],
+                'start_time' => $newState['start_time'],
+                'end_time' => $newState['end_time'],
+                'venue' => $newState['venue'],
+                'equipment' => $newState['equipment'],
+                'equipment_quantities' => $newState['equipment_quantities'],
+            ]);
+            $lockedRequest->syncRelationalItems();
+            $lockedRevision->update([
+                'status' => 'accepted',
+                'responded_at' => now(),
+            ]);
+            $lockedRequest->addHistory(
+                'revision_applied',
+                "Requestor accepted the proposed schedule change. {$lockedRevision->getSummary()}",
+                $user->id
+            );
+            return true;
+        });
+        if (!$accepted) {
+            return back()->withErrors([
+                'revision' => 'This proposal has already been answered, the reservation has changed or is locked, or the proposed schedule is no longer available. Contact the Supply Office.',
+            ]);
+        }
+
+        $facilityRequest->refresh();
+        $revision->refresh();
+        $revision->revisedBy?->notify(new \App\Notifications\ReservationRescheduleResponse($revision));
+
+        $notification = new \App\Notifications\ReservationRevised(
+            $facilityRequest,
+            $oldState,
+            $newState,
+            $revision->revision_reason,
+            $revision->revisedBy?->name,
+            $revision->conflict_detected,
+            $revision->override_conflict,
+            $revision->conflict_details,
+        );
+        $custodianIds = $oldCustodianIds
+            ->merge(Venue::query()->whereIn('name', $facilityRequest->getVenueNames())->pluck('custodian_id'))
+            ->merge($facilityRequest->getAssignedEquipmentCustodianIds())
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+        foreach (User::query()->whereIn('id', $custodianIds)->get() as $custodian) {
+            $custodian->notify($notification);
+        }
+        $notifiedCustodians = $custodianIds->all();
+        if ($notifiedCustodians !== []) {
+            $revision->markCustodianNotified();
+        }
+
+        $user->notify($notification);
+        $revision->markRequestorNotified();
+
+        return redirect()->route('request.show', $facilityRequest)
+            ->with('success', 'You accepted the proposal. The reservation schedule has been updated and the custodians have been notified.');
     }
 
     private const VENUE_OPTIONS = [
@@ -1489,6 +1701,7 @@ class RequestorController extends Controller
     {
         $request   = FacilityRequest::with(['requestVenues', 'requestEquipment', 'reservationSchedule', 'histories'])->findOrFail($id);
         $this->authorize('view', $request);
+        $pendingRevision = $request->revisionHistories()->where('status', 'pending')->first();
         $equipment = \App\Models\Equipment::where('is_active', true)->get();
         $venueCustodians = Venue::query()
             ->whereIn('name', $request->getVenueNames())
@@ -1546,6 +1759,7 @@ class RequestorController extends Controller
  
         return view('requestor.show', [
             'request'                 => $request,
+            'pendingRevision'         => $pendingRevision,
             'venueOptions'            => self::VENUE_OPTIONS,
             'equipOptions'            => self::EQUIPMENT_OPTIONS,
             'equipment'               => $equipment,

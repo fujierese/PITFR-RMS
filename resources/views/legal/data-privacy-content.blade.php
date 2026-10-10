@@ -17,6 +17,6 @@
     </section>
     <section>
         <h3 class="text-lg font-semibold text-slate-900">How do I contact the right person?</h3>
-        <p class="mt-2">PIT must publish and maintain its official Data Protection Officer contact and privacy-request procedure. Until confirmed, refer to the <button type="button" data-open-info-modal="privacy" class="font-semibold text-emerald-800 underline underline-offset-2">Privacy Policy draft</button>; do not treat its placeholder contact as an active help desk.</p>
+        <p class="mt-2">PIT has not provided an official privacy contact or process for questions and requests. Contact the institution through its established communication channels and confirm the appropriate contact before sending personal information.</p>
     </section>
 </article>
