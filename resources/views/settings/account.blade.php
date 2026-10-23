@@ -214,6 +214,7 @@
                         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Documents</p>
                         <h2 class="mt-1 text-xl font-bold text-slate-950">E-signature Management</h2>
                         <p class="mt-1 text-sm text-slate-600">Manage the signature image used for printable facility documents.</p>
+                        <p class="mt-2 text-sm text-slate-600">Need to create a signature image? <a href="https://signaturely.com/online-signature/" target="_blank" rel="noopener noreferrer" class="font-semibold text-emerald-700 underline hover:text-emerald-800">Create an e-signature with Signaturely</a>.</p>
                     </div>
 
                     @if($user->e_signature_file)

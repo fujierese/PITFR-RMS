@@ -96,6 +96,34 @@ class Phase2AvailabilityPolicyTest extends TestCase
         $this->assertTrue($result['available']);
     }
 
+    public function test_equipment_availability_warning_matches_reserved_and_remaining_inventory(): void
+    {
+        [$requestor, $venue, $equipment] = $this->resourceSetup('Availability Warning Venue', true);
+        $this->request($requestor, $venue, 'approved', '09:00', '12:00', $equipment, 3);
+        $this->request($requestor, $venue, 'pending', '09:30', '11:30', $equipment, 1);
+
+        $response = $this->actingAs($requestor)->get(route('equipment.availability', [
+            'name' => $equipment->name,
+            'start_date' => '2026-08-28',
+            'end_date' => '2026-08-28',
+            'start_time' => '10:00',
+            'end_time' => '11:00',
+        ]));
+
+        $response->assertOk()
+            ->assertJsonPath('total', 5)
+            ->assertJsonPath('reserved_quantity', 3)
+            ->assertJsonPath('remaining_quantity', 2)
+            ->assertJsonPath('available', 2)
+            ->assertJsonCount(1, 'overlapping_requests')
+            ->assertJsonPath('overlapping_requests.0.quantity', 3);
+
+        $this->assertSame(
+            $response->json('total'),
+            $response->json('reserved_quantity') + $response->json('remaining_quantity'),
+        );
+    }
+
     public function test_partially_returned_approved_equipment_remains_blocked(): void
     {
         [$requestor, $venue, $equipment] = $this->resourceSetup('Partial Return Venue', true);

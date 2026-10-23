@@ -14,9 +14,18 @@
     </div>
 
     <form method="GET" action="{{ route('admin.users') }}" class="mb-6 flex flex-col gap-3 sm:flex-row">
-        <input type="text" name="search" value="{{ old('search', $searchQuery ?? '') }}" placeholder="Search by name" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+        <input type="search" name="search" value="{{ old('search', $searchQuery ?? '') }}" placeholder="Search name, email, role, college, department, or office" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+        <select name="account_type" aria-label="Filter users by account type" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+            <option value="">All account types</option>
+            <option value="student" @selected(($accountTypeFilter ?? '') === 'student')>Student</option>
+            <option value="faculty" @selected(($accountTypeFilter ?? '') === 'faculty')>Faculty</option>
+            <option value="staff" @selected(($accountTypeFilter ?? '') === 'staff')>Staff</option>
+            <option value="outsider" @selected(($accountTypeFilter ?? '') === 'outsider')>Outsider</option>
+            <option value="custodian_venue" @selected(($accountTypeFilter ?? '') === 'custodian_venue')>Venue Custodian</option>
+            <option value="custodian_equipment" @selected(($accountTypeFilter ?? '') === 'custodian_equipment')>Equipment Custodian</option>
+        </select>
         <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Search</button>
-        @if(!empty($searchQuery))
+        @if(!empty($searchQuery) || !empty($accountTypeFilter))
             <a href="{{ route('admin.users') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Clear</a>
         @endif
     </form>
@@ -77,20 +86,49 @@
                     <input id="add-user-contact" type="text" name="contact_number" value="{{ old('contact_number') }}" maxlength="50" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                 </div>
                 <div data-academic-field>
-                    <label for="add-user-college" class="mb-1 block text-sm font-medium text-slate-700">College</label>
+                    <label for="add-user-college" class="mb-1 block text-sm font-medium text-slate-700">College / School</label>
                     <select id="add-user-college" name="college_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
                         <option value="">Select college</option>
                         @foreach($colleges as $college)
-                            <option value="{{ $college->id }}" @selected(old('college_id') == $college->id)>{{ $college->name }}</option>
+                            <option value="{{ $college->id }}" data-high-school="{{ $college->abbreviation === 'PIT-HS' ? 'true' : 'false' }}" @selected(old('college_id') == $college->id)>{{ $college->name }}</option>
                         @endforeach
                     </select>
                 </div>
-                <div data-academic-field>
+                <div data-academic-field data-department-field>
                     <label for="add-user-department" class="mb-1 block text-sm font-medium text-slate-700">Department</label>
                     <select id="add-user-department" name="department_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
                         <option value="">Select department</option>
                         @foreach($colleges->flatMap->departments as $department)
                             <option value="{{ $department->id }}" data-college="{{ $department->college_id }}" @selected(old('department_id') == $department->id)>{{ $department->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div data-program-field class="hidden">
+                    <label for="add-user-academic-program" class="mb-1 block text-sm font-medium text-slate-700">Academic program</label>
+                    <select id="add-user-academic-program" name="academic_program_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                        <option value="">Select program</option>
+                        @foreach($academicPrograms as $program)
+                            <option value="{{ $program->id }}" data-college="{{ $program->college_id }}" data-has-majors="{{ !empty($program->majors) ? 'true' : 'false' }}" @selected(old('academic_program_id') == $program->id)>{{ $program->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div data-major-field class="hidden">
+                    <label for="add-user-major" class="mb-1 block text-sm font-medium text-slate-700">Major</label>
+                    <select id="add-user-major" name="major" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                        <option value="">Select major</option>
+                        @foreach($academicPrograms as $program)
+                            @foreach($program->majors ?? [] as $major)
+                                <option value="{{ $major }}" data-program="{{ $program->id }}" @selected(old('major') === $major)>{{ $major }}</option>
+                            @endforeach
+                        @endforeach
+                    </select>
+                </div>
+                <div data-grade-level-field class="hidden">
+                    <label for="add-user-grade-level" class="mb-1 block text-sm font-medium text-slate-700">Grade level</label>
+                    <select id="add-user-grade-level" name="grade_level" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                        <option value="">Select grade level</option>
+                        @foreach(['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'] as $gradeLevel)
+                            <option value="{{ $gradeLevel }}" @selected(old('grade_level') === $gradeLevel)>{{ $gradeLevel }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -154,8 +192,15 @@
             const facultyAdviser = document.getElementById('add-user-faculty-adviser');
             const collegeField = document.getElementById('add-user-college');
             const departmentField = document.getElementById('add-user-department');
+            const programField = document.getElementById('add-user-academic-program');
+            const majorField = document.getElementById('add-user-major');
+            const gradeLevelField = document.getElementById('add-user-grade-level');
             const studentOrganizationField = document.getElementById('add-user-student-organization');
             const academicFields = document.querySelectorAll('[data-academic-field]');
+            const departmentContainer = document.querySelector('[data-department-field]');
+            const programContainer = document.querySelector('[data-program-field]');
+            const majorContainer = document.querySelector('[data-major-field]');
+            const gradeLevelContainer = document.querySelector('[data-grade-level-field]');
             const studentFields = document.querySelectorAll('[data-student-field]');
             const facultyFields = document.querySelectorAll('[data-faculty-field]');
             const positionFields = document.querySelectorAll('[data-position-field]');
@@ -188,6 +233,66 @@
                     departmentField.value = '';
                 }
             };
+            const updateAcademicChoices = () => {
+                const collegeId = collegeField?.value || '';
+                const selectedCollege = collegeField?.selectedOptions[0];
+                const isHighSchool = selectedCollege?.dataset.highSchool === 'true';
+                let selectedProgramIsVisible = false;
+
+                Array.from(programField?.options || []).forEach(option => {
+                    if (!option.value) {
+                        option.hidden = false;
+                        option.disabled = false;
+                        return;
+                    }
+
+                    const matchesCollege = option.dataset.college === collegeId;
+                    option.hidden = !matchesCollege;
+                    option.disabled = !matchesCollege;
+                    if (matchesCollege && option.selected) {
+                        selectedProgramIsVisible = true;
+                    }
+                });
+                if (!selectedProgramIsVisible && programField) {
+                    programField.value = '';
+                }
+
+                const programId = programField?.value || '';
+                let selectedMajorIsVisible = false;
+                Array.from(majorField?.options || []).forEach(option => {
+                    if (!option.value) {
+                        option.hidden = false;
+                        option.disabled = false;
+                        return;
+                    }
+
+                    const matchesProgram = option.dataset.program === programId;
+                    option.hidden = !matchesProgram;
+                    option.disabled = !matchesProgram;
+                    if (matchesProgram && option.selected) {
+                        selectedMajorIsVisible = true;
+                    }
+                });
+                if (!selectedMajorIsVisible && majorField) {
+                    majorField.value = '';
+                }
+
+                const isStudent = accountType.value === 'student';
+                const selectedProgramHasMajors = programField?.selectedOptions[0]?.dataset.hasMajors === 'true';
+                const showProgram = isStudent && !isHighSchool;
+                const showMajor = showProgram && selectedProgramHasMajors;
+                const showGradeLevel = isStudent && isHighSchool;
+                programContainer?.classList.toggle('hidden', !showProgram);
+                majorContainer?.classList.toggle('hidden', !showMajor);
+                gradeLevelContainer?.classList.toggle('hidden', !showGradeLevel);
+                departmentContainer?.classList.toggle('hidden', isStudent && isHighSchool);
+
+                if (programField) programField.required = showProgram;
+                if (majorField) majorField.required = showMajor;
+                if (gradeLevelField) gradeLevelField.required = showGradeLevel;
+                if (departmentField) departmentField.required = accountType.value === 'faculty' || (isStudent && !isHighSchool);
+                if (collegeField) collegeField.required = accountType.value === 'student' || accountType.value === 'faculty';
+            };
             const updateAccountFields = () => {
                 const isStudent = accountType.value === 'student';
                 const isFaculty = accountType.value === 'faculty';
@@ -199,6 +304,13 @@
                 const isFacultyAdviser = isFaculty && facultyAdviser && facultyAdviser.value === 'yes';
                 const isCreatingStudentOrganization = isStudent && studentOrganizationField?.value === '__new__';
                 academicFields.forEach(field => field.classList.toggle('hidden', !isAcademic));
+                Array.from(collegeField?.options || []).forEach(option => {
+                    const cannotAssignSchool = isFaculty && option.dataset.highSchool === 'true';
+                    option.disabled = cannotAssignSchool;
+                });
+                if (isFaculty && collegeField?.selectedOptions[0]?.dataset.highSchool === 'true') {
+                    collegeField.value = '';
+                }
                 studentFields.forEach(field => field.classList.toggle('hidden', !isStudent));
                 facultyFields.forEach(field => field.classList.toggle('hidden', !isFaculty));
                 positionFields.forEach(field => field.classList.toggle('hidden', !(isStudent || isFaculty || isStaff)));
@@ -212,9 +324,14 @@
                     studentOrganizationField.required = isStudent;
                 }
                 document.querySelectorAll('[data-new-organization-name-required]').forEach(input => input.required = isCreatingStudentOrganization);
+                updateAcademicChoices();
             };
             accountType.addEventListener('change', updateAccountFields);
-            collegeField?.addEventListener('change', updateDepartments);
+            collegeField?.addEventListener('change', () => {
+                updateDepartments();
+                updateAcademicChoices();
+            });
+            programField?.addEventListener('change', updateAcademicChoices);
             studentOrganizationField?.addEventListener('change', updateAccountFields);
             if (facultyAdviser) {
                 facultyAdviser.addEventListener('change', updateAccountFields);
@@ -225,6 +342,7 @@
                 }
             });
             updateDepartments();
+            updateAcademicChoices();
             updateAccountFields();
         </script>
         </div>

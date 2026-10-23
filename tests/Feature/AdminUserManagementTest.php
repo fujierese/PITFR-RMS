@@ -59,6 +59,9 @@ class AdminUserManagementTest extends TestCase
         $response->assertSee('data-college="1"', false);
         $response->assertSee('data-college="2"', false);
         $response->assertSee('Student Organization Representative');
+        $response->assertSee('Academic program');
+        $response->assertSee('Grade level');
+        $response->assertSee('Heating, Ventilating, Air Conditioning and Refrigeration Technology');
         $response->assertSee('+ Add new student organization');
         $response->assertSee('role="dialog"', false);
         $response->assertSee('aria-modal="true"', false);
@@ -260,9 +263,13 @@ class AdminUserManagementTest extends TestCase
             'name' => 'Supported Test Student Organization',
             'is_active' => true,
         ]);
+        $programId = \App\Models\AcademicProgram::query()
+            ->where('college_id', 1)
+            ->whereNull('majors')
+            ->value('id');
 
         $accounts = [
-            ['account_type' => 'student', 'surname' => 'Student', 'first_name' => 'Admin', 'school_id_number' => '23-0098-635', 'college_id' => 1, 'department_id' => 1, 'student_organization_id' => $organization->id, 'role' => 'admin', 'requestor_type' => 'outsider'],
+            ['account_type' => 'student', 'surname' => 'Student', 'first_name' => 'Admin', 'school_id_number' => '23-0098-635', 'college_id' => 1, 'department_id' => 1, 'academic_program_id' => $programId, 'student_organization_id' => $organization->id, 'role' => 'admin', 'requestor_type' => 'outsider'],
             ['account_type' => 'faculty', 'name' => 'Admin Faculty', 'faculty_id' => 'FAC-' . uniqid(), 'position' => 'Professor', 'college_id' => 1, 'department_id' => 1, 'role' => 'custodian', 'requestor_type' => 'outsider'],
             ['account_type' => 'staff', 'surname' => 'Staff', 'first_name' => 'Admin', 'position' => 'Administrative Staff', 'role' => 'admin', 'requestor_type' => 'faculty'],
             ['account_type' => 'custodian_venue', 'surname' => 'Venue', 'first_name' => 'Custodian', 'role' => 'admin', 'requestor_type' => 'student'],
@@ -475,6 +482,10 @@ class AdminUserManagementTest extends TestCase
         $this->actingAs($admin);
 
         $username = 'maria-' . uniqid() . '@test.com';
+        $programId = \App\Models\AcademicProgram::query()
+            ->where('college_id', 1)
+            ->whereNull('majors')
+            ->value('id');
         $response = $this->withSession(['_token' => 'test-token'])
             ->post(route('admin.users.store'), [
                 '_token' => 'test-token',
@@ -488,6 +499,7 @@ class AdminUserManagementTest extends TestCase
                 'password_confirmation' => 'password12345',
                 'college_id' => 1,
                 'department_id' => 1,
+                'academic_program_id' => $programId,
                 'school_id_number' => '23-0098-635',
                 'contact_number' => '09123456789',
                 'student_organization_id' => '__new__',
@@ -613,6 +625,10 @@ class AdminUserManagementTest extends TestCase
             'name' => 'Computer Science Society',
             'is_active' => true,
         ]);
+        $programId = \App\Models\AcademicProgram::query()
+            ->where('college_id', 1)
+            ->whereNull('majors')
+            ->value('id');
 
         $response = $this->withSession(['_token' => 'test-token'])
             ->post(route('admin.users.store'), [
@@ -625,6 +641,7 @@ class AdminUserManagementTest extends TestCase
                 'password_confirmation' => 'password12345',
                 'college_id' => 1,
                 'department_id' => 1,
+                'academic_program_id' => $programId,
                 'school_id_number' => '23-0098-635',
                 'position' => 'Student Council Officer',
                 'student_organization_id' => $organization->id,
@@ -640,6 +657,106 @@ class AdminUserManagementTest extends TestCase
             'student_organization_id' => $organization->id,
             'is_active' => true,
         ]);
+    }
+
+    public function test_admin_can_create_student_representative_with_program_and_major(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $college = \App\Models\College::where('abbreviation', 'COTE')->firstOrFail();
+        $department = \App\Models\Department::where('college_id', $college->id)
+            ->where('name', 'Industrial Technology')
+            ->firstOrFail();
+        $program = \App\Models\AcademicProgram::where('college_id', $college->id)
+            ->where('name', 'Bachelor of Industrial Technology (Bachelor of Science in Industrial Technology)')
+            ->firstOrFail();
+        $organization = StudentOrganization::create([
+            'name' => 'Industrial Technology Student Council',
+            'college_id' => $college->id,
+            'department_id' => $department->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('admin.users.store'), [
+            'account_type' => 'student',
+            'surname' => 'Major',
+            'first_name' => 'Student',
+            'username' => 'major-student-' . uniqid() . '@test.com',
+            'college_id' => $college->id,
+            'department_id' => $department->id,
+            'academic_program_id' => $program->id,
+            'major' => 'Automotive Technology',
+            'school_id_number' => '23-1234-567',
+            'student_organization_id' => $organization->id,
+        ]);
+
+        $response->assertRedirect(route('admin.users'));
+        $created = User::where('username', 'like', 'major-student-%@test.com')->firstOrFail();
+        $this->assertSame($program->id, $created->academic_program_id);
+        $this->assertSame('Automotive Technology', $created->major);
+        $this->assertNull($created->grade_level);
+        $this->assertSame($program->name, $created->studentProgramLabel);
+    }
+
+    public function test_admin_cannot_create_student_with_major_from_another_program(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $college = \App\Models\College::where('abbreviation', 'COTE')->firstOrFail();
+        $department = \App\Models\Department::where('college_id', $college->id)->firstOrFail();
+        $program = \App\Models\AcademicProgram::where('college_id', $college->id)
+            ->where('name', 'Bachelor of Industrial Technology (Bachelor of Science in Industrial Technology)')
+            ->firstOrFail();
+        $organization = StudentOrganization::create([
+            'name' => 'Invalid Major Student Council',
+            'college_id' => $college->id,
+            'department_id' => $department->id,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.users', ['add_user' => 1]))
+            ->post(route('admin.users.store'), [
+                'account_type' => 'student',
+                'surname' => 'Invalid',
+                'first_name' => 'Major',
+                'username' => 'invalid-major-' . uniqid() . '@test.com',
+                'college_id' => $college->id,
+                'department_id' => $department->id,
+                'academic_program_id' => $program->id,
+                'major' => 'Bachelor of Science in Electrical Engineering',
+                'school_id_number' => '23-3456-789',
+                'student_organization_id' => $organization->id,
+            ])
+            ->assertRedirect(route('admin.users', ['add_user' => 1]))
+            ->assertSessionHasErrors('major');
+    }
+
+    public function test_admin_can_create_high_school_student_using_grade_level_instead_of_program(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $highSchool = \App\Models\College::where('abbreviation', 'PIT-HS')->firstOrFail();
+        $organization = StudentOrganization::create([
+            'name' => 'PIT High School Student Council',
+            'college_id' => $highSchool->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('admin.users.store'), [
+            'account_type' => 'student',
+            'surname' => 'High School',
+            'first_name' => 'Student',
+            'username' => 'high-school-student-' . uniqid() . '@test.com',
+            'college_id' => $highSchool->id,
+            'grade_level' => 'Grade 9',
+            'school_id_number' => '23-2345-678',
+            'student_organization_id' => $organization->id,
+        ]);
+
+        $response->assertRedirect(route('admin.users'));
+        $created = User::where('username', 'like', 'high-school-student-%@test.com')->firstOrFail();
+        $this->assertSame('Grade 9', $created->grade_level);
+        $this->assertNull($created->academic_program_id);
+        $this->assertNull($created->major);
+        $this->assertSame('PIT High School', $created->department);
     }
 
     public function test_student_requestor_source_of_truth_uses_registered_organization_in_request_flow(): void
@@ -991,7 +1108,7 @@ class AdminUserManagementTest extends TestCase
         $this->assertSame($auditCount, \App\Models\AuditLog::count());
     }
 
-    public function test_admin_user_search_filters_by_name_only(): void
+    public function test_admin_user_search_matches_email_and_filters_by_account_type(): void
     {
         $admin = User::factory()->createOne(['role' => 'admin']);
         User::factory()->createOne([
@@ -1000,6 +1117,7 @@ class AdminUserManagementTest extends TestCase
             'surname' => 'Example',
             'username' => 'alice@example.com',
             'role' => 'requestor',
+            'requestor_type' => 'student',
         ]);
         User::factory()->createOne([
             'name' => 'Bob Example',
@@ -1007,13 +1125,21 @@ class AdminUserManagementTest extends TestCase
             'surname' => 'Example',
             'username' => 'bob@example.com',
             'role' => 'requestor',
+            'requestor_type' => 'faculty',
         ]);
 
         $response = $this->actingAs($admin)
-            ->get(route('admin.users', ['search' => 'Alice']));
+            ->get(route('admin.users', ['search' => 'alice@example.com']));
 
         $response->assertOk();
         $response->assertSee('Alice Example');
         $response->assertDontSee('Bob Example');
+
+        $filteredResponse = $this->actingAs($admin)
+            ->get(route('admin.users', ['account_type' => 'faculty']));
+
+        $filteredResponse->assertOk();
+        $filteredResponse->assertSee('Bob Example');
+        $filteredResponse->assertDontSee('Alice Example');
     }
 }

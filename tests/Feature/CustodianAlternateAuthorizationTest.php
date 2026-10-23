@@ -70,12 +70,25 @@ class CustodianAlternateAuthorizationTest extends TestCase
         ]);
 
         $dashboardResponse = $this->actingAs($custodian)->get(route('custodian.index'));
+        $todayCalendarUrl = route('calendar.index', [
+            'date' => now()->setTimezone(config('app.timezone', 'Asia/Manila'))->format('Y-m-d'),
+        ]);
 
         $dashboardResponse->assertOk()
             ->assertViewIs('custodian.dashboard')
-            ->assertSee('Custodian Dashboard')
+            ->assertSee('Custodian Workspace')
+            ->assertSee('Welcome, ' . ($custodian->first_name ?: $custodian->name))
             ->assertSee('Pending Review')
-            ->assertDontSee('Search requests');
+            ->assertDontSee('Search requests, venues, equipment')
+            ->assertDontSee('name="search"', false)
+            ->assertSee('data-calendar-today-link', false)
+            ->assertSee('href="' . $todayCalendarUrl . '"', false)
+            ->assertSee('Request progress')
+            ->assertSee('Awaiting venue &amp; equipment review', false)
+            ->assertSee('Venue review')
+            ->assertSee('Equipment review')
+            ->assertSee('Requests for Your Resources')
+            ->assertDontSee('Upcoming Requests');
 
         $allRequestsResponse = $this->get(route('custodian.index', ['filter' => 'all']));
 
@@ -83,6 +96,27 @@ class CustodianAlternateAuthorizationTest extends TestCase
             ->assertViewIs('custodian.index')
             ->assertSee('All Requests')
             ->assertSee('Search requests');
+    }
+
+    public function test_equipment_included_with_a_venue_still_requires_equipment_custodian_review(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-equipment']);
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        Equipment::create([
+            'name' => 'Sound System',
+            'custodian_id' => $custodian->id,
+            'quantity' => 2,
+            'quantity_available' => 2,
+        ]);
+        $facilityRequest = FacilityRequest::factory()->create([
+            'requested_by_id' => $requester->id,
+            'venue' => ['Balay Alumni'],
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => 1],
+        ]);
+
+        $this->assertSame([$custodian->id], $facilityRequest->getAssignedEquipmentCustodianIds());
+        $this->assertSame(['Sound System' => 1], $facilityRequest->getAssignedEquipmentForCustodian($custodian->id));
     }
 
     public function test_custodian_assignments_summary_cards_use_readable_contrast(): void

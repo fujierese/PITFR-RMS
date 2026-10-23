@@ -95,6 +95,11 @@ class RequestorController extends Controller
             'equipment' => $revision->new_equipment ?? [],
             'equipment_quantities' => $revision->new_equipment_quantities ?? [],
         ];
+        if ($newState['start_time'] <= '05:00' || $newState['end_time'] <= '05:00') {
+            return back()->withErrors([
+                'revision' => 'This proposed schedule is not allowed because reservations cannot start or end between 12:00 AM and 5:00 AM. Contact the Supply Office for a revised schedule.',
+            ]);
+        }
         $range = FacilityRequest::normalizeScheduleRange(
             $newState['start_date'],
             $newState['start_time'],
@@ -704,6 +709,14 @@ class RequestorController extends Controller
                 ->withErrors(['start_time' => 'Reservations cannot start between 12:00 AM and 5:00 AM. Choose a start time after 5:00 AM or use the Whole Day option.'])
                 ->withInput();
         }
+        if (
+            ($validated['reservation_duration'] ?? 'specific_time') === 'specific_time'
+            && $validated['end_time'] <= '05:00'
+        ) {
+            return back()
+                ->withErrors(['end_time' => 'Reservations cannot end between 12:00 AM and 5:00 AM. Choose an end time after 5:00 AM or use the Whole Day option.'])
+                ->withInput();
+        }
 
         $reservationDuration = strtolower((string) ($validated['reservation_duration'] ?? 'specific_time'));
         $scheduleRange = FacilityRequest::resolveReservationDuration(
@@ -1057,6 +1070,7 @@ class RequestorController extends Controller
             'venue'                 => ['required', 'string'],
             'equipment'             => 'nullable|array',
             'equipment_quantities'  => 'nullable|array',
+            'equipment_quantities.*' => ['nullable', 'integer', 'min:1'],
             'other_venue'           => 'nullable|string|max:200',
             'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
             'is_emergency'          => 'nullable|boolean',
@@ -1124,6 +1138,14 @@ class RequestorController extends Controller
         ) {
             return back()
                 ->withErrors(['start_time' => 'Reservations cannot start between 12:00 AM and 5:00 AM. Choose a start time after 5:00 AM or use the Whole Day option.'])
+                ->withInput();
+        }
+        if (
+            ($validated['reservation_duration'] ?? 'specific_time') === 'specific_time'
+            && $validated['end_time'] <= '05:00'
+        ) {
+            return back()
+                ->withErrors(['end_time' => 'Reservations cannot end between 12:00 AM and 5:00 AM. Choose an end time after 5:00 AM or use the Whole Day option.'])
                 ->withInput();
         }
 
@@ -1891,7 +1913,13 @@ class RequestorController extends Controller
         $name = trim((string) $request->input('name', ''));
 
         if ($name === '') {
-            return response()->json(['available' => 0, 'total' => 0, 'overlapping_requests' => []]);
+            return response()->json([
+                'available' => 0,
+                'total' => 0,
+                'reserved_quantity' => 0,
+                'remaining_quantity' => 0,
+                'overlapping_requests' => [],
+            ]);
         }
 
         $normalizedName = strtolower($name);
@@ -1900,7 +1928,13 @@ class RequestorController extends Controller
             ->first();
 
         if (!$eq) {
-            return response()->json(['available' => 0, 'total' => 0, 'overlapping_requests' => []]);
+            return response()->json([
+                'available' => 0,
+                'total' => 0,
+                'reserved_quantity' => 0,
+                'remaining_quantity' => 0,
+                'overlapping_requests' => [],
+            ]);
         }
 
         $requestedStart = null;
@@ -1922,38 +1956,30 @@ class RequestorController extends Controller
         $overlappingRequests = [];
 
         if ($requestedStart && $requestedEnd) {
-            $overlappingRequests = \App\Models\FacilityRequest::where(function ($query) {
-                    $query->where('status', 'approved')
-                        ->orWhere(function ($pendingQuery) {
-                            $pendingQuery->where('status', 'pending')
-                                ->where('venue_status', '!=', 'rejected')
-                                ->where('equipment_status', '!=', 'rejected');
-                        });
-                })
-                ->where(function ($query) {
-                    $query->where('equipment_returned_status', '!=', 'returned')
-                        ->where('equipment_returned_status', '!=', 'overdue');
-                })
+            $overlappingRequests = \App\Models\FacilityRequest::where('status', 'approved')
                 ->whereHas('reservationSchedule', function ($query) use ($requestedStart, $requestedEnd) {
                     $query->where('start_datetime', '<', $requestedEnd)
                         ->where('end_datetime', '>', $requestedStart);
                 })
+                ->orWhere(function ($query) use ($requestedStart, $requestedEnd) {
+                    $query->where('status', 'approved')
+                        ->whereDoesntHave('reservationSchedule')
+                        ->whereDate('start_date', '<=', $requestedEnd->toDateString())
+                        ->where(function ($endDateQuery) use ($requestedStart) {
+                            $endDateQuery->whereDate('end_date', '>=', $requestedStart->toDateString())
+                                ->orWhere(function ($singleDateQuery) use ($requestedStart) {
+                                    $singleDateQuery->whereNull('end_date')
+                                        ->whereDate('start_date', '>=', $requestedStart->toDateString());
+                                });
+                        });
+                })
                 ->get()
                 ->filter(function ($req) use ($normalizedName) {
-                    $quantities = $req->getEquipmentQuantities();
+                    $quantities = $req->getInventoryOutstandingQuantities();
                     if (!empty($quantities)) {
                         foreach ($quantities as $requestedName => $requestedQty) {
                             $candidate = strtolower((string) $requestedName);
-                            if ($candidate === $normalizedName || str_contains($candidate, $normalizedName)) {
-                                return true;
-                            }
-                        }
-                    }
-
-                    if (!empty($req->equipment) && is_array($req->equipment)) {
-                        foreach ($req->equipment as $requestedName) {
-                            $candidate = strtolower((string) $requestedName);
-                            if ($candidate === $normalizedName || str_contains($candidate, $normalizedName)) {
+                            if ($candidate === $normalizedName && (int) $requestedQty > 0) {
                                 return true;
                             }
                         }
@@ -1962,42 +1988,39 @@ class RequestorController extends Controller
                     return false;
                 })
                 ->map(function ($req) use ($normalizedName) {
-                    $quantities = $req->getEquipmentQuantities();
+                    $quantities = $req->getInventoryOutstandingQuantities();
                     $quantity = 0;
 
                     if (!empty($quantities)) {
                         foreach ($quantities as $requestedName => $requestedQty) {
                             $candidate = strtolower((string) $requestedName);
-                            if ($candidate === $normalizedName || str_contains($candidate, $normalizedName)) {
+                            if ($candidate === $normalizedName) {
                                 $quantity += (int) $requestedQty;
-                            }
-                        }
-                    }
-
-                    if ($quantity <= 0 && !empty($req->equipment) && is_array($req->equipment)) {
-                        foreach ($req->equipment as $requestedName) {
-                            $candidate = strtolower((string) $requestedName);
-                            if ($candidate === $normalizedName || str_contains($candidate, $normalizedName)) {
-                                $quantity += 1;
                             }
                         }
                     }
 
                     return [
                         'activity' => $req->name_of_activity ?: 'Existing reservation',
-                        'quantity' => max(1, $quantity),
+                        'quantity' => max(0, $quantity),
                         'schedule' => $req->reservationSchedule ? $req->reservationSchedule->start_datetime?->format('F j, Y') : null,
                         'priority' => $req->priority ?? 'regular',
                         'control_number' => $req->control_number ?? null,
                     ];
                 })
+                ->filter(fn ($reservation) => $reservation['quantity'] > 0)
                 ->values()
                 ->all();
         }
 
+        $total = (int) $eq->quantity;
+        $remainingQuantity = max(0, (int) ($availability['available_qty'] ?? 0));
+
         return response()->json([
-            'available' => max(0, (int) ($availability['available_qty'] ?? 0)),
-            'total' => (int) $eq->quantity,
+            'available' => $remainingQuantity,
+            'total' => $total,
+            'reserved_quantity' => max(0, $total - $remainingQuantity),
+            'remaining_quantity' => $remainingQuantity,
             'overlapping_requests' => $overlappingRequests,
         ]);
     }

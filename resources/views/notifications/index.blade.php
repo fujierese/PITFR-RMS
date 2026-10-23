@@ -69,6 +69,7 @@
                 @endif
             </div>
             <div class="flex-1">
+                <p class="mb-1 text-xs text-gray-500">{{ $notification->created_at->format('M j, Y g:i A') }} <span aria-hidden="true">·</span> {{ $notification->created_at->diffForHumans() }}</p>
                 <p class="text-sm font-semibold text-gray-800">
                     {{ $title }}
                 </p>
@@ -91,7 +92,6 @@
                 @if(!empty($data['notes']))
                     <p class="text-xs text-gray-400 mt-1 italic">Note: {{ $data['notes'] }}</p>
                 @endif
-                <p class="text-xs text-gray-500 mt-2">{{ $notification->created_at->diffForHumans() }}</p>
             </div>
             @if(!$notification->read_at)
                 <span class="shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></span>

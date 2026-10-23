@@ -1551,8 +1551,64 @@ document.addEventListener('DOMContentLoaded', function() {
         // Track current view for use in event callbacks
         var currentViewType = getInitialCalendarView();
 
+        function refreshEventMarquees(root) {
+            if (!root) return;
+
+            var eventElements = root.matches && root.matches('.fc-event')
+                ? [root]
+                : Array.from(root.querySelectorAll('.fc-event'));
+
+            window.requestAnimationFrame(function() {
+                window.requestAnimationFrame(function() {
+                    eventElements.forEach(function(eventElement) {
+                        var activityViewport = eventElement.querySelector('.activity-marquee-viewport');
+                        var activityName = eventElement.querySelector('.activity-name');
+                        if (activityViewport && activityName) {
+                            var activityOverflow = activityName.scrollWidth - activityViewport.clientWidth;
+                            activityName.classList.toggle('is-overflowing', activityOverflow > 16);
+                            if (activityOverflow > 16) {
+                                activityName.style.setProperty('--event-scroll-distance', '-' + activityOverflow + 'px');
+                                activityName.style.setProperty('--event-marquee-duration', Math.max(5, Math.min(14, 4 + (activityOverflow / 24))) + 's');
+                            } else {
+                                activityName.style.removeProperty('--event-scroll-distance');
+                                activityName.style.removeProperty('--event-marquee-duration');
+                            }
+                        }
+
+                        eventElement.querySelectorAll('.venue-marquee-viewport').forEach(function(viewport) {
+                            var venueName = viewport.querySelector('.venue-name');
+                            if (!venueName) return;
+                            var venueOverflow = venueName.scrollWidth - viewport.clientWidth;
+                            venueName.classList.toggle('is-overflowing', venueOverflow > 16);
+                            if (venueOverflow > 16) {
+                                venueName.style.setProperty('--event-scroll-distance', '-' + venueOverflow + 'px');
+                                venueName.style.setProperty('--event-marquee-duration', Math.max(6, Math.min(18, 5 + (venueOverflow / 18))) + 's');
+                            } else {
+                                venueName.style.removeProperty('--event-scroll-distance');
+                                venueName.style.removeProperty('--event-marquee-duration');
+                            }
+                        });
+                    });
+                });
+            });
+        }
+
+        if (window.ResizeObserver) {
+            new ResizeObserver(function() {
+                refreshEventMarquees(calendarEl);
+            }).observe(calendarEl);
+        } else {
+            window.addEventListener('resize', function() {
+                refreshEventMarquees(calendarEl);
+            });
+        }
+
         var calendar = new FullCalendar.Calendar(calendarEl, {
             initialView: getInitialCalendarView(),
+            initialDate: (() => {
+                const date = new URLSearchParams(window.location.search).get('date');
+                return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
+            })(),
             nextDayThreshold: '00:00:00',
             displayEventEnd: true,
             contentHeight: 'auto',
@@ -1597,6 +1653,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(function() {
                     calendar.refetchEvents();
                 }, 100);
+            },
+            datesSet: function() {
+                refreshEventMarquees(calendarEl);
             },
             dayCellClassNames: function(info) {
                 var classes = [];
@@ -2037,31 +2096,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     info.el.style.color = info.event.textColor;
                 }
 
-                var label = info.el.querySelector('.activity-marquee-viewport');
-                var track = info.el.querySelector('.activity-name');
-                if (label && track) {
-                    window.requestAnimationFrame(function() {
-                        var overflow = track.scrollWidth - label.clientWidth;
-                        if (overflow > 16) {
-                            track.classList.add('is-overflowing');
-                            track.style.setProperty('--event-scroll-distance', '-' + overflow + 'px');
-                            track.style.setProperty('--event-marquee-duration', Math.max(5, Math.min(14, 4 + (overflow / 24))) + 's');
-                        }
-                    });
-                }
-
-                info.el.querySelectorAll('.venue-marquee-viewport').forEach(function(viewport) {
-                    var venue = viewport.querySelector('.venue-name');
-                    if (!venue) return;
-                    window.requestAnimationFrame(function() {
-                        var overflow = venue.scrollWidth - viewport.clientWidth;
-                        if (overflow > 16) {
-                            venue.classList.add('is-overflowing');
-                            venue.style.setProperty('--event-scroll-distance', '-' + overflow + 'px');
-                            venue.style.setProperty('--event-marquee-duration', Math.max(6, Math.min(18, 5 + (overflow / 18))) + 's');
-                        }
-                    });
-                });
+                refreshEventMarquees(info.el);
             }
         });
 

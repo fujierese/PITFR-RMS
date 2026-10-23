@@ -989,10 +989,6 @@ class FacilityRequest extends Model
         $custodianIds = [];
 
         foreach (array_keys($quantities) as $itemName) {
-            if ($this->isVenueIncludedEquipment($itemName)) {
-                continue;
-            }
-
             $custodianIds = array_merge($custodianIds, $this->getAuthorizedCustodianIdsForEquipment($itemName));
         }
 

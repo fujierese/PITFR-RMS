@@ -280,6 +280,7 @@
                             <div>
                                 <label for="end_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Time <span class="required-asterisk">*</span></label>
                                 <input id="end_time" type="time" name="end_time" required value="{{ old('end_time') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('end_time') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('end_time') ? 'true' : 'false' }}">
+                                <p id="reservation-end-time-error" class="mt-2 hidden text-xs font-medium text-red-600" aria-live="polite">Reservations cannot end between 12:00 AM and 5:00 AM. Choose an end time after 5:00 AM or use the Whole Day option.</p>
                                 @error('end_time')
                                     <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                                 @enderror
@@ -312,12 +313,16 @@
                     <div class="mt-4 space-y-3">
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             @foreach($venueOptions as $v)
+                                @php
+                                    $venueCapacity = $venueCapacityMap[$v] ?? null;
+                                @endphp
                                 <label class="venue-option flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 {{ old('venue') === $v ? 'border-emerald-500 bg-emerald-50 shadow-sm' : '' }}">
                                     <input type="radio" name="venue" value="{{ $v }}"
                                            {{ old('venue') === $v ? 'checked' : '' }}
                                            required
                                            class="mt-0.5 h-4 w-4 rounded-full border-slate-300 text-emerald-600 focus:ring-emerald-500">
                                     <span class="flex-1 text-sm font-medium text-slate-700">{{ $v }}</span>
+                                    <span class="shrink-0 text-xs text-slate-500">{{ $venueCapacity !== null ? $venueCapacity . ' people' : 'Capacity not set' }}</span>
                                     <span class="hidden text-emerald-600">✓</span>
                                 </label>
                             @endforeach
@@ -410,17 +415,7 @@
                                 <span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">{{ $itemAvailable }} / {{ $itemQty }} available</span>
                                 <div class="quantity-input-wrap {{ $isSelected ? '' : 'hidden' }}" id="qty-wrap-{{ $loop->index }}">
                                     <label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Qty</label>
-                                    <div class="inline-flex items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white align-middle">
-                                        <input type="number" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ old('equipment_quantities.'.$itemName) }}" {{ $isSelected ? '' : 'disabled' }} class="w-12 border-0 px-2 py-1 text-center text-xs focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500" placeholder="1">
-                                        <span class="flex flex-col border-l border-slate-200">
-                                            <button type="button" data-quantity-step="1" aria-label="Increase {{ $itemName }} quantity" class="flex h-4 w-6 items-center justify-center text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40">
-                                                <svg aria-hidden="true" class="h-3 w-3" viewBox="0 0 16 16" fill="currentColor"><path d="m3.5 10 4.5-4.5 4.5 4.5h-9Z"/></svg>
-                                            </button>
-                                            <button type="button" data-quantity-step="-1" aria-label="Decrease {{ $itemName }} quantity" class="flex h-4 w-6 items-center justify-center border-t border-slate-200 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40">
-                                                <svg aria-hidden="true" class="h-3 w-3" viewBox="0 0 16 16" fill="currentColor"><path d="m3.5 6 4.5 4.5L12.5 6h-9Z"/></svg>
-                                            </button>
-                                        </span>
-                                    </div>
+                                    <input type="number" inputmode="numeric" step="1" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ old('equipment_quantities.'.$itemName) }}" {{ $isSelected ? 'required' : 'disabled' }} class="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" placeholder="Enter qty" aria-label="{{ $itemName }} quantity">
                                 </div>
                                 <div class="equipment-utilization-card mt-2 hidden w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 sm:min-w-[220px]"></div>
                             </div>
@@ -705,7 +700,7 @@
                                                 <p class="text-xs text-emerald-700">This will be applied automatically to the request form and printout.</p>
                                             </div>
                                         </div>
-                                        <a href="{{ route('requestor.settings') }}" class="inline-flex items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
+                                        <a href="{{ route('requestor.settings') }}" data-preserve-request-draft class="inline-flex items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
                                             Update in Account Settings
                                         </a>
                                     </div>
@@ -715,7 +710,7 @@
                                             <p class="text-sm font-semibold text-amber-700">No saved signature found</p>
                                             <p class="text-xs text-slate-600">Please upload your signature in Account Settings before submitting or printing this request.</p>
                                         </div>
-                                        <a href="{{ route('requestor.settings') }}" class="inline-flex items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100">
+                                        <a href="{{ route('requestor.settings') }}" data-preserve-request-draft class="inline-flex items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100">
                                             Go to Account Settings
                                         </a>
                                     </div>
@@ -993,10 +988,13 @@
         });
 
         window.addEventListener('beforeunload', (event) => {
-            if (formIsDirty) {
+            if (formIsDirty && !window.requestFormDraftNavigation) {
                 event.preventDefault();
                 event.returnValue = '';
             }
+        });
+        window.addEventListener('pageshow', () => {
+            window.requestFormDraftNavigation = false;
         });
 
         updateDraftStatus(false);
@@ -1014,12 +1012,20 @@
                 const isDisallowedStart = duration === 'specific_time'
                     && Boolean(startTimeInput.value)
                     && startTimeInput.value <= '05:00';
+                const isDisallowedEnd = duration === 'specific_time'
+                    && Boolean(endTimeInput.value)
+                    && endTimeInput.value <= '05:00';
 
                 startTimeInput.setCustomValidity(isDisallowedStart
                     ? 'Reservations cannot start between 12:00 AM and 5:00 AM. Choose a start time after 5:00 AM or use the Whole Day option.'
                     : '');
+                endTimeInput.setCustomValidity(isDisallowedEnd
+                    ? 'Reservations cannot end between 12:00 AM and 5:00 AM. Choose an end time after 5:00 AM or use the Whole Day option.'
+                    : '');
                 startTimeInput.setAttribute('aria-invalid', isDisallowedStart ? 'true' : 'false');
+                endTimeInput.setAttribute('aria-invalid', isDisallowedEnd ? 'true' : 'false');
                 reservationTimeError?.classList.toggle('hidden', !isDisallowedStart);
+                document.getElementById('reservation-end-time-error')?.classList.toggle('hidden', !isDisallowedEnd);
             };
 
             const applyDurationState = () => {
@@ -1113,7 +1119,7 @@
             }).map((row) => {
                 const name = row.dataset.name || 'Equipment';
                 const qtyInput = row.querySelector('input[type="number"]');
-                const qty = qtyInput && qtyInput.value ? Number(qtyInput.value) : 1;
+                const qty = qtyInput?.value || 'Enter quantity';
                 return `${name} × ${qty}`;
             });
 
@@ -1201,10 +1207,13 @@
                 if (!selectedVenue) return form.querySelector('[name="venue"]') || null;
 
                 const hasEquipmentSelection = form.querySelectorAll('.equipment-row .equipment-checkbox:checked').length > 0;
-                const hasAvailableEquipmentSelected = [...form.querySelectorAll('.equipment-row')].some((row) => {
+                const hasAvailableEquipmentSelected = [...form.querySelectorAll('.equipment-row')].filter((row) => {
+                    return row.querySelector('.equipment-checkbox')?.checked;
+                }).every((row) => {
                     const checkbox = row.querySelector('.equipment-checkbox');
-                    const quantity = row.querySelector('input[type="number"]');
-                    return checkbox?.checked && Number(row.dataset.available || 0) >= Number(quantity?.value || 0);
+                    const quantity = row.querySelector('.quantity-input-wrap input[type="number"]');
+                    const requested = Number(quantity?.value);
+                    return checkbox?.checked && Number.isInteger(requested) && requested >= 1 && requested <= Number(row.dataset.available || 0);
                 });
 
                 if (hasEquipmentSelection && !hasAvailableEquipmentSelected) {
@@ -1277,12 +1286,14 @@
 
             const allRequiredComplete = requiredFields.every(isChecklistFieldComplete);
             const selectedVenue = form.querySelector('[name="venue"]:checked');
-            const hasAvailableEquipmentSelected = [...form.querySelectorAll('.equipment-row')].some((row) => {
-                const checkbox = row.querySelector('.equipment-checkbox');
-                const quantity = row.querySelector('input[type="number"]');
-                return checkbox?.checked && Number(row.dataset.available || 0) >= Number(quantity?.value || 0);
-            });
             const hasEquipmentSelection = form.querySelectorAll('.equipment-row .equipment-checkbox:checked').length > 0;
+            const hasAvailableEquipmentSelected = [...form.querySelectorAll('.equipment-row')].filter((row) => {
+                return row.querySelector('.equipment-checkbox')?.checked;
+            }).every((row) => {
+                const quantity = row.querySelector('.quantity-input-wrap input[type="number"]');
+                const requested = Number(quantity?.value);
+                return Number.isInteger(requested) && requested >= 1 && requested <= Number(row.dataset.available || 0);
+            });
             const isStudent = form.dataset.isStudent === '1';
             const requestContext = form.querySelector('[name="request_context"]')?.value;
             const activityProposalFile = form.querySelector('[name="activity_proposal_file"]')?.files?.length > 0;

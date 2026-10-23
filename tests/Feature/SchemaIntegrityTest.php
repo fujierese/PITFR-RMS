@@ -12,7 +12,7 @@ class SchemaIntegrityTest extends TestCase
 
     public function test_current_workflow_tables_and_columns_exist(): void
     {
-        foreach (['users', 'facility_requests', 'venues', 'equipment', 'request_venues', 'request_equipment', 'request_histories', 'request_status_history'] as $table) {
+        foreach (['users', 'colleges', 'departments', 'academic_programs', 'facility_requests', 'venues', 'equipment', 'request_venues', 'request_equipment', 'request_histories', 'request_status_history'] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Missing table: {$table}");
         }
 
@@ -20,6 +20,7 @@ class SchemaIntegrityTest extends TestCase
             'username', 'password', 'role', 'requestor_type', 'school_id_number',
             'faculty_id', 'department', 'college_id', 'department_id', 'position',
             'office_or_organization',
+            'academic_program_id', 'major', 'grade_level',
         ]));
         $this->assertTrue(Schema::hasColumns('facility_requests', [
             'requested_by_id', 'status', 'venue_status', 'equipment_status',

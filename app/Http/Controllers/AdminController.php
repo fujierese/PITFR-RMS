@@ -8,6 +8,7 @@ use App\Models\StudentOrganization;
 use App\Models\StudentOrganizationMember;
 use App\Models\College;
 use App\Models\Department;
+use App\Models\AcademicProgram;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -49,8 +50,14 @@ class AdminController extends Controller
     public function users(Request $request)
     {
         $search = trim((string) $request->query('search', ''));
+        $accountType = (string) $request->query('account_type', '');
+        $accountTypes = ['student', 'faculty', 'staff', 'outsider', 'custodian_venue', 'custodian_equipment'];
+        if (!in_array($accountType, $accountTypes, true)) {
+            $accountType = '';
+        }
 
         $query = User::query()
+            ->with('academicProgram')
             ->whereNotIn('role', ['admin', 'supply_office'])
             ->orderBy('surname')
             ->orderBy('first_name')
@@ -62,8 +69,23 @@ class AdminController extends Controller
                     ->orWhereRaw('LOWER(COALESCE(surname, "")) LIKE ?', [$term])
                     ->orWhereRaw('LOWER(COALESCE(first_name, "")) LIKE ?', [$term])
                     ->orWhereRaw('LOWER(COALESCE(middle_name, "")) LIKE ?', [$term])
-                    ->orWhereRaw('LOWER(COALESCE(suffix, "")) LIKE ?', [$term]);
+                    ->orWhereRaw('LOWER(COALESCE(suffix, "")) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(COALESCE(username, "")) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(COALESCE(role, "")) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(COALESCE(requestor_type, "")) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(COALESCE(department, "")) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(COALESCE(office_or_organization, "")) LIKE ?', [$term])
+                    ->orWhereHas('college', fn ($collegeQuery) => $collegeQuery->whereRaw('LOWER(name) LIKE ?', [$term]))
+                    ->orWhereHas('departmentRecord', fn ($departmentQuery) => $departmentQuery->whereRaw('LOWER(name) LIKE ?', [$term]))
+                    ->orWhereHas('academicProgram', fn ($programQuery) => $programQuery->whereRaw('LOWER(name) LIKE ?', [$term]))
+                    ->orWhereRaw('LOWER(COALESCE(major, "")) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(COALESCE(grade_level, "")) LIKE ?', [$term]);
             });
+        }
+        if (str_starts_with($accountType, 'custodian_')) {
+            $query->where('role', $accountType === 'custodian_venue' ? 'custodian-venue' : 'custodian-equipment');
+        } elseif ($accountType !== '') {
+            $query->where('requestor_type', $accountType);
         }
 
         $users = $query->get();
@@ -74,8 +96,10 @@ class AdminController extends Controller
             'editUserId' => $editUserId,
             'showAddUser' => $request->boolean('add_user'),
             'colleges' => College::with('departments')->orderBy('name')->get(),
+            'academicPrograms' => AcademicProgram::query()->orderBy('name')->get(),
             'studentOrganizations' => StudentOrganization::query()->where('is_active', true)->orderBy('name')->get(),
             'searchQuery' => $search,
+            'accountTypeFilter' => $accountType,
         ]);
     }
 
@@ -206,7 +230,10 @@ class AdminController extends Controller
             'suffix' => ['nullable', 'string', 'max:50'],
             'username' => ['required', 'email', 'max:255', 'unique:users,username'],
             'college_id' => ['required_if:account_type,student,faculty', 'nullable', 'exists:colleges,id'],
-            'department_id' => ['required_if:account_type,student,faculty', 'nullable', 'exists:departments,id'],
+            'department_id' => ['nullable', 'exists:departments,id'],
+            'academic_program_id' => ['nullable', 'integer', 'exists:academic_programs,id'],
+            'major' => ['nullable', 'string', 'max:255'],
+            'grade_level' => ['nullable', Rule::in(['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'])],
             'school_id_number' => ['required_if:account_type,student', 'nullable', 'string', 'regex:/^\d{2}-\d{4}-\d{3}$/'],
             'faculty_id' => ['required_if:account_type,faculty', 'nullable', 'string', 'max:50', 'unique:users,faculty_id'],
             'faculty_adviser' => ['nullable', 'in:yes,no'],
@@ -232,6 +259,52 @@ class AdminController extends Controller
         ]);
 
         $accountMapping = $this->resolveAdminCreatedAccountMap($validated['account_type']);
+        $selectedCollege = !empty($validated['college_id'])
+            ? College::find($validated['college_id'])
+            : null;
+        $isHighSchoolStudent = $validated['account_type'] === 'student'
+            && $selectedCollege?->abbreviation === 'PIT-HS';
+        $academicProgram = !empty($validated['academic_program_id'])
+            ? AcademicProgram::find($validated['academic_program_id'])
+            : null;
+
+        if ($validated['account_type'] === 'student') {
+            if ($isHighSchoolStudent) {
+                if (empty($validated['grade_level'])) {
+                    return back()->withErrors(['grade_level' => 'Please select the student grade level.'])->withInput();
+                }
+                $validated['academic_program_id'] = null;
+                $validated['major'] = null;
+                $validated['department_id'] = null;
+            } else {
+                if (empty($validated['academic_program_id'])) {
+                    return back()->withErrors(['academic_program_id' => 'Please select the student academic program.'])->withInput();
+                }
+                if (!$academicProgram || (int) $academicProgram->college_id !== (int) $validated['college_id']) {
+                    return back()->withErrors(['academic_program_id' => 'Please select a program offered by the selected college.'])->withInput();
+                }
+                if (empty($validated['department_id'])) {
+                    return back()->withErrors(['department_id' => 'Please select the student department.'])->withInput();
+                }
+
+                $availableMajors = $academicProgram->majors ?? [];
+                if ($availableMajors !== [] && empty($validated['major'])) {
+                    return back()->withErrors(['major' => 'Please select a major for this program.'])->withInput();
+                }
+                if (!empty($validated['major']) && !in_array($validated['major'], $availableMajors, true)) {
+                    return back()->withErrors(['major' => 'Please select a major offered by the selected program.'])->withInput();
+                }
+                $validated['grade_level'] = null;
+            }
+        } else {
+            $validated['academic_program_id'] = null;
+            $validated['major'] = null;
+            $validated['grade_level'] = null;
+        }
+
+        if ($validated['account_type'] === 'faculty' && empty($validated['department_id'])) {
+            return back()->withErrors(['department_id' => 'Please select the faculty member department.'])->withInput();
+        }
         $facultyAdviser = $request->input('faculty_adviser') === 'yes';
 
         if ($validated['account_type'] === 'faculty' && $facultyAdviser && empty($validated['student_organization_id'])) {
@@ -283,6 +356,8 @@ class AdminController extends Controller
             $isStudent,
             $isStaff,
             $isAcademic,
+            $isHighSchoolStudent,
+            $selectedCollege,
             $facultyAdviser,
             $isCreatingStudentOrganization,
             $actor,
@@ -325,9 +400,12 @@ class AdminController extends Controller
                     ? (trim((string) ($validated['office_or_organization'] ?? '')) ?: null)
                     : (! $isStudent && ($validated['office_or_organization'] ?? null)),
                 'contact_number' => $validated['contact_number'] ?? null,
-                'department' => $isAcademic ? $department?->name : null,
+                'department' => $isHighSchoolStudent ? $selectedCollege->name : ($isAcademic ? $department?->name : null),
                 'college_id' => $isAcademic ? $validated['college_id'] : null,
                 'department_id' => $isAcademic ? $validated['department_id'] : null,
+                'academic_program_id' => $isStudent ? ($validated['academic_program_id'] ?? null) : null,
+                'major' => $isStudent ? ($validated['major'] ?? null) : null,
+                'grade_level' => $isStudent ? ($validated['grade_level'] ?? null) : null,
                 'is_active' => true,
                 'google_id' => null,
                 'email_verified_at' => now(),

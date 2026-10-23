@@ -113,6 +113,9 @@ class User extends Authenticatable implements CanResetPassword
         'department',
         'college_id',
         'department_id',
+        'academic_program_id',
+        'major',
+        'grade_level',
         'position',
         'requestor_type',
         'school_id_number',
@@ -354,7 +357,7 @@ class User extends Authenticatable implements CanResetPassword
 
     public function getStudentProgramLabelAttribute(): ?string
     {
-        return $this->program ?? $this->course ?? null;
+        return $this->academicProgram?->name ?? $this->program ?? $this->course ?? null;
     }
 
     public function getStudentYearLevelLabelAttribute(): ?string
@@ -436,6 +439,11 @@ class User extends Authenticatable implements CanResetPassword
     public function departmentRecord()
     {
         return $this->belongsTo(Department::class, 'department_id');
+    }
+
+    public function academicProgram()
+    {
+        return $this->belongsTo(AcademicProgram::class);
     }
 
     public function venues()

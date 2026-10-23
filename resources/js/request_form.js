@@ -112,6 +112,8 @@ const initializeRequestForm = function () {
     const fileName = document.getElementById('file-name');
     const draftStatus = document.getElementById('draft-status');
     const draftStorageKeys = ['pitfr-request-draft', 'pitfr-request-draft-session', 'pitfr-request-draft-cache'];
+    let draftDatabasePromise;
+    let draftSaveQueue = Promise.resolve();
     const urgentCheckbox = document.getElementById('urgent-processing-checkbox') || document.getElementById('is-emergency-checkbox');
     const emergencyCheckbox = urgentCheckbox;
     const emergencyJustificationWrap = document.getElementById('urgent-justification-wrap') || document.getElementById('emergency-justification-wrap');
@@ -231,11 +233,14 @@ const initializeRequestForm = function () {
                 return form.querySelector('[name="venue"]') || null;
             }
 
-            const equipmentSelected = form.querySelectorAll('.equipment-checkbox:checked').length > 0;
-            const hasAvailableEquipmentSelected = Array.from(form.querySelectorAll('.equipment-row')).some(function (row) {
-                const checkbox = row.querySelector('.equipment-checkbox');
-                const quantity = row.querySelector('input[type="number"]');
-                return checkbox?.checked && Number(row.dataset.available || 0) >= Number(quantity?.value || 0);
+            const selectedEquipmentRows = Array.from(form.querySelectorAll('.equipment-row')).filter(function (row) {
+                return row.querySelector('.equipment-checkbox')?.checked;
+            });
+            const equipmentSelected = selectedEquipmentRows.length > 0;
+            const hasAvailableEquipmentSelected = selectedEquipmentRows.every(function (row) {
+                const quantity = row.querySelector('.quantity-input-wrap input[type="number"]');
+                const requested = Number(quantity?.value);
+                return Number.isInteger(requested) && requested >= 1 && requested <= Number(row.dataset.available || 0);
             });
 
             if (equipmentSelected && !hasAvailableEquipmentSelected) {
@@ -339,10 +344,12 @@ const initializeRequestForm = function () {
         const documentChecklist = document.getElementById('checklist-document-upload');
         const signatureChecklist = document.getElementById('checklist-e-signature');
         if (requiredChecklist) requiredChecklist.checked = allRequiredComplete;
-        if (venueChecklist) venueChecklist.checked = Boolean(selectedVenue) && (!equipmentSelected || Array.from(form.querySelectorAll('.equipment-row')).some(function (row) {
-            const checkbox = row.querySelector('.equipment-checkbox');
-            const quantity = row.querySelector('input[type="number"]');
-            return checkbox?.checked && Number(row.dataset.available || 0) >= Number(quantity?.value || 0);
+        if (venueChecklist) venueChecklist.checked = Boolean(selectedVenue) && (!equipmentSelected || Array.from(form.querySelectorAll('.equipment-row')).filter(function (row) {
+            return row.querySelector('.equipment-checkbox')?.checked;
+        }).every(function (row) {
+            const quantity = row.querySelector('.quantity-input-wrap input[type="number"]');
+            const requested = Number(quantity?.value);
+            return Number.isInteger(requested) && requested >= 1 && requested <= Number(row.dataset.available || 0);
         }));
         if (documentChecklist) documentChecklist.checked = hasFileUpload;
         if (signatureChecklist) signatureChecklist.checked = eSignatureSelected;
@@ -362,7 +369,7 @@ const initializeRequestForm = function () {
         const isWholeDay = form.querySelector('[name="reservation_duration"]:checked')?.value === 'whole_day';
         const selectedVenue = form.querySelector('[name="venue"]:checked');
         const selectedEquipment = Array.from(form.querySelectorAll('.equipment-checkbox:checked')).map(function (checkbox) {
-            const quantity = checkbox.closest('.equipment-row')?.querySelector('input[type="number"]')?.value || '1';
+            const quantity = checkbox.closest('.equipment-row')?.querySelector('.quantity-input-wrap input[type="number"]')?.value || 'Enter quantity';
             return `${checkbox.value} x ${quantity}`;
         });
 
@@ -442,6 +449,16 @@ const initializeRequestForm = function () {
     };
 
     const clearDraftStorage = function () {
+        try {
+            const draft = JSON.parse(localStorage.getItem('pitfr-request-draft') || '{}');
+            (draft.files || []).forEach(function (name) {
+                deleteDraftFile(name).catch(function (error) {
+                    console.warn('Draft attachment cleanup failed', error);
+                });
+            });
+        } catch (error) {
+            console.warn('Draft attachment cleanup could not read saved draft', error);
+        }
         draftStorageKeys.forEach(function (key) {
             localStorage.removeItem(key);
             sessionStorage.removeItem(key);
@@ -497,24 +514,6 @@ const initializeRequestForm = function () {
         });
     };
 
-    const readFileAsDraftData = function (file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = function () {
-                resolve({
-                    name: file.name,
-                    size: file.size,
-                    type: file.type,
-                    data: typeof reader.result === 'string' ? reader.result : ''
-                });
-            };
-            reader.onerror = function () {
-                reject(new Error('Unable to read draft attachment.'));
-            };
-            reader.readAsDataURL(file);
-        });
-    };
-
     const createFileFromDraftData = function (metadata) {
         if (!metadata || !metadata.name || !metadata.data) {
             return null;
@@ -538,33 +537,117 @@ const initializeRequestForm = function () {
         }
     };
 
-    const saveDraft = function () {
-        const formData = new FormData(form);
-        const draft = {};
-        const fileMetadata = {};
-
-        formData.forEach((value, key) => {
-            const field = form.querySelector(`[name="${key}"]`);
-            if (field?.type === 'file' || key === 'proposal_file' || key === 'equipment[]' || key === 'venue') {
-                return;
-            }
-            draft[key] = value;
-        });
-
-        const fileInputs = Array.from(form.querySelectorAll('input[type="file"]'));
-        const readFiles = fileInputs.map(function (input) {
-            if (!input.files || !input.files.length) {
-                return Promise.resolve();
-            }
-            return readFileAsDraftData(input.files[0]).then(function (metadata) {
-                fileMetadata[input.name] = metadata;
-            }).catch(function (error) {
-                console.warn('Draft autosave could not read file', error);
+    const openDraftDatabase = function () {
+        if (!window.indexedDB) {
+            return Promise.reject(new Error('This browser does not support persistent request attachments.'));
+        }
+        if (!draftDatabasePromise) {
+            draftDatabasePromise = new Promise(function (resolve, reject) {
+                const request = window.indexedDB.open('pitfr-request-drafts', 1);
+                request.onupgradeneeded = function () {
+                    if (!request.result.objectStoreNames.contains('files')) {
+                        request.result.createObjectStore('files', { keyPath: 'name' });
+                    }
+                };
+                request.onsuccess = function () {
+                    resolve(request.result);
+                };
+                request.onerror = function () {
+                    reject(request.error || new Error('Unable to open request draft storage.'));
+                };
             });
-        });
+        }
+        return draftDatabasePromise;
+    };
 
-        Promise.all(readFiles).then(function () {
-            draft.fileMetadata = fileMetadata;
+    const storeDraftFile = async function (name, file) {
+        const database = await openDraftDatabase();
+        return new Promise(function (resolve, reject) {
+            const transaction = database.transaction('files', 'readwrite');
+            transaction.objectStore('files').put({
+                name: name,
+                file: file,
+                fileName: file.name,
+                type: file.type,
+                lastModified: file.lastModified
+            });
+            transaction.oncomplete = resolve;
+            transaction.onerror = function () {
+                reject(transaction.error || new Error('Unable to save request attachment.'));
+            };
+            transaction.onabort = function () {
+                reject(transaction.error || new Error('Request attachment save was interrupted.'));
+            };
+        });
+    };
+
+    const loadDraftFile = async function (name) {
+        const database = await openDraftDatabase();
+        return new Promise(function (resolve, reject) {
+            const transaction = database.transaction('files', 'readonly');
+            const request = transaction.objectStore('files').get(name);
+            request.onsuccess = function () {
+                resolve(request.result || null);
+            };
+            request.onerror = function () {
+                reject(request.error || new Error('Unable to restore request attachment.'));
+            };
+        });
+    };
+
+    const deleteDraftFile = async function (name) {
+        const database = await openDraftDatabase();
+        return new Promise(function (resolve, reject) {
+            const transaction = database.transaction('files', 'readwrite');
+            transaction.objectStore('files').delete(name);
+            transaction.oncomplete = resolve;
+            transaction.onerror = function () {
+                reject(transaction.error || new Error('Unable to remove request attachment.'));
+            };
+            transaction.onabort = function () {
+                reject(transaction.error || new Error('Request attachment removal was interrupted.'));
+            };
+        });
+    };
+
+    const displayRestoredFile = function (input, file) {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        input.files = dataTransfer.files;
+        const previewId = input.name === 'activity_proposal_file' ? 'activity-proposal-name'
+            : input.name === 'igp_receipt_file' ? 'igp-receipt-name'
+            : input.name === 'e_signature_file' ? 'e-signature-name'
+            : null;
+        const preview = previewId ? document.getElementById(previewId) : null;
+        if (preview) {
+            preview.textContent = file.name;
+            const wrapper = preview.closest('p,div') || preview.parentElement;
+            wrapper?.classList.remove('hidden');
+        }
+        input.dataset.restoredFileName = file.name;
+    };
+
+    const saveDraft = function () {
+        const persistDraft = async function () {
+            const formData = new FormData(form);
+            const draft = {};
+
+            formData.forEach((value, key) => {
+                const field = form.querySelector(`[name="${key}"]`);
+                if (field?.type === 'file' || key === 'proposal_file' || key === 'equipment[]' || key === 'venue') {
+                    return;
+                }
+                draft[key] = value;
+            });
+
+            const fileInputs = Array.from(form.querySelectorAll('input[type="file"]'));
+            const files = fileInputs.filter(input => input.files?.length).map(input => input.name);
+            await Promise.all(fileInputs.map(function (input) {
+                return input.files?.length
+                    ? storeDraftFile(input.name, input.files[0])
+                    : Promise.resolve();
+            }));
+            draft.files = files;
             draft.equipment = Array.from(equipmentCheckboxes)
                 .filter(checkbox => checkbox.checked)
                 .map(checkbox => checkbox.value);
@@ -582,15 +665,29 @@ const initializeRequestForm = function () {
                     }
                 }
             } catch (error) {
-                console.warn('Draft autosave failed', error);
+                throw new Error('Unable to save the request draft in this browser.', { cause: error });
             }
+        };
+
+        draftSaveQueue = draftSaveQueue.catch(function () {}).then(persistDraft).then(function () {
+            return true;
+        }).catch(function (error) {
+            console.error('Draft autosave failed', error);
+            if (draftStatus) {
+                const label = draftStatus.querySelector('[data-draft-status-label]');
+                if (label) {
+                    label.textContent = 'Draft attachment could not be saved';
+                }
+            }
+            return false;
         });
+        return draftSaveQueue;
     };
 
-    const restoreDraft = function () {
+    const restoreDraft = async function () {
         try {
             clearTransientUiState();
-            const cached = localStorage.getItem('pitfr-request-draft');
+            const cached = localStorage.getItem('pitfr-request-draft') || sessionStorage.getItem('pitfr-request-draft');
             if (!cached) {
                 updateProposalRequirement();
                 toggleEmergencyJustification();
@@ -604,19 +701,36 @@ const initializeRequestForm = function () {
             }
 
             const draft = JSON.parse(cached);
-            Object.entries(draft).forEach(([key, value]) => {
+            for (const [key, value] of Object.entries(draft)) {
                 if (key === 'equipment') {
                     equipmentCheckboxes.forEach(checkbox => {
                         checkbox.checked = Array.isArray(value) && value.includes(checkbox.value);
                     });
-                    return;
+                    continue;
                 }
 
                 if (key === 'venue') {
                     venueRadioInputs.forEach(radio => {
                         radio.checked = radio.value === value;
                     });
-                    return;
+                    continue;
+                }
+
+                if (key === 'files') {
+                    for (const fileName of value || []) {
+                        const targetInput = form.querySelector(`[name="${fileName}"]`);
+                        if (!targetInput) {
+                            continue;
+                        }
+                        const savedFile = await loadDraftFile(fileName);
+                        if (savedFile?.file) {
+                            displayRestoredFile(targetInput, new File([savedFile.file], savedFile.fileName, {
+                                type: savedFile.type || savedFile.file.type || 'application/octet-stream',
+                                lastModified: savedFile.lastModified || Date.now()
+                            }));
+                        }
+                    }
+                    continue;
                 }
 
                 if (key === 'fileMetadata') {
@@ -624,37 +738,19 @@ const initializeRequestForm = function () {
                         const targetInput = form.querySelector(`[name="${fileName}"]`);
                         const restoredFile = createFileFromDraftData(metadata);
                         if (targetInput && restoredFile) {
-                            const dataTransfer = new DataTransfer();
-                            dataTransfer.items.add(restoredFile);
-                            targetInput.files = dataTransfer.files;
-                        }
-                        const previewId = fileName === 'activity_proposal_file' ? 'activity-proposal-name'
-                            : fileName === 'igp_receipt_file' ? 'igp-receipt-name'
-                            : fileName === 'e_signature_file' ? 'e-signature-name'
-                            : null;
-                        const preview = previewId ? document.getElementById(previewId) : null;
-                        const displayName = metadata?.name || targetInput?.dataset?.restoredFileName || '';
-                        if (preview && displayName) {
-                            preview.textContent = displayName;
-                            const wrapper = preview.closest('p,div') || preview.parentElement;
-                            if (wrapper) {
-                                wrapper.classList.remove('hidden');
-                            }
-                        }
-                        if (targetInput && displayName) {
-                            targetInput.dataset.restoredFileName = displayName;
+                            displayRestoredFile(targetInput, restoredFile);
                         }
                     });
-                    return;
+                    continue;
                 }
 
                 const field = form.querySelector(`[name="${key}"]`);
                 if (!field) {
-                    return;
+                    continue;
                 }
 
                 if (field.type === 'file') {
-                    return;
+                    continue;
                 }
 
                 if (field.type === 'checkbox') {
@@ -666,7 +762,7 @@ const initializeRequestForm = function () {
                 } else {
                     field.value = value;
                 }
-            });
+            }
 
             updateProposalRequirement();
             toggleEmergencyJustification();
@@ -684,7 +780,13 @@ const initializeRequestForm = function () {
                 draftStatus.textContent = 'Draft restored';
             }
         } catch (error) {
-            console.warn('Draft restore failed', error);
+            console.error('Draft restore failed', error);
+            if (draftStatus) {
+                const label = draftStatus.querySelector('[data-draft-status-label]');
+                if (label) {
+                    label.textContent = 'Draft attachment could not be restored';
+                }
+            }
         }
     };
 
@@ -763,7 +865,7 @@ const initializeRequestForm = function () {
             const checkbox = form.querySelector(`input[name="equipment[]"][value="${CSS.escape(item)}"]`);
             const row = checkbox ? checkbox.closest('.equipment-row') : null;
             const qtyInput = row?.querySelector('.quantity-input-wrap input[type="number"]');
-            const qty = qtyInput?.value || '1';
+            const qty = qtyInput?.value || 'Enter quantity';
             return `<div>• ${escapeHtml(item)} × ${escapeHtml(qty)}</div>`;
         });
 
@@ -925,6 +1027,16 @@ const initializeRequestForm = function () {
         const endDate = endDateInput.value;
         const startTime = startTimeInput.value;
         const endTime = endTimeInput.value;
+        const isSpecificTime = (form.querySelector('[name="reservation_duration"]:checked')?.value || 'specific_time') === 'specific_time';
+        const disallowedEnd = isSpecificTime && endTime && endTime <= '05:00';
+        endTimeInput.setCustomValidity(disallowedEnd
+            ? 'Reservations cannot end between 12:00 AM and 5:00 AM. Choose an end time after 5:00 AM or use the Whole Day option.'
+            : '');
+        endTimeInput.setAttribute('aria-invalid', disallowedEnd ? 'true' : 'false');
+        document.getElementById('reservation-end-time-error')?.classList.toggle('hidden', !disallowedEnd);
+        if (disallowedEnd) {
+            return false;
+        }
 
         if (!startDate || !endDate || !startTime || !endTime) {
             return true;
@@ -1212,14 +1324,19 @@ const initializeRequestForm = function () {
             const checkbox = row.querySelector('.equipment-checkbox');
             const qtyInput = row.querySelector('.quantity-input-wrap input[type="number"]');
             const errorMessage = row.querySelector('.quantity-error-message');
-            const maxAllowed = parseInt(row.dataset.maxQuantity || row.dataset.available, 10) || 0;
-            const qty = parseInt(qtyInput.value, 10) || 0;
+            if (!checkbox || !qtyInput) return;
+            const maxAllowed = parseInt(row.dataset.available, 10) || 0;
+            const qty = Number(qtyInput.value);
 
-            if (checkbox.checked && (qty < 1 || qty > maxAllowed)) {
+            if (checkbox.checked && (!Number.isInteger(qty) || qty < 1 || qty > maxAllowed)) {
                 qtyInput.classList.add('border-red-500');
-                qtyInput.setCustomValidity('Quantity requested cannot exceed the available stock.');
+                qtyInput.setCustomValidity(maxAllowed > 0
+                    ? `Enter a whole-number quantity from 1 to ${maxAllowed}.`
+                    : 'No units are available for the selected schedule.');
                 if (errorMessage) {
-                    errorMessage.textContent = 'Please request between 1 and ' + maxAllowed + ' item' + (maxAllowed === 1 ? '' : 's') + '.';
+                    errorMessage.textContent = maxAllowed > 0
+                        ? 'Enter a whole-number quantity from 1 to ' + maxAllowed + '.'
+                        : 'No units are available for the selected schedule.';
                     errorMessage.classList.remove('hidden');
                 }
                 valid = false;
@@ -1236,29 +1353,38 @@ const initializeRequestForm = function () {
         return valid;
     };
 
-    const updateEquipmentRowVisuals = function (row, available, total, overlappingRequests = []) {
+    const updateEquipmentAvailabilityBadge = function (row) {
         const badge = row.querySelector('.availability-badge');
+        const checkbox = row.querySelector('.equipment-checkbox');
+        const qtyInput = row.querySelector('.quantity-input-wrap input[type="number"]');
+        if (!badge) return;
+
+        const available = Math.max(0, parseInt(row.dataset.available, 10) || 0);
+        const total = Math.max(0, parseInt(row.dataset.total, 10) || 0);
+        const requested = Number(qtyInput?.value);
+        const hasQuantity = Boolean(qtyInput?.value);
+        const hasValidQuantity = Number.isInteger(requested) && requested >= 1 && requested <= available;
+        const remaining = checkbox?.checked && hasQuantity
+            ? Math.max(0, available - (hasValidQuantity ? requested : available))
+            : available;
+        const state = getAvailabilityState(remaining, total);
+        const tone = checkbox?.checked && hasQuantity && !hasValidQuantity ? 'red' : state.tone;
+
+        badge.textContent = `${state.icon} ${remaining} / ${total} available`;
+        badge.className = `availability-badge rounded-full px-2.5 py-1 text-xs font-semibold ${tone === 'green' ? 'bg-green-100 text-green-700' : tone === 'yellow' ? 'bg-yellow-100 text-yellow-700' : tone === 'orange' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}`;
+    };
+
+    const updateEquipmentRowVisuals = function (row, available, total, overlappingRequests = []) {
         const qtyInput = row.querySelector('.quantity-input-wrap input[type="number"]');
         const checkbox = row.querySelector('.equipment-checkbox');
         const utilizationCard = row.querySelector('.equipment-utilization-card');
         const normalizedAvailable = Math.max(0, parseInt(available, 10) || 0);
         const normalizedTotal = Math.max(0, parseInt(total, 10) || 0);
-        const state = getAvailabilityState(normalizedAvailable, normalizedTotal);
-
-        if (badge) {
-            const badgeText = normalizedAvailable <= 0
-                ? `${state.icon} ${state.text}`
-                : state.tone === 'orange'
-                    ? `${state.icon} ${state.label} · ${state.text}`
-                    : `${state.icon} ${state.label} · ${normalizedAvailable} / ${normalizedTotal}`;
-            badge.textContent = badgeText;
-            badge.className = `availability-badge rounded-full px-2.5 py-1 text-xs font-semibold ${state.tone === 'green' ? 'bg-green-100 text-green-700' : state.tone === 'yellow' ? 'bg-yellow-100 text-yellow-700' : state.tone === 'orange' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}`;
-        }
 
         if (utilizationCard) {
             if (overlappingRequests.length > 0) {
                 const firstConflict = overlappingRequests[0];
-                const reservedQuantity = Math.max(0, Number(firstConflict?.quantity ?? (normalizedTotal - normalizedAvailable)));
+                const reservedQuantity = Math.max(0, normalizedTotal - normalizedAvailable);
                 const remainingQuantity = normalizedAvailable;
                 const conflictPriority = (firstConflict?.priority || 'regular').toString().toUpperCase();
                 const priorityTone = conflictPriority === 'URGENT' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700';
@@ -1267,7 +1393,7 @@ const initializeRequestForm = function () {
                 utilizationCard.innerHTML = '';
                 const title = document.createElement('div');
                 title.className = 'font-semibold text-slate-800';
-                title.textContent = '⚠ Existing Reservation';
+                title.textContent = '⚠ Existing Reservation' + (overlappingRequests.length > 1 ? `s (${overlappingRequests.length})` : '');
                 utilizationCard.appendChild(title);
 
                 const infoWrap = document.createElement('div');
@@ -1276,7 +1402,7 @@ const initializeRequestForm = function () {
                 const activityRow = document.createElement('div');
                 activityRow.className = 'flex items-center gap-2';
                 const activityDiv = document.createElement('div');
-                activityDiv.textContent = 'Activity: ' + (firstConflict?.activity || 'Existing reservation');
+                activityDiv.textContent = (overlappingRequests.length > 1 ? 'Example activity: ' : 'Activity: ') + (firstConflict?.activity || 'Existing reservation');
                 const priorityDiv = document.createElement('div');
                 priorityDiv.className = 'ml-2 inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset ' + priorityTone;
                 priorityDiv.textContent = escapeHtml(conflictPriority);
@@ -1311,17 +1437,15 @@ const initializeRequestForm = function () {
         }
 
         if (checkbox && qtyInput) {
-            const maxAllowed = Math.max(0, parseInt(row.dataset.maxQuantity || normalizedAvailable, 10) || normalizedAvailable);
-            qtyInput.max = maxAllowed;
-            if (parseInt(qtyInput.value, 10) > maxAllowed) {
-                qtyInput.value = maxAllowed;
-            }
+            qtyInput.max = normalizedAvailable;
+            qtyInput.required = checkbox.checked;
 
             if (normalizedAvailable <= 0) {
                 checkbox.disabled = true;
                 checkbox.checked = false;
-                qtyInput.value = 0;
+                qtyInput.value = '';
                 qtyInput.disabled = true;
+                qtyInput.required = false;
                 qtyInput.closest('.quantity-input-wrap').style.display = 'none';
             } else {
                 checkbox.disabled = false;
@@ -1329,9 +1453,14 @@ const initializeRequestForm = function () {
                 if (checkbox.checked) {
                     qtyInput.closest('.quantity-input-wrap').style.display = 'block';
                 } else {
+                    qtyInput.value = '';
                     qtyInput.closest('.quantity-input-wrap').style.display = 'none';
                 }
             }
+
+            qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+            updateEquipmentAvailabilityBadge(row);
         }
     };
 
@@ -1659,7 +1788,6 @@ const initializeRequestForm = function () {
         form.querySelectorAll('.quantity-input-wrap input[type="number"]').forEach(input => {
             input.addEventListener('input', function () {
                 updateSelectedItemsSummary();
-                refreshAllEquipmentAvailability();
                 saveDraft();
             });
         });
@@ -1699,6 +1827,21 @@ const initializeRequestForm = function () {
     initializeFileInputs();
     attachSelectionListeners();
     restoreDraft();
+    form.querySelectorAll('[data-preserve-request-draft]').forEach(function (link) {
+        link.addEventListener('click', function (event) {
+            event.preventDefault();
+            link.setAttribute('aria-disabled', 'true');
+            saveDraft().then(function (saved) {
+                if (!saved) {
+                    link.removeAttribute('aria-disabled');
+                    link.focus();
+                    return;
+                }
+                window.requestFormDraftNavigation = true;
+                window.location.assign(link.href);
+            });
+        });
+    });
     updateOtherVenueVisibility();
     updateSelectedItemsSummary();
 
@@ -1710,7 +1853,7 @@ const initializeRequestForm = function () {
         const checkbox = row.querySelector('.equipment-checkbox');
         const qtyInput = row.querySelector('.quantity-input-wrap input[type="number"]');
         const qtyWrap = row.querySelector('.quantity-input-wrap');
-        const quantityStepButtons = row.querySelectorAll('[data-quantity-step]');
+        if (!checkbox || !qtyInput || !qtyWrap) return;
         let errorMessage = row.querySelector('.quantity-error-message');
 
         if (!errorMessage) {
@@ -1721,38 +1864,28 @@ const initializeRequestForm = function () {
 
         const updateAvailability = function () {
             const available = Math.max(0, parseInt(row.dataset.available, 10) || 0);
-            const total = Math.max(0, parseInt(row.dataset.total, 10) || 0);
-            const maxAllowed = Math.max(0, parseInt(row.dataset.maxQuantity || available, 10) || available);
-            let qty = parseInt(qtyInput.value, 10);
             const isChecked = checkbox.checked;
+            const quantity = Number(qtyInput.value);
 
-            qtyInput.max = maxAllowed;
+            qtyInput.max = available;
             qtyInput.disabled = !isChecked || available <= 0;
-
-            quantityStepButtons.forEach(button => {
-                const step = Number(button.dataset.quantityStep);
-                const currentQuantity = Number(qtyInput.value) || 0;
-                button.disabled = qtyInput.disabled || (step > 0 ? currentQuantity >= maxAllowed : currentQuantity <= 1);
-            });
-
-            if (!qty || qty < 1) {
-                qty = 1;
-            }
+            qtyInput.required = isChecked;
 
             if (isChecked) {
-                qtyInput.value = qty;
                 qtyWrap.style.display = 'block';
             } else {
                 qtyWrap.style.display = 'none';
-                qtyInput.value = 0;
-                qty = 0;
+                qtyInput.value = '';
             }
 
-            let invalid = false;
-            if (isChecked && qty > maxAllowed) {
-                invalid = true;
-                qtyInput.setCustomValidity('Quantity requested cannot exceed the allowed amount.');
-                errorMessage.textContent = 'Please request no more than ' + maxAllowed + ' item' + (maxAllowed === 1 ? '' : 's') + '.';
+            const invalid = isChecked && (!Number.isInteger(quantity) || quantity < 1 || quantity > available);
+            if (invalid) {
+                qtyInput.setCustomValidity(available > 0
+                    ? 'Enter a whole-number quantity from 1 to ' + available + '.'
+                    : 'No units are available for the selected schedule.');
+                errorMessage.textContent = available > 0
+                    ? 'Enter a whole-number quantity from 1 to ' + available + '.'
+                    : 'No units are available for the selected schedule.';
             } else {
                 qtyInput.setCustomValidity('');
                 errorMessage.textContent = '';
@@ -1766,38 +1899,26 @@ const initializeRequestForm = function () {
                 errorMessage.classList.add('hidden');
             }
 
-            if (badge) {
-                const state = getAvailabilityState(available, total);
-                badge.textContent = available <= 0 ? `${state.icon} ${state.text}` : `${state.icon} ${state.label} · ${available} / ${total}`;
-                badge.className = 'availability-badge rounded-full px-2.5 py-1 text-xs font-semibold ' + (state.tone === 'green' ? 'bg-green-100 text-green-700' : state.tone === 'yellow' ? 'bg-yellow-100 text-yellow-700' : state.tone === 'orange' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700');
-            }
-
             if (available <= 0) {
                 checkbox.disabled = true;
                 checkbox.checked = false;
-                qtyInput.value = 0;
+                qtyInput.value = '';
                 qtyInput.disabled = true;
+                qtyInput.required = false;
                 qtyWrap.style.display = 'none';
+                qtyInput.setCustomValidity('');
+                qtyInput.classList.remove('border-red-500');
+                errorMessage.textContent = '';
+                errorMessage.classList.add('hidden');
             }
 
-            if (qty > maxAllowed) {
-                qtyInput.value = maxAllowed;
-            }
+            updateEquipmentAvailabilityBadge(row);
+            updateFormSummary();
         };
 
-        const badge = row.querySelector('.availability-badge');
         checkbox.addEventListener('change', updateAvailability);
         qtyInput.addEventListener('input', updateAvailability);
-        quantityStepButtons.forEach(button => {
-            button.addEventListener('click', function () {
-                const step = Number(button.dataset.quantityStep);
-                const minimum = Number(qtyInput.min) || 1;
-                const maximum = Number(qtyInput.max) || minimum;
-                const currentQuantity = Number(qtyInput.value) || minimum;
-                qtyInput.value = Math.min(maximum, Math.max(minimum, currentQuantity + step));
-                qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
-            });
-        });
+        qtyInput.addEventListener('change', updateAvailability);
 
         updateAvailability();
         fetchAvailabilityAndUpdate(row);

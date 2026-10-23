@@ -117,6 +117,30 @@ class Phase1RevisionWorkflowTest extends TestCase
         );
     }
 
+    public function test_admin_cannot_propose_a_revision_that_ends_before_six_am(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $request = $this->createApprovedRequest($requester);
+        $newDate = now()->addDays(2)->toDateString();
+
+        $this->actingAs($admin)
+            ->post(route('supply-office.requests.revise'), [
+                'facility_request_id' => $request->id,
+                'start_date' => $newDate,
+                'end_date' => $newDate,
+                'start_time' => '15:00',
+                'end_time' => '03:00',
+                'venue' => ['Test Venue'],
+                'equipment' => ['Test Equipment'],
+                'equipment_quantities' => ['Test Equipment' => 2],
+                'revision_reason' => 'Rescheduling due to a schedule conflict.',
+            ])
+            ->assertSessionHasErrors('end_time');
+
+        $this->assertDatabaseCount('revision_histories', 0);
+    }
+
     public function test_revision_creates_history_record(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);

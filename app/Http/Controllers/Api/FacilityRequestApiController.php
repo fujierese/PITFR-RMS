@@ -160,6 +160,14 @@ class FacilityRequestApiController extends Controller
                 'start_time' => 'Reservations cannot start between 12:00 AM and 5:00 AM. Choose a start time after 5:00 AM or use the Whole Day option.',
             ]);
         }
+        if (
+            ($validated['reservation_duration'] ?? 'specific_time') === 'specific_time'
+            && $validated['end_time'] <= '05:00'
+        ) {
+            throw ValidationException::withMessages([
+                'end_time' => 'Reservations cannot end between 12:00 AM and 5:00 AM. Choose an end time after 5:00 AM or use the Whole Day option.',
+            ]);
+        }
 
         $user = Auth::user();
 

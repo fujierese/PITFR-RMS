@@ -414,6 +414,11 @@ class SupplyOfficeController extends Controller
         ]);
 
         $facilityRequest = FacilityRequest::findOrFail($validated['facility_request_id']);
+        if ($validated['start_time'] <= '05:00' || $validated['end_time'] <= '05:00') {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['end_time' => 'Reservations cannot start or end between 12:00 AM and 5:00 AM. Choose times after 5:00 AM.']);
+        }
 
         // Check if revision is allowed
         if (!$facilityRequest->canBeRevised()) {

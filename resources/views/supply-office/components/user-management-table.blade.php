@@ -25,7 +25,16 @@
                         <td class="px-4 py-4">{{ $user->username }}</td>
                         <td class="px-4 py-4">{{ $user->account_type_label }}</td>
                         <td class="px-4 py-4">{{ $user->is_active === false ? 'Deactivated' : 'Active' }}</td>
-                        <td class="px-4 py-4">{{ $user->department ?? 'N/A' }}</td>
+                        <td class="px-4 py-4">
+                            {{ $user->department ?? 'N/A' }}
+                            @if($user->studentProgramLabel || $user->major || $user->grade_level)
+                                <span class="mt-1 block text-xs text-slate-500">
+                                    @if($user->studentProgramLabel){{ $user->studentProgramLabel }}@endif
+                                    @if($user->major){{ $user->studentProgramLabel ? ' · ' : '' }}Major: {{ $user->major }}@endif
+                                    @if($user->grade_level){{ $user->grade_level }}@endif
+                                </span>
+                            @endif
+                        </td>
                         <td class="px-4 py-4 text-right">
                             <a href="{{ route('supply-office.users', ['edit_user' => $user->id]) }}" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</a>
                             @if($user->is_active)

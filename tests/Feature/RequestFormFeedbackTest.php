@@ -45,6 +45,21 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringNotContainsString('Requested Importance', $html);
     }
 
+    public function test_request_form_shows_venue_capacity_next_to_venue_name(): void
+    {
+        $html = view('requestor.partials.request_form', [
+            'controlNumber' => 'FER-2026-001',
+            'venueOptions' => ['Balay Alumni'],
+            'venueCapacityMap' => ['Balay Alumni' => 50],
+            'equipment' => collect(),
+            'errors' => new \Illuminate\Support\ViewErrorBag(),
+            'requestorType' => 'outsider',
+        ])->render();
+
+        $this->assertStringContainsString('Balay Alumni', $html);
+        $this->assertStringContainsString('50 people', $html);
+    }
+
     public function test_request_form_marks_initialized_draft_state_to_prevent_duplicate_bindings(): void
     {
         $html = view('requestor.partials.request_form', [
@@ -72,6 +87,10 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringContainsString('Wireless Microphones', $html);
         $this->assertStringContainsString('Non-Wireless Microphones', $html);
         $this->assertStringContainsString('Monobloc Chairs', $html);
+        $this->assertStringContainsString('type="number" inputmode="numeric" step="1"', $html);
+        $this->assertStringContainsString('name="equipment_quantities[Sound System]"', $html);
+        $this->assertStringContainsString('placeholder="Enter qty"', $html);
+        $this->assertStringNotContainsString('data-quantity-step', $html);
         $this->assertStringContainsString('Balay Alumni already has 50 chairs available onsite.', $html);
         $this->assertStringNotContainsString('Aircon', $html);
         $this->assertStringNotContainsString('value="Wireless Microphone"', $html);

@@ -64,6 +64,26 @@ class BroadcastCustodianTest extends TestCase
         $this->assertDatabaseCount('facility_requests', 0);
     }
 
+    public function test_api_rejects_a_specific_time_ending_between_midnight_and_five_am(): void
+    {
+        $requestor = User::factory()->create(['role' => 'requestor']);
+
+        $this->actingAs($requestor)
+            ->postJson('/api/facility-requests', [
+                'name_of_activity' => 'Overnight activity',
+                'expected_participants' => 10,
+                'start_date' => now()->addDay()->toDateString(),
+                'end_date' => now()->addDay()->toDateString(),
+                'start_time' => '15:00',
+                'end_time' => '03:00',
+                'department' => 'IT',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('end_time');
+
+        $this->assertDatabaseCount('facility_requests', 0);
+    }
+
     public function test_api_whole_day_duration_uses_the_supported_eight_am_start(): void
     {
         $requestor = User::factory()->create(['role' => 'requestor']);

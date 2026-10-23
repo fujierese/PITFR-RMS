@@ -1,5 +1,5 @@
 <div data-date-weather class="grid grid-cols-2 gap-3 text-left sm:min-w-[320px]" aria-label="Current date, time, and weather">
-    <div class="min-w-0 rounded-2xl border border-emerald-200 bg-gradient-to-br from-white via-white to-emerald-50 p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <a data-calendar-today-link href="{{ route('calendar.index', ['date' => now()->setTimezone(config('app.timezone', 'Asia/Manila'))->format('Y-m-d')]) }}" aria-label="Open the calendar for today" class="min-w-0 rounded-2xl border border-emerald-200 bg-gradient-to-br from-white via-white to-emerald-50 p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
         <div class="flex items-center justify-between gap-2">
             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-800">Today</p>
             <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
@@ -15,7 +15,7 @@
             </svg>
             <p data-current-time>{{ now()->setTimezone(config('app.timezone', 'Asia/Manila'))->format('g:i A') }} PHT</p>
         </div>
-    </div>
+    </a>
     <div class="min-w-0 rounded-2xl border border-sky-200 bg-gradient-to-br from-white via-white to-sky-50 p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
         <div class="flex items-center justify-between gap-2">
             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-800">Weather</p>
@@ -47,6 +47,18 @@
                 });
                 document.querySelectorAll('[data-current-time]').forEach(element => {
                     element.textContent = `${new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(now)} PHT`;
+                });
+                const todayParts = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Manila',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                }).formatToParts(now);
+                const today = `${todayParts.find(part => part.type === 'year').value}-${todayParts.find(part => part.type === 'month').value}-${todayParts.find(part => part.type === 'day').value}`;
+                document.querySelectorAll('[data-calendar-today-link]').forEach(element => {
+                    const calendarUrl = new URL(element.href);
+                    calendarUrl.searchParams.set('date', today);
+                    element.href = calendarUrl.toString();
                 });
             };
             const loadWeather = async () => {

@@ -15,4 +15,9 @@ class College extends Model
     {
         return $this->hasMany(Department::class);
     }
+
+    public function academicPrograms()
+    {
+        return $this->hasMany(AcademicProgram::class);
+    }
 }
