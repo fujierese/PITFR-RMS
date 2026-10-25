@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Models\Venue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -194,6 +196,10 @@ class SecurityHardeningTest extends TestCase
     public function test_request_details_keep_e_signature_only_in_print_view(): void
     {
         $owner = User::factory()->create(['role' => 'requestor']);
+        Storage::disk('local')->put(
+            'documents/e_signature/private/signatures/requestor.png',
+            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+        );
         $request = $this->facilityRequest($owner, [], [], [
             'e_signature_file' => 'private/signatures/requestor.png',
         ]);
@@ -205,7 +211,8 @@ class SecurityHardeningTest extends TestCase
 
         $this->get(route('request.print', $request))
             ->assertOk()
-            ->assertSee(route('request.signature', ['id' => $request->id]));
+            ->assertSee('data:image/png;base64,', false)
+            ->assertDontSee(route('request.signature', ['id' => $request->id]));
     }
 
     public function test_equipment_custodian_approves_before_admin_final_approval(): void
@@ -268,8 +275,12 @@ class SecurityHardeningTest extends TestCase
 
     public function test_api_delete_retains_request_as_cancelled(): void
     {
+        Notification::fake();
         $requester = User::factory()->create(['role' => 'requestor']);
-        $request = $this->facilityRequest($requester, [], []);
+        $request = $this->facilityRequest($requester, [], [], [
+            'start_date' => now()->addDays(2)->toDateString(),
+            'end_date' => now()->addDays(2)->toDateString(),
+        ]);
 
         Sanctum::actingAs($requester);
 

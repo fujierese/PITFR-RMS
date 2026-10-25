@@ -2,6 +2,8 @@
     $venues = implode(', ', $request->getVenueNames()) ?: 'N/A';
     $equipmentItems = $request->getEquipmentItems();
     $proposalFilename = $request->proposal_file ?? 'N/A';
+    $venueEquipmentAllocations = $request->getVenueEquipmentAllocations();
+    $equipmentQuantities = $request->getEquipmentQuantities();
 
     $venueStatusLabel = match($request->venue_status) {
         'approved' => 'Approved',
@@ -128,21 +130,33 @@
         <table class="equipment-table">
             <thead>
                 <tr>
+                    <th>Venue</th>
                     <th>Equipment / Item</th>
                     <th>Quantity</th>
                 </tr>
             </thead>
             <tbody>
-                @if(count($equipmentItems) > 0)
+                @if(!empty($venueEquipmentAllocations))
+                    @foreach($venueEquipmentAllocations as $venueName => $venueEquipment)
+                        @foreach($venueEquipment as $item => $quantity)
+                            <tr>
+                                <td>{{ $venueName }}</td>
+                                <td>{{ $item }}</td>
+                                <td>{{ $quantity }}</td>
+                            </tr>
+                        @endforeach
+                    @endforeach
+                @elseif(count($equipmentItems) > 0)
                     @foreach($equipmentItems as $item)
                         <tr>
+                            <td>—</td>
                             <td>{{ $item }}</td>
-                            <td>{{ !empty($request->getEquipmentQuantities()[$item]) ? $request->getEquipmentQuantities()[$item] : 1 }}</td>
+                            <td>{{ !empty($equipmentQuantities[$item]) ? $equipmentQuantities[$item] : 1 }}</td>
                         </tr>
                     @endforeach
                 @else
                     <tr>
-                        <td colspan="2">No equipment requested.</td>
+                        <td colspan="3">No equipment requested.</td>
                     </tr>
                 @endif
             </tbody>

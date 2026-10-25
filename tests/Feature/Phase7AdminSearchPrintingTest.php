@@ -221,6 +221,10 @@ class Phase7AdminSearchPrintingTest extends TestCase
     /** @test */
     public function print_form_displays_e_signature_when_present(): void
     {
+        Storage::disk('local')->put(
+            'documents/e_signature/test_signature_001.png',
+            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+        );
         $this->approvedRequest->update([
             'document_metadata' => [
                 'e_signature' => ['uploaded_at' => '2026-08-14 09:26:35'],
@@ -231,10 +235,96 @@ class Phase7AdminSearchPrintingTest extends TestCase
         $response = $this->get(route('request.print', $this->approvedRequest->id));
 
         $response->assertStatus(200);
-        $response->assertSee(route('request.signature', ['id' => $this->approvedRequest->id]), false);
+        $response->assertSee('data:image/png;base64,', false);
+        $response->assertDontSee(route('request.signature', ['id' => $this->approvedRequest->id]), false);
         $response->assertDontSee('/storage/documents/e_signature/', false);
-        $response->assertSee('Electronic Signature', false);
-        $response->assertSee('Serial No. ES-' . $this->approvedRequest->id . '-20260814092635', false);
+        $response->assertDontSee('Electronic Signature', false);
+        $response->assertDontSee('Signature over printed name', false);
+        $response->assertSee('text-align: center', false);
+        $response->assertSee(asset('images/TUVNORD-Logo.png'), false);
+        $response->assertSee('Signature ID: ES-' . $this->approvedRequest->id . '-20260814092635', false);
+    }
+
+    public function test_print_layout_combines_schedule_and_resource_rows_and_removes_header_status(): void
+    {
+        $this->approvedRequest->update([
+            'department' => 'Information Technology',
+            'date_requested' => '2026-10-20',
+            'venue' => ['CHIC'],
+            'equipment' => ['Sound System'],
+            'reservation_duration' => 'whole_day',
+            'start_time' => '08:00',
+            'end_time' => '00:00',
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('request.print', $this->approvedRequest->id))
+            ->assertOk()
+            ->assertSee('Venue Schedule(s):')
+            ->assertSee('Facility / Venue')
+            ->assertSee('Equipment')
+            ->assertSee('8:00 AM – 5:00 PM')
+            ->assertDontSee('Status:</span>');
+
+        $html = $response->getContent();
+        $this->assertSame(2, substr_count($html, 'class="copy-form"'));
+        $this->assertSame(2, substr_count($html, 'class="inclusive-row"'));
+        $this->assertSame(2, substr_count($html, 'class="resources-row"'));
+    }
+
+    public function test_print_form_shows_recorded_custodian_and_supply_office_signatures(): void
+    {
+        $signature = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+        foreach (['venue-signature.png', 'equipment-signature.png', 'final-signature.png'] as $filename) {
+            Storage::disk('local')->put('documents/e_signature/approvals/' . $filename, $signature);
+        }
+        $this->approvedRequest->update([
+            'venue_approval_signature_file' => 'venue-signature.png',
+            'equipment_approval_signature_file' => 'equipment-signature.png',
+            'final_approval_signature_file' => 'final-signature.png',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('request.print', $this->approvedRequest->id))
+            ->assertOk()
+            ->assertSee('data:image/png;base64,', false)
+            ->assertDontSee('/approval-signature/', false)
+            ->assertSee('Approved By (Supply Office)')
+            ->assertSee('Venue custodian e-signature')
+            ->assertSee('Equipment custodian e-signature')
+            ->assertSee('Supply Office e-signature');
+    }
+
+    public function test_print_form_includes_each_equipment_custodian_signature(): void
+    {
+        $signature = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+        Storage::disk('local')->put('documents/e_signature/approvals/equipment-one.png', $signature);
+        Storage::disk('local')->put('documents/e_signature/approvals/equipment-two.png', $signature);
+        $this->approvedRequest->update([
+            'approval_signature_meta' => [
+                'equipment' => [
+                    json_encode([
+                        'approver_name' => 'Equipment Custodian One',
+                        'approver_position' => 'Custodian',
+                        'signature_file' => 'equipment-one.png',
+                        'time' => '2026-10-20T09:00:00+08:00',
+                    ]),
+                    json_encode([
+                        'approver_name' => 'Equipment Custodian Two',
+                        'approver_position' => 'Custodian',
+                        'signature_file' => 'equipment-two.png',
+                        'time' => '2026-10-20T10:00:00+08:00',
+                    ]),
+                ],
+            ],
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('request.print', $this->approvedRequest->id))
+            ->assertOk()
+            ->assertSee('Equipment Custodian One')
+            ->assertSee('Equipment Custodian Two')
+            ->assertSee('data:image/png;base64,', false);
     }
 
     /** @test */

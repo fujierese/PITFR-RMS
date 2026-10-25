@@ -65,7 +65,7 @@ class ResourceManagementAuthorizationTest extends TestCase
 
         $this->actingAs($supplyOffice)
             ->post('/supply-office/venues', ['name' => 'Unauthorized', 'capacity' => 10])
-            ->assertNotFound();
+            ->assertForbidden();
 
         $this->actingAs($supplyOffice)
             ->get(route('supply-office.users'))

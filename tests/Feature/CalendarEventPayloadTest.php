@@ -12,6 +12,24 @@ class CalendarEventPayloadTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_embedded_calendar_is_a_date_picker_without_dashboard_navigation(): void
+    {
+        $response = $this->get(route('calendar.embed', [
+            'date' => '2026-10-26',
+            'venue' => 'Balay Alumni',
+            'select' => 1,
+        ]));
+
+        $response->assertOk()
+            ->assertSee('id="calendar"', false)
+            ->assertSee('Select a start date, then an end date.', false)
+            ->assertSee('selectionStartDate = clickedDate', false)
+            ->assertSee('selectionEndDate = clickedDate', false)
+            ->assertSee('calendar-range-between', false)
+            ->assertSee('venue-calendar-date-selected', false)
+            ->assertDontSee('dashboard-sidebar');
+    }
+
     public function test_calendar_events_include_rich_request_details_for_modal_display(): void
     {
         $requestor = User::factory()->create([
@@ -47,6 +65,8 @@ class CalendarEventPayloadTest extends TestCase
         ]);
 
         $admin = User::factory()->create(['role' => 'admin']);
+        $request->supply_office_reviewed_by_id = $admin->id;
+        $request->save();
         $response = $this->actingAs($admin)->getJson(route('calendar.events'));
 
         $response->assertOk();
@@ -60,6 +80,7 @@ class CalendarEventPayloadTest extends TestCase
         $this->assertArrayNotHasKey('requestorEmail', $event['extendedProps']);
         $this->assertSame('institutional', $event['extendedProps']['priority']);
         $this->assertTrue($event['extendedProps']['isUrgent']);
+        $this->assertSame($admin->name, $event['extendedProps']['assistedBy']);
         $this->assertSame(route('request.show', $request->id), $event['extendedProps']['requestUrl']);
     }
 
@@ -109,16 +130,17 @@ class CalendarEventPayloadTest extends TestCase
         $response->assertOk();
 
         $payload = collect($response->json());
-        $event = $payload->firstWhere('id', $request->id);
+        $events = $payload->where('extendedProps.facilityRequestId', $request->id);
 
-        $this->assertNotNull($event);
-        // Timed multi-day reservations must preserve their real start/end range and remain timed.
-        $this->assertSame('2026-08-10T08:00:00', $event['start']);
-        $this->assertSame('2026-08-12T17:00:00', $event['end']);
-        $this->assertFalse($event['allDay']);
-        $this->assertSame('College of Information and Computing Sciences', $event['extendedProps']['department']);
-        $this->assertSame('PIT Innovation Hub', $event['extendedProps']['organization']);
-        $this->assertSame('PIT Multi-Purpose Gymnasium, CHIC Conference Hall', $event['venue']);
+        $this->assertCount(2, $events);
+        foreach ($events as $event) {
+            // Timed multi-day reservations preserve their real range for each venue.
+            $this->assertSame('2026-08-10T08:00:00', $event['start']);
+            $this->assertSame('2026-08-12T17:00:00', $event['end']);
+            $this->assertFalse($event['allDay']);
+            $this->assertSame('College of Information and Computing Sciences', $event['extendedProps']['department']);
+            $this->assertSame('PIT Innovation Hub', $event['extendedProps']['organization']);
+        }
     }
 
     public function test_requestor_calendar_shows_other_reservations_as_view_only(): void
@@ -341,6 +363,69 @@ class CalendarEventPayloadTest extends TestCase
         $this->assertSame('pending', $event['status']);
         $this->assertSame('#F59E0B', $event['backgroundColor']);
         $this->assertSame('#D97706', $event['borderColor']);
+    }
+
+    public function test_calendar_events_use_their_venue_color_and_the_legend_explains_the_colors(): void
+    {
+        $requestor = User::factory()->create(['role' => 'requestor']);
+        $venues = [
+            'Conference Hall & Interaction Center (CHIC)' => '#DC2626',
+            'Balay Alumni' => '#2563EB',
+            'Gymnasium' => '#92400E',
+            'Covered Court' => '#16A34A',
+            'Oval Grounds' => '#16A34A',
+        ];
+
+        foreach ($venues as $venue => $expectedColor) {
+            FacilityRequest::create([
+                'control_number' => 'FER-2026-COLOR-' . substr(sha1($venue), 0, 8),
+                'date_requested' => now()->toDateString(),
+                'department' => 'BSIT',
+                'name_of_activity' => 'Venue Color ' . $venue,
+                'expected_participants' => 12,
+                'start_date' => '2026-09-04',
+                'end_date' => '2026-09-04',
+                'start_time' => '10:00',
+                'end_time' => '12:00',
+                'requested_by_id' => $requestor->id,
+                'venue' => [$venue],
+                'status' => 'pending',
+                'venue_status' => 'pending',
+                'equipment_status' => 'pending',
+            ]);
+        }
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $events = collect($this->actingAs($admin)->getJson(route('calendar.events'))->assertOk()->json());
+
+        foreach ($venues as $venue => $expectedColor) {
+            $event = $events->first(fn (array $candidate): bool => ($candidate['extendedProps']['purpose'] ?? null) === 'Venue Color ' . $venue);
+            $this->assertNotNull($event);
+            $this->assertSame($expectedColor, $event['backgroundColor']);
+        }
+
+        \Illuminate\Support\Facades\Auth::logout();
+        $publicEvents = collect($this->getJson(route('calendar.events'))->assertOk()->json());
+        foreach ($venues as $venue => $expectedColor) {
+            $event = $publicEvents->firstWhere('title', 'Venue Color ' . $venue);
+            $this->assertNotNull($event);
+            $this->assertSame($expectedColor, $event['backgroundColor']);
+        }
+
+        $this->get(route('calendar.index'))
+            ->assertOk()
+            ->assertSee('CHIC', false)
+            ->assertSee('Balay Alumni', false)
+            ->assertSee('Covered Courts / Oval', false)
+            ->assertSee('style="background-color: #92400e;"', false)
+            ->assertSee('.venue-chic { color: #dc2626; }', false)
+            ->assertSee('.venue-balay { color: #2563eb; }', false)
+            ->assertSee('.venue-gymnasium { color: #92400e; }', false)
+            ->assertSee('.venue-covered-court { color: #16a34a; }', false)
+            ->assertSee('background-color: transparent !important;', false)
+            ->assertSee('border: 1px solid #000000 !important;', false)
+            ->assertSee('Assisted by:', false)
+            ->assertDontSee('Venue color:', false);
     }
 
     public function test_cancelled_requests_are_hidden_by_default_and_only_admins_can_include_them(): void

@@ -20,6 +20,12 @@ class FacilityRequest extends Model
         'equipment_quantities', 'other_venue', 'equipment_custodian_statuses',
         'requested_by_id', 'status', 'venue_status', 'equipment_status',
         'venue_approval_signature', 'equipment_approval_signature', 'approval_signature_meta',
+        'supply_office_review_status', 'supply_office_reviewed_by_id', 'supply_office_reviewed_at', 'supply_office_review_notes',
+        'urgent_document_status', 'igp_receipt_number', 'igp_payment_status',
+        'cancellation_status', 'cancellation_requested_by_id', 'cancellation_requested_at',
+        'cancellation_reviewed_by_id', 'cancellation_reviewed_at', 'cancellation_notes',
+        'igp_paid_by_id', 'igp_paid_at', 'igp_refund_status', 'igp_refund_reference',
+        'igp_refund_notes', 'igp_refunded_by_id', 'igp_refunded_at',
         'approved_by', 'approved_by_id', 'approved_date', 'notes', 'venue_notes', 'equipment_notes',
         'equipment_returned_status', 'equipment_returned_by', 'equipment_returned_date', 'equipment_return_notes',
         'equipment_returned_items', 'equipment_return_damaged_quantity', 'equipment_return_missing_quantity',
@@ -47,6 +53,11 @@ class FacilityRequest extends Model
         'equipment'                    => 'array',
         'equipment_quantities'         => 'array',
         'approved_date'                => 'datetime',
+        'supply_office_reviewed_at'    => 'datetime',
+        'cancellation_requested_at'    => 'datetime',
+        'cancellation_reviewed_at'     => 'datetime',
+        'igp_paid_at'                  => 'datetime',
+        'igp_refunded_at'              => 'datetime',
         'equipment_returned_date'      => 'datetime',
         'date_requested'               => 'date',
         'start_date'                   => 'date',
@@ -142,6 +153,29 @@ class FacilityRequest extends Model
     public function approvedBy()
     {
         return $this->belongsTo(User::class, 'approved_by_id');
+    }
+
+    public function supplyOfficeReviewer()
+    {
+        return $this->belongsTo(User::class, 'supply_office_reviewed_by_id');
+    }
+
+    public function paymentRecorder()
+    {
+        return $this->belongsTo(User::class, 'igp_paid_by_id');
+    }
+
+    public function refundRecorder()
+    {
+        return $this->belongsTo(User::class, 'igp_refunded_by_id');
+    }
+
+    public function hasCustodianApprovalBy(User $user): bool
+    {
+        return $this->histories()
+            ->where('action', 'custodian_endorsed')
+            ->where('user_id', $user->getKey())
+            ->exists();
     }
 
     public function reservationSchedule()
@@ -317,20 +351,27 @@ class FacilityRequest extends Model
         return !empty($snapshot['approver_position']) ? (string) $snapshot['approver_position'] : null;
     }
 
-    private function getApprovalSnapshot(string $stage): array
+    public function getStageApprovalSnapshots(string $stage): array
     {
         $metadata = $this->approval_signature_meta[$stage] ?? null;
-        if (is_array($metadata) && array_is_list($metadata)) {
-            $metadata = end($metadata) ?: null;
-        }
+        $entries = is_array($metadata) && array_is_list($metadata) ? $metadata : [$metadata];
 
-        if (!is_string($metadata) || $metadata === '') {
-            return [];
-        }
+        return array_values(array_filter(array_map(static function ($entry): ?array {
+            if (! is_string($entry) || $entry === '') {
+                return null;
+            }
 
-        $decoded = json_decode($metadata, true);
+            $decoded = json_decode($entry, true);
 
-        return is_array($decoded) ? $decoded : [];
+            return is_array($decoded) ? $decoded : null;
+        }, $entries)));
+    }
+
+    private function getApprovalSnapshot(string $stage): array
+    {
+        $snapshots = $this->getStageApprovalSnapshots($stage);
+
+        return $snapshots === [] ? [] : end($snapshots);
     }
 
     public function getStageApprovalDate(string $stage): ?Carbon
@@ -432,8 +473,76 @@ class FacilityRequest extends Model
         });
     }
 
-    public function syncRelationalItems(): void
+    public function scopeUpcomingReservation(Builder $query): Builder
     {
+        $today = now()->toDateString();
+
+        return $query->where(function (Builder $dateQuery) use ($today): void {
+            $dateQuery->whereDate('end_date', '>=', $today)
+                ->orWhere(function (Builder $legacyQuery) use ($today): void {
+                    $legacyQuery->whereNull('end_date')
+                        ->whereDate('start_date', '>=', $today);
+                });
+        });
+    }
+
+    public function scopePastReservation(Builder $query): Builder
+    {
+        $today = now()->toDateString();
+
+        return $query->where(function (Builder $dateQuery) use ($today): void {
+            $dateQuery->whereDate('end_date', '<', $today)
+                ->orWhere(function (Builder $legacyQuery) use ($today): void {
+                    $legacyQuery->whereNull('end_date')
+                        ->whereDate('start_date', '<', $today);
+                });
+        });
+    }
+
+    public function syncRelationalItems(?array $venueSchedules = null, ?array $venueEquipment = null): void
+    {
+        if ($venueEquipment === null && Schema::hasTable('request_equipment') && Schema::hasColumn('request_equipment', 'request_venue_id')) {
+            $venueEquipment = $this->getVenueEquipmentAllocations();
+            if ($venueEquipment !== []) {
+                $requestVenueNames = $this->getVenueNamesFromLegacyData();
+                $normalizedRequestVenueNames = array_map(
+                    static fn (string $name): string => mb_strtolower(trim($name)),
+                    $requestVenueNames
+                );
+                $allocationVenueNames = array_map(
+                    static fn (string $name): string => mb_strtolower(trim($name)),
+                    array_keys($venueEquipment)
+                );
+                $allocationFitsRequestVenues = array_diff($allocationVenueNames, $normalizedRequestVenueNames) === [];
+
+                $allocationQuantities = [];
+                foreach ($venueEquipment as $items) {
+                    foreach ($items as $equipmentName => $quantity) {
+                        $allocationQuantities[$equipmentName] = ($allocationQuantities[$equipmentName] ?? 0) + (int) $quantity;
+                    }
+                }
+
+                $legacyQuantities = $this->getEquipmentQuantitiesFromLegacyData();
+                $requestQuantities = [];
+                foreach ($this->getEquipmentItemsFromLegacyData() as $equipmentName) {
+                    $quantity = (int) ($legacyQuantities[$equipmentName] ?? 1);
+                    if ($quantity > 0) {
+                        $requestQuantities[$equipmentName] = ($requestQuantities[$equipmentName] ?? 0) + $quantity;
+                    }
+                }
+
+                ksort($allocationQuantities);
+                ksort($requestQuantities);
+                if ($allocationFitsRequestVenues && $allocationQuantities === $requestQuantities) {
+                    // Keep the existing venue mapping when the request still matches it.
+                } elseif (count($requestVenueNames) === 1 && $requestQuantities !== []) {
+                    $venueEquipment = [$requestVenueNames[0] => $requestQuantities];
+                } else {
+                    $venueEquipment = [];
+                }
+            }
+        }
+
         if (Schema::hasTable('request_venues')) {
             DB::table('request_venues')->where('facility_request_id', $this->getKey())->delete();
         }
@@ -458,13 +567,32 @@ class FacilityRequest extends Model
         }
 
         $venues = $this->getVenueNamesFromLegacyData();
+        $requestVenueRecords = [];
         if (Schema::hasTable('request_venues')) {
             foreach ($venues as $venueName) {
                 if (empty($venueName)) {
                     continue;
                 }
 
-                $payload = ['name' => $venueName];
+                $schedule = $venueSchedules[$venueName] ?? null;
+                if (! is_array($schedule)) {
+                    $schedule = [
+                        'start_date' => $this->start_date,
+                        'end_date' => $this->end_date ?? $this->start_date,
+                        'start_time' => $this->start_time,
+                        'end_time' => $this->end_time ?? $this->start_time,
+                        'reservation_duration' => $this->reservation_duration ?? 'specific_time',
+                    ];
+                }
+
+                $payload = array_merge(
+                    ['name' => $venueName],
+                    array_filter(
+                        $schedule,
+                        fn (string $column): bool => Schema::hasColumn('request_venues', $column),
+                        ARRAY_FILTER_USE_KEY
+                    )
+                );
                 if (Schema::hasColumn('request_venues', 'venue_id')) {
                     $venue = Venue::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($venueName)])->first();
                     if ($venue) {
@@ -472,7 +600,7 @@ class FacilityRequest extends Model
                     }
                 }
 
-                $this->requestVenues()->create($payload);
+                $requestVenueRecords[$venueName] = $this->requestVenues()->create($payload);
             }
         }
 
@@ -480,6 +608,39 @@ class FacilityRequest extends Model
         $quantities = $this->getEquipmentQuantitiesFromLegacyData();
 
         if (Schema::hasTable('request_equipment')) {
+            if (is_array($venueEquipment) && $venueEquipment !== []) {
+                foreach ($venueEquipment as $venueName => $venueItems) {
+                    $requestVenue = $requestVenueRecords[$venueName] ?? null;
+                    if (! $requestVenue || ! is_array($venueItems)) {
+                        continue;
+                    }
+
+                    foreach ($venueItems as $equipmentName => $quantity) {
+                        if (is_array($quantity)) {
+                            $quantity = $quantity['quantity'] ?? 1;
+                        }
+                        if (! is_string($equipmentName) || trim($equipmentName) === '' || (int) $quantity <= 0) {
+                            continue;
+                        }
+
+                        $payload = [
+                            'request_venue_id' => $requestVenue->id,
+                            'name' => $equipmentName,
+                            'quantity' => (int) $quantity,
+                        ];
+                        if (Schema::hasColumn('request_equipment', 'equipment_id')) {
+                            $equipmentRecord = Equipment::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($equipmentName)])->first();
+                            if ($equipmentRecord) {
+                                $payload['equipment_id'] = $equipmentRecord->id;
+                            }
+                        }
+                        $this->requestEquipment()->create($payload);
+                    }
+                }
+
+                return;
+            }
+
             foreach ($equipment as $equipmentName) {
                 if (empty($equipmentName)) {
                     continue;
@@ -500,6 +661,52 @@ class FacilityRequest extends Model
                 $this->requestEquipment()->create($payload);
             }
         }
+    }
+
+    public function getVenueEquipmentAllocations(): array
+    {
+        $providedAllocations = $this->getAttribute('venue_equipment_allocations');
+        if (is_array($providedAllocations)) {
+            return $providedAllocations;
+        }
+
+        if (! Schema::hasTable('request_equipment') || ! Schema::hasColumn('request_equipment', 'request_venue_id')) {
+            return [];
+        }
+
+        $this->loadMissing(['requestEquipment.requestVenue.venue', 'requestEquipment.equipment']);
+        $items = $this->getRelation('requestEquipment');
+        $allocations = [];
+
+        foreach ($items as $item) {
+            if (! $item->request_venue_id || ! $item->requestVenue) {
+                continue;
+            }
+
+            $venueName = $item->requestVenue->resolvedName();
+            $equipmentName = $item->resolvedName();
+            if ($venueName === '' || $equipmentName === '') {
+                continue;
+            }
+
+            $allocations[$venueName][$equipmentName] = ($allocations[$venueName][$equipmentName] ?? 0) + (int) $item->quantity;
+        }
+
+        return $allocations;
+    }
+
+    public function getVenueEquipmentLabels(): array
+    {
+        $allocations = $this->getVenueEquipmentAllocations();
+        $labels = [];
+
+        foreach ($allocations as $venueName => $items) {
+            foreach ($items as $equipmentName => $quantity) {
+                $labels[] = "{$venueName}: {$equipmentName} ({$quantity})";
+            }
+        }
+
+        return $labels;
     }
 
     public function getVenueNames(): array
@@ -533,6 +740,95 @@ class FacilityRequest extends Model
         }
 
         return $this->getVenueNamesFromLegacyData();
+    }
+
+    public function getInclusiveDatesLabel(): string
+    {
+        if (! $this->start_date) {
+            return '—';
+        }
+
+        $startDate = $this->start_date->format('M d, Y');
+        $endDate = ($this->end_date ?? $this->start_date)->format('M d, Y');
+
+        return $startDate === $endDate ? $startDate : $startDate . ' – ' . $endDate;
+    }
+
+    public function getVenueScheduleSummaries(): array
+    {
+        return collect($this->getVenueNames())
+            ->map(function (string $venueName): array {
+                $schedule = $this->getVenueSchedule($venueName);
+                $startDate = $this->formatDateForDisplay($schedule['start_date']);
+                $endDate = $this->formatDateForDisplay($schedule['end_date']);
+                $dates = $startDate === $endDate ? $startDate : $startDate . ' – ' . $endDate;
+                $isWholeDay = in_array(
+                    strtolower((string) $schedule['reservation_duration']),
+                    ['whole_day', 'whole-day', 'whole day'],
+                    true
+                );
+                $time = $isWholeDay
+                    ? '8:00 AM – 5:00 PM'
+                    : $this->formatTimeForDisplay($schedule['start_time'])
+                        . ' – '
+                        . $this->formatTimeForDisplay($schedule['end_time']);
+                $range = $this->getVenueScheduleRange($venueName);
+                $durationMinutes = $range['start']->diffInMinutes($range['end']);
+                $durationHours = intdiv($durationMinutes, 60);
+                $durationRemainder = $durationMinutes % 60;
+                $duration = ($durationHours ? $durationHours . ' hour' . ($durationHours === 1 ? '' : 's') : '')
+                    . ($durationRemainder
+                        ? ($durationHours ? ' ' : '') . $durationRemainder . ' minute' . ($durationRemainder === 1 ? '' : 's')
+                        : '');
+
+                return [
+                    'venue' => $venueName,
+                    'dates' => $dates,
+                    'time' => $time,
+                    'label' => $dates . ' · ' . $time,
+                    'duration' => $duration ?: 'Not specified',
+                ];
+            })
+            ->all();
+    }
+
+    public function getVenueSchedule(string $venueName): array
+    {
+        $this->loadMissing('requestVenues');
+        $venue = $this->requestVenues->first(
+            fn (RequestVenue $requestVenue): bool => mb_strtolower($requestVenue->resolvedName()) === mb_strtolower(trim($venueName))
+        );
+
+        if ($venue && $venue->start_date) {
+            return [
+                'start_date' => $venue->start_date->toDateString(),
+                'end_date' => ($venue->end_date ?? $venue->start_date)->toDateString(),
+                'start_time' => $venue->start_time ?? $this->start_time,
+                'end_time' => $venue->end_time ?? $this->end_time,
+                'reservation_duration' => $venue->reservation_duration ?? 'specific_time',
+            ];
+        }
+
+        return [
+            'start_date' => $this->start_date?->toDateString(),
+            'end_date' => ($this->end_date ?? $this->start_date)?->toDateString(),
+            'start_time' => $this->start_time,
+            'end_time' => $this->end_time,
+            'reservation_duration' => $this->reservation_duration ?? 'specific_time',
+        ];
+    }
+
+    public function getVenueScheduleRange(string $venueName): array
+    {
+        $schedule = $this->getVenueSchedule($venueName);
+
+        return self::resolveReservationDuration(
+            $schedule['reservation_duration'],
+            $schedule['start_date'],
+            $schedule['start_time'],
+            $schedule['end_date'],
+            $schedule['end_time'],
+        );
     }
 
     public function getEquipmentItems(): array
@@ -570,9 +866,7 @@ class FacilityRequest extends Model
     public function getEquipmentQuantities(): array
     {
         if ($this->relationLoaded('requestEquipment')) {
-            $relationalQuantities = $this->requestEquipment->mapWithKeys(function (RequestEquipment $item) {
-                return [$item->resolvedName() => (int) $item->quantity];
-            })->all();
+            $relationalQuantities = $this->resolveEquipmentRelationQuantities();
 
             if (!empty($relationalQuantities)) {
                 return $this->preferRelationQuantitiesOverLegacy($relationalQuantities, $this->getEquipmentQuantitiesFromLegacyData());
@@ -582,18 +876,14 @@ class FacilityRequest extends Model
         if (Schema::hasTable('request_equipment')) {
             $this->loadMissing('requestEquipment');
             $this->loadMissing('requestEquipment.equipment');
-            $relationalQuantities = $this->requestEquipment->mapWithKeys(function (RequestEquipment $item) {
-                return [$item->resolvedName() => (int) $item->quantity];
-            })->all();
+            $relationalQuantities = $this->resolveEquipmentRelationQuantities();
 
             if (!empty($relationalQuantities)) {
                 return $this->preferRelationQuantitiesOverLegacy($relationalQuantities, $this->getEquipmentQuantitiesFromLegacyData());
             }
 
-            $relationalQuantities = $this->requestEquipment()->get()
-                ->mapWithKeys(function (RequestEquipment $item) {
-                    return [$item->resolvedName() => (int) $item->quantity];
-                })->all();
+            $this->setRelation('requestEquipment', $this->requestEquipment()->with('equipment')->get());
+            $relationalQuantities = $this->resolveEquipmentRelationQuantities();
 
             if (!empty($relationalQuantities)) {
                 return $this->preferRelationQuantitiesOverLegacy($relationalQuantities, $this->getEquipmentQuantitiesFromLegacyData());
@@ -639,12 +929,26 @@ class FacilityRequest extends Model
                 return collect($items)
                     ->map(fn (RequestEquipment $item) => $item->resolvedName())
                     ->filter()
+                    ->unique()
                     ->values()
                     ->all();
             }
         }
 
         return [];
+    }
+
+    private function resolveEquipmentRelationQuantities(): array
+    {
+        if (! $this->relationLoaded('requestEquipment')) {
+            return [];
+        }
+
+        return collect($this->getRelation('requestEquipment'))
+            ->groupBy(fn (RequestEquipment $item): string => $item->resolvedName())
+            ->map(fn ($items): int => (int) $items->sum('quantity'))
+            ->filter(fn (int $quantity, string $name): bool => $name !== '')
+            ->all();
     }
 
     private function preferRelationValuesOverLegacy(array $relationValues, array $legacyValues): array
@@ -781,7 +1085,7 @@ class FacilityRequest extends Model
                 $effectiveStartDate,
                 '08:00',
                 $effectiveEndDate,
-                '23:59'
+                '17:00'
             );
         }
 

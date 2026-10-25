@@ -35,6 +35,10 @@ class RevisionHistory extends Model
         'override_reason',
         'requestor_notified_at',
         'custodian_notified_at',
+        'response_deadline_at',
+        'affected_user_ids',
+        'responses',
+        'memorandum_priority',
     ];
 
     protected $casts = [
@@ -55,6 +59,10 @@ class RevisionHistory extends Model
         'custodian_notified_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'response_deadline_at' => 'datetime',
+        'affected_user_ids' => 'array',
+        'responses' => 'array',
+        'memorandum_priority' => 'boolean',
     ];
 
     /**

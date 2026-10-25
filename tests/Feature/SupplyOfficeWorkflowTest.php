@@ -158,6 +158,51 @@ class SupplyOfficeWorkflowTest extends TestCase
         Notification::assertSentToTimes($requester, RequestStatusChanged::class, 1);
     }
 
+    public function test_supply_office_staff_can_confirm_availability_and_are_attributed_in_history_and_calendar(): void
+    {
+        $request = $this->makeRequest([
+            'supply_office_review_status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+        ]);
+        $staff = User::factory()->create([
+            'name' => 'Jose Julius J. Paloma',
+            'role' => 'supply_office',
+            'additional_roles' => ['custodian-venue'],
+            'department' => 'Supply Office',
+        ]);
+
+        $this->actingAs($staff)
+            ->get(route('supply-office.index'))
+            ->assertOk();
+
+        $this->actingAs($staff)
+            ->post(route('supply-office.requests.availability-review'), [
+                'id' => $request->id,
+                'decision' => 'available',
+                'urgent_document_validated' => '1',
+            ])
+            ->assertRedirect(route('supply-office.index'))
+            ->assertSessionHasNoErrors();
+
+        $request->refresh();
+        $this->assertSame($staff->id, $request->supply_office_reviewed_by_id);
+        $history = $request->histories()->where('action', 'availability_confirmed')->firstOrFail();
+        $this->assertSame($staff->id, $history->user_id);
+        $this->assertStringContainsString($staff->name, $history->detail);
+
+        $requester = User::findOrFail($request->requested_by_id);
+        $this->actingAs($requester)
+            ->get(route('request.show', $request->id))
+            ->assertOk()
+            ->assertSee('Recorded by ' . $staff->name);
+
+        $calendar = $this->actingAs($staff)->getJson(route('calendar.events'));
+        $calendar->assertOk();
+        $event = collect($calendar->json())->firstWhere('extendedProps.facilityRequestId', $request->id);
+        $this->assertSame($staff->name, $event['extendedProps']['assistedBy']);
+    }
+
     public function test_supply_office_rejection_records_audit_and_notification_without_approval_fields(): void
     {
         $request = $this->makeRequest();
@@ -209,7 +254,7 @@ class SupplyOfficeWorkflowTest extends TestCase
     public function test_supply_office_dashboard_paginates_the_review_queue(): void
     {
         for ($index = 0; $index < 16; $index++) {
-            $this->makeRequest();
+            $this->makeRequest(['supply_office_review_status' => 'pending']);
         }
 
         $admin = User::factory()->create(['role' => 'admin']);
@@ -218,10 +263,10 @@ class SupplyOfficeWorkflowTest extends TestCase
             ->get(route('supply-office.index'))
             ->assertOk()
             ->assertSee('16 waiting')
-            ->assertSee('queue_page=2');
+            ->assertSee('availability_page=2');
 
         $this->actingAs($admin)
-            ->get(route('supply-office.index', ['queue_page' => 2]))
+            ->get(route('supply-office.index', ['availability_page' => 2]))
             ->assertOk()
             ->assertSee('16 waiting');
     }

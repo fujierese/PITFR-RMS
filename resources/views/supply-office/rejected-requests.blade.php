@@ -18,7 +18,7 @@
                         <th class="px-4 py-3 font-medium">Activity</th>
                         <th class="px-4 py-3 font-medium">Venue</th>
                         <th class="px-4 py-3 font-medium">Equipment</th>
-                        <th class="px-4 py-3 font-medium">Date and Time</th>
+                        <th class="px-4 py-3 font-medium">Venue Schedules</th>
                         <th class="px-4 py-3 font-medium">Status</th>
                         <th class="px-4 py-3 font-medium">Actions</th>
                     </tr>
@@ -32,10 +32,11 @@
                                 <p class="mt-1 text-xs text-slate-500">{{ $request->requester?->name ?? 'Unknown' }}@if($request->department) <span aria-hidden="true">·</span> {{ $request->department }}@endif</p>
                             </td>
                             <td class="px-4 py-4">{{ implode(', ', $request->getVenueNames()) ?: '—' }}</td>
-                            <td class="px-4 py-4">{{ implode(', ', $request->getEquipmentItems()) ?: '—' }}</td>
+                            <td class="px-4 py-4">{{ implode(', ', $request->getVenueEquipmentLabels() ?: $request->getEquipmentItems()) ?: '—' }}</td>
                             <td class="px-4 py-4 whitespace-nowrap">
-                                <p>{{ $request->start_date ? \Carbon\Carbon::parse($request->start_date)->format('M d, Y') : '—' }}</p>
-                                <p class="mt-1 text-xs text-slate-500">{{ $request->start_time ? \Carbon\Carbon::parse($request->start_time)->format('g:i A') : '—' }}@if($request->end_time) - {{ \Carbon\Carbon::parse($request->end_time)->format('g:i A') }}@endif</p>
+                                @foreach($request->getVenueScheduleSummaries() as $schedule)
+                                    <p class="mb-2 last:mb-0"><span class="font-medium">{{ $schedule['venue'] }}</span><span class="mt-1 block text-xs text-slate-500">{{ $schedule['label'] }}</span></p>
+                                @endforeach
                             </td>
                             <td class="px-4 py-4"><x-request-status-badge :request="$request" /></td>
                             <td class="px-4 py-4 whitespace-nowrap"><a href="{{ route('request.show', $request->id) }}" class="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 transition hover:bg-rose-100" aria-label="View request {{ $request->control_number }}">View</a></td>

@@ -7,6 +7,7 @@ use App\Models\FacilityRequest;
 use App\Models\User;
 use App\Models\Venue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class InventoryConsistencyTest extends TestCase
@@ -17,6 +18,7 @@ class InventoryConsistencyTest extends TestCase
     {
         parent::setUp();
         $this->withoutMiddleware();
+        Notification::fake();
     }
 
     public function test_requestor_cancellation_does_not_overflow_quantity()
@@ -37,8 +39,8 @@ class InventoryConsistencyTest extends TestCase
             'department' => 'IT',
             'name_of_activity' => 'Cancel Test',
             'expected_participants' => 10,
-            'start_date' => now()->toDateString(),
-            'end_date' => now()->toDateString(),
+            'start_date' => now()->addDays(2)->toDateString(),
+            'end_date' => now()->addDays(2)->toDateString(),
             'start_time' => '09:00',
             'end_time' => '10:00',
             'venue' => [],

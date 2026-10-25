@@ -6,6 +6,8 @@ use App\Models\Equipment;
 use App\Models\FacilityRequest;
 use App\Models\RequestChangeRequest;
 use App\Models\User;
+use App\Models\Venue;
+use App\Events\RequestCancelled;
 use App\Notifications\RequestStatusChanged;
 use App\Services\AvailabilityService;
 use Illuminate\Http\Request;
@@ -13,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Carbon\Carbon;
 
 class RequestActionController extends Controller
 {
@@ -23,47 +26,85 @@ class RequestActionController extends Controller
     public function cancel($facilityRequest, Request $request)
     {
         $facilityRequest = $this->resolveFacilityRequest($facilityRequest);
-
-        /** @var User|null $user */
         $user = Auth::user();
+        abort_unless($user && (int) $user->id === (int) $facilityRequest->requested_by_id, 403);
+        abort_unless(in_array($facilityRequest->status, ['pending', 'approved'], true), 403);
 
-        abort_unless($user && $user->id === $facilityRequest->requested_by_id, 403);
-        abort_unless($facilityRequest->status === 'pending', 403);
+        $reservationDate = Carbon::parse($facilityRequest->start_date)->startOfDay();
+        if ($reservationDate->lessThanOrEqualTo(now()->startOfDay())) {
+            return back()->withErrors(['cancellation' => 'Cancellation must be requested no later than the calendar day before the reservation.']);
+        }
 
-        DB::beginTransaction();
-
-        try {
-            if ($facilityRequest->equipment_status === 'approved') {
-                foreach ($facilityRequest->getEquipmentQuantities() as $itemName => $qty) {
-                    // Lock the equipment row before modifying inventory and cap to max quantity
-                    $equipment = Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])
-                        ->lockForUpdate()
-                        ->first();
-
-                    if ($equipment) {
-                        $equipment->quantity_available = min(
-                            $equipment->quantity,
-                            $equipment->quantity_available + (int) $qty
-                        );
-                        $equipment->save();
-                    }
-                }
+        if ($facilityRequest->status === 'approved') {
+            if ($facilityRequest->cancellation_status === 'pending') {
+                return back()->withErrors(['cancellation' => 'A cancellation request is already awaiting Supply Office confirmation.']);
             }
-
-            $facilityRequest->addHistory('cancelled', 'Request cancelled by requester ' . $user->name, $user->id);
             $facilityRequest->update([
+                'cancellation_status' => 'pending',
+                'cancellation_requested_by_id' => $user->id,
+                'cancellation_requested_at' => now(),
+                'cancellation_notes' => trim((string) $request->input('reason', '')),
+            ]);
+            $reason = 'Cancellation requested by ' . $user->name . '. Supply Office confirmation is required.';
+            $facilityRequest->addHistory('cancellation_requested', $reason, $user->id);
+            $this->notifyCancellationParties($facilityRequest, 'cancellation_requested', $reason, true);
+
+            return back()->with('success', 'Cancellation requested. The approved reservation remains active until the Supply Office confirms it.');
+        }
+
+        DB::transaction(function () use ($facilityRequest, $user): void {
+            $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
+            if ($lockedRequest->status !== 'pending') {
+                abort(409, 'This request can no longer be cancelled directly.');
+            }
+            $lockedRequest->update([
                 'status' => 'cancelled',
                 'venue_status' => 'cancelled',
                 'equipment_status' => 'cancelled',
+                'cancellation_status' => 'confirmed',
+                'cancellation_requested_by_id' => $user->id,
+                'cancellation_requested_at' => now(),
+                'cancellation_reviewed_by_id' => $user->id,
+                'cancellation_reviewed_at' => now(),
             ]);
+            $lockedRequest->addHistory('cancelled', 'Pending request cancelled by ' . $user->name, $user->id);
+        });
+        $this->notifyCancellationParties($facilityRequest->fresh(), 'request_cancelled', 'Pending request cancelled by ' . $user->name . '.', false);
 
-            DB::commit();
+        return redirect()->route('requestor.index')->with('success', 'Request cancelled successfully.');
+    }
 
-            return redirect()->route('requestor.index')->with('success', 'Request cancelled successfully.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()->withErrors('Unable to cancel the request at this time.');
+    private function notifyCancellationParties(FacilityRequest $facilityRequest, string $status, string $reason, bool $includeSupplyOffice): void
+    {
+        $recipientIds = Venue::query()->whereIn('name', $facilityRequest->getVenueNames())->pluck('custodian_id')
+            ->merge($facilityRequest->getAssignedEquipmentCustodianIds())
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique();
+        $recipients = User::query()->whereIn('id', $recipientIds)->get();
+        if ($facilityRequest->requester) {
+            $recipients->push($facilityRequest->requester);
         }
+        if ($includeSupplyOffice) {
+            $recipients = $recipients->merge(User::query()->withAnyRole(['admin', 'supply_office'])->get());
+        }
+        $recipients = $recipients->unique('id')->values();
+        if ($status === 'request_cancelled') {
+            event(new RequestCancelled(
+                $facilityRequest->id,
+                $facilityRequest->control_number,
+                Auth::user()?->name ?? '',
+                $facilityRequest->requested_by_id,
+                $recipientIds->all()
+            ));
+        }
+
+        Notification::send($recipients, new RequestStatusChanged(
+            $facilityRequest,
+            $status,
+            $reason,
+            Auth::user()?->name
+        ));
     }
 
     public function submitChangeRequest($facilityRequest, Request $request)
@@ -184,6 +225,12 @@ class RequestActionController extends Controller
             $facilityRequest = FacilityRequest::whereKey($facilityRequest->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($facilityRequest->supply_office_review_status === 'pending'
+                || $facilityRequest->supply_office_review_status === 'unavailable') {
+                DB::rollBack();
+                return redirect()->back()->withErrors('The Supply Office must confirm venue availability before custodian review can begin.');
+            }
 
             $conflictMessage = $this->checkHybridResources($facilityRequest);
             if ($conflictMessage) {
@@ -395,6 +442,30 @@ class RequestActionController extends Controller
                 }
 
                 return redirect()->back()->withErrors('Cannot finalize approval: required custodial endorsements are incomplete.');
+            }
+
+            if (in_array($facilityRequest->supply_office_review_status, ['pending', 'unavailable'], true)) {
+                DB::rollBack();
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => 'Initial Supply Office availability review is incomplete.'], 409);
+                }
+                return redirect()->back()->withErrors('Initial Supply Office availability review must be confirmed before final approval.');
+            }
+
+            if ($facilityRequest->hasCustodianApprovalBy($user)) {
+                DB::rollBack();
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => 'A custodian cannot also provide final Supply Office approval for this request.'], 409);
+                }
+                return redirect()->back()->withErrors('A custodian cannot also provide final Supply Office approval for the same request.');
+            }
+
+            if ($facilityRequest->is_emergency && $facilityRequest->urgent_document_status !== 'validated') {
+                DB::rollBack();
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => 'The urgent supporting document must be validated before approval.'], 409);
+                }
+                return redirect()->back()->withErrors('Validate the urgent supporting document before final approval.');
             }
 
             $originalStatus = $facilityRequest->status;

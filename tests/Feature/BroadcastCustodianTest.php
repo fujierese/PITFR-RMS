@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Notification;
 use App\Events\RequestCreated;
 use App\Events\RequestCancelled;
 use App\Models\User;
@@ -15,6 +16,12 @@ use App\Models\FacilityRequest;
 class BroadcastCustodianTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Notification::fake();
+    }
 
     public function test_requestcreated_includes_primary_custodian()
     {
@@ -84,7 +91,7 @@ class BroadcastCustodianTest extends TestCase
         $this->assertDatabaseCount('facility_requests', 0);
     }
 
-    public function test_api_whole_day_duration_uses_the_supported_eight_am_start(): void
+    public function test_api_whole_day_duration_uses_the_supported_regular_reservation_hours(): void
     {
         $requestor = User::factory()->create(['role' => 'requestor']);
         $date = now()->addDay()->toDateString();
@@ -105,7 +112,7 @@ class BroadcastCustodianTest extends TestCase
         $this->assertDatabaseHas('facility_requests', [
             'name_of_activity' => 'Whole-day activity',
             'start_time' => '08:00',
-            'end_time' => '23:59',
+            'end_time' => '17:00',
         ]);
     }
 
@@ -205,8 +212,8 @@ class BroadcastCustodianTest extends TestCase
             'department' => 'IT',
             'name_of_activity' => 'Cancel test',
             'expected_participants' => 2,
-            'start_date' => now()->toDateString(),
-            'end_date' => now()->toDateString(),
+            'start_date' => now()->addDays(2)->toDateString(),
+            'end_date' => now()->addDays(2)->toDateString(),
             'start_time' => '09:00',
             'end_time' => '10:00',
             'venue' => [],

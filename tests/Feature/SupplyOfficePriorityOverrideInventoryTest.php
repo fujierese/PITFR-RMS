@@ -7,6 +7,7 @@ use App\Models\FacilityRequest;
 use App\Models\User;
 use App\Models\Venue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class SupplyOfficePriorityOverrideInventoryTest extends TestCase
@@ -17,6 +18,7 @@ class SupplyOfficePriorityOverrideInventoryTest extends TestCase
     {
         parent::setUp();
         $this->withoutMiddleware();
+        Notification::fake();
     }
 
     private function createVenueAndRequest(User $requester, array $attributes = []): FacilityRequest
@@ -33,8 +35,8 @@ class SupplyOfficePriorityOverrideInventoryTest extends TestCase
             'department' => 'IT Department',
             'name_of_activity' => 'Test Activity',
             'expected_participants' => 50,
-            'start_date' => now()->addDay()->toDateString(),
-            'end_date' => now()->addDay()->toDateString(),
+            'start_date' => now()->addDays(2)->toDateString(),
+            'end_date' => now()->addDays(2)->toDateString(),
             'start_time' => '09:00',
             'end_time' => '12:00',
             'venue' => ['Conference Hall & Interaction Center (CHIC)'],

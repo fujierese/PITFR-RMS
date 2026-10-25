@@ -72,11 +72,104 @@
         </a>
     </div>
 
+    <section class="rounded-3xl border border-cyan-200 bg-white p-6 shadow-sm ring-1 ring-cyan-100">
+        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 class="text-xl font-semibold text-slate-900">Initial Availability Review</h2>
+                <p class="mt-1 text-sm text-slate-600">Review every new request here before custodians begin approval. Calendar availability is not Supply Office confirmation.</p>
+            </div>
+            <span class="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-800">{{ $availabilityReviewQueue->total() }} waiting</span>
+        </div>
+        @forelse($availabilityReviewQueue as $availabilityRequest)
+            <article class="mb-4 rounded-2xl border border-slate-200 p-4 last:mb-0">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <a href="{{ route('request.show', $availabilityRequest->id) }}" class="font-semibold text-slate-900 hover:text-cyan-700">{{ $availabilityRequest->control_number }} — {{ $availabilityRequest->name_of_activity }}</a>
+                        <div class="mt-1 space-y-1 text-sm text-slate-600">
+                            <p>{{ $availabilityRequest->requester?->name ?? 'Unknown' }}</p>
+                            @foreach($availabilityRequest->getVenueScheduleSummaries() as $schedule)
+                                <p>{{ $schedule['venue'] }} · {{ $schedule['label'] }}</p>
+                            @endforeach
+                        </div>
+                        @if($availabilityRequest->is_emergency)
+                            <p class="mt-2 text-sm font-semibold text-amber-700">Urgent: validate the attached proposal or memorandum order before confirming.</p>
+                        @endif
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" class="flex flex-wrap items-center gap-2">
+                            @csrf
+                            <input type="hidden" name="id" value="{{ $availabilityRequest->id }}">
+                            <input type="hidden" name="decision" value="available">
+                            @if($availabilityRequest->is_emergency)
+                                <label class="flex items-center gap-2 text-xs font-medium text-amber-800">
+                                    <input type="checkbox" name="urgent_document_validated" value="1" required class="rounded border-amber-400 text-amber-600">
+                                    Memo/proposal validated
+                                </label>
+                            @endif
+                            <button type="submit" class="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800">Confirm Available</button>
+                        </form>
+                        <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" class="flex flex-wrap items-center gap-2">
+                            @csrf
+                            <input type="hidden" name="id" value="{{ $availabilityRequest->id }}">
+                            <input type="hidden" name="decision" value="unavailable">
+                            <input type="text" name="notes" required maxlength="1000" placeholder="Conflict / reschedule note" class="w-52 rounded-xl border border-slate-300 px-3 py-2 text-xs">
+                            <button type="submit" class="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100">Mark Unavailable</button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+        @empty
+            <p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">No new requests are waiting for an availability review.</p>
+        @endforelse
+        @if($availabilityReviewQueue->hasPages())
+            <div class="mt-4">{{ $availabilityReviewQueue->links() }}</div>
+        @endif
+    </section>
+
+    <section class="rounded-3xl border border-rose-200 bg-white p-6 shadow-sm" aria-labelledby="cancellation-queue-heading">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 id="cancellation-queue-heading" class="text-xl font-semibold text-slate-900">Approved Reservation Cancellations</h2>
+                <p class="mt-1 text-sm text-slate-600">Confirm with the requestor before cancelling; the booking remains active while awaiting your decision.</p>
+            </div>
+            <span class="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-800">{{ $cancellationQueue->count() }} awaiting</span>
+        </div>
+        @forelse($cancellationQueue as $cancellationRequest)
+            <article class="mb-3 flex flex-col gap-3 rounded-2xl border border-rose-100 p-4 last:mb-0 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                    <a href="{{ route('request.show', $cancellationRequest) }}" class="font-semibold text-slate-900 hover:text-rose-700">{{ $cancellationRequest->control_number }} — {{ $cancellationRequest->name_of_activity }}</a>
+                    <p class="mt-1 text-sm text-slate-600">Requestor: {{ $cancellationRequest->requester?->name ?? 'Unknown' }}</p>
+                    <div class="mt-1 space-y-1 text-sm text-slate-600">
+                        @foreach($cancellationRequest->getVenueScheduleSummaries() as $schedule)
+                            <p>{{ $schedule['venue'] }} · {{ $schedule['label'] }}</p>
+                        @endforeach
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500">Requested {{ $cancellationRequest->cancellation_requested_at?->format('M j, Y g:i A') }}@if($cancellationRequest->cancellation_notes) · {{ $cancellationRequest->cancellation_notes }}@endif</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <form method="POST" action="{{ route('supply-office.requests.cancellation-review', $cancellationRequest) }}" class="flex flex-wrap gap-2">
+                        @csrf
+                        <input type="hidden" name="decision" value="confirm">
+                        <button type="submit" class="rounded-xl bg-rose-700 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-800">Confirm cancellation</button>
+                    </form>
+                    <form method="POST" action="{{ route('supply-office.requests.cancellation-review', $cancellationRequest) }}" class="flex flex-wrap gap-2">
+                        @csrf
+                        <input type="hidden" name="decision" value="decline">
+                        <input type="text" name="notes" required maxlength="1000" placeholder="Reason to decline" class="w-44 rounded-xl border border-slate-300 px-3 py-2 text-xs">
+                        <button type="submit" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Keep reservation</button>
+                    </form>
+                </div>
+            </article>
+        @empty
+            <p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">No approved reservations are awaiting cancellation confirmation.</p>
+        @endforelse
+    </section>
+
     <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/50">
         <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h2 class="text-xl font-semibold text-slate-900">Supply Office Review Queue</h2>
-                <p class="mt-1 text-sm text-slate-500">Requests that have already passed custodian review and are waiting for final supply office action.</p>
+                <p class="mt-1 text-sm text-slate-500">Requests that have passed the initial availability review and custodian approvals, and are waiting for final Supply Office action.</p>
             </div>
             <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">{{ $pendingFinalApprovalCount }} waiting</span>
         </div>
@@ -143,7 +236,7 @@
                             <th class="px-4 py-3 font-medium">Activity</th>
                             <th class="px-4 py-3 font-medium">Venue</th>
                             <th class="px-4 py-3 font-medium">Equipment</th>
-                            <th class="px-4 py-3 font-medium">Date and Time</th>
+                            <th class="px-4 py-3 font-medium">Venue Schedules</th>
                             <th class="px-4 py-3 font-medium">Status</th>
                             <th class="px-4 py-3 font-medium">Actions</th>
                         </tr>
@@ -157,10 +250,11 @@
                             <p class="mt-1 text-xs text-slate-500">{{ $request->requester?->name ?? 'Unknown' }}@if($request->department) <span aria-hidden="true">·</span> {{ $request->department }}@endif</p>
                         </td>
                         <td class="px-4 py-4">{{ implode(', ', $request->getVenueNames()) ?: '—' }}</td>
-                        <td class="px-4 py-4">{{ implode(', ', $request->getEquipmentItems()) ?: '—' }}</td>
+                        <td class="px-4 py-4">{{ implode(', ', $request->getVenueEquipmentLabels() ?: $request->getEquipmentItems()) ?: '—' }}</td>
                         <td class="px-4 py-4 whitespace-nowrap">
-                            <p>{{ $request->start_date ? \Carbon\Carbon::parse($request->start_date)->format('M d, Y') : '—' }}</p>
-                            <p class="mt-1 text-xs text-slate-500">{{ $request->start_time ? \Carbon\Carbon::parse($request->start_time)->format('g:i A') : '—' }}@if($request->end_time) - {{ \Carbon\Carbon::parse($request->end_time)->format('g:i A') }}@endif</p>
+                            @foreach($request->getVenueScheduleSummaries() as $schedule)
+                                <p class="mb-2 last:mb-0"><span class="font-medium">{{ $schedule['venue'] }}</span><span class="mt-1 block text-xs text-slate-500">{{ $schedule['label'] }}</span></p>
+                            @endforeach
                         </td>
                         <td class="px-4 py-4"><x-request-status-badge :request="$request" /></td>
                         <td class="px-4 py-4 whitespace-nowrap"><a href="{{ route('request.show', $request->id) }}" class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100" aria-label="Review request {{ $request->control_number }}">Review</a></td>

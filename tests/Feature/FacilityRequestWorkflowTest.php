@@ -27,7 +27,8 @@ class FacilityRequestWorkflowTest extends TestCase
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         $venueCustodian = User::factory()->create(['role' => 'custodian-venue']);
         $equipmentCustodian = User::factory()->create(['role' => 'custodian-equipment']);
-        $startDate = now()->addDay()->toDateString();
+        $this->travelTo(now()->setTime(8, 0));
+        $startDate = now()->toDateString();
 
         Venue::create([
             'name' => 'Conference Hall & Interaction Center (CHIC)',
@@ -48,7 +49,7 @@ class FacilityRequestWorkflowTest extends TestCase
             'expected_participants' => 50,
             'start_date' => $startDate,
             'end_date' => $startDate,
-            'start_time' => '09:00',
+            'start_time' => '10:00',
             'end_time' => '12:00',
             'venue' => ['Conference Hall & Interaction Center (CHIC)'],
             'equipment' => ['Sound System'],
@@ -69,7 +70,7 @@ class FacilityRequestWorkflowTest extends TestCase
                 'expected_participants' => 50,
                 'start_date' => $startDate,
                 'end_date' => $startDate,
-                'start_time' => '09:00',
+                'start_time' => '10:00',
                 'end_time' => '12:00',
                 'venue' => 'Conference Hall & Interaction Center (CHIC)',
                 'equipment' => ['Sound System'],
@@ -305,7 +306,7 @@ class FacilityRequestWorkflowTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Three-Day Workshop');
-        $response->assertSee('Sep 1, 2026 - Sep 3, 2026');
+        $response->assertSee('Sep 1, 2026 – Sep 3, 2026');
         $response->assertSee('Sound System');
         $response->assertSee('Qty 2');
         $response->assertSee('Pending Equipment Custodian Approval');

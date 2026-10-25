@@ -27,23 +27,16 @@
         </div>
 
         {{-- Meta Info --}}
-        <div class="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div class="bg-gray-50 rounded-xl p-3">
                 <p class="text-xs text-gray-400 mb-0.5">Control No.</p>
                 <p class="text-xs font-semibold text-gray-700">{{ $req->control_number }}</p>
             </div>
             <div class="bg-gray-50 rounded-xl p-3">
-                <p class="text-xs text-gray-400 mb-0.5">Date</p>
-                <p class="text-xs font-semibold text-gray-700">{{ $req->start_date->format('M j, Y') }}</p>
-            </div>
-            <div class="bg-gray-50 rounded-xl p-3">
-                <p class="text-xs text-gray-400 mb-0.5">Time</p>
-                <p class="text-xs font-semibold text-gray-700">
-                    {{ \Carbon\Carbon::parse($req->start_time)->format('g:i A') }}
-                    @if($req->end_time)
-                        — {{ \Carbon\Carbon::parse($req->end_time)->format('g:i A') }}
-                    @endif
-                </p>
+                <p class="text-xs text-gray-400 mb-0.5">Venue Schedules</p>
+                @foreach($req->getVenueScheduleSummaries() as $schedule)
+                    <p class="text-xs font-semibold text-gray-700">{{ $schedule['venue'] }}: {{ $schedule['label'] }}</p>
+                @endforeach
             </div>
             <div class="bg-gray-50 rounded-xl p-3">
                 <p class="text-xs text-gray-400 mb-0.5">Participants</p>
@@ -83,19 +76,33 @@
         @endif
 
         {{-- Equipment --}}
-        @php $completedEquipment = $req->getEquipmentItems(); $completedQuantities = $req->getEquipmentQuantities(); @endphp
+        @php
+            $completedEquipment = $req->getEquipmentItems();
+            $completedQuantities = $req->getEquipmentQuantities();
+            $completedVenueEquipment = $req->getVenueEquipmentAllocations();
+        @endphp
         @if(!empty($completedEquipment))
         <div class="mb-3">
             <p class="text-xs text-gray-400 mb-1">Equipment</p>
             <div class="flex flex-wrap gap-1.5">
-                @foreach($completedEquipment as $e)
-                    <span class="bg-purple-50 text-purple-700 text-xs font-medium px-2.5 py-0.5 rounded-full border border-purple-100">
-                        🔧 {{ $e }}
-                        @if(!empty($completedQuantities[$e]))
-                            <span class="font-bold">(×{{ $completedQuantities[$e] }})</span>
-                        @endif
-                    </span>
-                @endforeach
+                @if(!empty($completedVenueEquipment))
+                    @foreach($completedVenueEquipment as $venueName => $venueEquipment)
+                        @foreach($venueEquipment as $equipmentName => $quantity)
+                            <span class="bg-purple-50 text-purple-700 text-xs font-medium px-2.5 py-0.5 rounded-full border border-purple-100">
+                                🔧 {{ $venueName }}: {{ $equipmentName }} <span class="font-bold">(×{{ $quantity }})</span>
+                            </span>
+                        @endforeach
+                    @endforeach
+                @else
+                    @foreach($completedEquipment as $e)
+                        <span class="bg-purple-50 text-purple-700 text-xs font-medium px-2.5 py-0.5 rounded-full border border-purple-100">
+                            🔧 {{ $e }}
+                            @if(!empty($completedQuantities[$e]))
+                                <span class="font-bold">(×{{ $completedQuantities[$e] }})</span>
+                            @endif
+                        </span>
+                    @endforeach
+                @endif
             </div>
         </div>
         @endif

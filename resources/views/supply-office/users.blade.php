@@ -21,6 +21,7 @@
             <option value="faculty" @selected(($accountTypeFilter ?? '') === 'faculty')>Faculty</option>
             <option value="staff" @selected(($accountTypeFilter ?? '') === 'staff')>Staff</option>
             <option value="outsider" @selected(($accountTypeFilter ?? '') === 'outsider')>Outsider</option>
+            <option value="igp" @selected(($accountTypeFilter ?? '') === 'igp')>IGP</option>
             <option value="custodian_venue" @selected(($accountTypeFilter ?? '') === 'custodian_venue')>Venue Custodian</option>
             <option value="custodian_equipment" @selected(($accountTypeFilter ?? '') === 'custodian_equipment')>Equipment Custodian</option>
         </select>
@@ -50,7 +51,7 @@
                 <div>
                     <label for="account_type" class="mb-1 block text-sm font-medium text-slate-700">Account type</label>
                     <select id="account_type" name="account_type" required class="w-full rounded-xl border border-emerald-300 bg-white px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
-                        @foreach(['student' => 'Student Organization Representative', 'faculty' => 'Faculty', 'staff' => 'Staff', 'custodian_venue' => 'Venue Custodian', 'custodian_equipment' => 'Equipment Custodian'] as $value => $label)
+                        @foreach(['student' => 'Student Organization Representative', 'faculty' => 'Faculty', 'staff' => 'Staff', 'supply_office' => 'Supply Office Staff', 'custodian_venue' => 'Venue Custodian', 'custodian_equipment' => 'Equipment Custodian', 'igp' => 'IGP Coordinator'] as $value => $label)
                             <option value="{{ $value }}" @selected(old('account_type', 'student') === $value)>{{ $label }}</option>
                         @endforeach
                     </select>
@@ -140,6 +141,10 @@
                     <label for="add-user-faculty-id" class="mb-1 block text-sm font-medium text-slate-700">Faculty ID</label>
                     <input id="add-user-faculty-id" type="text" name="faculty_id" value="{{ old('faculty_id') }}" maxlength="50" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                 </div>
+                <div data-staff-id-field class="hidden">
+                    <label for="add-user-staff-id" class="mb-1 block text-sm font-medium text-slate-700">Staff ID <span class="font-normal text-slate-400">(optional)</span></label>
+                    <input id="add-user-staff-id" type="text" name="staff_id" value="{{ old('staff_id') }}" maxlength="50" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                </div>
                 <div data-position-field>
                     <label for="add-user-position" class="mb-1 block text-sm font-medium text-slate-700">Position</label>
                     <input id="add-user-position" type="text" name="position" value="{{ old('position') }}" maxlength="100" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
@@ -175,8 +180,18 @@
                     </div>
                 </div>
                 <div data-staff-office-field class="hidden">
-                    <label for="add-user-office-unit" class="mb-1 block text-sm font-medium text-slate-700">Office / unit (optional)</label>
-                    <input id="add-user-office-unit" type="text" name="office_or_organization" value="{{ old('office_or_organization') }}" maxlength="191" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                    <label for="add-user-office-unit" class="mb-1 block text-sm font-medium text-slate-700">Department / office</label>
+                    <select id="add-user-office-unit" name="office_or_organization" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                        <option value="">Select department / office</option>
+                        @foreach($staffDepartments as $department)
+                            <option value="{{ $department }}" data-office-name="{{ $department }}" @selected(old('office_or_organization') === $department || (old('account_type') === 'supply_office' && $department === 'Supply Office'))>{{ $department }}</option>
+                        @endforeach
+                        <option value="other" @selected(old('office_or_organization') === 'other')>Other office</option>
+                    </select>
+                </div>
+                <div data-other-office-field class="hidden">
+                    <label for="add-user-other-office" class="mb-1 block text-sm font-medium text-slate-700">Specify office</label>
+                    <input id="add-user-other-office" type="text" name="other_office_name" value="{{ old('other_office_name') }}" maxlength="191" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                 </div>
                 <div class="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
                     The user will create their password from the secure setup link sent to the email address above.
@@ -190,6 +205,8 @@
         <script>
             const accountType = document.getElementById('account_type');
             const facultyAdviser = document.getElementById('add-user-faculty-adviser');
+            const staffOfficeField = document.getElementById('add-user-office-unit');
+            const otherOfficeNameField = document.getElementById('add-user-other-office');
             const collegeField = document.getElementById('add-user-college');
             const departmentField = document.getElementById('add-user-department');
             const programField = document.getElementById('add-user-academic-program');
@@ -210,6 +227,8 @@
             const studentAccountNotes = document.querySelectorAll('[data-student-account-note]');
             const custodianAccountNotes = document.querySelectorAll('[data-custodian-account-note]');
             const staffOfficeFields = document.querySelectorAll('[data-staff-office-field]');
+            const otherOfficeFields = document.querySelectorAll('[data-other-office-field]');
+            const staffIdFields = document.querySelectorAll('[data-staff-id-field]');
             const updateDepartments = () => {
                 const collegeId = collegeField?.value || '';
                 let selectedDepartmentIsVisible = false;
@@ -285,7 +304,8 @@
                 programContainer?.classList.toggle('hidden', !showProgram);
                 majorContainer?.classList.toggle('hidden', !showMajor);
                 gradeLevelContainer?.classList.toggle('hidden', !showGradeLevel);
-                departmentContainer?.classList.toggle('hidden', isStudent && isHighSchool);
+                const showDepartment = accountType.value === 'faculty' || (isStudent && !isHighSchool);
+                departmentContainer?.classList.toggle('hidden', !showDepartment);
 
                 if (programField) programField.required = showProgram;
                 if (majorField) majorField.required = showMajor;
@@ -296,13 +316,18 @@
             const updateAccountFields = () => {
                 const isStudent = accountType.value === 'student';
                 const isFaculty = accountType.value === 'faculty';
-                const isStaff = accountType.value === 'staff';
+                const isStaff = accountType.value === 'staff' || accountType.value === 'supply_office';
+                const isSupplyOffice = accountType.value === 'supply_office';
                 const isCustodianVenue = accountType.value === 'custodian_venue';
                 const isCustodianEquipment = accountType.value === 'custodian_equipment';
+                const isIgp = accountType.value === 'igp';
                 const isCustodian = isCustodianVenue || isCustodianEquipment;
                 const isAcademic = isStudent || isFaculty;
                 const isFacultyAdviser = isFaculty && facultyAdviser && facultyAdviser.value === 'yes';
                 const isCreatingStudentOrganization = isStudent && studentOrganizationField?.value === '__new__';
+                if (isSupplyOffice && staffOfficeField) {
+                    staffOfficeField.value = 'Supply Office';
+                }
                 academicFields.forEach(field => field.classList.toggle('hidden', !isAcademic));
                 Array.from(collegeField?.options || []).forEach(option => {
                     const cannotAssignSchool = isFaculty && option.dataset.highSchool === 'true';
@@ -314,12 +339,18 @@
                 studentFields.forEach(field => field.classList.toggle('hidden', !isStudent));
                 facultyFields.forEach(field => field.classList.toggle('hidden', !isFaculty));
                 positionFields.forEach(field => field.classList.toggle('hidden', !(isStudent || isFaculty || isStaff)));
+                staffIdFields.forEach(field => field.classList.toggle('hidden', !(isStaff || isIgp || isCustodian)));
                 studentOrganizationFields.forEach(field => field.classList.toggle('hidden', !(isStudent || isFacultyAdviser)));
                 newStudentOrganizationFields.forEach(field => field.classList.toggle('hidden', !isCreatingStudentOrganization));
-                personNameInputs.forEach(input => input.required = isStudent || isStaff || isCustodian);
+                personNameInputs.forEach(input => input.required = isStudent || isStaff || isCustodian || isIgp);
                 studentAccountNotes.forEach(note => note.classList.toggle('hidden', !isStudent));
                 custodianAccountNotes.forEach(note => note.classList.toggle('hidden', !isCustodian));
-                staffOfficeFields.forEach(field => field.classList.toggle('hidden', !isStaff));
+                staffOfficeFields.forEach(field => field.classList.toggle('hidden', !(isStaff || isIgp)));
+                const isOtherOffice = (isStaff || isIgp) && staffOfficeField?.value === 'other';
+                otherOfficeFields.forEach(field => field.classList.toggle('hidden', !isOtherOffice));
+                if (otherOfficeNameField) {
+                    otherOfficeNameField.required = isOtherOffice;
+                }
                 if (studentOrganizationField) {
                     studentOrganizationField.required = isStudent;
                 }
@@ -336,6 +367,7 @@
             if (facultyAdviser) {
                 facultyAdviser.addEventListener('change', updateAccountFields);
             }
+            staffOfficeField?.addEventListener('change', updateAccountFields);
             document.addEventListener('keydown', event => {
                 if (event.key === 'Escape') {
                     window.location.href = @json(route('admin.users'));

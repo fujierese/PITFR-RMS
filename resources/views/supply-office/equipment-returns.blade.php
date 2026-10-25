@@ -53,7 +53,7 @@
                                 </div>
                                 <div class="mt-2 text-sm text-slate-600">
                                     <p>Venue: {{ implode(', ', $request->getVenueNames()) ?: '—' }}</p>
-                                    <p>Equipment: {{ implode(', ', $request->getEquipmentItems()) ?: '—' }}</p>
+                                    <p>Equipment: {{ implode(', ', $request->getVenueEquipmentLabels() ?: $request->getEquipmentItems()) ?: '—' }}</p>
                                 </div>
                                 </a>
                             </div>

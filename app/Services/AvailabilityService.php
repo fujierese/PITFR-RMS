@@ -75,23 +75,95 @@ class AvailabilityService
 
         if (! $ignoreVenueConflicts) {
             foreach ($facilityRequest->getVenueNames() as $venueName) {
-                $availability = $this->checkVenueAvailability($venueName, $requestedStart, $requestedEnd, $excludeRequestId);
+                $venueRange = $facilityRequest->getVenueScheduleRange($venueName);
+                $availability = $this->checkVenueAvailability(
+                    $venueName,
+                    $venueRange['start'],
+                    $venueRange['end'],
+                    $excludeRequestId
+                );
                 if (!$availability['available']) {
                     return $availability['message'] ?? 'Venue booking conflict detected.';
                 }
             }
         }
 
+        $venueEquipment = $facilityRequest->getVenueEquipmentAllocations();
+        if ($venueEquipment !== []) {
+            $equipmentRanges = [];
+            foreach ($venueEquipment as $venueName => $items) {
+                if (! is_array($items) || ! in_array($venueName, $facilityRequest->getVenueNames(), true)) {
+                    continue;
+                }
+                $venueRange = $facilityRequest->getVenueScheduleRange($venueName);
+                foreach ($items as $itemName => $quantity) {
+                    $equipmentRanges[$itemName][] = [
+                        ...$venueRange,
+                        'quantity' => (int) $quantity,
+                    ];
+                }
+            }
+
+            foreach ($equipmentRanges as $itemName => $ranges) {
+                if (! Equipment::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($itemName)])->exists()) {
+                    continue;
+                }
+
+                $boundaries = collect($ranges)
+                    ->flatMap(fn (array $range): array => [$range['start'], $range['end']])
+                    ->unique(fn (Carbon $time): string => $time->toIso8601String())
+                    ->sortBy(fn (Carbon $time): int => $time->getTimestamp())
+                    ->values();
+
+                for ($index = 0; $index < $boundaries->count() - 1; $index++) {
+                    $segmentStart = $boundaries[$index];
+                    $segmentEnd = $boundaries[$index + 1];
+                    if ($segmentStart->equalTo($segmentEnd)) {
+                        continue;
+                    }
+
+                    $requestedQuantity = collect($ranges)
+                        ->filter(fn (array $range): bool => $range['start']->lt($segmentEnd) && $range['end']->gt($segmentStart))
+                        ->sum('quantity');
+                    if ($requestedQuantity === 0) {
+                        continue;
+                    }
+
+                    $availability = $this->checkEquipmentAvailability(
+                        $itemName,
+                        (int) $requestedQuantity,
+                        $segmentStart,
+                        $segmentEnd,
+                        $excludeRequestId
+                    );
+                    if (! $availability['available']) {
+                        return $availability['message'] ?? 'Requested equipment is not available.';
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        $equipmentRanges = collect($facilityRequest->getVenueNames())
+            ->map(fn (string $venueName): array => $facilityRequest->getVenueScheduleRange($venueName))
+            ->whenEmpty(fn (Collection $ranges): Collection => collect([[
+                'start' => $requestedStart,
+                'end' => $requestedEnd,
+            ]]));
+
         foreach ($facilityRequest->getEquipmentQuantities() as $itemName => $quantity) {
-            $availability = $this->checkEquipmentAvailability(
-                $itemName,
-                (int) $quantity,
-                $requestedStart,
-                $requestedEnd,
-                $excludeRequestId
-            );
-            if (!$availability['available']) {
-                return $availability['message'] ?? 'Requested equipment is not available.';
+            foreach ($equipmentRanges as $range) {
+                $availability = $this->checkEquipmentAvailability(
+                    $itemName,
+                    (int) $quantity,
+                    $range['start'],
+                    $range['end'],
+                    $excludeRequestId
+                );
+                if (!$availability['available']) {
+                    return $availability['message'] ?? 'Requested equipment is not available.';
+                }
             }
         }
 
@@ -145,7 +217,21 @@ class AvailabilityService
             return ['available' => false, 'message' => 'The selected venue is unavailable.', 'capacity' => $venueRecord->capacity];
         }
 
-        $requests = $this->getApprovedRequestsOverlapping($requestedStart, $requestedEnd, $excludeRequestId);
+        $requests = FacilityRequest::query()
+            ->where('status', 'approved')
+            ->when($excludeRequestId !== null, fn ($query) => $query->whereKeyNot($excludeRequestId))
+            ->where(function ($query) use ($requestedStart, $requestedEnd): void {
+                $query->whereHas('reservationSchedule', function ($scheduleQuery) use ($requestedStart, $requestedEnd): void {
+                    $scheduleQuery->where('start_datetime', '<', $requestedEnd)
+                        ->where('end_datetime', '>', $requestedStart);
+                })->orWhere(function ($legacyQuery) use ($requestedStart, $requestedEnd): void {
+                    $legacyQuery->whereDoesntHave('reservationSchedule')
+                        ->whereDate('start_date', '<=', $requestedEnd->toDateString())
+                        ->whereDate('end_date', '>=', $requestedStart->toDateString());
+                });
+            })
+            ->with(['requestVenues', 'reservationSchedule'])
+            ->get();
 
         $conflicts = $requests->contains(function (FacilityRequest $request) use ($venueName, $requestedStart, $requestedEnd): bool {
                 if ($request->status !== 'approved') {
@@ -156,7 +242,13 @@ class AvailabilityService
                     return trim($name) === strtolower(trim($venueName));
                 });
 
-                return $matchesVenue && $request->overlapsTimeRange($requestedStart, $requestedEnd);
+                if (! $matchesVenue) {
+                    return false;
+                }
+
+                $range = $request->getVenueScheduleRange($venueName);
+
+                return $range['start']->lt($requestedEnd) && $range['end']->gt($requestedStart);
             });
 
         $maintenanceConflict = MaintenanceSchedule::where(function ($query) use ($venueName, $venueRecord) {
@@ -190,7 +282,7 @@ class AvailabilityService
                 continue;
             }
 
-            if (!$request->overlapsTimeRange($requestedStart, $requestedEnd)) {
+            if (! $this->requestHasScheduleOverlap($request, $requestedStart, $requestedEnd)) {
                 continue;
             }
 
@@ -227,6 +319,23 @@ class AvailabilityService
             })
             ->with(['requestVenues', 'requestEquipment', 'reservationSchedule'])
             ->get();
+    }
+
+    private function requestHasScheduleOverlap(FacilityRequest $request, Carbon $requestedStart, Carbon $requestedEnd): bool
+    {
+        $venueNames = $request->getVenueNames();
+        if ($venueNames === []) {
+            return $request->overlapsTimeRange($requestedStart, $requestedEnd);
+        }
+
+        foreach ($venueNames as $venueName) {
+            $range = $request->getVenueScheduleRange($venueName);
+            if ($range['start']->lt($requestedEnd) && $range['end']->gt($requestedStart)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function buildVenueMessage(bool $conflicts, bool $maintenance, bool $holiday): ?string

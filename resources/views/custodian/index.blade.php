@@ -89,7 +89,7 @@
                     <th class="px-4 py-3 font-medium">Activity</th>
                     <th class="px-4 py-3 font-medium">Venue</th>
                     <th class="px-4 py-3 font-medium">Equipment</th>
-                    <th class="px-4 py-3 font-medium">Date and Time</th>
+                    <th class="px-4 py-3 font-medium">Venue Schedules</th>
                     <th class="px-4 py-3 font-medium">Status</th>
                     <th class="px-4 py-3 font-medium">Actions</th>
                 </tr>
@@ -107,10 +107,11 @@
                             <p class="mt-1 text-xs text-slate-500">{{ $req->requester?->name ?? $req->requested_by }}@if($req->department) <span aria-hidden="true">·</span> {{ $req->department }}@endif</p>
                         </td>
                         <td class="px-4 py-4">{{ implode(', ', $req->getVenueNames()) ?: '—' }}</td>
-                        <td class="px-4 py-4">{{ implode(', ', $req->getEquipmentItems()) ?: '—' }}</td>
+                        <td class="px-4 py-4">{{ implode(', ', $req->getVenueEquipmentLabels() ?: $req->getEquipmentItems()) ?: '—' }}</td>
                         <td class="px-4 py-4 whitespace-nowrap">
-                            <p>{{ $req->start_date ? $req->start_date->format('M d, Y') : '—' }}</p>
-                            <p class="mt-1 text-xs text-slate-500">{{ \Carbon\Carbon::parse($req->start_time)->format('g:i A') }}@if(!empty($req->end_time)) - {{ \Carbon\Carbon::parse($req->end_time)->format('g:i A') }}@endif</p>
+                            @foreach($req->getVenueScheduleSummaries() as $schedule)
+                                <p class="mb-2 last:mb-0"><span class="font-medium">{{ $schedule['venue'] }}</span><span class="mt-1 block text-xs text-slate-500">{{ $schedule['label'] }}</span></p>
+                            @endforeach
                         </td>
                         <td class="px-4 py-4">
                             <x-request-status-badge :request="$req" />

@@ -77,6 +77,16 @@ class Phase1RevisionWorkflowTest extends TestCase
         $this->actingAs($requester)
             ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
             ->assertRedirect(route('request.show', $request));
+
+        foreach (array_map('intval', $revision->affected_user_ids ?? []) as $affectedUserId) {
+            if ($affectedUserId === (int) $requester->id) {
+                continue;
+            }
+
+            $this->actingAs(User::findOrFail($affectedUserId))
+                ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
+                ->assertRedirect(route('request.show', $request));
+        }
     }
 
     public function test_admin_can_revise_approved_request(): void
@@ -477,8 +487,19 @@ class Phase1RevisionWorkflowTest extends TestCase
         $this->actingAs($requester)
             ->from(route('request.show', $request))
             ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
-            ->assertRedirect(route('request.show', $request))
-            ->assertSessionHasErrors('revision');
+            ->assertRedirect(route('request.show', $request));
+
+        $lastResponse = null;
+        foreach (array_map('intval', $revision->affected_user_ids ?? []) as $affectedUserId) {
+            if ($affectedUserId === (int) $requester->id) {
+                continue;
+            }
+
+            $lastResponse = $this->actingAs(User::findOrFail($affectedUserId))
+                ->from(route('request.show', $request))
+                ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept']);
+        }
+        $lastResponse->assertRedirect(route('request.show', $request))->assertSessionHasErrors('revision');
 
         $this->assertSame('pending', $revision->fresh()->status);
         $this->assertSame(now()->addDay()->toDateString(), $request->fresh()->start_date->toDateString());
@@ -513,13 +534,21 @@ class Phase1RevisionWorkflowTest extends TestCase
         $this->actingAs($requester)
             ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
             ->assertRedirect(route('request.show', $request));
+        foreach (array_map('intval', $revision->affected_user_ids ?? []) as $affectedUserId) {
+            if ($affectedUserId === (int) $requester->id) {
+                continue;
+            }
+            $this->actingAs(User::findOrFail($affectedUserId))
+                ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
+                ->assertRedirect(route('request.show', $request));
+        }
 
         $previousCustodian = User::findOrFail($previousCustodianId);
         Notification::assertSentTo([$previousCustodian], \App\Notifications\ReservationRevised::class);
         Notification::assertSentTo([$newCustodian], \App\Notifications\ReservationRevised::class);
     }
 
-    public function test_only_reservation_owner_can_respond_to_a_pending_proposal(): void
+    public function test_only_affected_users_can_respond_to_a_pending_proposal(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         $otherRequestor = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
@@ -574,7 +603,7 @@ class Phase1RevisionWorkflowTest extends TestCase
             ->assertOk()
             ->assertViewHas('pendingRevision', fn ($pendingRevision) => $pendingRevision?->id === $revision->id)
             ->assertSee('Schedule change proposed')
-            ->assertSee('Accept proposed schedule')
+            ->assertSee('Confirm proposed schedule')
             ->assertSee('Decline proposal')
             ->assertSee($proposal['revision_reason']);
 
@@ -608,10 +637,7 @@ class Phase1RevisionWorkflowTest extends TestCase
                 'revision_reason' => 'First revision.',
             ]);
 
-        $pendingRevision = RevisionHistory::where('facility_request_id', $request->id)->where('status', 'pending')->firstOrFail();
-        $this->actingAs($requester)
-            ->post(route('request.revision.respond', [$request, $pendingRevision]), ['response' => 'accept'])
-            ->assertRedirect(route('request.show', $request));
+        $this->acceptPendingRevision($request, $requester);
 
         // Second revision
         $this->actingAs($admin)

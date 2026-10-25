@@ -6,6 +6,11 @@
     $profileCollegeId = $profileCollegeId ?? null;
     $profileDepartmentId = $profileDepartmentId ?? null;
     $effectiveRequestorType = $currentUser?->requestor_type ?? ($requestorType ?? null);
+    $venueDefaultEquipmentMap = $venueDefaultEquipmentMap ?? [];
+    $venueEquipmentVisibilityMap = $venueEquipmentVisibilityMap ?? [];
+    $selectedVenues = (array) old('venue', []);
+    $oldVenueEquipment = (array) old('venue_equipment', []);
+    $oldVenueEquipmentQuantities = (array) old('venue_equipment_quantities', []);
     $requestClassification = 'Standard Request';
     $classificationTone = 'emerald';
     $urgentRequested = old('is_emergency') ? true : false;
@@ -43,9 +48,17 @@
         line-height: 1;
         vertical-align: middle;
     }
+
+    .venue-option [data-venue-schedule] {
+        display: none;
+    }
+
+    .venue-option:has(> label input[name="venue[]"]:checked) [data-venue-schedule] {
+        display: block;
+    }
 </style>
 
-<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="Submit this request?" data-swal-text="Please confirm that the request details are complete and correct." data-swal-icon="question" data-swal-confirm-text="Yes, submit request" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-has-saved-signature="{{ $currentUser?->e_signature_file ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
+<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="Submit this request?" data-swal-text="Please confirm that the request details are complete and correct." data-swal-icon="question" data-swal-confirm-text="Yes, submit request" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-venue-availability-url="{{ route('requestor.venue.availability') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-has-saved-signature="{{ $currentUser?->e_signature_file ? '1' : '0' }}" data-venue-capacities="{{ json_encode($venueCapacityMap ?? []) }}" data-venue-default-equipment="{{ json_encode($venueDefaultEquipmentMap ?? []) }}">
     @csrf
 
 <div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]">
@@ -66,25 +79,28 @@
             </div>
 
             <div class="mb-6">
-                <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Request Progress</p>
+                <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Request Submission Steps</p>
                 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                         <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Step 1</p>
-                        <p class="mt-1 text-sm font-semibold text-slate-900">Requestor Details</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">Request Details</p>
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                         <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 2</p>
-                        <p class="mt-1 text-sm font-semibold text-slate-900">Venue & Schedule</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">Choose Venue & Schedule</p>
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                         <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 3</p>
-                        <p class="mt-1 text-sm font-semibold text-slate-900">Equipment Requirements</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">Select Equipment</p>
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                         <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 4</p>
-                        <p class="mt-1 text-sm font-semibold text-slate-900">Review & Submit Request</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">Review & Submit</p>
                     </div>
                 </div>
+                <p class="mt-3 text-xs leading-5 text-slate-600">
+                    After submission, the Supply Office checks availability first. If available, the request goes to the relevant custodian(s) for review, then returns to the Supply Office for the final decision. Calendar availability is not a confirmation.
+                </p>
             </div>
 
             <div class="mb-6 rounded-[24px] border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
@@ -142,9 +158,8 @@
                         <div class="space-y-3 rounded-[24px] border border-slate-200 bg-white p-4 text-xs text-slate-600">
                             <p>Ref. Code: <span class="font-semibold text-slate-800">PIT-PSMO-F-05-3.7-08</span></p>
                             <p>Rev. No: <span class="font-semibold text-slate-800">00</span></p>
-                            <div class="mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 text-center text-xs shadow-sm">
-                                <p class="font-semibold text-slate-800">TUV NORD</p>
-                                <p class="text-slate-500">ISO 9001:2015 Certified</p>
+                            <div class="mt-2 flex min-h-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-sm">
+                                <img src="{{ asset('images/TUVNORD-Logo.png') }}" alt="TUV NORD ISO 9001:2015 Certified" class="max-h-12 w-auto max-w-full object-contain">
                             </div>
                         </div>
                     </div>
@@ -228,63 +243,13 @@
                                 <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                             @enderror
                         </div>
-                        <div class="grid gap-4 md:grid-cols-3 md:gap-5">
-                            <div>
-                                <label for="start_date" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Date <span class="required-asterisk">*</span></label>
-                                <input id="start_date" type="date" name="start_date" required min="{{ now()->toDateString() }}" value="{{ old('start_date') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('start_date') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('start_date') ? 'true' : 'false' }}">
-                                @error('start_date')
-                                    <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
-                                @enderror
-                            </div>
-                            <div>
-                                <label for="end_date" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Date (inclusive) <span class="required-asterisk">*</span></label>
-                                <input id="end_date" type="date" name="end_date" required min="{{ now()->toDateString() }}" value="{{ old('end_date') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('end_date') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('end_date') ? 'true' : 'false' }}">
-                                @error('end_date')
-                                    <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
-                                @enderror
-                                <p id="overnight-hint" class="mt-2 text-xs text-emerald-600 hidden">Overnight booking detected: end date auto-updated to the next day.</p>
-                            </div>
-                            <div>
+                        <div>
                                 <label for="expected_participants" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Expected No. of Participants <span class="required-asterisk">*</span></label>
                                 <input id="expected_participants" type="number" name="expected_participants" required min="1" value="{{ old('expected_participants') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('expected_participants') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('expected_participants') ? 'true' : 'false' }}">
                                 @error('expected_participants')
                                     <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                                 @enderror
                                 <div id="capacity-warning-banner" role="status" aria-live="polite" class="mt-3 hidden rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900"></div>
-                            </div>
-                        </div>
-                        <div class="reservation-duration-group mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Reservation Duration</p>
-                            <div class="mt-3 flex flex-col gap-3 sm:flex-row">
-                                <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-emerald-500 bg-emerald-50 px-3 py-2 text-sm font-medium text-slate-900 shadow-sm">
-                                    <input type="radio" name="reservation_duration" value="specific_time" checked>
-                                    <span>Specific Time</span>
-                                </label>
-                                <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                                    <input type="radio" name="reservation_duration" value="whole_day">
-                                    <span>Whole Day</span>
-                                    <span class="text-xs text-slate-500">08:00 AM – 11:59 PM</span>
-                                </label>
-                            </div>
-                            <p class="reservation-duration-helper mt-3 text-xs text-emerald-700" aria-live="polite">Whole Day uses 08:00 AM–11:59 PM for each selected date.</p>
-                        </div>
-                        <div class="grid gap-4 md:grid-cols-2 md:gap-5">
-                            <div>
-                                <label for="start_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start Time <span class="required-asterisk">*</span></label>
-                                <input id="start_time" type="time" name="start_time" required value="{{ old('start_time') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('start_time') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('start_time') ? 'true' : 'false' }}">
-                                <p id="reservation-time-error" class="mt-2 hidden text-xs font-medium text-red-600" aria-live="polite">Reservations cannot start between 12:00 AM and 5:00 AM. Choose a start time after 5:00 AM or use the Whole Day option.</p>
-                                @error('start_time')
-                                    <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
-                                @enderror
-                            </div>
-                            <div>
-                                <label for="end_time" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">End Time <span class="required-asterisk">*</span></label>
-                                <input id="end_time" type="time" name="end_time" required value="{{ old('end_time') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('end_time') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('end_time') ? 'true' : 'false' }}">
-                                <p id="reservation-end-time-error" class="mt-2 hidden text-xs font-medium text-red-600" aria-live="polite">Reservations cannot end between 12:00 AM and 5:00 AM. Choose an end time after 5:00 AM or use the Whole Day option.</p>
-                                @error('end_time')
-                                    <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
-                                @enderror
-                            </div>
                         </div>
                     </div>
                 </section>
@@ -294,9 +259,9 @@
                         <div class="flex items-center justify-between gap-4">
                             <div>
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section III. Venue</p>
-                                <p class="mt-1 text-sm text-slate-500">Select the facility / venue requested for the activity.</p>
+                                <p class="mt-1 text-sm text-slate-500">Select every facility / venue needed for the activity.</p>
                             </div>
-                            <p class="text-xs text-slate-500">Choose one</p>
+                            <p class="text-xs text-slate-500">Choose one or more</p>
                         </div>
                     </div>
                             @if ($isExternal)
@@ -315,32 +280,67 @@
                             @foreach($venueOptions as $v)
                                 @php
                                     $venueCapacity = $venueCapacityMap[$v] ?? null;
+                                    $venueScheduleOld = old('venue_schedules', [])[$v] ?? [];
+                                    $isVenueSelected = in_array($v, $selectedVenues, true);
+                                    $venueCalendarUrl = route('calendar.embed', array_filter([
+                                        'date' => $venueScheduleOld['start_date'] ?? now()->toDateString(),
+                                        'venue' => $v,
+                                        'select' => 1,
+                                    ]));
                                 @endphp
-                                <label class="venue-option flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 {{ old('venue') === $v ? 'border-emerald-500 bg-emerald-50 shadow-sm' : '' }}">
-                                    <input type="radio" name="venue" value="{{ $v }}"
-                                           {{ old('venue') === $v ? 'checked' : '' }}
-                                           required
-                                           class="mt-0.5 h-4 w-4 rounded-full border-slate-300 text-emerald-600 focus:ring-emerald-500">
-                                    <span class="flex-1 text-sm font-medium text-slate-700">{{ $v }}</span>
-                                    <span class="shrink-0 text-xs text-slate-500">{{ $venueCapacity !== null ? $venueCapacity . ' people' : 'Capacity not set' }}</span>
-                                    <span class="hidden text-emerald-600">✓</span>
-                                </label>
+                                <div class="venue-option rounded-2xl border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 {{ $isVenueSelected ? 'border-emerald-500 bg-emerald-50 shadow-sm' : '' }}" data-venue-option data-venue-name="{{ $v }}">
+                                    <label class="flex cursor-pointer items-start gap-3">
+                                        <input type="checkbox" name="venue[]" value="{{ $v }}"
+                                               {{ $isVenueSelected ? 'checked' : '' }}
+                                               class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                                        <span class="flex-1 text-sm font-medium text-slate-700">{{ $v }}</span>
+                                        <span class="shrink-0 text-xs text-slate-500">{{ $venueCapacity !== null ? $venueCapacity . ' people' : 'Capacity not set' }}</span>
+                                        <span class="venue-checkmark {{ $isVenueSelected ? '' : 'hidden' }} text-emerald-600">✓</span>
+                                    </label>
+                                    <div class="venue-schedule mt-4 {{ $isVenueSelected ? '' : 'hidden' }}" data-venue-schedule data-venue-name="{{ $v }}">
+                                        <div class="mb-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3">
+                                            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Reservation Schedule</p>
+                                            <button type="button" data-open-venue-calendar data-calendar-url="{{ $venueCalendarUrl }}" data-venue-name="{{ $v }}" class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">
+                                                Choose date on calendar
+                                            </button>
+                                        </div>
+                                        <div class="grid gap-3 sm:grid-cols-2">
+                                            <div>
+                                                <label class="text-xs font-semibold text-slate-600">Start Date <span class="required-asterisk">*</span></label>
+                                                <input type="date" name="venue_schedules[{{ $v }}][start_date]" {{ $isVenueSelected ? 'required' : '' }} min="{{ now()->toDateString() }}" value="{{ $venueScheduleOld['start_date'] ?? old('start_date') }}" class="venue-schedule-input mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
+                                            </div>
+                                            <div>
+                                                <label class="text-xs font-semibold text-slate-600">End Date (inclusive) <span class="required-asterisk">*</span></label>
+                                                <input type="date" name="venue_schedules[{{ $v }}][end_date]" {{ $isVenueSelected ? 'required' : '' }} min="{{ now()->toDateString() }}" value="{{ $venueScheduleOld['end_date'] ?? old('end_date') }}" class="venue-schedule-input mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
+                                            </div>
+                                            <div>
+                                                <label class="text-xs font-semibold text-slate-600">Start Time <span class="required-asterisk">*</span></label>
+                                                <input type="time" name="venue_schedules[{{ $v }}][start_time]" {{ $isVenueSelected ? 'required' : '' }} value="{{ $venueScheduleOld['start_time'] ?? old('start_time') }}" class="venue-schedule-input mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
+                                            </div>
+                                            <div>
+                                                <label class="text-xs font-semibold text-slate-600">End Time <span class="required-asterisk">*</span></label>
+                                                <input type="time" name="venue_schedules[{{ $v }}][end_time]" {{ $isVenueSelected ? 'required' : '' }} value="{{ $venueScheduleOld['end_time'] ?? old('end_time') }}" class="venue-schedule-input mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
+                                            </div>
+                                        </div>
+                                        <fieldset class="mt-3 flex flex-wrap gap-3">
+                                            <legend class="sr-only">Reservation duration for {{ $v }}</legend>
+                                            <label class="inline-flex items-center gap-2 text-xs text-slate-700">
+                                                <input type="radio" name="venue_schedules[{{ $v }}][reservation_duration]" value="specific_time" @checked(($venueScheduleOld['reservation_duration'] ?? 'specific_time') === 'specific_time')>
+                                                Specific time
+                                            </label>
+                                            <label class="inline-flex items-center gap-2 text-xs text-slate-700">
+                                                <input type="radio" name="venue_schedules[{{ $v }}][reservation_duration]" value="whole_day" @checked(($venueScheduleOld['reservation_duration'] ?? '') === 'whole_day')>
+                                                Whole day (8:00 AM–5:00 PM)
+                                            </label>
+                                        </fieldset>
+                                        <p class="venue-availability mt-3 text-xs text-slate-500" aria-live="polite">Select dates and times to check availability.</p>
+                                        @error('venue_schedules.' . $v . '.start_date')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                        @error('venue_schedules.' . $v . '.end_date')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                        @error('venue_schedules.' . $v . '.start_time')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                        @error('venue_schedules.' . $v . '.end_time')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    </div>
+                                </div>
                             @endforeach
-                            <label class="venue-option flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 {{ old('venue') === 'Others (specify)' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : '' }}">
-                                <input type="radio" name="venue" value="Others (specify)"
-                                       {{ old('venue') === 'Others (specify)' ? 'checked' : '' }}
-                                       required
-                                       class="mt-0.5 h-4 w-4 rounded-full border-slate-300 text-emerald-600 focus:ring-emerald-500">
-                                <span class="flex-1 text-sm font-medium text-slate-700">Others (specify)</span>
-                                <span class="hidden text-emerald-600">✓</span>
-                            </label>
-                        </div>
-                        <div id="venue-other-wrap" class="mt-4 {{ old('venue') === 'Others (specify)' ? 'block' : 'none' }}">
-                            <label for="venue-other" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Specify Other Venue <span class="required-asterisk">*</span></label>
-                            <input id="venue-other" type="text" name="other_venue" value="{{ old('other_venue') }}" placeholder="Enter the name of the venue" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('other_venue') border-red-300 bg-red-50 @enderror" @if(old('venue') !== 'Others (specify)') disabled @endif>
-                            @error('other_venue')
-                                <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
-                            @enderror
                         </div>
                         @error('venue')
                             <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
@@ -353,73 +353,90 @@
                     <div class="mb-5 border-b border-slate-200 pb-4">
                         <div class="flex items-center justify-between gap-4">
                             <div>
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Equipment Selection</p>
-                                <p class="mt-1 text-sm text-slate-500">Choose additional items beyond the venue package.</p>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Equipment by Venue</p>
+                                <p class="mt-1 text-sm text-slate-500">Select equipment separately for each venue. Venue-included equipment is preselected and still goes through custodian review.</p>
                             </div>
                             <div class="flex items-center gap-2">
                                 <p class="text-xs text-slate-500">Real-time availability</p>
                             </div>
                         </div>
                     </div>
-                    <div id="balay-chair-note" class="hidden mb-4 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900" role="note">
-                        <span class="font-semibold">Balay Alumni already has 50 chairs available onsite.</span>
-                        Request additional Monobloc Chairs only if more seating is needed.
-                    </div>
-                    <div class="mt-4 space-y-3">
-                        @php
-                            $equipmentList = $equipment instanceof \Illuminate\Support\Collection ? $equipment->all() : $equipment;
-                            $equipmentItems = [];
-                            if (!empty($equipmentList)) {
-                                foreach ($equipmentList as $eq) {
-                                    $equipmentItems[] = $eq;
-                                }
-                            } else {
-                                $equipmentItems = collect([
-                                    ['name' => 'Sound System', 'quantity' => 1, 'quantity_available' => 1],
-                                    ['name' => 'Wireless Microphones', 'quantity' => 2, 'quantity_available' => 2],
-                                    ['name' => 'Non-Wireless Microphones', 'quantity' => 2, 'quantity_available' => 2],
-                                    ['name' => 'Canopies', 'quantity' => 3, 'quantity_available' => 3],
-                                    ['name' => 'Industrial Fans', 'quantity' => 4, 'quantity_available' => 4],
-                                    ['name' => 'Iwata Cooler Fans', 'quantity' => 2, 'quantity_available' => 2],
-                                    ['name' => 'Tables', 'quantity' => 10, 'quantity_available' => 10],
-                                    ['name' => 'Monobloc Chairs', 'quantity' => 12, 'quantity_available' => 12],
-                                ]);
-                            }
-                        @endphp
-                        @foreach($equipmentItems as $eq)
-                        @php
-                            $itemName = is_object($eq) ? $eq->name : ($eq['name'] ?? '');
-                            $itemQty = is_object($eq) ? ($eq->quantity ?? 0) : ($eq['quantity'] ?? 0);
-                            $itemAvailable = max(0, (int) (is_object($eq) ? ($eq->quantity_available ?? $itemQty) : ($eq['quantity_available'] ?? $itemQty)));
-                            $badgeClass = $itemAvailable <= 0 ? 'bg-red-100 text-red-700' : ($itemAvailable == $itemQty ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700');
-                            $isSelected = in_array($itemName, old('equipment', []), true);
-                        @endphp
-                        <div class="equipment-row flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between {{ $itemAvailable > 0 ? 'hover:border-purple-400 hover:bg-purple-50/70' : 'border-red-100 bg-red-50/70 opacity-70' }} {{ $isSelected ? 'border-emerald-300 bg-emerald-50/60' : '' }}" data-available="{{ $itemAvailable }}" data-total="{{ $itemQty }}" data-name="{{ $itemName }}" data-index="{{ $loop->index }}">
-                            <label class="flex flex-1 cursor-pointer items-center gap-3">
-                                <input type="checkbox" name="equipment[]" value="{{ $itemName }}" {{ $itemAvailable <= 0 ? 'disabled' : '' }} {{ $isSelected ? 'checked' : '' }} class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="{{ $itemName }}">
-                                <div class="flex flex-1 items-center gap-2">
-                                    <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
-                                    @php
-                                        $selectedVenueName = old('venue') ?: null;
-                                        $venueIncludedEquipment = [
-                                            'Balay Alumni' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Tables', 'Chairs'],
-                                        ];
-                                        $isVenueIncludedItem = isset($venueIncludedEquipment[$selectedVenueName]) && in_array($itemName, $venueIncludedEquipment[$selectedVenueName], true);
-                                    @endphp
-                                    @if($isVenueIncludedItem)
-                                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Included</span>
-                                    @endif
+                    <p class="mb-3 text-xs text-slate-500">Choose either Wireless or Non-Wireless Microphones. Sir Rogelio Guillemer handles Sound System and microphone requests.</p>
+                    <p id="microphone-selection-error" class="mb-3 hidden text-sm font-medium text-red-600" role="alert">Select either Wireless or Non-Wireless Microphones, not both.</p>
+                    @php
+                        $equipmentList = $equipment instanceof \Illuminate\Support\Collection ? $equipment->all() : $equipment;
+                        $equipmentItems = !empty($equipmentList) ? $equipmentList : collect([
+                            ['name' => 'Sound System', 'quantity' => 3, 'quantity_available' => 3],
+                            ['name' => 'Wireless Microphones', 'quantity' => 3, 'quantity_available' => 3],
+                            ['name' => 'Non-Wireless Microphones', 'quantity' => 3, 'quantity_available' => 3],
+                            ['name' => 'Aircon', 'quantity' => 1, 'quantity_available' => 1],
+                            ['name' => 'Canopies', 'quantity' => 3, 'quantity_available' => 3],
+                            ['name' => 'Industrial Fans', 'quantity' => 4, 'quantity_available' => 4],
+                            ['name' => 'Iwata Cooler Fans', 'quantity' => 2, 'quantity_available' => 2],
+                            ['name' => 'Tables', 'quantity' => 10, 'quantity_available' => 10],
+                            ['name' => 'Chairs', 'quantity' => 50, 'quantity_available' => 50],
+                            ['name' => 'Monobloc Chairs', 'quantity' => 12, 'quantity_available' => 12],
+                            ['name' => 'Lights', 'quantity' => 1, 'quantity_available' => 1],
+                            ['name' => 'Podium', 'quantity' => 1, 'quantity_available' => 1],
+                            ['name' => 'Television (CHIC)', 'quantity' => 1, 'quantity_available' => 1],
+                            ['name' => 'HDMI', 'quantity' => 1, 'quantity_available' => 1],
+                        ]);
+                    @endphp
+                    <div class="mt-4 space-y-4">
+                        @foreach($venueOptions as $venueName)
+                            @php
+                                $venueDefaults = $venueDefaultEquipmentMap[$venueName] ?? [];
+                                $venueIncompatible = \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment($venueName);
+                                $venueIsSelected = in_array($venueName, $selectedVenues, true);
+                            @endphp
+                            <div class="venue-equipment-group {{ $venueIsSelected ? '' : 'hidden' }} rounded-2xl border border-slate-200 p-4" data-venue-equipment-group data-venue-name="{{ $venueName }}">
+                                <h4 class="mb-3 font-semibold text-slate-800">{{ $venueName }} equipment</h4>
+                                @if($venueName === 'Balay Alumni')
+                                    <div class="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900" role="note">
+                                        Balay Alumni has 50 Chairs onsite. Request Monobloc Chairs only if additional seating is needed.
+                                    </div>
+                                @endif
+                                <div class="space-y-3">
+                                    @foreach($equipmentItems as $eq)
+                                        @php
+                                            $itemName = is_object($eq) ? $eq->name : ($eq['name'] ?? '');
+                                            $itemQty = (int) (is_object($eq) ? ($eq->quantity ?? 0) : ($eq['quantity'] ?? 0));
+                                            $itemAvailable = max(0, (int) (is_object($eq) ? ($eq->quantity_available ?? $itemQty) : ($eq['quantity_available'] ?? $itemQty)));
+                                            $badgeClass = $itemAvailable <= 0 ? 'bg-red-100 text-red-700' : ($itemAvailable == $itemQty ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700');
+                                            $isVenueRequired = in_array($itemName, $venueDefaults, true);
+                                            $oldVenueItems = (array) ($oldVenueEquipment[$venueName] ?? []);
+                                            $legacySelected = !array_key_exists('venue_equipment', session()->getOldInput()) && $venueName === ($selectedVenues[0] ?? null) && in_array($itemName, (array) old('equipment', []), true);
+                                            $isSelected = in_array($itemName, $oldVenueItems, true) || $legacySelected || ($isVenueRequired && $venueIsSelected);
+                                            $allowedVenues = $venueEquipmentVisibilityMap[$itemName] ?? [];
+                                            $isOtherVenueEquipment = in_array($itemName, ['Podium', 'HDMI', 'Television (CHIC)'], true);
+                                            $isVisible = !in_array($itemName, $venueIncompatible, true) && ($allowedVenues === [] || in_array($venueName, $allowedVenues, true));
+                                            $itemIndex = $loop->parent->index . '-' . $loop->index;
+                                            $itemQuantity = $oldVenueEquipmentQuantities[$venueName][$itemName] ?? ($isSelected ? 1 : '');
+                                        @endphp
+                                        @if($isVisible)
+                                            <div class="equipment-row flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between {{ $itemAvailable > 0 ? 'hover:border-purple-400 hover:bg-purple-50/70' : 'border-red-100 bg-red-50/70 opacity-70' }} {{ $isSelected ? 'border-emerald-300 bg-emerald-50/60' : '' }}" data-available="{{ $itemAvailable }}" data-total="{{ $itemQty }}" data-name="{{ $itemName }}" data-venue="{{ $venueName }}" data-venue-required="{{ $isVenueRequired ? '1' : '0' }}" data-index="{{ $itemIndex }}">
+                                                <label class="flex flex-1 cursor-pointer items-center gap-3">
+                                                    <input type="checkbox" name="venue_equipment[{{ $venueName }}][]" value="{{ $itemName }}" {{ $itemAvailable <= 0 && !$isVenueRequired ? 'disabled' : '' }} {{ $isSelected ? 'checked' : '' }} class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="{{ $itemName }}" data-venue-required="{{ $isVenueRequired ? '1' : '0' }}">
+                                                    <div class="flex flex-1 items-center gap-2">
+                                                        <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
+                                                        <span data-equipment-included-badge class="{{ $isVenueRequired ? 'inline-flex' : 'hidden' }} items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Included in venue</span>
+                                                        @if($isOtherVenueEquipment)
+                                                            <span data-other-venue-equipment-badge class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600">{{ $venueName === 'Conference Hall & Interaction Center (CHIC)' ? 'CHIC equipment' : 'Others' }}</span>
+                                                        @endif
+                                                    </div>
+                                                </label>
+                                                <div class="flex flex-col items-start gap-2 sm:items-end sm:text-right">
+                                                    <span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">{{ $itemAvailable }} / {{ $itemQty }} available</span>
+                                                    <div class="quantity-input-wrap {{ $isSelected ? '' : 'hidden' }}" id="qty-wrap-{{ $itemIndex }}">
+                                                        <label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Qty</label>
+                                                        <input type="number" inputmode="numeric" step="1" name="venue_equipment_quantities[{{ $venueName }}][{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ $itemQuantity }}" {{ $isSelected ? 'required' : 'disabled' }} class="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" placeholder="Enter qty" aria-label="{{ $venueName }} {{ $itemName }} quantity">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endif
+                                    @endforeach
                                 </div>
-                            </label>
-                            <div class="flex flex-col items-start gap-2 sm:items-end sm:text-right">
-                                <span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">{{ $itemAvailable }} / {{ $itemQty }} available</span>
-                                <div class="quantity-input-wrap {{ $isSelected ? '' : 'hidden' }}" id="qty-wrap-{{ $loop->index }}">
-                                    <label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Qty</label>
-                                    <input type="number" inputmode="numeric" step="1" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ old('equipment_quantities.'.$itemName) }}" {{ $isSelected ? 'required' : 'disabled' }} class="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" placeholder="Enter qty" aria-label="{{ $itemName }} quantity">
-                                </div>
-                                <div class="equipment-utilization-card mt-2 hidden w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] text-slate-600 sm:min-w-[220px]"></div>
                             </div>
-                        </div>
                         @endforeach
                     </div>
                 </section>
@@ -615,9 +632,9 @@
                             {{-- IGP Receipt for External/Organization --}}
                             <div>
                                 <label for="igp_receipt_file" class="mb-3 block text-sm font-semibold text-slate-700">
-                                    IGP Receipt <span class="required-asterisk">*</span>
+                                    Receipt document <span class="text-xs font-normal text-slate-500">(optional)</span>
                                 </label>
-                                <p class="mb-3 text-xs text-slate-500">Required document: Inter-agency Collaborative Agreement (IGP) receipt or approval document for external organizations.</p>
+                                <p class="mb-3 text-xs text-slate-500">Do not pay before the Supply Office confirms availability. The IGP will record the official receipt number after availability is confirmed. You may add a receipt document later if requested.</p>
                                 <div data-upload-box class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition duration-200 hover:border-emerald-400">
                                     <div class="space-y-3 text-center">
                                         <svg class="mx-auto h-14 w-14 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
@@ -775,7 +792,95 @@
     </section>
 </div>
 </form>
+<dialog id="venue-calendar-modal" style="width:min(96vw,1100px);max-width:none;height:min(92vh,900px);max-height:92vh;margin:auto" class="overflow-hidden rounded-2xl border-0 p-0 shadow-2xl backdrop:bg-slate-950/60">
+    <div class="flex h-full flex-col bg-white">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+            <div>
+                <h2 id="venue-calendar-modal-title" class="text-lg font-semibold text-slate-900">Venue calendar</h2>
+                <p id="venue-calendar-selection-status" class="mt-1 text-sm text-slate-600" aria-live="polite">Select a start date, then an end date. The end date is inclusive.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" data-close-venue-calendar class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100" aria-label="Close venue calendar">Cancel</button>
+                <button type="button" data-apply-venue-calendar-dates disabled class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300">Use dates</button>
+            </div>
+        </div>
+        <iframe id="venue-calendar-modal-frame" title="Choose reservation date range" class="min-h-0 w-full flex-1 bg-slate-50" src="about:blank"></iframe>
+    </div>
+</dialog>
 <script>
+    window.syncVenueScheduleDuration = (group) => {
+        const duration = group.querySelector('input[type="radio"][name$="[reservation_duration]"]:checked')?.value || 'specific_time';
+        const startTime = group.querySelector('input[name$="[start_time]"]');
+        const endTime = group.querySelector('input[name$="[end_time]"]');
+        if (!startTime || !endTime) return;
+
+        const wholeDay = duration === 'whole_day';
+        startTime.readOnly = wholeDay;
+        endTime.readOnly = wholeDay;
+        if (!wholeDay) return;
+
+        [['08:00', startTime], ['17:00', endTime]].forEach(([value, field]) => {
+            if (field.value === value) return;
+            field.value = value;
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    };
+
+    document.addEventListener('change', (event) => {
+        const radio = event.target;
+        if (!(radio instanceof HTMLInputElement) || radio.type !== 'radio' || !radio.name.endsWith('[reservation_duration]')) return;
+        const group = radio.closest('[data-venue-schedule]');
+        if (group) window.syncVenueScheduleDuration(group);
+    });
+
+    document.querySelectorAll('[data-venue-schedule]').forEach((group) => {
+        window.syncVenueScheduleDuration(group);
+    });
+
+    const initializeVenueCapacityWarning = () => {
+        const form = document.getElementById('request-form');
+        const participantCountInput = form?.querySelector('[name="expected_participants"]');
+        const capacityWarningBanner = document.getElementById('capacity-warning-banner');
+        if (!form || !participantCountInput || !capacityWarningBanner) return;
+
+        const venueCapacities = JSON.parse(form.dataset.venueCapacities || '{}');
+        const updateVenueCapacityWarning = () => {
+            const participants = Number(participantCountInput.value);
+            const selectedVenues = [...form.querySelectorAll('[name="venue[]"]:checked')];
+            const exceededVenues = selectedVenues
+                .map((venueInput) => ({
+                    name: venueInput.value,
+                    capacity: Number(venueCapacities[venueInput.value]),
+                }))
+                .filter(({ capacity }) => Number.isFinite(capacity) && capacity > 0 && participants > capacity);
+
+            if (!Number.isInteger(participants) || participants < 1 || exceededVenues.length === 0) {
+                capacityWarningBanner.textContent = '';
+                capacityWarningBanner.classList.add('hidden');
+                return;
+            }
+
+            const venueDetails = exceededVenues
+                .map(({ name, capacity }) => `${name} (maximum ${capacity})`)
+                .join(', ');
+            capacityWarningBanner.textContent = `The expected ${participants} participants exceed the capacity of: ${venueDetails}. You may still submit the request, but the Supply Office will need to review it.`;
+            capacityWarningBanner.classList.remove('hidden');
+        };
+
+        participantCountInput.addEventListener('input', updateVenueCapacityWarning);
+        form.querySelectorAll('[name="venue[]"]').forEach((venueInput) => {
+            venueInput.addEventListener('change', updateVenueCapacityWarning);
+        });
+        updateVenueCapacityWarning();
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeVenueCapacityWarning, { once: true });
+    } else {
+        initializeVenueCapacityWarning();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('request-form');
         if (!form) return;
@@ -939,10 +1044,88 @@
 
     });
 
-    document.addEventListener('DOMContentLoaded', function () {
+    const initializeRequestFormDraftUi = () => {
         const form = document.getElementById('request-form');
         if (!form || form.dataset.requestDraftUiInitialized === '1') return;
         form.dataset.requestDraftUiInitialized = '1';
+        const venueCalendarModal = document.getElementById('venue-calendar-modal');
+        const venueCalendarFrame = document.getElementById('venue-calendar-modal-frame');
+        const venueCalendarTitle = document.getElementById('venue-calendar-modal-title');
+        const venueCalendarSelectionStatus = document.getElementById('venue-calendar-selection-status');
+        const applyVenueCalendarDates = venueCalendarModal?.querySelector('[data-apply-venue-calendar-dates]');
+        let selectedCalendarRange = null;
+        const closeVenueCalendarModal = () => {
+            if (!venueCalendarModal?.open) return;
+            venueCalendarModal.close();
+            if (venueCalendarFrame) venueCalendarFrame.src = 'about:blank';
+        };
+
+        form.querySelectorAll('[data-open-venue-calendar]').forEach((button) => {
+            button.addEventListener('click', () => {
+                if (!venueCalendarModal || !venueCalendarFrame) return;
+                const venueName = button.dataset.venueName || 'Venue';
+                venueCalendarModal.dataset.venueName = venueName;
+                selectedCalendarRange = null;
+                if (applyVenueCalendarDates) applyVenueCalendarDates.disabled = true;
+                if (venueCalendarSelectionStatus) {
+                    venueCalendarSelectionStatus.textContent = 'Select a start date, then an end date. The end date is inclusive.';
+                }
+                if (venueCalendarTitle) venueCalendarTitle.textContent = `${venueName} calendar`;
+                venueCalendarFrame.src = button.dataset.calendarUrl || 'about:blank';
+                venueCalendarModal.showModal();
+            });
+        });
+        venueCalendarModal?.querySelector('[data-close-venue-calendar]')?.addEventListener('click', closeVenueCalendarModal);
+        venueCalendarModal?.addEventListener('click', (event) => {
+            if (event.target === venueCalendarModal) closeVenueCalendarModal();
+        });
+        venueCalendarModal?.addEventListener('close', () => {
+            if (venueCalendarFrame) venueCalendarFrame.src = 'about:blank';
+        });
+        window.addEventListener('message', (event) => {
+            if (
+                event.origin !== window.location.origin
+                || event.source !== venueCalendarFrame?.contentWindow
+                || event.data?.type !== 'venue-calendar-date-selected'
+                || event.data.venue !== venueCalendarModal?.dataset.venueName
+                || typeof event.data.startDate !== 'string'
+                || typeof event.data.endDate !== 'string'
+                || !/^\d{4}-\d{2}-\d{2}$/.test(event.data.startDate)
+                || (event.data.endDate !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(event.data.endDate))
+                || (event.data.endDate !== '' && event.data.endDate < event.data.startDate)
+            ) {
+                return;
+            }
+
+            selectedCalendarRange = event.data.endDate
+                ? { startDate: event.data.startDate, endDate: event.data.endDate }
+                : null;
+            if (venueCalendarSelectionStatus) {
+                venueCalendarSelectionStatus.textContent = event.data.endDate
+                    ? `${event.data.startDate} – ${event.data.endDate} (inclusive). Choose “Use dates” to apply.`
+                    : `Start date: ${event.data.startDate}. Now select the end date (inclusive).`;
+            }
+            if (applyVenueCalendarDates) applyVenueCalendarDates.disabled = !selectedCalendarRange;
+        });
+        applyVenueCalendarDates?.addEventListener('click', () => {
+            if (!selectedCalendarRange || !venueCalendarModal?.dataset.venueName) return;
+
+            const venueSchedule = [...form.querySelectorAll('[data-venue-schedule]')]
+                .find((group) => group.dataset.venueName === venueCalendarModal.dataset.venueName);
+            if (!venueSchedule) return;
+
+            [
+                ['start_date', selectedCalendarRange.startDate],
+                ['end_date', selectedCalendarRange.endDate],
+            ].forEach(([fieldName, date]) => {
+                const field = venueSchedule.querySelector(`[name$="[${fieldName}]"]`);
+                if (!field) return;
+                field.value = date;
+                field.dispatchEvent(new Event('input', { bubbles: true }));
+                field.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            closeVenueCalendarModal();
+        });
 
         const draftStatus = document.getElementById('draft-status');
         let formIsDirty = false;
@@ -982,7 +1165,18 @@
             field.addEventListener('change', markFormDirty);
         });
 
-        form.addEventListener('submit', () => {
+        form.addEventListener('submit', (event) => {
+            const hasBothMicrophoneTypes = [...form.querySelectorAll('[data-venue-equipment-group]:not(.hidden)')].some((group) => (
+                group.querySelector('.equipment-checkbox:checked[value="Wireless Microphones"]')
+                && group.querySelector('.equipment-checkbox:checked[value="Non-Wireless Microphones"]')
+            ));
+            const microphoneError = document.getElementById('microphone-selection-error');
+            if (hasBothMicrophoneTypes) {
+                event.preventDefault();
+                microphoneError?.classList.remove('hidden');
+                microphoneError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
             formIsDirty = false;
             updateDraftStatus(false);
         });
@@ -999,79 +1193,7 @@
 
         updateDraftStatus(false);
 
-        const durationInputs = document.querySelectorAll('input[name="reservation_duration"]');
-        const startTimeInput = document.querySelector('input[name="start_time"]');
-        const endTimeInput = document.querySelector('input[name="end_time"]');
-        const reservationTimeError = document.getElementById('reservation-time-error');
-
-        if (durationInputs.length && startTimeInput && endTimeInput) {
-            let previousDuration = document.querySelector('input[name="reservation_duration"]:checked')?.value || null;
-
-            const validateReservationTimes = () => {
-                const duration = document.querySelector('input[name="reservation_duration"]:checked')?.value || 'specific_time';
-                const isDisallowedStart = duration === 'specific_time'
-                    && Boolean(startTimeInput.value)
-                    && startTimeInput.value <= '05:00';
-                const isDisallowedEnd = duration === 'specific_time'
-                    && Boolean(endTimeInput.value)
-                    && endTimeInput.value <= '05:00';
-
-                startTimeInput.setCustomValidity(isDisallowedStart
-                    ? 'Reservations cannot start between 12:00 AM and 5:00 AM. Choose a start time after 5:00 AM or use the Whole Day option.'
-                    : '');
-                endTimeInput.setCustomValidity(isDisallowedEnd
-                    ? 'Reservations cannot end between 12:00 AM and 5:00 AM. Choose an end time after 5:00 AM or use the Whole Day option.'
-                    : '');
-                startTimeInput.setAttribute('aria-invalid', isDisallowedStart ? 'true' : 'false');
-                endTimeInput.setAttribute('aria-invalid', isDisallowedEnd ? 'true' : 'false');
-                reservationTimeError?.classList.toggle('hidden', !isDisallowedStart);
-                document.getElementById('reservation-end-time-error')?.classList.toggle('hidden', !isDisallowedEnd);
-            };
-
-            const applyDurationState = () => {
-                const duration = document.querySelector('input[name="reservation_duration"]:checked')?.value ?? null;
-                const isWholeDay = duration === 'whole_day';
-                startTimeInput.readOnly = isWholeDay;
-                endTimeInput.readOnly = isWholeDay;
-
-                if (isWholeDay) {
-                    startTimeInput.value = '08:00';
-                    endTimeInput.value = '23:59';
-                } else if (previousDuration === 'whole_day' || (!duration && previousDuration)) {
-                    startTimeInput.value = '';
-                    endTimeInput.value = '';
-                }
-
-                previousDuration = duration;
-                validateReservationTimes();
-            };
-
-            startTimeInput.addEventListener('input', validateReservationTimes);
-            startTimeInput.addEventListener('change', validateReservationTimes);
-            endTimeInput.addEventListener('input', validateReservationTimes);
-            endTimeInput.addEventListener('change', validateReservationTimes);
-            durationInputs.forEach((input) => {
-                input.addEventListener('mousedown', () => {
-                    input.dataset.wasChecked = input.checked ? 'true' : 'false';
-                });
-                input.addEventListener('keydown', (event) => {
-                    if (event.key === ' ' && input.checked) {
-                        event.preventDefault();
-                        input.checked = false;
-                        input.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
-                });
-                input.addEventListener('click', (event) => {
-                    if (input.dataset.wasChecked === 'true') {
-                        event.preventDefault();
-                        input.checked = false;
-                        input.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
-                });
-                input.addEventListener('change', applyDurationState);
-            });
-            applyDurationState();
-        }
+        const venueScheduleGroups = form.querySelectorAll('[data-venue-schedule]');
 
         const summaryDetails = {
             activity: document.getElementById('summary-activity'),
@@ -1100,27 +1222,39 @@
 
         function updateSummary() {
             const activityInput = form.querySelector('[name="name_of_activity"]');
-            const selectedVenue = form.querySelector('input[name="venue"]:checked');
-            const venueText = selectedVenue ? (selectedVenue.value === 'Others (specify)' ? (document.getElementById('venue-other')?.value.trim() || 'Other venue') : selectedVenue.value) : 'Not selected';
-            const startDate = form.querySelector('[name="start_date"]')?.value;
-            const endDate = form.querySelector('[name="end_date"]')?.value;
-            const startTime = form.querySelector('[name="start_time"]')?.value;
-            const endTime = form.querySelector('[name="end_time"]')?.value;
+            const selectedVenues = [...form.querySelectorAll('input[name="venue[]"]:checked')].map((input) => input.value);
+            const venueText = selectedVenues.length ? selectedVenues.join(', ') : 'Not selected';
+            const scheduleSummary = [...venueScheduleGroups]
+                .filter((group) => group.closest('[data-venue-option]')?.querySelector('input[name="venue[]"]')?.checked)
+                .map((group) => {
+                    const fields = Object.fromEntries(['start_date', 'end_date', 'start_time', 'end_time']
+                        .map((field) => [field, group.querySelector(`[name$="[${field}]"]`)?.value || '']));
+                    const duration = group.querySelector('input[type="radio"]:checked')?.value;
+                    const date = fields.start_date && fields.end_date
+                        ? `${formatDisplayDate(fields.start_date)}${fields.start_date === fields.end_date ? '' : ` – ${formatDisplayDate(fields.end_date)}`}`
+                        : 'Dates not selected';
+                    const time = duration === 'whole_day'
+                        ? 'Whole day (8:00 AM–5:00 PM)'
+                        : fields.start_time && fields.end_time
+                            ? `${formatDisplayTime(fields.start_time)} – ${formatDisplayTime(fields.end_time)}`
+                            : 'Times not selected';
+                    return `${group.dataset.venueName}: ${date}, ${time}`;
+                });
 
             if (summaryDetails.activity) summaryDetails.activity.textContent = activityInput?.value.trim() || 'Not specified';
             if (summaryDetails.venue) summaryDetails.venue.textContent = venueText;
-            const isWholeDay = form.querySelector('[name="reservation_duration"]:checked')?.value === 'whole_day';
-            if (summaryDetails.date) summaryDetails.date.textContent = startDate && endDate ? `${formatDisplayDate(startDate)}${startDate === endDate ? '' : ` – ${formatDisplayDate(endDate)}`}` : 'Not selected';
-            if (summaryDetails.time) summaryDetails.time.textContent = isWholeDay ? 'Whole day (08:00 AM – 11:59 PM)' : (startTime && endTime ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}` : 'Not selected');
+            if (summaryDetails.date) summaryDetails.date.textContent = scheduleSummary.length ? scheduleSummary.join(' | ') : 'Not selected';
+            if (summaryDetails.time) summaryDetails.time.textContent = 'Schedules are specified separately for each selected venue.';
 
             const selectedEquipment = [...form.querySelectorAll('.equipment-row')].filter((row) => {
                 const checkbox = row.querySelector('.equipment-checkbox');
                 return checkbox && checkbox.checked;
             }).map((row) => {
                 const name = row.dataset.name || 'Equipment';
+                const venue = row.dataset.venue || 'Venue';
                 const qtyInput = row.querySelector('input[type="number"]');
                 const qty = qtyInput?.value || 'Enter quantity';
-                return `${name} × ${qty}`;
+                return `${venue}: ${name} × ${qty}`;
             });
 
             if (summaryDetails.equipment) {
@@ -1135,7 +1269,242 @@
             updateChecklistState();
         }
 
-        const venueInputs = form.querySelectorAll('input[name="venue"]');
+        const venueInputs = form.querySelectorAll('input[name="venue[]"]');
+        const venueDefaultEquipment = JSON.parse(form.dataset.venueDefaultEquipment || '{}');
+        const venueAvailabilityContainer = document.getElementById('venue-conflict-alert-wrap');
+        let venueAvailabilityState = null;
+        let venueAvailabilitySequence = 0;
+        let venueAvailabilityTimer = null;
+        const renderVenueAvailability = (state, message, results = []) => {
+            venueAvailabilityState = state;
+            if (!venueAvailabilityContainer) return;
+            venueAvailabilityContainer.replaceChildren();
+
+            const notice = document.createElement('div');
+            notice.className = state === true
+                ? 'rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800'
+                : state === false
+                    ? 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900'
+                    : 'rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600';
+            notice.setAttribute('role', 'status');
+            notice.setAttribute('aria-live', 'polite');
+            notice.textContent = message;
+            venueAvailabilityContainer.appendChild(notice);
+
+            if (results.length) {
+                const list = document.createElement('ul');
+                list.className = 'mt-2 space-y-1';
+                results.forEach((result) => {
+                    const item = document.createElement('li');
+                    item.textContent = `${result.venue}: ${result.available ? 'available' : (result.message || 'unavailable')}`;
+                    list.appendChild(item);
+                });
+                notice.appendChild(list);
+            }
+        };
+
+        const checkVenueAvailability = () => {
+            window.clearTimeout(venueAvailabilityTimer);
+            const selectedGroups = [...venueScheduleGroups].filter((group) => {
+                return group.closest('[data-venue-option]')?.querySelector('input[name="venue[]"]')?.checked;
+            });
+            const preparedSchedules = selectedGroups.map((group) => ({
+                group,
+                venue: group.dataset.venueName,
+                startDate: group.querySelector('[name$="[start_date]"]')?.value,
+                endDate: group.querySelector('[name$="[end_date]"]')?.value,
+                startTime: group.querySelector('[name$="[start_time]"]')?.value,
+                endTime: group.querySelector('[name$="[end_time]"]')?.value,
+                duration: group.querySelector('input[type="radio"]:checked')?.value || 'specific_time',
+            }));
+
+            if (!preparedSchedules.length) {
+                venueAvailabilitySequence += 1;
+                venueAvailabilityState = null;
+                renderVenueAvailability(null, 'Select a venue and enter its schedule to check availability.');
+                updateChecklistState();
+                return;
+            }
+
+            const sequence = ++venueAvailabilitySequence;
+            const incompleteSchedules = preparedSchedules.filter((schedule) => {
+                return !schedule.startDate || !schedule.endDate || !schedule.startTime || !schedule.endTime;
+            });
+            if (incompleteSchedules.length) {
+                venueAvailabilityState = null;
+                incompleteSchedules.forEach(({ group }) => {
+                    const status = group.querySelector('.venue-availability');
+                    if (status) {
+                        status.textContent = 'Select dates and times to check availability.';
+                        status.className = 'venue-availability mt-3 text-xs text-slate-500';
+                    }
+                });
+                renderVenueAvailability(null, 'Enter dates and times for each selected venue.');
+                updateChecklistState();
+                return;
+            }
+
+            preparedSchedules.forEach(({ group }) => {
+                const status = group.querySelector('.venue-availability');
+                if (status) {
+                    status.textContent = 'Checking availability…';
+                    status.className = 'venue-availability mt-3 text-xs text-slate-500';
+                }
+            });
+            renderVenueAvailability(null, 'Checking selected venue schedules…');
+            updateChecklistState();
+            venueAvailabilityTimer = window.setTimeout(async () => {
+                try {
+                    const results = await Promise.all(preparedSchedules.map(async (schedule) => {
+                        const query = new URLSearchParams({
+                            start_date: schedule.startDate,
+                            end_date: schedule.endDate,
+                            start_time: schedule.startTime,
+                            end_time: schedule.endTime,
+                            reservation_duration: schedule.duration,
+                        });
+                        query.append('venues[]', schedule.venue);
+                        const response = await fetch(`${form.dataset.venueAvailabilityUrl}?${query.toString()}`, {
+                            headers: { Accept: 'application/json' },
+                            credentials: 'same-origin',
+                        });
+                        if (!response.ok) throw new Error('Availability check failed.');
+                        const payload = await response.json();
+                        return { group: schedule.group, ...(payload.venues?.[0] || { venue: schedule.venue, available: false }) };
+                    }));
+                    if (sequence !== venueAvailabilitySequence) return;
+                    results.forEach((result) => {
+                        const status = result.group.querySelector('.venue-availability');
+                        if (status) {
+                            status.textContent = result.available
+                                ? `${result.venue} is available for this schedule. Supply Office confirmation is still required.`
+                                : `${result.venue} is unavailable for this schedule. ${result.message || ''}`;
+                            status.className = `venue-availability mt-3 text-xs ${result.available ? 'text-emerald-700' : 'text-amber-800'}`;
+                        }
+                    });
+                    const isAvailable = results.every((result) => result.available);
+                    renderVenueAvailability(
+                        isAvailable,
+                        isAvailable
+                            ? 'All selected venues are available for their individual schedules. Supply Office confirmation is still required.'
+                            : 'One or more selected venues are unavailable for their selected schedule.',
+                        results,
+                    );
+                } catch {
+                    if (sequence !== venueAvailabilitySequence) return;
+                    preparedSchedules.forEach(({ group }) => {
+                        const status = group.querySelector('.venue-availability');
+                        if (status) {
+                            status.textContent = 'Availability could not be checked. Please try again.';
+                            status.className = 'venue-availability mt-3 text-xs text-red-700';
+                        }
+                    });
+                    renderVenueAvailability(null, 'Availability could not be checked. Please try again before submitting.');
+                }
+                updateChecklistState();
+            }, 250);
+        };
+
+        const toggleScheduleFields = () => {
+            venueScheduleGroups.forEach((group) => {
+                const isSelected = group.closest('[data-venue-option]')?.querySelector('input[name="venue[]"]')?.checked === true;
+                group.classList.toggle('hidden', !isSelected);
+                group.style.display = isSelected ? 'block' : 'none';
+                group.querySelectorAll('.venue-schedule-input').forEach((field) => {
+                    field.required = isSelected;
+                });
+            });
+        };
+
+        const applyVenueDuration = (group) => {
+            window.syncVenueScheduleDuration(group);
+        };
+
+        const updateVenueEquipmentDefaults = () => {
+            const selectedVenues = [...venueInputs].filter((input) => input.checked).map((input) => input.value);
+            form.querySelectorAll('[data-venue-equipment-group]').forEach((group) => {
+                const venue = group.dataset.venueName || '';
+                const venueIsSelected = selectedVenues.includes(venue);
+                group.classList.toggle('hidden', !venueIsSelected);
+                group.querySelectorAll('.equipment-row').forEach((row) => {
+                    const checkbox = row.querySelector('.equipment-checkbox');
+                    const quantityWrap = row.querySelector('.quantity-input-wrap');
+                    const quantity = quantityWrap?.querySelector('input[type="number"]');
+                    const includedBadge = row.querySelector('[data-equipment-included-badge]');
+                    if (!checkbox) return;
+
+                    const isVenueRequired = (venueDefaultEquipment[venue] || []).includes(row.dataset.name);
+                    checkbox.dataset.venueRequired = isVenueRequired ? '1' : '0';
+                    if (includedBadge) {
+                        includedBadge.classList.toggle('hidden', !isVenueRequired);
+                        includedBadge.classList.toggle('inline-flex', isVenueRequired);
+                    }
+
+                    if (!venueIsSelected) {
+                        checkbox.checked = false;
+                    } else if (isVenueRequired && !checkbox.disabled) {
+                        checkbox.checked = true;
+                    }
+
+                    const isSelected = venueIsSelected && checkbox.checked;
+                    quantityWrap?.classList.toggle('hidden', !isSelected);
+                    if (quantity) {
+                        quantity.disabled = !isSelected;
+                        quantity.required = isSelected;
+                        if (isSelected && !quantity.value) quantity.value = '1';
+                    }
+                    row.classList.toggle('border-emerald-300', isSelected);
+                    row.classList.toggle('bg-emerald-50/60', isSelected);
+                });
+            });
+            updateSummary();
+        };
+
+        form.querySelectorAll('.equipment-checkbox').forEach((checkbox) => {
+            checkbox.addEventListener('change', () => {
+                if (checkbox.dataset.venueRequired === '1' && !checkbox.checked) {
+                    checkbox.checked = true;
+                }
+                if (checkbox.checked && ['Wireless Microphones', 'Non-Wireless Microphones'].includes(checkbox.value)) {
+                    const otherMicrophone = checkbox.value === 'Wireless Microphones' ? 'Non-Wireless Microphones' : 'Wireless Microphones';
+                    const otherCheckbox = checkbox.closest('[data-venue-equipment-group]')?.querySelector(`.equipment-checkbox[value="${otherMicrophone}"]`);
+                    if (otherCheckbox) otherCheckbox.checked = false;
+                    document.getElementById('microphone-selection-error')?.classList.add('hidden');
+                }
+                updateVenueEquipmentDefaults();
+            });
+        });
+
+        venueScheduleGroups.forEach((group) => {
+            group.querySelectorAll('input[type="radio"][name$="[reservation_duration]"]').forEach((radio) => {
+                radio.addEventListener('change', () => {
+                    applyVenueDuration(group);
+                    checkVenueAvailability();
+                    updateSummary();
+                });
+            });
+            group.querySelectorAll('.venue-schedule-input').forEach((field) => {
+                field.addEventListener('input', () => {
+                    if (field.name.endsWith('[start_date]')) {
+                        const endDate = group.querySelector('[name$="[end_date]"]');
+                        if (endDate) endDate.min = field.value || '{{ now()->toDateString() }}';
+                        group.querySelectorAll('[data-calendar-url]').forEach((button) => {
+                            const calendarUrl = new URL(button.dataset.calendarUrl, window.location.origin);
+                            calendarUrl.searchParams.set('date', field.value || '{{ now()->toDateString() }}');
+                            button.dataset.calendarUrl = calendarUrl.toString();
+                        });
+                    }
+                    checkVenueAvailability();
+                    updateSummary();
+                });
+                field.addEventListener('change', () => {
+                    checkVenueAvailability();
+                    updateSummary();
+                });
+            });
+            applyVenueDuration(group);
+        });
+
         venueInputs.forEach((input) => {
             input.addEventListener('mousedown', () => {
                 input.dataset.wasChecked = input.checked ? 'true' : 'false';
@@ -1148,18 +1517,22 @@
                 }
             });
             input.addEventListener('change', function () {
-                const otherWrap = document.getElementById('venue-other-wrap');
-                if (otherWrap) {
-                    otherWrap.style.display = input.value === 'Others (specify)' && input.checked ? 'block' : 'none';
-                }
+                toggleScheduleFields();
+                venueSelectionState();
+                updateVenueEquipmentDefaults();
+                venueScheduleGroups.forEach((group) => {
+                    const isSelected = group.closest('[data-venue-option]')?.querySelector('input[name="venue[]"]')?.checked === true;
+                    if (!isSelected) return;
+
+                    group.querySelectorAll('.venue-schedule-input').forEach((field) => {
+                        field.required = true;
+                    });
+                    applyVenueDuration(group);
+                });
+                checkVenueAvailability();
                 updateSummary();
             });
         });
-
-        const otherVenueInput = document.getElementById('venue-other');
-        if (otherVenueInput) {
-            otherVenueInput.addEventListener('input', updateSummary);
-        }
 
         form.querySelectorAll('input, textarea, select').forEach((field) => {
             field.addEventListener('input', updateSummary);
@@ -1189,22 +1562,24 @@
                     requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
                     form.querySelector('[name="name_of_activity"]'),
                     form.querySelector('[name="purpose"]'),
-                    form.querySelector('[name="start_date"]'),
-                    form.querySelector('[name="end_date"]'),
                     form.querySelector('[name="expected_participants"]'),
-                    form.querySelector('[name="start_time"]'),
-                    form.querySelector('[name="end_time"]'),
                     form.querySelector('[name="requested_by_position"]'),
                     positionSelect?.value === 'Other' ? otherPositionInput : null,
-                    form.querySelector('[name="venue"]:checked')
                 ];
 
-                return requiredFields.find((field) => !isChecklistFieldComplete(field)) || null;
+                const missingField = requiredFields.find((field) => !isChecklistFieldComplete(field));
+                if (missingField) return missingField;
+                const selectedGroup = [...venueScheduleGroups].find((group) => {
+                    return group.closest('[data-venue-option]')?.querySelector('input[name="venue[]"]')?.checked;
+                });
+                if (!selectedGroup) return form.querySelector('[name="venue[]"]');
+                return [...selectedGroup.querySelectorAll('.venue-schedule-input')].find((field) => !field.value)
+                    || selectedGroup.querySelector('input[type="radio"]:checked');
             }
 
             if (checklistId === 'checklist-venue-availability') {
-                const selectedVenue = form.querySelector('[name="venue"]:checked');
-                if (!selectedVenue) return form.querySelector('[name="venue"]') || null;
+                const selectedVenues = [...form.querySelectorAll('[name="venue[]"]:checked')];
+                if (!selectedVenues.length) return form.querySelector('[name="venue[]"]') || null;
 
                 const hasEquipmentSelection = form.querySelectorAll('.equipment-row .equipment-checkbox:checked').length > 0;
                 const hasAvailableEquipmentSelected = [...form.querySelectorAll('.equipment-row')].filter((row) => {
@@ -1217,7 +1592,7 @@
                 });
 
                 if (hasEquipmentSelection && !hasAvailableEquipmentSelected) {
-                    return form.querySelector('.equipment-row .equipment-checkbox, .equipment-row input[type="number"]') || selectedVenue;
+                    return form.querySelector('.equipment-row .equipment-checkbox, .equipment-row input[type="number"]') || selectedVenues[0];
                 }
 
                 return null;
@@ -1274,18 +1649,20 @@
                 requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
                 form.querySelector('[name="name_of_activity"]'),
                 form.querySelector('[name="purpose"]'),
-                form.querySelector('[name="start_date"]'),
-                form.querySelector('[name="end_date"]'),
                 form.querySelector('[name="expected_participants"]'),
-                form.querySelector('[name="start_time"]'),
-                form.querySelector('[name="end_time"]'),
                 form.querySelector('[name="requested_by_position"]'),
                 positionSelect?.value === 'Other' ? otherPositionInput : null,
-                form.querySelector('[name="venue"]:checked')
             ];
 
-            const allRequiredComplete = requiredFields.every(isChecklistFieldComplete);
-            const selectedVenue = form.querySelector('[name="venue"]:checked');
+            const selectedScheduleGroups = [...venueScheduleGroups].filter((group) => {
+                return group.closest('[data-venue-option]')?.querySelector('input[name="venue[]"]')?.checked;
+            });
+            const schedulesComplete = selectedScheduleGroups.length > 0 && selectedScheduleGroups.every((group) => {
+                return [...group.querySelectorAll('.venue-schedule-input')].every(isChecklistFieldComplete)
+                    && Boolean(group.querySelector('input[type="radio"]:checked'));
+            });
+            const allRequiredComplete = requiredFields.every(isChecklistFieldComplete) && schedulesComplete;
+            const selectedVenue = form.querySelector('[name="venue[]"]:checked');
             const hasEquipmentSelection = form.querySelectorAll('.equipment-row .equipment-checkbox:checked').length > 0;
             const hasAvailableEquipmentSelected = [...form.querySelectorAll('.equipment-row')].filter((row) => {
                 return row.querySelector('.equipment-checkbox')?.checked;
@@ -1304,14 +1681,19 @@
                 ? (activityProposalFile || proposalFile)
                 : (isStudent || requestorType === 'faculty') && !requestContext
                     ? (activityProposalFile || proposalFile)
-                    : igpReceiptFile;
+                    : requestorType === 'outsider'
+                        ? (!form.querySelector('[name="is_emergency"]')?.checked || activityProposalFile || proposalFile)
+                        : igpReceiptFile;
 
             if (checklistRequiredFields) {
                 checklistRequiredFields.checked = allRequiredComplete;
             }
 
             if (checklistVenueAvailability) {
-                checklistVenueAvailability.checked = Boolean(selectedVenue) && (!hasEquipmentSelection || hasAvailableEquipmentSelected);
+                checklistVenueAvailability.checked = Boolean(selectedVenue)
+                    && schedulesComplete
+                    && venueAvailabilityState === true
+                    && (!hasEquipmentSelection || hasAvailableEquipmentSelected);
             }
 
             if (checklistDocumentUpload) {
@@ -1350,9 +1732,17 @@
             });
         });
 
-        venueInputs.forEach((input) => input.addEventListener('change', venueSelectionState));
+        toggleScheduleFields();
         venueSelectionState();
+        updateVenueEquipmentDefaults();
         updateSummary();
         updateChecklistState();
-    });
+        checkVenueAvailability();
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeRequestFormDraftUi, { once: true });
+    } else {
+        initializeRequestFormDraftUi();
+    }
 </script>

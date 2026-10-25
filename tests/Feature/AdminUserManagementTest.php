@@ -119,7 +119,7 @@ class AdminUserManagementTest extends TestCase
         $this->assertStringNotContainsString('value="student"', $roleOptions);
         $this->assertStringNotContainsString('value="facility_admin"', $roleOptions);
         $this->assertStringNotContainsString('value="admin"', $roleOptions);
-        $this->assertStringNotContainsString('value="supply_office"', $roleOptions);
+        $this->assertStringContainsString('value="supply_office"', $roleOptions);
     }
 
     public function test_privileged_account_edit_shows_no_admin_role_choices(): void
@@ -160,6 +160,57 @@ class AdminUserManagementTest extends TestCase
             'role' => 'requestor',
             'requestor_type' => 'student',
         ]);
+    }
+
+    public function test_admin_can_assign_secondary_custodian_role_to_a_user_account(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $user = User::factory()->createOne([
+            'role' => 'requestor',
+            'requestor_type' => 'staff',
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('admin.users.update', $user), [
+                'name' => $user->name,
+                'username' => $user->username,
+                'role' => 'requestor',
+                'requestor_type' => 'staff',
+                'additional_roles_present' => '1',
+                'additional_roles' => ['custodian-venue'],
+            ])
+            ->assertRedirect(route('admin.users'));
+
+        $user->refresh();
+        $this->assertSame(['custodian-venue'], $user->additional_roles);
+        $this->assertTrue($user->hasRole('requestor'));
+        $this->assertTrue($user->isCustodian());
+    }
+
+    public function test_existing_supply_office_account_can_receive_secondary_custodian_access(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $supplyOfficer = User::factory()->createOne(['role' => 'supply_office']);
+
+        $this->actingAs($admin)
+            ->get(route('supply-office.users'))
+            ->assertOk()
+            ->assertSee($supplyOfficer->username);
+
+        $this->actingAs($admin)
+            ->put(route('supply-office.users.update', $supplyOfficer), [
+                'name' => $supplyOfficer->name,
+                'username' => $supplyOfficer->username,
+                'role' => 'supply_office',
+                'additional_roles_present' => '1',
+                'additional_roles' => ['custodian-venue'],
+            ])
+            ->assertRedirect(route('admin.users'));
+
+        $supplyOfficer->refresh();
+        $this->assertSame(['custodian-venue'], $supplyOfficer->additional_roles);
+        $this->assertTrue($supplyOfficer->isAdmin());
+        $this->assertTrue($supplyOfficer->isCustodianVenue());
     }
 
     public function test_admin_can_update_and_delete_a_user(): void
@@ -548,7 +599,8 @@ class AdminUserManagementTest extends TestCase
             'middle_name' => 'Santos',
             'username' => $email,
             'position' => 'Administrative Assistant',
-            'office_or_organization' => 'Registrar Office',
+            'office_or_organization' => 'other',
+            'other_office_name' => 'Registrar Office',
             'contact_number' => '09123456789',
         ])->assertRedirect(route('admin.users'));
 
@@ -562,6 +614,141 @@ class AdminUserManagementTest extends TestCase
         $this->view('components.dashboard-sidebar', ['user' => $staff])
             ->assertSee('Juan Santos Dela Cruz')
             ->assertSee('Staff · Registrar Office — Administrative Assistant');
+    }
+
+    public function test_create_user_form_lists_staff_offices_and_saves_department_for_igp(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->createOne(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.users', ['add_user' => 1]))
+            ->assertOk()
+            ->assertSee('Office of the President')
+            ->assertSee('Office of the Vice President for Academic Affairs')
+            ->assertSee('Office of the Vice President for Research, Innovation, and Extension Services')
+            ->assertSee('Human Resource Office (HR)')
+            ->assertSee('Accounting Office')
+            ->assertSee('Office of Student Development and Services')
+            ->assertSee('High School Office')
+            ->assertSee('Supply Office')
+            ->assertSee('Clinic')
+            ->assertSee('Auxiliary and General Services (AGS)')
+            ->assertSee('Other office');
+
+        $email = 'igp-office-' . uniqid() . '@test.com';
+        $this->post(route('admin.users.store'), [
+            'account_type' => 'igp',
+            'surname' => 'Coordinator',
+            'first_name' => 'IGP',
+            'username' => $email,
+            'office_or_organization' => 'IGP Office',
+        ])->assertRedirect(route('admin.users'));
+
+        $igp = User::where('username', $email)->firstOrFail();
+        $this->assertSame('igp', $igp->role);
+        $this->assertSame('IGP Office', $igp->department);
+        $this->assertSame('IGP Office', $igp->office_or_organization);
+    }
+
+    public function test_system_admin_can_promote_existing_custodian_account_to_supply_office_without_losing_custodian_access(): void
+    {
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $custodian = User::factory()->createOne([
+            'name' => 'Arlene L. Sala',
+            'role' => 'custodian-venue',
+            'requestor_type' => null,
+        ]);
+        \App\Models\Venue::create([
+            'name' => 'CHIC',
+            'custodian_id' => $custodian->id,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('supply-office.users.update', $custodian), [
+                'name' => $custodian->name,
+                'username' => $custodian->username,
+                'role' => 'supply_office',
+                'additional_roles_present' => '1',
+                'additional_roles' => ['custodian-venue'],
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('admin.users'));
+
+        $custodian->refresh();
+        $this->assertSame('supply_office', $custodian->role);
+        $this->assertSame(['custodian-venue'], $custodian->additional_roles);
+        $this->assertSame('Supply Office', $custodian->department);
+        $this->assertTrue($custodian->isAdmin());
+        $this->assertTrue($custodian->isCustodian());
+        $this->assertSame(route('supply-office.index'), $custodian->getDashboardRoute());
+        $this->assertSame($custodian->id, \App\Models\Venue::where('name', 'CHIC')->value('custodian_id'));
+    }
+
+    public function test_admin_can_create_supply_office_staff_account_with_password_setup_link(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $email = 'supply-staff-' . uniqid() . '@test.com';
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'account_type' => 'supply_office',
+                'surname' => 'Petallo',
+                'first_name' => 'Ederson',
+                'username' => $email,
+                'office_or_organization' => 'Supply Office',
+            ])
+            ->assertRedirect(route('admin.users'));
+
+        $staff = User::where('username', $email)->firstOrFail();
+        $this->assertSame('supply_office', $staff->role);
+        $this->assertNull($staff->requestor_type);
+        $this->assertSame('Supply Office', $staff->department);
+        $this->assertSame('Supply Office', $staff->office_or_organization);
+        $this->assertTrue($staff->isAdmin());
+        Notification::assertSentTo($staff, ResetPasswordNotification::class);
+    }
+
+    public function test_admin_can_save_unique_staff_ids_for_staff_igp_supply_office_and_custodian_accounts(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->createOne(['role' => 'admin']);
+        $this->actingAs($admin);
+
+        $accounts = [
+            'staff' => 'STF-001',
+            'supply_office' => 'STF-002',
+            'igp' => 'STF-003',
+            'custodian_venue' => 'STF-004',
+            'custodian_equipment' => 'STF-005',
+        ];
+
+        foreach ($accounts as $accountType => $staffId) {
+            $email = "staff-id-{$accountType}-" . uniqid() . '@test.com';
+            $this->post(route('admin.users.store'), [
+                'account_type' => $accountType,
+                'surname' => 'Employee',
+                'first_name' => ucfirst($accountType),
+                'username' => $email,
+                'office_or_organization' => $accountType === 'supply_office' ? 'Supply Office' : null,
+                'staff_id' => $staffId,
+            ])->assertRedirect(route('admin.users'));
+
+            $this->assertSame($staffId, User::where('username', $email)->value('staff_id'));
+        }
+
+        $this->from(route('admin.users', ['add_user' => 1]))
+            ->post(route('admin.users.store'), [
+                'account_type' => 'staff',
+                'surname' => 'Duplicate',
+                'first_name' => 'Staff',
+                'username' => 'duplicate-staff-id-' . uniqid() . '@test.com',
+                'staff_id' => 'STF-001',
+            ])
+            ->assertRedirect(route('admin.users', ['add_user' => 1]))
+            ->assertSessionHasErrors('staff_id');
     }
 
     public function test_custodian_accounts_require_person_name_and_use_role_based_positions(): void

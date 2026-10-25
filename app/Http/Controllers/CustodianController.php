@@ -464,6 +464,7 @@ class CustodianController extends Controller
             }
 
             return FacilityRequest::with(['requester', 'requestVenues.venue', 'reservationSchedule'])
+                ->upcomingReservation()
                 ->where(function ($query) use ($venueIds, $venueNames) {
                 $query->whereHas('requestVenues', function ($venueQuery) use ($venueIds) {
                     $venueQuery->whereIn('venue_id', $venueIds);
@@ -487,7 +488,7 @@ class CustodianController extends Controller
                 return collect([]);
             }
 
-            return FacilityRequest::with('requester')->where(function ($query) use ($equipmentNames) {
+            return FacilityRequest::with('requester')->upcomingReservation()->where(function ($query) use ($equipmentNames) {
                 foreach ($equipmentNames as $name) {
                     $query->orWhere(fn ($subQuery) => $subQuery->matchesEquipment($name));
                 }
@@ -503,7 +504,7 @@ class CustodianController extends Controller
             return collect([]);
         }
 
-        return FacilityRequest::with('requester')->where(function ($query) use ($venueNames, $equipmentNames) {
+        return FacilityRequest::with('requester')->upcomingReservation()->where(function ($query) use ($venueNames, $equipmentNames) {
                 foreach ($venueNames as $name) {
                     $query->orWhere(fn ($subQuery) => $subQuery->matchesVenue($name));
                 }

@@ -43,7 +43,6 @@ class RequestorController extends Controller
     public function respondToRevision(Request $request, FacilityRequest $facilityRequest, RevisionHistory $revision)
     {
         $user = $this->currentUser();
-        abort_unless((int) $facilityRequest->requested_by_id === (int) $user->id, 403);
         abort_unless((int) $revision->facility_request_id === (int) $facilityRequest->id, 404);
 
         $validated = $request->validate([
@@ -54,6 +53,24 @@ class RequestorController extends Controller
             return back()->withErrors(['revision' => 'This schedule proposal has already been answered.']);
         }
 
+        $affectedUserIds = array_map('intval', $revision->affected_user_ids ?? [$facilityRequest->requested_by_id]);
+        abort_unless(in_array((int) $user->id, $affectedUserIds, true), 403);
+        if ($revision->memorandum_priority
+            && (int) $user->id === (int) $facilityRequest->requested_by_id
+            && ! $user->isCustodian()) {
+            abort(403, 'Memorandum-priority transfers do not require requestor consent.');
+        }
+
+        if ($revision->response_deadline_at && $revision->response_deadline_at->isPast()) {
+            $revision->update(['status' => 'expired', 'responded_at' => now()]);
+            $facilityRequest->addHistory('revision_expired', 'Schedule proposal expired without changing the approved reservation.', $user->id);
+            Notification::send(
+                User::query()->whereIn('id', $affectedUserIds)->get(),
+                new \App\Notifications\RequestStatusChanged($facilityRequest, 'revision_expired', 'The change proposal expired. The approved reservation remains unchanged.')
+            );
+            return back()->withErrors(['revision' => 'This proposal expired. The existing reservation remains unchanged.']);
+        }
+
         if ($validated['response'] === 'decline') {
             $declined = DB::transaction(function () use ($facilityRequest, $revision, $user): bool {
                 $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
@@ -62,11 +79,14 @@ class RequestorController extends Controller
                     return false;
                 }
 
+                $responses = $lockedRevision->responses ?? [];
+                $responses[(string) $user->id] = 'declined';
                 $lockedRevision->update([
                     'status' => 'rejected',
                     'responded_at' => now(),
+                    'responses' => $responses,
                 ]);
-                $lockedRequest->addHistory('revision_declined', 'Requestor declined the proposed schedule change.', $user->id);
+                $lockedRequest->addHistory('revision_declined', $user->name . ' declined the proposed schedule change. The approved reservation remains unchanged.', $user->id);
                 return true;
             });
             if (!$declined) {
@@ -75,9 +95,47 @@ class RequestorController extends Controller
 
             $revision->refresh();
             $revision->revisedBy?->notify(new \App\Notifications\ReservationRescheduleResponse($revision));
+            Notification::send(
+                User::query()->whereIn('id', $affectedUserIds)->whereKeyNot($user->id)->get(),
+                new \App\Notifications\RequestStatusChanged($facilityRequest, 'change_request_rejected', $user->name . ' declined the proposed change. The approved reservation remains unchanged.')
+            );
 
             return redirect()->route('request.show', $facilityRequest)
-                ->with('success', 'You declined the schedule proposal. Your current reservation remains unchanged.');
+                ->with('success', 'You declined the schedule proposal. The current approved reservation remains unchanged.');
+        }
+
+        $responseProgress = DB::transaction(function () use ($facilityRequest, $revision, $user): ?bool {
+            $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
+            $lockedRevision = RevisionHistory::query()->lockForUpdate()->findOrFail($revision->id);
+            if ($lockedRevision->status !== 'pending' || $lockedRevision->facility_request_id !== $lockedRequest->id) {
+                return null;
+            }
+            if ($lockedRevision->response_deadline_at && $lockedRevision->response_deadline_at->isPast()) {
+                $lockedRevision->update(['status' => 'expired', 'responded_at' => now()]);
+                $lockedRequest->addHistory('revision_expired', 'Schedule proposal expired without changing the approved reservation.', $user->id);
+                return null;
+            }
+
+            $responses = $lockedRevision->responses ?? [];
+            $responses[(string) $user->id] = 'accepted';
+            $lockedRevision->responses = $responses;
+            $lockedRevision->save();
+            $lockedRequest->addHistory('revision_response_received', $user->name . ' accepted the proposed schedule change.', $user->id);
+
+            foreach ($lockedRevision->affected_user_ids ?? [$lockedRequest->requested_by_id] as $requiredUserId) {
+                if (($responses[(string) $requiredUserId] ?? 'pending') === 'pending') {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+        if ($responseProgress === null) {
+            return back()->withErrors(['revision' => 'This proposal is no longer active or has expired. The approved reservation remains unchanged.']);
+        }
+        if ($responseProgress === false) {
+            return redirect()->route('request.show', $facilityRequest)
+                ->with('success', 'Your acceptance was recorded. The approved reservation stays unchanged until all affected custodians and users respond.');
         }
 
         if (!$facilityRequest->canBeRevised()) {
@@ -107,12 +165,18 @@ class RequestorController extends Controller
             $newState['end_time']
         );
         $availabilityService = $this->availabilityService;
-        $venueConflict = !$availabilityService->checkVenueAvailability(
-            $newState['venue'][0] ?? '',
-            $range['start'],
-            $range['end'],
-            $facilityRequest->id
-        )['available'];
+        $venueConflict = false;
+        foreach ($newState['venue'] as $venueName) {
+            if (! $availabilityService->checkVenueAvailability(
+                $venueName,
+                $range['start'],
+                $range['end'],
+                $facilityRequest->id
+            )['available']) {
+                $venueConflict = true;
+                break;
+            }
+        }
         $equipmentConflict = false;
         foreach ($newState['equipment'] as $equipment) {
             $quantity = (int) ($newState['equipment_quantities'][$equipment] ?? 1);
@@ -169,12 +233,18 @@ class RequestorController extends Controller
             }
 
             $availabilityService = app(AvailabilityService::class);
-            $venueAvailable = $availabilityService->checkVenueAvailability(
-                $newState['venue'][0] ?? '',
-                $range['start'],
-                $range['end'],
-                $lockedRequest->id
-            )['available'];
+            $venueAvailable = true;
+            foreach ($newState['venue'] as $venueName) {
+                if (! $availabilityService->checkVenueAvailability(
+                    $venueName,
+                    $range['start'],
+                    $range['end'],
+                    $lockedRequest->id
+                )['available']) {
+                    $venueAvailable = false;
+                    break;
+                }
+            }
             $equipmentAvailable = true;
             foreach ($newState['equipment'] as $equipment) {
                 $quantity = (int) ($newState['equipment_quantities'][$equipment] ?? 1);
@@ -249,7 +319,14 @@ class RequestorController extends Controller
             $revision->markCustodianNotified();
         }
 
-        $user->notify($notification);
+        $notificationRecipients = User::query()
+            ->whereIn('id', collect($revision->affected_user_ids ?? [])
+                ->merge([(int) $facilityRequest->requested_by_id])
+                ->merge($custodianIds)
+                ->unique()
+                ->all())
+            ->get();
+        Notification::send($notificationRecipients, $notification);
         $revision->markRequestorNotified();
 
         return redirect()->route('request.show', $facilityRequest)
@@ -262,7 +339,8 @@ class RequestorController extends Controller
     ];
     private const EQUIPMENT_OPTIONS = [
         'Sound System', 'Canopies', 'Industrial Fans',
-        'Iwata Cooler Fans', 'Tables', 'Chairs', 'Wireless Microphones', 'Non-Wireless Microphones', 'Monobloc Chairs',
+        'Iwata Cooler Fans', 'Tables', 'Chairs', 'Aircon', 'Wireless Microphones', 'Non-Wireless Microphones', 'Monobloc Chairs',
+        'Lights', 'Podium', 'HDMI', 'Television (CHIC)', 'Television (Balay Alumni)',
     ];
 
     private static function canonicalizeEquipmentName(string $name): string
@@ -317,7 +395,8 @@ class RequestorController extends Controller
         $sort = $request->query('sort', 'oldest');
 
         $query = FacilityRequest::with(['requestVenues', 'requestEquipment', 'reservationSchedule', 'histories'])
-            ->where('requested_by_id', $user->id);
+            ->where('requested_by_id', $user->id)
+            ->upcomingReservation();
 
         if ($search !== '') {
             $searchTerm = '%' . mb_strtolower($search) . '%';
@@ -440,6 +519,10 @@ class RequestorController extends Controller
         foreach ($venueOptions as $venueName) {
             $venueCapacityMap[$venueName] = $this->availabilityService->getVenueCapacity($venueName);
         }
+        $venueDefaultEquipmentMap = collect($venueOptions)
+            ->mapWithKeys(fn (string $venueName): array => [$venueName => VenueEquipmentPolicy::getDefaultEquipment($venueName)])
+            ->all();
+        $venueEquipmentVisibilityMap = VenueEquipmentPolicy::getVenueRestrictedEquipment();
 
         $departments = Department::query()->orderBy('name')->get();
         $colleges = College::query()->with('departments')->orderBy('name')->get();
@@ -474,6 +557,8 @@ class RequestorController extends Controller
             'controlNumber'     => FacilityRequest::generateControlNumber(),
             'equipment'         => $equipment,
             'venueCapacityMap'  => $venueCapacityMap,
+            'venueDefaultEquipmentMap' => $venueDefaultEquipmentMap,
+            'venueEquipmentVisibilityMap' => $venueEquipmentVisibilityMap,
         ]);
     }
 
@@ -676,7 +761,7 @@ class RequestorController extends Controller
         if (in_array($reservationDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
             $request->merge([
                 'start_time' => '08:00',
-                'end_time' => '23:59',
+                'end_time' => '17:00',
             ]);
         }
 
@@ -1039,7 +1124,9 @@ class RequestorController extends Controller
         // Build validation rules
         $hasDepartmentDirectory = College::query()->exists() && Department::query()->exists();
         $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
+
         $hasSavedSignature = (bool) ($user->e_signature_file && Storage::disk('local')->exists('documents/e_signature/users/' . $user->e_signature_file));
+        $activeVenueNames = Venue::query()->where('is_active', true)->pluck('name')->all();
 
         $profileCollegeId = $user->college_id ?? null;
         $profileDepartmentId = $user->department_id ?? null;
@@ -1048,6 +1135,9 @@ class RequestorController extends Controller
         }
         if (! $request->filled('department_id') && $profileDepartmentId) {
             $request->merge(['department_id' => $profileDepartmentId]);
+        }
+        if (is_string($request->input('venue'))) {
+            $request->merge(['venue' => [$request->input('venue')]]);
         }
 
         $rules = [
@@ -1063,15 +1153,29 @@ class RequestorController extends Controller
             'name_of_activity'      => 'required|string|max:200',
             'purpose'               => ['nullable', 'string', 'max:2000'],
             'expected_participants' => 'required|integer|min:1',
-            'start_date'            => 'required|date|after_or_equal:today',
-            'end_date'              => 'required|date|after_or_equal:start_date',
-            'start_time'            => 'required|date_format:H:i',
-            'end_time'              => 'required|date_format:H:i',
-            'venue'                 => ['required', 'string'],
+            'start_date'            => 'nullable|date|after_or_equal:today',
+            'end_date'              => 'nullable|date|after_or_equal:start_date',
+            'start_time'            => 'nullable|date_format:H:i',
+            'end_time'              => 'nullable|date_format:H:i',
+            'venue_schedules'       => 'nullable|array',
+            'venue_schedules.*'     => 'array',
+            'venue_schedules.*.start_date' => 'nullable|date',
+            'venue_schedules.*.end_date' => 'nullable|date',
+            'venue_schedules.*.start_time' => 'nullable|date_format:H:i',
+            'venue_schedules.*.end_time' => 'nullable|date_format:H:i',
+            'venue_schedules.*.reservation_duration' => ['nullable', 'in:specific_time,whole_day'],
+            'venue'                 => ['required', 'array', 'min:1'],
+            'venue.*'               => ['required', 'string', Rule::in(array_merge(self::VENUE_OPTIONS, $activeVenueNames))],
+            'venue_equipment' => ['nullable', 'array'],
+            'venue_equipment.*' => ['array'],
+            'venue_equipment.*.*' => ['string'],
+            'venue_equipment_quantities' => ['nullable', 'array'],
+            'venue_equipment_quantities.*' => ['array'],
+            'venue_equipment_quantities.*.*' => ['nullable', 'integer', 'min:1'],
             'equipment'             => 'nullable|array',
             'equipment_quantities'  => 'nullable|array',
             'equipment_quantities.*' => ['nullable', 'integer', 'min:1'],
-            'other_venue'           => 'nullable|string|max:200',
+            'other_venue'           => 'prohibited',
             'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
             'is_emergency'          => 'nullable|boolean',
             'e_signature_file'      => $hasSavedSignature
@@ -1111,9 +1215,15 @@ class RequestorController extends Controller
         if (($user->isStudent() && $requestContext !== 'outside_organization') || ($user->isFaculty() && $requestContext === 'personal')) {
             $rules['activity_proposal_file'] = 'required|file|mimes:pdf,jpeg,jpg,png|max:10240';
             $rules['igp_receipt_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
+        } elseif ($user->isOutsider()) {
+            $rules['igp_receipt_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
+            $rules['activity_proposal_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
         } else {
             $rules['igp_receipt_file'] = 'required|file|mimes:pdf,jpeg,jpg,png|max:10240';
             $rules['activity_proposal_file'] = 'nullable|file|mimes:pdf,jpeg,jpg,png|max:10240';
+        }
+        if ($request->boolean('is_emergency')) {
+            $rules['proposal_file'] = ['required_without:activity_proposal_file', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'];
         }
 
         $request->merge([
@@ -1126,27 +1236,97 @@ class RequestorController extends Controller
         if (in_array($reservationDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
             $request->merge([
                 'start_time' => '08:00',
-                'end_time' => '23:59',
+                'end_time' => '17:00',
             ]);
         }
 
         $validated = $request->validate($rules);
 
-        if (
-            ($validated['reservation_duration'] ?? 'specific_time') === 'specific_time'
-            && $validated['start_time'] <= '05:00'
-        ) {
-            return back()
-                ->withErrors(['start_time' => 'Reservations cannot start between 12:00 AM and 5:00 AM. Choose a start time after 5:00 AM or use the Whole Day option.'])
-                ->withInput();
+        $venue = array_values(array_unique(array_map(
+            static fn (string $venueName): string => trim($venueName),
+            $validated['venue']
+        )));
+        $submittedSchedules = $request->input('venue_schedules', []);
+        $venueSchedules = [];
+        $scheduleRanges = [];
+        foreach ($venue as $venueName) {
+            $scheduleInput = $submittedSchedules[$venueName] ?? [];
+            if (! is_array($scheduleInput) || $scheduleInput === []) {
+                $scheduleInput = [
+                    'start_date' => $validated['start_date'] ?? null,
+                    'end_date' => $validated['end_date'] ?? null,
+                    'start_time' => $validated['start_time'] ?? null,
+                    'end_time' => $validated['end_time'] ?? null,
+                    'reservation_duration' => $validated['reservation_duration'] ?? 'specific_time',
+                ];
+            }
+
+            $scheduleValidator = \Illuminate\Support\Facades\Validator::make($scheduleInput, [
+                'start_date' => ['required', 'date', 'after_or_equal:today'],
+                'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+                'start_time' => ['required', 'date_format:H:i'],
+                'end_time' => ['required', 'date_format:H:i'],
+                'reservation_duration' => ['nullable', 'in:specific_time,whole_day'],
+            ]);
+            if ($scheduleValidator->fails()) {
+                return back()->withErrors($scheduleValidator)->withInput();
+            }
+
+            $scheduleInput = $scheduleValidator->validated();
+            $duration = $scheduleInput['reservation_duration'] ?? 'specific_time';
+            if ($duration === 'specific_time' && $scheduleInput['start_time'] <= '05:00') {
+                return back()->withErrors([
+                    "venue_schedules.{$venueName}.start_time" => "{$venueName}: reservations cannot start from 12:00 AM through 5:00 AM.",
+                ])->withInput();
+            }
+            if ($duration === 'specific_time' && $scheduleInput['end_time'] <= '05:00') {
+                return back()->withErrors([
+                    "venue_schedules.{$venueName}.end_time" => "{$venueName}: reservations cannot end from 12:00 AM through 5:00 AM.",
+                ])->withInput();
+            }
+
+            $range = FacilityRequest::resolveReservationDuration(
+                $duration,
+                $scheduleInput['start_date'],
+                $scheduleInput['start_time'],
+                $scheduleInput['end_date'],
+                $scheduleInput['end_time']
+            );
+            if ($range['end']->lte($range['start'])) {
+                return back()->withErrors([
+                    "venue_schedules.{$venueName}.end_date" => "{$venueName}: end date and time must be after the start date and time.",
+                ])->withInput();
+            }
+
+            $scheduleRanges[$venueName] = $range;
+            $venueSchedules[$venueName] = [
+                'start_date' => $range['start']->toDateString(),
+                'end_date' => $range['end']->toDateString(),
+                'start_time' => $range['start']->format('H:i'),
+                'end_time' => $range['end']->format('H:i'),
+                'reservation_duration' => $duration,
+            ];
         }
-        if (
-            ($validated['reservation_duration'] ?? 'specific_time') === 'specific_time'
-            && $validated['end_time'] <= '05:00'
-        ) {
-            return back()
-                ->withErrors(['end_time' => 'Reservations cannot end between 12:00 AM and 5:00 AM. Choose an end time after 5:00 AM or use the Whole Day option.'])
-                ->withInput();
+
+        $startDateTime = collect($scheduleRanges)->pluck('start')->sort()->first();
+        $endDateTime = collect($scheduleRanges)->pluck('end')->sort()->last();
+        $validated['start_date'] = $startDateTime->toDateString();
+        $validated['end_date'] = $endDateTime->toDateString();
+        $validated['start_time'] = $startDateTime->format('H:i');
+        $validated['end_time'] = $endDateTime->format('H:i');
+        $validated['reservation_duration'] = collect($venueSchedules)->every(
+            fn (array $schedule): bool => $schedule['reservation_duration'] === 'whole_day'
+        ) ? 'whole_day' : 'specific_time';
+        if ($request->boolean('is_emergency')) {
+            $hasSameDayUrgentSchedule = collect($scheduleRanges)->every(
+                fn (array $range): bool => $range['start']->toDateString() === now()->toDateString()
+                    && $range['end']->toDateString() === now()->toDateString()
+            );
+            if (! $hasSameDayUrgentSchedule) {
+                return back()
+                    ->withErrors(['is_emergency' => 'Urgent requests must be submitted and held entirely on the same local calendar day.'])
+                    ->withInput();
+            }
         }
 
         $hasSavedSignature = (bool) ($user->e_signature_file && Storage::disk('local')->exists('documents/e_signature/users/' . $user->e_signature_file));
@@ -1229,165 +1409,106 @@ class RequestorController extends Controller
             }
         }
 
-        $reservationDuration = strtolower((string) ($validated['reservation_duration'] ?? 'specific_time'));
-        $scheduleRange = FacilityRequest::resolveReservationDuration(
-            $reservationDuration,
-            $validated['start_date'],
-            $validated['start_time'],
-            $validated['end_date'] ?? $validated['start_date'],
-            $validated['end_time']
-        );
-        $validated['start_time'] = $scheduleRange['start']->format('H:i');
-        $validated['end_time'] = $scheduleRange['end']->format('H:i');
-        $validated['end_date'] = $scheduleRange['end']->toDateString();
-
-        $rulesForOtherVenue = ['nullable', 'string', 'max:200', 'required_if:venue,Others (specify)'];
-        $request->validate(['other_venue' => $rulesForOtherVenue]);
-
-        if (empty($request->input('venue'))) {
-            return back()->withErrors(['venue' => 'Please select a venue.'])->withInput();
-        }
-
-        $selectedQuantities = $request->input('equipment_quantities', []);
-        $selectedEquipment = array_values(array_filter($request->input('equipment', []), fn($item) => !empty($item)));
         $capacityWarning = null;
-
-        if (!empty($selectedEquipment)) {
-            foreach ($selectedEquipment as $item) {
-                $quantity = (int) ($selectedQuantities[$item] ?? 0);
-                if ($quantity <= 0) {
-                    return back()->withErrors(['equipment' => 'Please select required equipment and quantity.'])->withInput();
-                }
-            }
-        }
  
         $user = $this->currentUser();
  
-        $submittedVenue = $request->input('venue');
-        if (is_array($submittedVenue)) {
-            $submittedVenue = reset($submittedVenue);
-        }
-        $submittedVenue = trim((string) $submittedVenue);
-        $allowedVenues = array_merge(self::VENUE_OPTIONS, ['Others (specify)']);
-        $venue = in_array($submittedVenue, $allowedVenues, true) ? [$submittedVenue] : [];
-        
-        // Normalize explicit canonical names and known legacy variants; reject ambiguous generic microphone input.
-        $rawEquipment = array_values(array_filter($request->input('equipment', []), fn($e) => is_string($e) && trim($e) !== ''));
-        if (in_array('microphones', array_map(static fn (string $item): string => mb_strtolower(trim($item)), $rawEquipment), true)) {
-            return back()->withErrors(['equipment' => 'Please select Wireless Microphones or Non-Wireless Microphones.'])->withInput();
-        }
-        $requestedEquipment = self::normalizeEquipmentSelection($rawEquipment);
-        $unsupportedEquipment = array_values(array_diff($requestedEquipment, self::EQUIPMENT_OPTIONS));
-        if (! empty($unsupportedEquipment)) {
-            return back()
-                ->withErrors(['equipment' => 'One or more selected equipment items are no longer available. Please refresh the form and select from the available equipment.'])
-                ->withInput();
-        }
+        $submittedVenueEquipment = $request->input('venue_equipment');
+        $submittedVenueQuantities = $request->input('venue_equipment_quantities', []);
+        $legacyEquipment = array_values(array_filter(
+            $request->input('equipment', []),
+            fn ($item): bool => is_string($item) && trim($item) !== ''
+        ));
+        $legacyQuantities = $request->input('equipment_quantities', []);
+        $venueEquipment = [];
+        $equipmentQuantitiesByName = [];
 
-        // Apply venue-specific equipment rules
-        if (!empty($venue)) {
-            $venueName = $venue[0];
-            
-            // Add default equipment required for this venue if not already selected
-            $defaultEquipment = VenueEquipmentPolicy::getDefaultEquipment($venueName);
-            foreach ($defaultEquipment as $requiredItem) {
-                if (!in_array($requiredItem, $requestedEquipment)) {
-                    $requestedEquipment[] = $requiredItem;
-                }
+        foreach ($venue as $venueName) {
+            $hasVenueSpecificSelection = is_array($submittedVenueEquipment)
+                && array_key_exists($venueName, $submittedVenueEquipment);
+            $venueItems = $hasVenueSpecificSelection
+                ? (array) $submittedVenueEquipment[$venueName]
+                : $legacyEquipment;
+
+            if (in_array('microphones', array_map(static fn ($item): string => mb_strtolower(trim((string) $item)), $venueItems), true)) {
+                return back()->withErrors(['equipment' => 'Please select Wireless Microphones or Non-Wireless Microphones.'])->withInput();
             }
-            
-            // Check for incompatible equipment
-            $incompatible = VenueEquipmentPolicy::getIncompatibleEquipment($venueName);
-            $requestedIncompatible = array_intersect($requestedEquipment, $incompatible);
-            if (!empty($requestedIncompatible)) {
+
+            $normalizedItems = self::normalizeEquipmentSelection(array_values(array_filter(
+                $venueItems,
+                fn ($item): bool => is_string($item) && trim($item) !== ''
+            )));
+            $normalizedItems = array_values(array_unique(array_merge(
+                $normalizedItems,
+                VenueEquipmentPolicy::getDefaultEquipment($venueName)
+            )));
+            $unsupportedEquipment = array_values(array_diff($normalizedItems, self::EQUIPMENT_OPTIONS));
+            if ($unsupportedEquipment !== []) {
+                return back()
+                    ->withErrors(['equipment' => 'One or more selected equipment items are no longer available. Please refresh the form and select from the available equipment.'])
+                    ->withInput();
+            }
+
+            $requestedIncompatible = array_intersect($normalizedItems, VenueEquipmentPolicy::getIncompatibleEquipment($venueName));
+            if ($requestedIncompatible !== []) {
                 $incompatibleList = implode(', ', $requestedIncompatible);
                 return back()->withErrors(['equipment' => "{$venueName} does not support the following equipment: {$incompatibleList}. Please select a different venue or remove these items."])->withInput();
             }
+
+            $microphoneCount = count(array_intersect($normalizedItems, ['Wireless Microphones', 'Non-Wireless Microphones']));
+            if ($microphoneCount > 1) {
+                return back()->withErrors(['equipment' => "{$venueName}: select either Wireless Microphones or Non-Wireless Microphones, not both."])->withInput();
+            }
+
+            $venueQuantities = is_array($submittedVenueQuantities[$venueName] ?? null)
+                ? $submittedVenueQuantities[$venueName]
+                : [];
+            foreach ($normalizedItems as $equipmentName) {
+                $hasSubmittedQuantity = array_key_exists($equipmentName, $venueQuantities)
+                    || (! $hasVenueSpecificSelection && array_key_exists($equipmentName, $legacyQuantities));
+                $quantity = (int) ($venueQuantities[$equipmentName] ?? $legacyQuantities[$equipmentName] ?? 0);
+                if (! $hasSubmittedQuantity && in_array($equipmentName, VenueEquipmentPolicy::getDefaultEquipment($venueName), true)) {
+                    $quantity = 1;
+                }
+                if ($quantity <= 0) {
+                    return back()->withErrors(['equipment' => "Enter a quantity for {$equipmentName} at {$venueName}."])->withInput();
+                }
+
+                $venueEquipment[$venueName][$equipmentName] = $quantity;
+                $equipmentQuantitiesByName[$equipmentName] = ($equipmentQuantitiesByName[$equipmentName] ?? 0) + $quantity;
+            }
         }
-        
-        $equipment = $requestedEquipment;
- 
-        $validated['reservation_duration'] = strtolower((string) ($validated['reservation_duration'] ?? 'specific_time'));
-        $scheduleRange = FacilityRequest::resolveReservationDuration(
-            $validated['reservation_duration'],
-            $validated['start_date'],
-            $validated['start_time'],
-            $validated['end_date'] ?? $validated['start_date'],
-            $validated['end_time']
-        );
-        $validated['start_time'] = $scheduleRange['start']->format('H:i');
-        $validated['end_time'] = $scheduleRange['end']->format('H:i');
-        $validated['end_date'] = $scheduleRange['end']?->toDateString() ?? $validated['end_date'] ?? $validated['start_date'];
-        $startDateTime = $scheduleRange['start'];
-        $endDateTime = $scheduleRange['end'];
+
+        $equipment = array_keys($equipmentQuantitiesByName);
+        $quantities = $equipmentQuantitiesByName;
 
         if (!empty($validated['is_emergency']) && $validated['is_emergency']) {
-            $cutoff = now()->addHours(48);
-            if ($startDateTime->gt($cutoff)) {
+            $hasSameDayUrgentSchedule = collect($scheduleRanges)->every(
+                fn (array $range): bool => $range['start']->toDateString() === now()->toDateString()
+                    && $range['end']->toDateString() === now()->toDateString()
+            );
+            if (! $hasSameDayUrgentSchedule) {
                 return back()
-                    ->withErrors(['is_emergency' => 'Emergency requests are only allowed within 48 hours of the reservation schedule.'])
+                    ->withErrors(['is_emergency' => 'Urgent requests must be submitted and held entirely on the same local calendar day.'])
                     ->withInput();
             }
-        }
 
-        if ($endDateTime->lte($startDateTime)) {
-            return back()
-                ->withErrors(['end_date' => 'End date and time must be after the start date and time. For overnight bookings, set the end date to the next day.'])
-                ->withInput();
-        }
-
-        // Build quantities map e.g. ["Sound System" => 2, "Tables" => 10]
-        $quantities = [];
-        foreach ($equipment as $item) {
-            $qty = (int) ($request->input('equipment_quantities')[$item] ?? 1);
-            $quantities[$item] = $qty;
-        }
-
-        // ✅ CHECK AVAILABILITY ONLY — do NOT reserve yet (deduct upon approval)
-        // Some venue default items may be auto-added even when they are not yet present in
-        // the equipment catalog. Those should not block request creation; we only validate
-        // items that actually exist in the catalog.
-        foreach ($quantities as $itemName => $qty) {
-            $equipmentExists = Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])->exists();
-            if (!$equipmentExists) {
-                continue;
-            }
-
-            $availability = $this->availabilityService->checkEquipmentAvailability($itemName, $qty, $startDateTime, $endDateTime);
-
-            if (!$availability['available']) {
-                return back()
-                    ->withErrors(['equipment' => $availability['message'] ?? "Sorry, only {$availability['available_qty']} unit(s) of '{$itemName}' available."])
-                    ->withInput();
+            if (! $request->hasFile('proposal_file') && ! $request->hasFile('activity_proposal_file')) {
+                return back()->withErrors(['proposal_file' => 'Urgent requests require a proposal or memorandum order.'])->withInput();
             }
         }
 
-        // ✅ CHECK FOR VENUE CONFLICTS
-        $isUrgentRequest = !empty($validated['is_emergency']) && (bool) $validated['is_emergency'];
+        $isUrgentRequest = $request->boolean('is_emergency');
+
+        // Availability is validated below per venue schedule and equipment assignment.
+
+        // Venue conflicts are checked by AvailabilityService using each venue's schedule.
         if (!empty($venue)) {
-            $requestedStart = $startDateTime;
-            $requestedEnd = $endDateTime;
-
-            if (!$isUrgentRequest) {
-                $venueAvailability = $this->availabilityService->checkVenueAvailability($submittedVenue, $requestedStart, $requestedEnd);
-                if (!$venueAvailability['available']) {
-                    return back()
-                        ->withErrors(['venue' => $venueAvailability['message'] ?? 'Scheduling conflict detected.'])
-                        ->withInput();
-                }
-            }
-
             // ✅ CHECK VENUE CAPACITY
             $participants = (int) $validated['expected_participants'];
             $selectedVenues = array_values($venue);
-            $venueCapacityMap = [];
-            $hasUnknownCapacity = false;
+            $overCapacityVenues = [];
             foreach ($selectedVenues as $venueName) {
-                if ($venueName === 'Others (specify)') {
-                    $hasUnknownCapacity = true;
-                    continue;
-                }
-
                 $venueRecord = \App\Models\Venue::where('name', $venueName)->first();
                 $capacity = null;
 
@@ -1395,20 +1516,14 @@ class RequestorController extends Controller
                     $capacity = (int) $venueRecord->capacity;
                 }
 
-                if ($capacity === null) {
-                    $hasUnknownCapacity = true;
-                    continue;
+                if ($capacity !== null && $participants > $capacity) {
+                    $overCapacityVenues[] = "{$venueName} (maximum {$capacity})";
                 }
-
-                $venueCapacityMap[$venueName] = $capacity;
             }
 
-            if (!$hasUnknownCapacity) {
-                $totalCapacity = array_sum($venueCapacityMap);
-                if ($totalCapacity < $participants) {
-                    $capacityWarning = "The combined capacity of your selected venues is {$totalCapacity}, which is insufficient for {$participants} participants. The request will still be submitted for review.";
-                }
-
+            if ($overCapacityVenues !== []) {
+                $venueList = implode(', ', $overCapacityVenues);
+                $capacityWarning = "The expected {$participants} participants exceed the capacity of: {$venueList}. The request will still be submitted for Supply Office review.";
             }
         }
  
@@ -1531,6 +1646,7 @@ class RequestorController extends Controller
             'end_date'                 => $validated['end_date'] ?? $validated['start_date'],
             'start_time'               => $validated['start_time'],
             'end_time'                 => $validated['end_time'],
+            'reservation_duration'     => $validated['reservation_duration'],
             'venue'                    => $venue,
             'equipment'                => $equipment,
             'equipment_quantities'     => $quantities,
@@ -1540,6 +1656,9 @@ class RequestorController extends Controller
             'status'                   => 'pending',
             'venue_status'             => 'pending',
             'equipment_status'         => 'pending',
+            'supply_office_review_status' => 'pending',
+            'urgent_document_status'   => $isUrgentRequest ? 'pending' : 'not_required',
+            'igp_payment_status'       => $user->isOutsider() ? 'awaiting_availability' : null,
             'priority'                 => $isUrgentRequest ? 'institutional' : 'regular',
             'requested_priority'       => $isUrgentRequest ? 'institutional' : null,
             'requested_is_emergency'   => $validated['is_emergency'] ?? false,
@@ -1558,6 +1677,16 @@ class RequestorController extends Controller
             ->map(fn (string $name) => mb_strtolower($name))
             ->all();
         $availabilityCandidate = new FacilityRequest($requestAttributes);
+        $availabilityCandidate->setRelation(
+            'requestVenues',
+            collect($venueSchedules)->map(
+                fn (array $schedule, string $name): \App\Models\RequestVenue => new \App\Models\RequestVenue([
+                    'name' => $name,
+                    ...$schedule,
+                ])
+            )->values()
+        );
+        $availabilityCandidate->setAttribute('venue_equipment_allocations', $venueEquipment);
         $availabilityQuantities = [];
         foreach ($quantities as $name => $quantity) {
             if (in_array(mb_strtolower($name), $knownEquipmentNames, true)) {
@@ -1593,7 +1722,7 @@ class RequestorController extends Controller
         }
 
         $fr = FacilityRequest::create($requestAttributes);
-        $fr->syncRelationalItems();
+        $fr->syncRelationalItems($venueSchedules, $venueEquipment);
         DB::commit();
 
         // Determine custodians using authoritative model helper (includes authorized alternates)
@@ -1606,20 +1735,8 @@ class RequestorController extends Controller
 
         $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
 
-        if (!empty($custodianIds)) {
-            $custodians = \App\Models\User::whereIn('id', $custodianIds)->get();
-            try {
-                Notification::send($custodians, new \App\Notifications\NewFacilityRequestNotification($fr));
-            } catch (\Throwable $e) {
-                Log::warning('Failed to notify custodians for new facility request.', [
-                    'facility_request_id' => $fr->id,
-                    'exception' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        // Fire Laravel event for broadcasting (include custodians)
-        \App\Events\RequestCreated::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, $custodianIds);
+        // Custodians are notified only after the Supply Office's initial availability review.
+        \App\Events\RequestCreated::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, []);
 
         return redirect()->route('requestor.index', ['tab' => 'requests'])
                         ->with('success', 'Request submitted successfully!')
@@ -1628,95 +1745,11 @@ class RequestorController extends Controller
  
     public function destroy(Request $request)
     {
-        $user = $this->currentUser();
-        $fr   = FacilityRequest::where('id', $request->input('id'))
-                    ->where('requested_by_id', $user->id)
-                    ->where('status', 'pending')
-                    ->firstOrFail();
+        $facilityRequest = FacilityRequest::query()
+            ->whereKey($request->input('id'))
+            ->firstOrFail();
 
-        DB::beginTransaction();
-
-        try {
-            // ✅ Only release if equipment was already approved (deducted)
-            if ($fr->equipment_status === 'approved') {
-                foreach ($fr->getEquipmentQuantities() as $itemName => $qty) {
-                    $qty = (int) $qty;
-                    if ($qty <= 0) {
-                        continue;
-                    }
-
-                    $eq = \App\Models\Equipment::whereRaw('LOWER(name) = ?', [strtolower($itemName)])
-                        ->lockForUpdate()
-                        ->first();
-
-                    if ($eq) {
-                        $eq->quantity_available = min(
-                            (int) $eq->quantity,
-                            (int) $eq->quantity_available + $qty
-                        );
-                        $eq->save();
-                    }
-                }
-            }
-
-            $fr->addHistory('cancelled', 'Request cancelled by requester ' . $user->name, $user->id);
-
-            // Determine affected custodians (use model helper for equipment + venue custodians)
-            $equipmentCustodianIds = $fr->getAssignedEquipmentCustodianIds();
-            $venueCustodianIds = \App\Models\Venue::whereIn('name', $fr->venue ?? [])->pluck('custodian_id')->filter()->unique()->toArray();
-            $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
-
-            // Notify custodians and admins about cancellation
-            if (!empty($custodianIds)) {
-                $custodians = \App\Models\User::whereIn('id', $custodianIds)->get();
-                try {
-                    Notification::send($custodians, new \App\Notifications\RequestStatusChanged(
-                        $fr,
-                        'request_cancelled',
-                        "Request {$fr->control_number} has been cancelled by {$user->name}. Equipment and venue are now available for other requests."
-                    ));
-                } catch (\Throwable $e) {
-                    Log::warning('Failed to notify custodians for cancelled facility request.', [
-                        'facility_request_id' => $fr->id,
-                        'exception' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            // Notify admins as well
-            $admins = \App\Models\User::whereIn('role', ['admin', 'facility_admin'])->get();
-            if ($admins->isNotEmpty()) {
-                try {
-                    Notification::send($admins, new \App\Notifications\RequestStatusChanged(
-                        $fr,
-                        'request_cancelled',
-                        "Request {$fr->control_number} has been cancelled by {$user->name}. Equipment and venue are now available for other requests."
-                    ));
-                } catch (\Throwable $e) {
-                    Log::warning('Failed to notify admins for cancelled facility request.', [
-                        'facility_request_id' => $fr->id,
-                        'exception' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            // Fire Laravel event for broadcasting (include custodians)
-            \App\Events\RequestCancelled::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, $custodianIds);
-
-            $fr->update([
-                'status' => 'cancelled',
-                'venue_status' => 'cancelled',
-                'equipment_status' => 'cancelled',
-            ]);
-
-            DB::commit();
-
-            return redirect()->back()->with('success', 'Request cancelled successfully');
-        } catch (\Throwable $e) {
-            DB::rollBack();
-
-            return redirect()->back()->withErrors('Unable to cancel the request at this time.');
-        }
+        return app(RequestActionController::class)->cancel($facilityRequest->id, $request);
     }
 
     public function show($id)
@@ -1804,10 +1837,63 @@ class RequestorController extends Controller
             ? sprintf('ES-%d-%s', $request->id, $signatureTime->format('YmdHis'))
             : null;
 
+        $approvalSignatures = [];
+        foreach ([
+            'venue' => 'venue_approval_signature_file',
+            'equipment' => 'equipment_approval_signature_file',
+            'final' => 'final_approval_signature_file',
+        ] as $stage => $signatureField) {
+            $snapshots = $request->getStageApprovalSnapshots($stage);
+            if ($snapshots === []) {
+                $snapshots = [[
+                    'approver_name' => $request->getStageApproverName($stage),
+                    'approver_position' => $request->getStageApproverPosition($stage),
+                    'signature_file' => $request->{$signatureField},
+                    'time' => $request->getStageApprovalDate($stage)?->toISOString(),
+                ]];
+            }
+
+            $approvalSignatures[$stage] = array_map(function (array $snapshot) use ($request, $signatureField): array {
+                $filename = $snapshot['signature_file'] ?? $request->{$signatureField};
+
+                return [
+                    'name' => $snapshot['approver_name'] ?? 'Approver',
+                    'position' => $snapshot['approver_position'] ?? null,
+                    'date' => ! empty($snapshot['time']) ? Carbon::parse($snapshot['time'])->format('M j, Y') : null,
+                    'image' => $this->signatureDataUri($filename, 'documents/e_signature/approvals'),
+                ];
+            }, $snapshots);
+        }
+
         return view('request.print', [
             'request' => $request,
             'signatureSerial' => $signatureSerial,
+            'requestorSignatureImage' => $this->signatureDataUri(
+                $request->e_signature_file,
+                'documents/e_signature'
+            ),
+            'approvalSignatures' => $approvalSignatures,
         ]);
+    }
+
+    private function signatureDataUri(?string $filename, string $directory): ?string
+    {
+        if (! $filename) {
+            return null;
+        }
+
+        $disk = Storage::disk('local');
+        $path = $directory . '/' . $filename;
+        if (! $disk->exists($path)) {
+            return null;
+        }
+
+        $mimeType = $disk->mimeType($path);
+        if (! in_array($mimeType, ['image/png', 'image/jpeg', 'image/gif', 'image/webp'], true)) {
+            return null;
+        }
+
+        return 'data:' . $mimeType . ';base64,' . base64_encode($disk->get($path));
     }
 
     public function proposal($id)
@@ -2022,6 +2108,50 @@ class RequestorController extends Controller
             'reserved_quantity' => max(0, $total - $remainingQuantity),
             'remaining_quantity' => $remainingQuantity,
             'overlapping_requests' => $overlappingRequests,
+        ]);
+    }
+
+    public function venueAvailability(Request $request)
+    {
+        $this->currentUser();
+        $validated = $request->validate([
+            'venues' => ['required', 'array', 'min:1'],
+            'venues.*' => ['required', 'string', Rule::in(array_merge(
+                self::VENUE_OPTIONS,
+                Venue::query()->where('is_active', true)->pluck('name')->all()
+            ))],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time' => ['required', 'date_format:H:i'],
+            'reservation_duration' => ['nullable', 'in:specific_time,whole_day'],
+        ]);
+
+        $range = FacilityRequest::resolveReservationDuration(
+            $validated['reservation_duration'] ?? 'specific_time',
+            $validated['start_date'],
+            $validated['start_time'],
+            $validated['end_date'],
+            $validated['end_time'],
+        );
+
+        $results = [];
+        foreach (array_values(array_unique($validated['venues'])) as $venueName) {
+            $availability = $this->availabilityService->checkVenueAvailability(
+                $venueName,
+                $range['start'],
+                $range['end'],
+            );
+            $results[] = [
+                'venue' => $venueName,
+                'available' => $availability['available'],
+                'message' => $availability['message'] ?? null,
+            ];
+        }
+
+        return response()->json([
+            'available' => collect($results)->every(fn (array $result): bool => $result['available']),
+            'venues' => $results,
         ]);
     }
 }

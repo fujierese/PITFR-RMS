@@ -326,7 +326,51 @@
             ];
         }
 
-        if (! $user->isAdmin() && ! $user->isCustodian()) {
+        if ($user->isIgp()) {
+            $navigation[] = [
+                'section' => 'IGP',
+                'type' => 'section-header',
+            ];
+            $navigation[] = [
+                'key' => 'igp-dashboard',
+                'label' => 'Reservation Coordination',
+                'route' => route('igp.index'),
+                'route_name' => 'igp.index',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14l1 12H4L5 9zm5 4h4"/></svg>',
+            ];
+            $navigation[] = [
+                'key' => 'calendar',
+                'label' => 'Calendar',
+                'route' => route('calendar.index'),
+                'route_name' => 'calendar.index',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+            ];
+            $navigation[] = [
+                'section' => 'Notifications',
+                'type' => 'section-header',
+            ];
+            $navigation[] = [
+                'key' => 'notifications',
+                'label' => 'Notifications',
+                'route' => route('notifications.index'),
+                'route_name' => 'notifications.index',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>',
+                'badge' => $notificationCount > 0 ? $notificationCount : null,
+            ];
+            $navigation[] = [
+                'section' => 'Account',
+                'type' => 'section-header',
+            ];
+            $navigation[] = [
+                'key' => 'settings',
+                'label' => 'Account Settings',
+                'route' => route('igp.settings'),
+                'route_name' => 'igp.settings',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>',
+            ];
+        }
+
+        if (! $user->isAdmin() && ! $user->isCustodian() && ! $user->isIgp()) {
             $navigation[] = [
                 'section' => 'Overview',
                 'type' => 'section-header',
@@ -386,6 +430,18 @@
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>',
             ];
         }
+
+        $navigation[] = [
+            'section' => 'Records',
+            'type' => 'section-header',
+        ];
+        $navigation[] = [
+            'key' => 'history',
+            'label' => 'Reservation History',
+            'route' => route('history.index'),
+            'route_name' => 'history.index',
+            'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+        ];
     }
 
     if ($currentRoute === 'requestor.index' && $activeTab === 'create') {
@@ -402,6 +458,10 @@
         $activeKey = 'calendar';
     } elseif ($currentRoute === 'supply-office.index') {
         $activeKey = 'dashboard';
+    } elseif ($currentRoute === 'igp.index') {
+        $activeKey = 'igp-dashboard';
+    } elseif ($currentRoute === 'history.index') {
+        $activeKey = 'history';
     } elseif ($currentRoute === 'supply-office.venues.index') {
         $activeKey = 'venue-management';
     } elseif ($currentRoute === 'supply-office.equipment.index') {
@@ -423,6 +483,8 @@
     } elseif ($currentRoute === 'supply-office.usage-reports') {
         $activeKey = 'reports';
     } elseif ($currentRoute === 'supply-office.settings') {
+        $activeKey = 'settings';
+    } elseif ($currentRoute === 'igp.settings') {
         $activeKey = 'settings';
     } elseif ($currentRoute === 'custodian.index') {
         $activeKey = request()->has('filter') ? match (request()->query('filter')) {

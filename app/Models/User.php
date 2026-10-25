@@ -10,6 +10,7 @@ use Illuminate\Contracts\Auth\CanResetPassword;
 use Illuminate\Auth\Passwords\CanResetPassword as CanResetPasswordTrait;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Laravel\Sanctum\HasApiTokens;
 use App\Notifications\ResetPasswordNotification;
 
@@ -109,6 +110,7 @@ class User extends Authenticatable implements CanResetPassword
         'middle_name',
         'suffix',
         'role',
+        'additional_roles',
         'is_active',
         'department',
         'college_id',
@@ -120,6 +122,7 @@ class User extends Authenticatable implements CanResetPassword
         'requestor_type',
         'school_id_number',
         'faculty_id',
+        'staff_id',
         'office_or_organization',
         'organization_acronym',
         'organization_type',
@@ -227,6 +230,7 @@ class User extends Authenticatable implements CanResetPassword
             'otp_expires_at' => 'datetime',
             'otp_last_sent_at' => 'datetime',
             'notification_preferences' => 'array',
+            'additional_roles' => 'array',
             'is_active' => 'boolean',
         ];
     }
@@ -252,9 +256,27 @@ class User extends Authenticatable implements CanResetPassword
         $this->notify(new ResetPasswordNotification($token));
     }
 
+    public function hasRole(string $role): bool
+    {
+        return $this->role === $role
+            || in_array($role, $this->additional_roles ?? [], true);
+    }
+
+    public function scopeWithAnyRole(Builder $query, array $roles): Builder
+    {
+        return $query->where(function (Builder $roleQuery) use ($roles): void {
+            $roleQuery->whereIn('role', $roles);
+            foreach ($roles as $role) {
+                $roleQuery->orWhereJsonContains('additional_roles', $role);
+            }
+        });
+    }
+
     public function isRequestee(): bool
     {
-        return in_array($this->role, ['requestor', 'student', 'faculty'], true);
+        return $this->hasRole('requestor')
+            || $this->hasRole('student')
+            || $this->hasRole('faculty');
     }
 
     public function isStudent(): bool
@@ -277,6 +299,11 @@ class User extends Authenticatable implements CanResetPassword
         return $this->requestor_type === 'outsider';
     }
 
+    public function isIgp(): bool
+    {
+        return $this->hasRole('igp');
+    }
+
     public function isStudentOrganization(): bool
     {
         return $this->requestor_type === 'student_organization';
@@ -296,21 +323,23 @@ class User extends Authenticatable implements CanResetPassword
 
     public function isRequestor(): bool
     {
-        return $this->role === 'requestor';
+        return $this->hasRole('requestor');
     }
 
     public function isCustodian(): bool
     {
-        return $this->role === 'custodian' || str_starts_with($this->role, 'custodian');
+        return collect($this->getRoles())->contains(
+            fn (string $role): bool => $role === 'custodian' || str_starts_with($role, 'custodian')
+        );
     }
 
     public function isCustodianVenue(): bool
     {
-        if ($this->role === 'custodian-venue') {
+        if ($this->hasRole('custodian-venue')) {
             return true;
         }
 
-        if ($this->role === 'custodian') {
+        if ($this->hasRole('custodian')) {
             return $this->venues()->exists();
         }
 
@@ -319,11 +348,11 @@ class User extends Authenticatable implements CanResetPassword
 
     public function isCustodianEquipment(): bool
     {
-        if ($this->role === 'custodian-equipment') {
+        if ($this->hasRole('custodian-equipment')) {
             return true;
         }
 
-        if ($this->role === 'custodian') {
+        if ($this->hasRole('custodian')) {
             return $this->equipmentItems()->exists();
         }
 
@@ -332,17 +361,17 @@ class User extends Authenticatable implements CanResetPassword
 
     public function isFacilityAdministrator(): bool
     {
-        return in_array($this->role, ['admin', 'facility_admin', 'supply_office'], true);
+        return $this->hasRole('admin') || $this->hasRole('facility_admin') || $this->hasRole('supply_office');
     }
 
     public function isSupplyOffice(): bool
     {
-        return in_array($this->role, ['admin', 'facility_admin', 'supply_office'], true);
+        return $this->isFacilityAdministrator();
     }
 
     public function isSystemAdmin(): bool
     {
-        return in_array($this->role, ['admin', 'facility_admin', 'supply_office'], true);
+        return $this->isFacilityAdministrator();
     }
 
     public function isAdminRole(): bool
@@ -381,17 +410,28 @@ class User extends Authenticatable implements CanResetPassword
      */
     public function custodianType(): ?string
     {
-        if ($this->role === 'custodian-venue') {
+        if ($this->hasRole('custodian-venue')) {
             return 'venue';
         }
 
-        if ($this->role === 'custodian-equipment') {
+        if ($this->hasRole('custodian-equipment')) {
             return 'equipment';
         }
 
         // For generic 'custodian' role with no specific suffix, return null
         // Do NOT infer type from resource assignment
         return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getRoles(): array
+    {
+        return array_values(array_unique(array_filter(
+            array_merge([$this->role], $this->additional_roles ?? []),
+            static fn ($role): bool => is_string($role) && $role !== '',
+        )));
     }
 
     public function getRoleLabelAttribute(): string
@@ -407,6 +447,7 @@ class User extends Authenticatable implements CanResetPassword
             'facility_admin',
             'admin',
             'supply_office'       => 'Supply Office',
+            'igp'                 => 'IGP',
             default               => 'User',
         };
     }
@@ -475,6 +516,10 @@ class User extends Authenticatable implements CanResetPassword
     {
         if ($this->isAdmin()) {
             return route('supply-office.index');
+        }
+
+        if ($this->isIgp()) {
+            return route('igp.index');
         }
 
         if ($this->isCustodian()) {

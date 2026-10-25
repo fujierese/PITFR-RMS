@@ -6,11 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\FacilityRequest;
 use App\Models\Equipment;
 use App\Models\Venue;
+use App\Models\User;
+use App\Notifications\RequestStatusChanged;
 use App\Services\AvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Carbon\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -33,7 +36,7 @@ class FacilityRequestApiController extends Controller
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
         
-        $query = FacilityRequest::query();
+        $query = FacilityRequest::upcomingReservation();
 
         // Filter based on user role
         if ($user->isRequestee()) {
@@ -118,7 +121,7 @@ class FacilityRequestApiController extends Controller
         if (in_array($reservationDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
             $request->merge([
                 'start_time' => '08:00',
-                'end_time' => '23:59',
+                'end_time' => '17:00',
             ]);
         }
 
@@ -190,6 +193,13 @@ class FacilityRequestApiController extends Controller
                 'success' => false,
                 'error' => 'End date and time must be after the start date and time.',
             ], 422);
+        }
+        if (! empty($validated['is_emergency'])
+            && ($requestedStart->toDateString() !== now()->toDateString()
+                || $requestedEnd->toDateString() !== now()->toDateString())) {
+            throw ValidationException::withMessages([
+                'is_emergency' => 'Urgent requests must be submitted and held entirely on the same local calendar day.',
+            ]);
         }
 
         // Check equipment availability
@@ -378,67 +388,7 @@ class FacilityRequestApiController extends Controller
 
     public function destroy(FacilityRequest $facilityRequest)
     {
-        $this->authorize('delete', $facilityRequest);
-
-        $user = Auth::user();
-
-        DB::beginTransaction();
-
-        try {
-            $this->availabilityService->lockResourcesForFacilityRequests($facilityRequest);
-            $facilityRequest = FacilityRequest::whereKey($facilityRequest->id)
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if ($facilityRequest->status !== 'pending') {
-                DB::rollBack();
-
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Only pending requests can be cancelled.',
-                ], 409);
-            }
-
-            if ($facilityRequest->equipment_status === 'approved') {
-                foreach ($facilityRequest->getEquipmentQuantities() as $itemName => $quantity) {
-                    $equipment = Equipment::whereRaw('LOWER(name) = ?', [mb_strtolower($itemName)])
-                        ->lockForUpdate()
-                        ->first();
-                    if ($equipment) {
-                        $equipment->quantity_available = min(
-                            $equipment->quantity,
-                            $equipment->quantity_available + (int) $quantity
-                        );
-                        $equipment->save();
-                    }
-                }
-            }
-
-            $facilityRequest->addHistory('cancelled', 'Request cancelled by ' . $user->name, $user->id);
-            $facilityRequest->update([
-                'status' => 'cancelled',
-                'venue_status' => 'cancelled',
-                'equipment_status' => 'cancelled',
-            ]);
-            DB::commit();
-        } catch (\Throwable $exception) {
-            DB::rollBack();
-            Log::error('Facility request API cancellation failed.', [
-                'facility_request_id' => $facilityRequest->id,
-                'user_id' => $user->id,
-                'exception' => $exception,
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'error' => 'The request could not be cancelled.',
-            ], 500);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Request cancelled successfully.',
-        ]);
+        return $this->cancel(request(), $facilityRequest);
     }
 
     public function approve(Request $request, FacilityRequest $facilityRequest)
@@ -589,7 +539,99 @@ class FacilityRequestApiController extends Controller
 
     public function cancel(Request $request, FacilityRequest $facilityRequest)
     {
-        return $this->destroy($facilityRequest);
+        $this->authorize('delete', $facilityRequest);
+        $user = Auth::user();
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (! $facilityRequest->start_date || $facilityRequest->start_date->toDateString() <= now()->toDateString()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Cancellation must be requested no later than the calendar day before the reservation.',
+            ], 422);
+        }
+
+        $approvedCancellation = DB::transaction(function () use ($facilityRequest, $user, $validated): bool {
+            $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
+            if (! in_array($lockedRequest->status, ['pending', 'approved'], true)) {
+                abort(409, 'Only pending or approved reservations can be cancelled.');
+            }
+            if ($lockedRequest->cancellation_status === 'pending') {
+                abort(409, 'A cancellation request is already awaiting Supply Office confirmation.');
+            }
+
+            if ($lockedRequest->status === 'approved') {
+                $lockedRequest->update([
+                    'cancellation_status' => 'pending',
+                    'cancellation_requested_by_id' => $user->getKey(),
+                    'cancellation_requested_at' => now(),
+                    'cancellation_notes' => trim((string) ($validated['reason'] ?? '')) ?: null,
+                ]);
+                $lockedRequest->addHistory(
+                    'cancellation_requested',
+                    'Cancellation requested by ' . $user->name . '. Supply Office confirmation is required.',
+                    $user->getKey()
+                );
+
+                return true;
+            }
+
+            if ($lockedRequest->equipment_status === 'approved') {
+                foreach ($lockedRequest->getEquipmentQuantities() as $itemName => $quantity) {
+                    $equipment = Equipment::whereRaw('LOWER(name) = ?', [mb_strtolower($itemName)])
+                        ->lockForUpdate()
+                        ->first();
+                    if ($equipment) {
+                        $equipment->quantity_available = min(
+                            $equipment->quantity,
+                            $equipment->quantity_available + (int) $quantity
+                        );
+                        $equipment->save();
+                    }
+                }
+            }
+
+            $lockedRequest->update([
+                'status' => 'cancelled',
+                'venue_status' => 'cancelled',
+                'equipment_status' => 'cancelled',
+                'cancellation_status' => 'confirmed',
+                'cancellation_requested_by_id' => $user->getKey(),
+                'cancellation_requested_at' => now(),
+                'cancellation_reviewed_by_id' => $user->getKey(),
+                'cancellation_reviewed_at' => now(),
+                'cancellation_notes' => trim((string) ($validated['reason'] ?? '')) ?: null,
+            ]);
+            $lockedRequest->addHistory('cancelled', 'Pending request cancelled by ' . $user->name . '.', $user->getKey());
+
+            return false;
+        });
+
+        $recipientIds = Venue::query()->whereIn('name', $facilityRequest->getVenueNames())
+            ->pluck('custodian_id')
+            ->merge($facilityRequest->getAssignedEquipmentCustodianIds())
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique();
+        $recipients = User::query()->whereIn('id', $recipientIds)->get();
+        $recipients->push($user);
+        if ($approvedCancellation) {
+            $recipients = $recipients->merge(User::query()->withAnyRole(['admin', 'supply_office'])->get());
+        }
+        $message = $approvedCancellation
+            ? 'Cancellation requested. The approved reservation remains active until the Supply Office confirms it.'
+            : 'Pending reservation cancelled by ' . $user->name . '.';
+        Notification::send(
+            $recipients->unique('id')->values(),
+            new RequestStatusChanged($facilityRequest->fresh(), $approvedCancellation ? 'cancellation_requested' : 'request_cancelled', $message, $user->name)
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'cancellation_status' => $approvedCancellation ? 'pending' : 'confirmed',
+        ]);
     }
 
     public function returnEquipment(Request $request, FacilityRequest $facilityRequest)

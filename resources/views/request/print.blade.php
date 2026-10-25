@@ -250,11 +250,22 @@
             margin-bottom: 0.1rem;
         }
 
+        .reference-box .iso img {
+            display: block;
+            width: 100%;
+            max-height: 12mm;
+            object-fit: contain;
+        }
+
         .label-row {
             display: grid;
             grid-template-columns: minmax(0, 1fr) 260px;
             border-bottom: 2px solid var(--line);
             min-height: 48px;
+        }
+
+        .request-meta-row {
+            grid-template-columns: 1.2fr 1fr 0.8fr;
         }
 
         .label-row > div {
@@ -362,12 +373,42 @@
         }
 
         .inclusive-row {
-            padding: 0.42rem 0.7rem;
-            min-height: 46px;
-            display: flex;
-            align-items: flex-start;
-            gap: 0.45rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
             border-bottom: 2px solid var(--line);
+        }
+
+        .inclusive-row > div {
+            padding: 0.42rem 0.7rem;
+            min-width: 0;
+        }
+
+        .inclusive-row > div + div {
+            border-left: 1px solid var(--line);
+        }
+
+        .resources-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            border-bottom: 2px solid var(--line);
+        }
+
+        .resource-column {
+            min-width: 0;
+            padding: 0.54rem 0.7rem 0.45rem;
+        }
+
+        .resource-column + .resource-column {
+            border-left: 1px solid var(--line);
+        }
+
+        .resource-column .title {
+            display: block;
+            font-size: 0.58rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            margin-bottom: 0.35rem;
         }
 
         .section-box {
@@ -459,13 +500,36 @@
             color: var(--ink);
         }
 
+        .approval-signature {
+            display: block;
+            max-width: 100%;
+            max-height: 1.8rem;
+            object-fit: contain;
+            margin: 0.15rem auto;
+        }
+
+        .approval-signature-placeholder {
+            width: 70%;
+            margin: 0.3rem auto 0;
+            border-bottom: 1px solid var(--line);
+            height: 1rem;
+        }
+
+        .approval-signature-entry + .approval-signature-entry {
+            margin-top: 1.5mm;
+            padding-top: 1.5mm;
+            border-top: 0.5pt solid #94a3b8;
+        }
+
         .signature-block {
             display: flex;
             flex-direction: column;
+            align-items: center;
             justify-content: center;
             min-height: 86px;
             padding: 0.6rem 0.7rem 0.45rem;
             border-bottom: 1px solid var(--line);
+            text-align: center;
         }
 
         .signature-block .field-label {
@@ -481,16 +545,25 @@
         }
 
         .e-signature-image {
+            display: block;
+            width: 42mm;
             max-width: 100%;
-            max-height: 1.8rem;
+            height: 12mm;
+            max-height: 12mm;
             object-fit: contain;
-            margin-bottom: 0.1rem;
+            margin: 0 auto 0.1rem;
         }
 
         .signature-name {
             font-size: 0.68rem;
             font-weight: 700;
             min-height: 0.9rem;
+        }
+
+        .signature-serial {
+            margin-top: 0.2rem;
+            color: var(--muted);
+            font-size: 0.52rem;
         }
 
         .footer-bar {
@@ -519,8 +592,8 @@
 
         @media print {
             @page {
-                size: auto;
-                margin: 6mm 6mm 6mm 6mm;
+                size: A4 portrait;
+                margin: 5mm;
             }
 
             .print-settings-helper {
@@ -728,12 +801,27 @@
                 border-right: none;
             }
 
+            .request-meta-row {
+                grid-template-columns: 1.2fr 1fr 0.8fr;
+            }
+
             .inclusive-row {
-                display: block;
+                display: grid;
+                grid-template-columns: 1fr 1.2fr 0.8fr;
                 width: 100%;
-                padding: 0.7mm 1.8mm;
                 box-sizing: border-box;
                 border-bottom: 0.75pt solid var(--line);
+            }
+
+            .inclusive-row > div {
+                padding: 0.7mm 1.8mm;
+                box-sizing: border-box;
+                min-width: 0;
+            }
+
+            .inclusive-row > div + div {
+                border-left: 0.75pt solid var(--line);
+                padding-left: 1.8mm;
             }
 
             .field-label {
@@ -757,6 +845,32 @@
                 padding: 0.7mm 1.8mm;
                 box-sizing: border-box;
                 border-bottom: 0.75pt solid var(--line);
+            }
+
+            .resources-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                border-bottom: 0.75pt solid var(--line);
+                width: 100%;
+                box-sizing: border-box;
+                page-break-inside: avoid;
+            }
+
+            .resource-column {
+                padding: 0.8mm 1.8mm;
+                min-width: 0;
+            }
+
+            .resource-column + .resource-column {
+                border-left: 0.75pt solid var(--line);
+            }
+
+            .resource-column .title {
+                font-size: 7.8pt;
+                font-weight: 700;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                margin-bottom: 0.5mm;
             }
 
             .purpose-row .field-label,
@@ -827,6 +941,7 @@
                 box-sizing: border-box;
                 border-bottom: 0.75pt solid var(--line);
                 page-break-inside: avoid;
+                text-align: center;
             }
 
             .signature-block .field-label {
@@ -865,6 +980,33 @@
                 color: var(--muted);
                 font-weight: 400;
                 text-align: center;
+            }
+
+            .e-signature-image {
+                width: 34mm;
+                height: 9mm;
+                max-height: 9mm;
+                margin: 0 auto 0.25mm;
+            }
+
+            .approval-signature {
+                max-height: 9mm;
+                margin: 0.25mm auto;
+            }
+
+            .signature-serial {
+                margin-top: 0.3mm;
+                font-size: 5.8pt;
+            }
+
+            .approval-signature-placeholder {
+                height: 3mm;
+                margin-top: 0.5mm;
+            }
+
+            .approval-signature-entry + .approval-signature-entry {
+                margin-top: 1mm;
+                padding-top: 1mm;
             }
 
             .approval-row {
@@ -933,9 +1075,11 @@
 <body>
     @php
         $venueNames = $request->getVenueNames();
+        $venueScheduleSummaries = $request->getVenueScheduleSummaries();
         $venues = implode(', ', $venueNames) ?: 'N/A';
         $selectedEquipment = $request->getEquipmentItems();
         $equipmentQuantities = $request->getEquipmentQuantities();
+        $venueEquipmentAllocations = $request->getVenueEquipmentAllocations();
         $finalApprover = $request->getStageApproverName('final') ?: 'Pending';
         $finalApprovalDate = $request->getStageApprovalDate('final') ? $request->getStageApprovalDate('final')->format('M j, Y') : 'Pending';
 
@@ -950,15 +1094,10 @@
             || ((string) ($request->start_time ?? '') === '08:00' && (string) ($request->end_time ?? '') === '00:00')
             || ((string) ($request->start_time ?? '') === '00:00' && (string) ($request->end_time ?? '') === '23:59');
         $scheduleTime = $endTime ? $startTime . ' - ' . $endTime : $startTime;
-        $displayScheduleTime = $wholeDayRequested ? 'WHOLE DAY (12:00 AM – 11:59 PM)' : $scheduleTime;
+        $displayScheduleTime = $wholeDayRequested ? 'WHOLE DAY (8:00 AM - 5:00 PM)' : $scheduleTime;
 
         $requesterName = $request->requested_by ?? $request->requester?->name ?? 'N/A';
         $requesterPosition = $request->requested_by_position ?? $request->requester?->position ?? 'N/A';
-        $venueApprover = $request->getStageApproverName('venue') ?: 'Pending';
-        $equipmentApprover = $request->getStageApproverName('equipment') ?: 'Pending';
-        $venueSignatureRecorded = $request->venue_status === 'approved' && !empty($request->venue_approval_signature_file);
-        $equipmentSignatureRecorded = $request->equipment_status === 'approved' && !empty($request->equipment_approval_signature_file);
-        $finalSignatureRecorded = $request->status === 'approved' && !empty($request->final_approval_signature_file);
         $statusLabel = match ($request->status) {
             'approved' => 'Approved',
             'rejected' => 'Rejected',
@@ -989,7 +1128,7 @@
                         @endif
                         <div class="header-row">
                             <div class="logo-box">
-                                <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo">
+                                <img src="{{ asset('/images/PIT-LOGO.png') }}" alt="PIT Logo">
                             </div>
                             <div class="title-box">
                                 <div>
@@ -1003,51 +1142,25 @@
                                 <div class="meta-line"><span>Ref. Code:</span> <strong>PIT-PSMO-F-05-3.7-08</strong></div>
                                 <div class="meta-line"><span>Rev. No:</span> <strong>00</strong></div>
                                 <div class="iso">
-                                    <strong>TUV NORD</strong>
-                                    <span>ISO 9001:2015 Certified</span>
+                                    <img src="{{ asset('/images/TUVNORD-Logo.png') }}" alt="TUV NORD ISO 9001 certification">
                                 </div>
                             </div>
                         </div>
 
-                        @if (!empty($request->department))
-                            <div class="label-row">
-                                <div>
-                                    <span class="field-label">Dept. / Requisitioning Office:</span>
-                                    <span class="field-value">{{ $request->department }}</span>
-                                </div>
-                                <div>
-                                    <span class="field-label">Control Number:</span>
-                                    <span class="field-value">{{ $request->control_number }}</span>
-                                </div>
+                        <div class="label-row request-meta-row">
+                            <div>
+                                <span class="field-label">Dept. / Requisitioning Office:</span>
+                                <span class="field-value">{{ $request->department ?: 'N/A' }}</span>
                             </div>
-                        @else
-                            <div class="label-row">
-                                <div style="grid-column: 2;">
-                                    <span class="field-label">Control Number:</span>
-                                    <span class="field-value">{{ $request->control_number }}</span>
-                                </div>
+                            <div>
+                                <span class="field-label">Control Number:</span>
+                                <span class="field-value">{{ $request->control_number }}</span>
                             </div>
-                        @endif
-
-                        @if ($request->date_requested)
-                            <div class="meta-grid">
-                                <div>
-                                    <span class="field-label">Date Requested:</span>
-                                    <span class="field-value">{{ \Carbon\Carbon::parse($request->date_requested)->format('M j, Y') }}</span>
-                                </div>
-                                <div>
-                                    <span class="field-label">Status:</span>
-                                    <span class="field-value">{{ $statusLabel }}</span>
-                                </div>
+                            <div>
+                                <span class="field-label">Date Requested:</span>
+                                <span class="field-value">{{ $request->date_requested ? \Carbon\Carbon::parse($request->date_requested)->format('M j, Y') : 'N/A' }}</span>
                             </div>
-                        @else
-                            <div class="meta-grid">
-                                <div style="grid-column: 2;">
-                                    <span class="field-label">Status:</span>
-                                    <span class="field-value">{{ $statusLabel }}</span>
-                                </div>
-                            </div>
-                        @endif
+                        </div>
 
                         @if (!empty($request->name_of_activity))
                             <div class="purpose-row">
@@ -1056,78 +1169,79 @@
                             </div>
                         @endif
 
-                        @if (!empty($request->expected_participants) || !empty($request->start_time))
-                            <div class="schedule-row">
-                                @if (!empty($request->expected_participants))
-                                    <div>
-                                        <span class="field-label">Expected No. of Participants:</span>
-                                        <span class="field-value">{{ $request->expected_participants }}</span>
-                                    </div>
-                                @endif
-                                @if (!empty($request->start_time))
-                                    <div>
-                                        <span class="field-label">Time:</span>
-                                        <span class="field-value">{{ $displayScheduleTime }}</span>
-                                    </div>
-                                @endif
+                        <div class="inclusive-row">
+                            <div>
+                                <span class="field-label">Expected Participants:</span>
+                                <span class="field-value">{{ $request->expected_participants ?: 'N/A' }}</span>
                             </div>
-                        @endif
-
-                        @if (!empty($request->start_date) && $inclusiveDates !== 'N/A')
-                            <div class="inclusive-row">
-                                <span class="field-label">Inclusive Dates:</span>
-                                <span class="field-value">{{ $inclusiveDates }}</span>
+                            <div style="grid-column: span 2;">
+                                <span class="field-label">Venue Schedule(s):</span>
+                                <span class="field-value">
+                                    @forelse ($venueScheduleSummaries as $schedule)
+                                        <span class="block">{{ $schedule['venue'] }}: {{ $schedule['label'] }}</span>
+                                    @empty
+                                        {{ $inclusiveDates }} · {{ $displayScheduleTime }}
+                                    @endforelse
+                                </span>
                             </div>
-                        @endif
+                        </div>
 
-                        @if (!empty($venueNames) || !empty($request->other_venue))
-                            <div class="section-box">
+                        <div class="resources-row">
+                            <div class="resource-column">
                                 <span class="title">Facility / Venue</span>
                                 <div class="plain-list">
-                                    @foreach ($venueNames as $venueName)
+                                    @forelse ($venueNames as $venueName)
                                         <span>{{ trim($venueName) }}</span>
-                                    @endforeach
-                                    @if (!empty($request->other_venue))
+                                    @empty
+                                        <span>{{ $request->other_venue ? trim($request->other_venue) : 'N/A' }}</span>
+                                    @endforelse
+                                    @if (!empty($request->other_venue) && !empty($venueNames))
                                         <span>{{ trim($request->other_venue) }}</span>
                                     @endif
                                 </div>
                             </div>
-                        @endif
-
-                        @if (!empty($selectedEquipment) || !empty($request->other_equipment))
-                            <div class="section-box">
+                            <div class="resource-column">
                                 <span class="title">Equipment</span>
                                 <div class="plain-list">
-                                    @foreach ($selectedEquipment as $equipmentName)
-                                        @php $equipmentQty = (int) ($equipmentQuantities[$equipmentName] ?? 0); @endphp
-                                        @if ($equipmentQty > 0)
-                                            <span>{{ trim($equipmentName) }} ({{ $equipmentQty }})</span>
-                                        @elseif (trim($equipmentName) !== '')
-                                            <span>{{ trim($equipmentName) }}</span>
-                                        @endif
-                                    @endforeach
+                                    @if (!empty($venueEquipmentAllocations))
+                                        @foreach ($venueEquipmentAllocations as $venueName => $venueEquipment)
+                                            @foreach ($venueEquipment as $equipmentName => $equipmentQty)
+                                                <span>{{ $venueName }}: {{ trim($equipmentName) }} ({{ (int) $equipmentQty }})</span>
+                                            @endforeach
+                                        @endforeach
+                                    @else
+                                        @forelse ($selectedEquipment as $equipmentName)
+                                            @php $equipmentQty = (int) ($equipmentQuantities[$equipmentName] ?? 0); @endphp
+                                            @if ($equipmentQty > 0)
+                                                <span>{{ trim($equipmentName) }} ({{ $equipmentQty }})</span>
+                                            @elseif (trim($equipmentName) !== '')
+                                                <span>{{ trim($equipmentName) }}</span>
+                                            @endif
+                                        @empty
+                                            @if (empty($request->other_equipment))
+                                                <span>N/A</span>
+                                            @endif
+                                        @endforelse
+                                    @endif
                                     @if (!empty($request->other_equipment))
                                         <span>{{ trim($request->other_equipment) }}</span>
                                     @endif
                                 </div>
                             </div>
-                        @endif
+                        </div>
 
                         <div class="signature-block">
                             <span class="field-label">Requisitioner</span>
-                            @if($request->e_signature_file)
-                                <img src="{{ route('request.signature', ['id' => $request->id]) }}"
-                                     alt="E-Signature" class="e-signature-image">
+                            @if($requestorSignatureImage)
+                                <img src="{{ $requestorSignatureImage }}"
+                                     alt="Requisitioner e-signature" class="e-signature-image">
                             @else
                                 <div class="signature-line"></div>
                             @endif
                             <div class="signature-name">{{ $requesterName }}</div>
                             <div class="signature-name" style="font-weight: 600; margin-top: 0.3rem;">{{ $requesterPosition }}</div>
-                            <div style="font-size: 0.52rem; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 0.4rem; color: var(--muted);">
-                                @if($request->e_signature_file)Electronic Signature@else Signature over printed name @endif
-                            </div>
                             @if($signatureSerial)
-                                <div style="font-size: 0.52rem; margin-top: 0.2rem; color: var(--muted);">Serial No. {{ $signatureSerial }}</div>
+                                <div class="signature-serial">Signature ID: {{ $signatureSerial }}</div>
                             @endif
                         </div>
 
@@ -1135,24 +1249,44 @@
                             <div class="approval-panel">
                                 <span class="title">Recommending Approval (Venue)</span>
                                 <div class="approval-list">
-                                    @if($venueSignatureRecorded)
-                                        <div>{{ $venueApprover }}</div>
-                                        <img src="{{ route('request.approval.signature', ['facilityRequest' => $request->id, 'type' => 'venue']) }}" alt="Venue approval signature" style="max-height: 36px; display: block; margin: 3px auto 0; object-fit: contain;">
+                                    @if($request->venue_status === 'approved')
+                                        @foreach($approvalSignatures['venue'] as $approval)
+                                            <div class="approval-signature-entry">
+                                                <div><strong>{{ $approval['name'] }}</strong></div>
+                                                @if($approval['image'])
+                                                    <img src="{{ $approval['image'] }}" alt="Venue custodian e-signature" class="approval-signature">
+                                                @else
+                                                    <div class="approval-signature-placeholder" aria-hidden="true"></div>
+                                                    <div>Signature not recorded</div>
+                                                @endif
+                                                @if($approval['position'])<div>{{ $approval['position'] }}</div>@endif
+                                                @if($approval['date'])<div>{{ $approval['date'] }}</div>@endif
+                                            </div>
+                                        @endforeach
                                     @else
                                         <div>Pending</div>
                                     @endif
                                 </div>
                             </div>
                             <div class="approval-panel">
-                                <span class="title">Approved By</span>
+                                <span class="title">Approved By (Supply Office)</span>
                                 <div class="approval-list">
-                                    @if($finalSignatureRecorded)
-                                        <div><strong>{{ $finalApprover }}</strong></div>
-                                        <img src="{{ route('request.approval.signature', ['facilityRequest' => $request->id, 'type' => 'final']) }}" alt="Final approval signature" style="max-height: 36px; display: block; margin: 3px auto 0; object-fit: contain;">
-                                        <div>{{ $finalApprovalDate }}</div>
+                                    @if($request->status === 'approved')
+                                        @foreach($approvalSignatures['final'] as $approval)
+                                            <div class="approval-signature-entry">
+                                                <div><strong>{{ $approval['name'] }}</strong></div>
+                                                @if($approval['image'])
+                                                    <img src="{{ $approval['image'] }}" alt="Supply Office e-signature" class="approval-signature">
+                                                @else
+                                                    <div class="approval-signature-placeholder" aria-hidden="true"></div>
+                                                    <div>Signature not recorded</div>
+                                                @endif
+                                                @if($approval['position'])<div>{{ $approval['position'] }}</div>@endif
+                                                <div>{{ $approval['date'] ?: $finalApprovalDate }}</div>
+                                            </div>
+                                        @endforeach
                                     @else
-                                        <div><strong>{{ $finalApprover }}</strong></div>
-                                        <div>{{ $finalApprovalDate }}</div>
+                                        <div>Pending</div>
                                     @endif
                                 </div>
                             </div>
@@ -1162,9 +1296,20 @@
                             <div class="approval-panel">
                                 <span class="title">Recommending Approval (Equipment)</span>
                                 <div class="approval-list">
-                                    @if($equipmentSignatureRecorded)
-                                        <div>{{ $equipmentApprover }}</div>
-                                        <img src="{{ route('request.approval.signature', ['facilityRequest' => $request->id, 'type' => 'equipment']) }}" alt="Equipment approval signature" style="max-height: 36px; display: block; margin: 3px auto 0; object-fit: contain;">
+                                    @if($request->equipment_status === 'approved')
+                                        @foreach($approvalSignatures['equipment'] as $approval)
+                                            <div class="approval-signature-entry">
+                                                <div><strong>{{ $approval['name'] }}</strong></div>
+                                                @if($approval['image'])
+                                                    <img src="{{ $approval['image'] }}" alt="Equipment custodian e-signature" class="approval-signature">
+                                                @else
+                                                    <div class="approval-signature-placeholder" aria-hidden="true"></div>
+                                                    <div>Signature not recorded</div>
+                                                @endif
+                                                @if($approval['position'])<div>{{ $approval['position'] }}</div>@endif
+                                                @if($approval['date'])<div>{{ $approval['date'] }}</div>@endif
+                                            </div>
+                                        @endforeach
                                     @else
                                         <div>Pending</div>
                                     @endif

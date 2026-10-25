@@ -219,7 +219,7 @@
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Activity</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Venue</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Equipment</th>
-                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Date and Time</th>
+                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Venue Schedules</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Status</th>
                                     <th class="sticky top-0 bg-slate-50 px-4 py-4">Actions</th>
                                 </tr>
@@ -239,19 +239,17 @@
                                             ? 'bg-rose-100 text-rose-700 ring-rose-200'
                                             : ($priorityLabel ? ($priorityBadgeClasses[$priorityValue] ?? 'bg-slate-100 text-slate-700 ring-slate-200') : null);
                                         $venueLabel = implode(', ', $requestItem->getVenueNames()) ?: '-';
-                                        $equipmentLabel = implode(', ', $requestItem->getEquipmentItems()) ?: '-';
-                                        $reservationDate = $requestItem->start_date ? $requestItem->start_date->format('M d, Y') : '-';
-                                        $reservationTime = $requestItem->start_time
-                                            ? \Carbon\Carbon::parse($requestItem->start_time)->format('g:i A')
-                                                . (!empty($requestItem->end_time) ? ' - ' . \Carbon\Carbon::parse($requestItem->end_time)->format('g:i A') : '')
-                                            : '-';
+                                        $equipmentLabel = implode(', ', $requestItem->getVenueEquipmentLabels() ?: $requestItem->getEquipmentItems()) ?: '-';
+                                        $venueScheduleSummaries = $requestItem->getVenueScheduleSummaries();
                                         $canEdit = $statusKey === 'needs_reschedule'
                                             || $requestItem->venue_status === 'needs_reschedule'
                                             || $requestItem->equipment_status === 'needs_reschedule'
                                             || ($statusKey === 'pending'
                                                 && $requestItem->venue_status === 'pending'
                                                 && $requestItem->equipment_status === 'pending');
-                                        $canCancel = $statusKey === 'pending';
+                                        $canCancel = in_array($statusKey, ['pending', 'approved'], true)
+                                            && $requestItem->cancellation_status !== 'pending'
+                                            && $requestItem->start_date?->toDateString() > now()->toDateString();
                                         $progressLabels = match ($statusKey) {
                                             'rejected' => ['Forwarded for review', 'Rejected'],
                                             'cancelled' => ['Submitted', 'Cancelled'],
@@ -277,8 +275,14 @@
                                         <td class="px-4 py-4">{{ $venueLabel }}</td>
                                         <td class="px-4 py-4">{{ $equipmentLabel }}</td>
                                         <td class="px-4 py-4">
-                                            <div class="font-medium text-slate-900">{{ $reservationDate }}</div>
-                                            <div class="mt-1 text-xs text-slate-500">{{ $reservationTime }}</div>
+                                            @forelse($venueScheduleSummaries as $schedule)
+                                                <div class="mb-2 last:mb-0">
+                                                    <div class="font-medium text-slate-900">{{ $schedule['venue'] }}</div>
+                                                    <div class="mt-1 text-xs text-slate-500">{{ $schedule['label'] }}</div>
+                                                </div>
+                                            @empty
+                                                <span>—</span>
+                                            @endforelse
                                         </td>
                                         <td class="px-4 py-4">
                                             <div class="flex flex-wrap gap-2">
@@ -316,9 +320,9 @@
                                                     <button type="button" data-edit-url="{{ route('requestor.edit', $requestItem->id) }}" class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Edit</button>
                                                 @endif
                                                 @if ($canCancel)
-                                                    <form method="POST" action="{{ route('request.cancel', $requestItem->id) }}" class="inline-block" data-swal-confirm data-swal-title="Cancel this request?" data-swal-text="This will remove the pending request from the queue." data-swal-confirm-text="Yes, cancel it" data-swal-confirm-color="#dc2626">
+                                                    <form method="POST" action="{{ route('request.cancel', $requestItem->id) }}" class="inline-block" data-swal-confirm data-swal-title="{{ $statusKey === 'approved' ? 'Request cancellation?' : 'Cancel this request?' }}" data-swal-text="{{ $statusKey === 'approved' ? 'The Supply Office must confirm. Your approved reservation remains active until then.' : 'This will cancel the pending request.' }}" data-swal-confirm-text="{{ $statusKey === 'approved' ? 'Request cancellation' : 'Yes, cancel it' }}" data-swal-confirm-color="#dc2626">
                                                         @csrf
-                                                        <button type="submit" class="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">Cancel</button>
+                                                        <button type="submit" class="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">{{ $statusKey === 'approved' ? 'Request cancellation' : 'Cancel' }}</button>
                                                     </form>
                                                 @endif
                                             </div>
@@ -345,19 +349,17 @@
                                 ? 'bg-rose-100 text-rose-700 ring-rose-200'
                                 : ($priorityLabel ? ($priorityBadgeClasses[$priorityValue] ?? 'bg-slate-100 text-slate-700 ring-slate-200') : null);
                             $venueLabel = implode(', ', $requestItem->getVenueNames()) ?: '-';
-                            $equipmentLabel = implode(', ', $requestItem->getEquipmentItems()) ?: '-';
-                            $reservationDate = $requestItem->start_date ? $requestItem->start_date->format('M d, Y') : '-';
-                            $reservationTime = $requestItem->start_time
-                                ? \Carbon\Carbon::parse($requestItem->start_time)->format('g:i A')
-                                    . (!empty($requestItem->end_time) ? ' - ' . \Carbon\Carbon::parse($requestItem->end_time)->format('g:i A') : '')
-                                : '-';
+                            $equipmentLabel = implode(', ', $requestItem->getVenueEquipmentLabels() ?: $requestItem->getEquipmentItems()) ?: '-';
+                            $venueScheduleSummaries = $requestItem->getVenueScheduleSummaries();
                             $canEdit = $statusKey === 'needs_reschedule'
                                 || $requestItem->venue_status === 'needs_reschedule'
                                 || $requestItem->equipment_status === 'needs_reschedule'
                                 || ($statusKey === 'pending'
                                     && $requestItem->venue_status === 'pending'
                                     && $requestItem->equipment_status === 'pending');
-                            $canCancel = $statusKey === 'pending';
+                            $canCancel = in_array($statusKey, ['pending', 'approved'], true)
+                                && $requestItem->cancellation_status !== 'pending'
+                                && $requestItem->start_date?->toDateString() > now()->toDateString();
                         @endphp
                         <div class="cursor-pointer rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/40 focus:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500" data-request-url="{{ route('request.show', $requestItem->id) }}" role="link" tabindex="0" aria-label="Open request details for {{ $requestItem->control_number ?? 'request' }}">
                             <div class="flex items-start justify-between gap-3">
@@ -375,8 +377,16 @@
                             <div class="mt-4 space-y-2 text-sm text-slate-600">
                                 <div><span class="font-semibold text-slate-900">Venue:</span> {{ $venueLabel }}</div>
                                 <div><span class="font-semibold text-slate-900">Equipment:</span> {{ $equipmentLabel }}</div>
-                                <div><span class="font-semibold text-slate-900">Date:</span> {{ $reservationDate }}</div>
-                                <div><span class="font-semibold text-slate-900">Time:</span> {{ $reservationTime }}</div>
+                                <div>
+                                    <span class="font-semibold text-slate-900">Venue Schedules:</span>
+                                    <ul class="mt-1 space-y-1">
+                                        @forelse($venueScheduleSummaries as $schedule)
+                                            <li>{{ $schedule['venue'] }}: {{ $schedule['label'] }}</li>
+                                        @empty
+                                            <li>—</li>
+                                        @endforelse
+                                    </ul>
+                                </div>
                                 @if ($priorityLabel)
                                     <div><span class="font-semibold text-slate-900">Priority:</span> <span class="ml-1 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset {{ $priorityBadgeClass }}">{{ $priorityLabel }}</span></div>
                                 @endif
@@ -386,9 +396,9 @@
                                     <button type="button" data-edit-url="{{ route('requestor.edit', $requestItem->id) }}" class="inline-flex flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Edit</button>
                                 @endif
                                 @if ($canCancel)
-                                    <form method="POST" action="{{ route('request.cancel', $requestItem->id) }}" class="flex-1" data-swal-confirm data-swal-title="Cancel this request?" data-swal-text="This will remove the pending request from the queue." data-swal-confirm-text="Yes, cancel it" data-swal-confirm-color="#dc2626">
+                                    <form method="POST" action="{{ route('request.cancel', $requestItem->id) }}" class="flex-1" data-swal-confirm data-swal-title="{{ $statusKey === 'approved' ? 'Request cancellation?' : 'Cancel this request?' }}" data-swal-text="{{ $statusKey === 'approved' ? 'The Supply Office must confirm. Your approved reservation remains active until then.' : 'This will cancel the pending request.' }}" data-swal-confirm-text="{{ $statusKey === 'approved' ? 'Request cancellation' : 'Yes, cancel it' }}" data-swal-confirm-color="#dc2626">
                                         @csrf
-                                        <button type="submit" class="w-full rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">Cancel</button>
+                                        <button type="submit" class="w-full rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{{ $statusKey === 'approved' ? 'Request cancellation' : 'Cancel' }}</button>
                                     </form>
                                 @endif
                             </div>
@@ -475,8 +485,16 @@
                                     </div>
                                     <div class="mt-4 space-y-2 text-sm text-slate-600">
                                         <div><span class="font-semibold text-slate-900">Venue:</span> {{ empty($upcomingReservation->getVenueNames()) ? '-' : implode(', ', $upcomingReservation->getVenueNames()) }}</div>
-                                        <div><span class="font-semibold text-slate-900">Reservation Date:</span> {{ $upcomingReservation->start_date ? $upcomingReservation->start_date->format('M d, Y') : '-' }}</div>
-                                        <div><span class="font-semibold text-slate-900">Time:</span> {{ $upcomingReservation->start_time ? $upcomingReservation->start_time : '-' }}</div>
+                                        <div>
+                                            <span class="font-semibold text-slate-900">Venue Schedules:</span>
+                                            <ul class="mt-1 space-y-1">
+                                                @forelse($upcomingReservation->getVenueScheduleSummaries() as $schedule)
+                                                    <li>{{ $schedule['venue'] }}: {{ $schedule['label'] }}</li>
+                                                @empty
+                                                    <li>—</li>
+                                                @endforelse
+                                            </ul>
+                                        </div>
                                     </div>
                                 </div>
                             @endforeach

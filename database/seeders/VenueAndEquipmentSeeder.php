@@ -29,14 +29,32 @@ class VenueAndEquipmentSeeder extends Seeder
         $this->upsertVenue('Volleyball Court', null, $custodians['ctado@gmail.com']);
 
         $fanAlternate = [$custodians['jrvillas@gmail.com']];
-        $this->upsertEquipment('Sound System', 1, $custodians['rguillemer@gmail.com']);
-        $this->upsertEquipment('Wireless Microphones', 1, $custodians['rguillemer@gmail.com'], [], ['Wireless Microphone', 'Wireless Microphones']);
-        $this->upsertEquipment('Non-Wireless Microphones', 1, $custodians['rguillemer@gmail.com'], [], ['Non-wireless Microphone', 'Non-Wireless Microphones']);
+        $soundSystem = Equipment::query()->where('name', 'Sound System')->first();
+        $soundSystemOutstanding = $soundSystem
+            ? max(0, (int) $soundSystem->quantity - (int) $soundSystem->quantity_available)
+            : 0;
+        $this->upsertEquipment(
+            'Sound System',
+            3,
+            $custodians['rguillemer@gmail.com'],
+            [],
+            [],
+            true,
+            max(0, 3 - $soundSystemOutstanding),
+        );
+        $this->upsertEquipment('Wireless Microphones', 3, $custodians['rguillemer@gmail.com'], [], ['Wireless Microphone', 'Wireless Microphones']);
+        $this->upsertEquipment('Non-Wireless Microphones', 3, $custodians['rguillemer@gmail.com'], [], ['Non-wireless Microphone', 'Non-Wireless Microphones']);
+        $this->upsertEquipment('Aircon', 1, $custodians['lalmerino@gmail.com'], [], [], false, null, true, true);
+        $this->upsertEquipment('Lights', 1, $custodians['rguillemer@gmail.com']);
+        $this->upsertEquipment('Podium', 1, $custodians['asala@gmail.com']);
+        $this->upsertEquipment('HDMI', 1, $custodians['asala@gmail.com']);
+        $this->upsertEquipment('Television (CHIC)', 1, $custodians['asala@gmail.com']);
+        $this->upsertEquipment('Television (Balay Alumni)', 1, $custodians['mmercado@gmail.com'], [], [], true, 0, false);
         $this->upsertEquipment('Canopies', 10, $custodians['jsuralta@gmail.com']);
         $this->upsertEquipment('Industrial Fans', 6, $custodians['lalmerino@gmail.com'], $fanAlternate);
         $this->upsertEquipment('Iwata Cooler Fans', 4, $custodians['lalmerino@gmail.com'], $fanAlternate);
         $this->upsertEquipment('Tables', 10, $custodians['jsuralta@gmail.com']);
-        $this->upsertEquipment('Chairs', 50, $custodians['jsuralta@gmail.com'], [], ['Chair', 'Chairs']);
+        $this->upsertEquipment('Chairs', 50, $custodians['mmercado@gmail.com'], [], ['Chair', 'Chairs'], false, null, true, true, true);
         $this->upsertEquipment('Monobloc Chairs', 600, $custodians['jsuralta@gmail.com'], [], ['Monobloc chair', 'Monobloc chairs']);
     }
 
@@ -78,7 +96,18 @@ class VenueAndEquipmentSeeder extends Seeder
         $venue->save();
     }
 
-    private function upsertEquipment(string $name, int $quantity, int $custodianId, array $alternateIds = [], array $aliases = []): void
+    private function upsertEquipment(
+        string $name,
+        int $quantity,
+        int $custodianId,
+        array $alternateIds = [],
+        array $aliases = [],
+        bool $forceSeedQuantity = false,
+        ?int $available = null,
+        bool $isActive = true,
+        bool $forceCustodian = false,
+        bool $forceTotalQuantity = false,
+    ): void
     {
         $canonicalName = match (mb_strtolower(trim($name))) {
             'wireless microphone' => 'Wireless Microphones',
@@ -98,21 +127,21 @@ class VenueAndEquipmentSeeder extends Seeder
         }
 
         if ($equipment->exists) {
-            if ($equipment->custodian_id === null) {
+            if ($forceCustodian || $equipment->custodian_id === null) {
                 $equipment->custodian_id = $custodianId;
             }
-            if ($equipment->quantity === null) {
+            if ($forceSeedQuantity || $forceTotalQuantity || $equipment->quantity === null) {
                 $equipment->quantity = $quantity;
             }
-            if ($equipment->quantity_available === null) {
-                $equipment->quantity_available = $quantity;
+            if ($forceSeedQuantity || $equipment->quantity_available === null) {
+                $equipment->quantity_available = $available ?? $quantity;
+            } elseif ($forceTotalQuantity) {
+                $equipment->quantity_available = min((int) $equipment->quantity_available, $quantity);
             }
             if (empty($equipment->authorized_custodian_ids) && ! empty($alternateIds)) {
                 $equipment->authorized_custodian_ids = $alternateIds;
             }
-            if (! $equipment->is_active) {
-                $equipment->is_active = true;
-            }
+            $equipment->is_active = $isActive;
             $equipment->save();
             return;
         }
@@ -120,10 +149,10 @@ class VenueAndEquipmentSeeder extends Seeder
         $equipment->fill([
             'name' => $canonicalName,
             'quantity' => $quantity,
-            'quantity_available' => $quantity,
+            'quantity_available' => $available ?? $quantity,
             'custodian_id' => $custodianId,
             'authorized_custodian_ids' => $alternateIds,
-            'is_active' => true,
+            'is_active' => $isActive,
         ]);
         $equipment->save();
     }

@@ -53,8 +53,14 @@
                 <div class="min-w-0 flex-1">
                     <p class="font-semibold text-slate-900">{{ $req->name_of_activity ?? 'Untitled activity' }}</p>
                     <p class="mt-1 text-sm text-slate-600">{{ $req->control_number }} <span aria-hidden="true">·</span> {{ $req->requester?->name ?? $req->requested_by }}</p>
-                    <p class="mt-1 text-sm text-slate-500">{{ $req->start_date ? $req->start_date->format('M d, Y') : 'Date not set' }} <span aria-hidden="true">·</span> {{ implode(', ', $req->getVenueNames()) ?: 'No venue listed' }}</p>
-                    <p class="mt-1 text-sm text-slate-500">Equipment: {{ implode(', ', $req->getEquipmentItems()) ?: 'None requested' }}</p>
+                    <div class="mt-1 space-y-1 text-sm text-slate-500">
+                        @forelse($req->getVenueScheduleSummaries() as $schedule)
+                            <p>{{ $schedule['venue'] }} <span aria-hidden="true">·</span> {{ $schedule['label'] }}</p>
+                        @empty
+                            <p>No venue schedule listed</p>
+                        @endforelse
+                    </div>
+                    <p class="mt-1 text-sm text-slate-500">Equipment: {{ implode(', ', $req->getVenueEquipmentLabels() ?: $req->getEquipmentItems()) ?: 'None requested' }}</p>
                 </div>
                 <div class="w-full sm:w-64 sm:shrink-0">
                     <x-request-status-badge :request="$req" :show-workflow-stage="true" />

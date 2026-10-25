@@ -135,7 +135,7 @@ class RequestDocumentUploadTest extends TestCase
         $response->assertSessionHasErrors('activity_proposal_file');
     }
 
-    public function test_external_requires_igp_receipt(): void
+    public function test_external_can_submit_before_igp_records_payment(): void
     {
         $this->actingAs($this->externalUser);
 
@@ -154,11 +154,15 @@ class RequestDocumentUploadTest extends TestCase
             // Missing igp_receipt_file
         ]);
 
-        $response->assertSessionHasErrors('igp_receipt_file');
-        $this->assertDatabaseCount('facility_requests', 0);
+        $response->assertRedirect(route('requestor.index', ['tab' => 'requests']));
+        $this->assertDatabaseHas('facility_requests', [
+            'requested_by_id' => $this->externalUser->id,
+            'igp_payment_status' => 'awaiting_availability',
+            'igp_receipt_number' => null,
+        ]);
     }
 
-    public function test_external_requires_both_documents(): void
+    public function test_external_signature_is_required_but_receipt_is_not_required_before_availability(): void
     {
         $this->actingAs($this->externalUser);
 
@@ -175,7 +179,7 @@ class RequestDocumentUploadTest extends TestCase
             'equipment_quantities' => ['Tables' => 5],
         ]);
 
-        $response->assertSessionHasErrors(['igp_receipt_file', 'e_signature_file']);
+        $response->assertSessionHasErrors('e_signature_file');
         $this->assertDatabaseCount('facility_requests', 0);
     }
 
@@ -319,7 +323,7 @@ class RequestDocumentUploadTest extends TestCase
         $this->get(route('request.proposal', ['id' => $request->id]))->assertNotFound();
     }
 
-    public function test_student_cannot_request_deactivated_aircon_for_balay_alumni(): void
+    public function test_student_can_request_aircon_for_balay_alumni(): void
     {
         $this->actingAs($this->studentUser);
 
@@ -339,9 +343,9 @@ class RequestDocumentUploadTest extends TestCase
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ]);
 
-        $response->assertRedirect()->assertSessionHasErrors('equipment');
+        $response->assertRedirect()->assertSessionHasNoErrors();
 
-        $this->assertDatabaseMissing('facility_requests', [
+        $this->assertDatabaseHas('facility_requests', [
             'requested_by_id' => $this->studentUser->id,
             'name_of_activity' => 'Balay Alumni Event',
         ]);
@@ -546,10 +550,10 @@ class RequestDocumentUploadTest extends TestCase
         $response->assertSessionHasErrors('activity_proposal_file');
     }
 
-    public function test_urgent_request_more_than_48_hours_away_shows_eligibility_error(): void
+    public function test_urgent_request_must_be_reserved_on_the_submission_day(): void
     {
         $this->actingAs($this->studentUser);
-        $requestDate = now()->addDays(4)->toDateString();
+        $requestDate = now()->addDay()->toDateString();
 
         $response = $this->post(route('requestor.store'), [
             'department' => 'Computer Science',
@@ -568,7 +572,7 @@ class RequestDocumentUploadTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors([
-            'is_emergency' => 'Emergency requests are only allowed within 48 hours of the reservation schedule.',
+            'is_emergency' => 'Urgent requests must be submitted and held entirely on the same local calendar day.',
         ]);
     }
 

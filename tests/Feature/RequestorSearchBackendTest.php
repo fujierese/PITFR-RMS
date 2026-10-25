@@ -19,9 +19,9 @@ class RequestorSearchBackendTest extends TestCase
         ]);
 
         foreach ([
-            ['name' => 'December Request', 'date' => '2026-12-01', 'time' => '09:00'],
-            ['name' => 'September Afternoon', 'date' => '2026-09-15', 'time' => '14:00'],
-            ['name' => 'September Morning', 'date' => '2026-09-15', 'time' => '08:00'],
+            ['name' => 'December Request', 'date' => now()->addDays(30)->toDateString(), 'time' => '09:00'],
+            ['name' => 'September Afternoon', 'date' => now()->addDays(2)->toDateString(), 'time' => '14:00'],
+            ['name' => 'September Morning', 'date' => now()->addDays(2)->toDateString(), 'time' => '08:00'],
         ] as $item) {
             FacilityRequest::create([
                 'requested_by_id' => $user->id,
@@ -63,8 +63,8 @@ class RequestorSearchBackendTest extends TestCase
             'status' => 'approved',
             'date_requested' => '2026-08-01',
             'expected_participants' => 50,
-            'start_date' => '2026-08-10',
-            'end_date' => '2026-08-10',
+            'start_date' => now()->addDays(2)->toDateString(),
+            'end_date' => now()->addDays(2)->toDateString(),
             'start_time' => '09:00',
             'end_time' => '12:00',
             'venue' => ['Main Gym'],

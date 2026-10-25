@@ -24,16 +24,23 @@ class CalendarController extends Controller
         $user = auth()->user();
         $role = $this->getUserRole($user);
 
-        $query = FacilityRequest::with(['user', 'requestVenues', 'requestEquipment', 'reservationSchedule']);
+        $query = FacilityRequest::with([
+            'user',
+            'requestVenues',
+            'requestEquipment',
+            'reservationSchedule',
+            'supplyOfficeReviewer',
+            'approvedBy',
+        ]);
         $includeCancelled = $user && $user->isAdmin() && $request->boolean('include_cancelled');
         if (! $includeCancelled) {
             $query->where('status', '!=', 'cancelled');
         }
 
-        if ($user && $user->isCustodian()) {
-            $requests = $this->getRequestsForCustodian($user);
-        } elseif ($user && $user->isAdmin()) {
+        if ($user && $user->isAdmin()) {
             $requests = $query->get();
+        } elseif ($user && $user->isCustodian()) {
+            $requests = $this->getRequestsForCustodian($user, false);
         } elseif ($user && $role === 'requestor') {
             $requests = $query->where(function ($calendarQuery) use ($user): void {
                 $calendarQuery->where('requested_by_id', $user->id)
@@ -44,28 +51,46 @@ class CalendarController extends Controller
             $requests = $query->whereIn('status', ['approved', 'pending'])->get();
         }
 
-        $events = $requests->map(function($req) use ($role, $user) {
-            if (
-                ! $user
-                || ($user->isRequestee() && $user->id !== $req->requested_by_id)
-            ) {
-                return $this->toPublicCalendarEvent($req);
-            }
+        $venueFilter = trim((string) $request->query('venue', ''));
+        if ($venueFilter !== '') {
+            $requests = $requests->filter(
+                fn (FacilityRequest $facilityRequest): bool => collect($facilityRequest->getVenueNames())
+                    ->contains(fn (string $name): bool => mb_strtolower(trim($name)) === mb_strtolower($venueFilter))
+            )->values();
+        }
 
-            $schedule = $req->reservationSchedule;
-            if ($schedule) {
-                $startDateTime = $schedule->start_datetime;
-                $endDateTime = $schedule->end_datetime;
-            } else {
-                $startDateTime = $req->start_date instanceof \Illuminate\Support\Carbon
-                    ? $req->start_date->copy()->setTimeFromTimeString($req->start_time ?? '00:00')
-                    : \Illuminate\Support\Carbon::parse((string) ($req->start_date ?? now()->toDateString()))->setTimeFromTimeString($req->start_time ?? '00:00');
+        $requests->loadMissing('supplyOfficeReviewer', 'approvedBy');
 
-                $endDate = $req->end_date ?? $req->start_date ?? now()->toDateString();
-                $endDateTime = $endDate instanceof \Illuminate\Support\Carbon
-                    ? $endDate->copy()->setTimeFromTimeString($req->end_time ?? $req->start_time ?? '00:00')
-                    : \Illuminate\Support\Carbon::parse((string) $endDate)->setTimeFromTimeString($req->end_time ?? $req->start_time ?? '00:00');
-            }
+        $events = $requests->flatMap(function($req) use ($role, $user, $venueFilter) {
+            $venueNames = $venueFilter !== '' ? [$venueFilter] : $req->getVenueNames();
+            $eventVenueNames = $venueNames ?: [null];
+
+            return collect($eventVenueNames)->map(function (?string $eventVenueName) use ($req, $role, $user): array {
+                if (
+                    ! $user
+                    || ($user->isRequestee() && $user->id !== $req->requested_by_id)
+                ) {
+                    return $this->toPublicCalendarEvent($req, $eventVenueName);
+                }
+
+                $venueNames = $eventVenueName !== null ? [$eventVenueName] : [];
+                if ($eventVenueName !== null) {
+                    $scheduleRange = $req->getVenueScheduleRange($eventVenueName);
+                    $startDateTime = $scheduleRange['start'];
+                    $endDateTime = $scheduleRange['end'];
+                } elseif ($schedule = $req->reservationSchedule) {
+                    $startDateTime = $schedule->start_datetime;
+                    $endDateTime = $schedule->end_datetime;
+                } else {
+                    $startDateTime = $req->start_date instanceof \Illuminate\Support\Carbon
+                        ? $req->start_date->copy()->setTimeFromTimeString($req->start_time ?? '00:00')
+                        : \Illuminate\Support\Carbon::parse((string) ($req->start_date ?? now()->toDateString()))->setTimeFromTimeString($req->start_time ?? '00:00');
+
+                    $endDate = $req->end_date ?? $req->start_date ?? now()->toDateString();
+                    $endDateTime = $endDate instanceof \Illuminate\Support\Carbon
+                        ? $endDate->copy()->setTimeFromTimeString($req->end_time ?? $req->start_time ?? '00:00')
+                        : \Illuminate\Support\Carbon::parse((string) $endDate)->setTimeFromTimeString($req->end_time ?? $req->start_time ?? '00:00');
+                }
 
             // Ensure times are Carbon instances in the app timezone (Asia/Manila)
             if (!$startDateTime instanceof \Illuminate\Support\Carbon) {
@@ -78,13 +103,16 @@ class CalendarController extends Controller
             // Calendar design requirement:
             // - explicit whole-day reservations are all-day events
             // - timed reservations must keep their exact start/end timestamps
-            $normalizedDuration = strtolower((string) ($req->reservation_duration ?? ''));
+            $normalizedDuration = strtolower((string) (
+                $eventVenueName !== null
+                    ? $req->getVenueSchedule($eventVenueName)['reservation_duration']
+                    : ($req->reservation_duration ?? '')
+            ));
             $isAllDay = in_array($normalizedDuration, ['whole_day', 'whole-day', 'whole day'], true);
 
             $eventStart = $startDateTime->copy()->format('Y-m-d\TH:i:s');
             $eventEnd = $endDateTime->copy()->format('Y-m-d\TH:i:s');
 
-            $venueNames = $req->getVenueNames();
             $requestor = $req->user ?: $req->requester;
             $department = trim((string) ($req->department ?: ($requestor?->department ?? '')));
             $organization = trim((string) ($requestor?->office_or_organization ?? ''));
@@ -99,14 +127,16 @@ class CalendarController extends Controller
             }
 
             // Determine event color based on role and status
-            $eventColor = $this->getEventColor($req, $role);
+            $eventColor = $this->getEventColor($req, $role, $venueNames);
 
             if ($isAllDay && $eventEnd) {
                 $eventEnd = $endDateTime->copy()->addDay()->startOfDay()->format('Y-m-d\TH:i:s');
             }
 
             return [
-                'id' => $req->id,
+                'id' => $eventVenueName !== null
+                    ? $req->id . '-' . substr(hash('sha256', mb_strtolower($eventVenueName)), 0, 8)
+                    : $req->id,
                 'title' => $req->name_of_activity . ' (' . $req->control_number . ')',
                 'start' => $eventStart,
                 'end' => $eventEnd,
@@ -124,6 +154,7 @@ class CalendarController extends Controller
                     'venue' => implode(', ', $venueNames),
                     'equipment' => $req->getEquipmentItems(),
                     'requestor' => $requestor ? $requestor->name : 'Unknown',
+                    'assistedBy' => $req->supplyOfficeReviewer?->name ?? $req->approvedBy?->name,
                     'controlNumber' => $req->control_number,
                     'time' => $startDateTime->format('H:i:s'),
                     'endTime' => $endDateTime->format('H:i:s'),
@@ -139,18 +170,23 @@ class CalendarController extends Controller
                     'facilityRequestId' => $req->id,
                     'requestUrl' => route('request.show', $req->id),
                     'isOwner' => $role === 'requestor' && $user->id === $req->requested_by_id,
-                ]
+                ],
             ];
+            });
         });
 
 
         return response()->json($events);
     }
 
-    private function toPublicCalendarEvent(FacilityRequest $request): array
+    private function toPublicCalendarEvent(FacilityRequest $request, ?string $venueName = null): array
     {
-        $schedule = $request->reservationSchedule;
-        if ($schedule) {
+        $venueNames = $venueName !== null ? [$venueName] : $request->getVenueNames();
+        if ($venueName !== null) {
+            $scheduleRange = $request->getVenueScheduleRange($venueName);
+            $startDateTime = $scheduleRange['start'];
+            $endDateTime = $scheduleRange['end'];
+        } elseif ($schedule = $request->reservationSchedule) {
             $startDateTime = $schedule->start_datetime;
             $endDateTime = $schedule->end_datetime;
         } else {
@@ -173,7 +209,10 @@ class CalendarController extends Controller
             ? $endDateTime
             : \Illuminate\Support\Carbon::parse($endDateTime);
 
-        $isAllDay = in_array(strtolower((string) ($request->reservation_duration ?? '')), ['whole_day', 'whole-day', 'whole day'], true);
+        $duration = $venueName !== null
+            ? $request->getVenueSchedule($venueName)['reservation_duration']
+            : ($request->reservation_duration ?? '');
+        $isAllDay = in_array(strtolower((string) $duration), ['whole_day', 'whole-day', 'whole day'], true);
         $eventEnd = $isAllDay ? $endDateTime->copy()->addDay()->startOfDay() : $endDateTime;
         $status = (string) $request->status;
         $statusColors = match ($status) {
@@ -181,24 +220,34 @@ class CalendarController extends Controller
             'pending' => ['background' => '#F59E0B', 'border' => '#D97706'],
             default => ['background' => '#6B7280', 'border' => '#4B5563'],
         };
+        $eventColor = $this->getVenueColor($venueNames) ?? $statusColors;
 
         return [
-            'id' => 'public-' . hash_hmac('sha256', (string) $request->getKey(), config('app.key')),
+            'id' => 'public-' . hash_hmac(
+                'sha256',
+                (string) $request->getKey() . '|' . (string) $venueName,
+                config('app.key')
+            ),
             'title' => (string) $request->name_of_activity,
             'start' => $startDateTime->format('Y-m-d\TH:i:s'),
             'end' => $eventEnd->format('Y-m-d\TH:i:s'),
             'allDay' => $isAllDay,
             'status' => $status,
-            'venue' => implode(', ', $request->getVenueNames()),
-            'backgroundColor' => $statusColors['background'],
-            'borderColor' => $statusColors['border'],
+            'venue' => implode(', ', $venueNames),
+            'backgroundColor' => $eventColor['background'],
+            'borderColor' => $eventColor['border'],
             'textColor' => '#FFFFFF',
         ];
     }
 
-    private function getEventColor($request, $role = null)
+    private function getEventColor($request, $role = null, array $venueNames = [])
     {
         $status = strtolower((string) ($request->status ?? ''));
+        $venueColor = $this->getVenueColor($venueNames);
+
+        if ($venueColor !== null) {
+            return $venueColor + ['text' => '#FFFFFF', 'className' => 'venue-event'];
+        }
 
         return match ($status) {
             'approved' => [
@@ -238,6 +287,37 @@ class CalendarController extends Controller
                 'className' => 'neutral-event',
             ],
         };
+    }
+
+    private function getVenueColor(array $venueNames): ?array
+    {
+        foreach ($venueNames as $venueName) {
+            $normalized = mb_strtolower(trim((string) $venueName));
+            $color = match ($normalized) {
+                'chic',
+                'chic conference hall',
+                'conference hall & interaction center (chic)',
+                'conference hall and interaction center (chic)' => ['background' => '#DC2626', 'border' => '#B91C1C'],
+                'balay alumni',
+                'balay alumni hall' => ['background' => '#2563EB', 'border' => '#1D4ED8'],
+                'gym',
+                'gymnasium',
+                'pit multi-purpose gymnasium',
+                'pit multi purpose gymnasium' => ['background' => '#92400E', 'border' => '#78350F'],
+                'covered court',
+                'covered courts',
+                'oval',
+                'oval ground',
+                'oval grounds' => ['background' => '#16A34A', 'border' => '#15803D'],
+                default => null,
+            };
+
+            if ($color !== null) {
+                return $color;
+            }
+        }
+
+        return null;
     }
 
     private function getUserRole($user)
@@ -285,6 +365,7 @@ class CalendarController extends Controller
             $personalRequests = FacilityRequest::with(['requestVenues', 'requestEquipment', 'reservationSchedule'])
                 ->where('requested_by_id', $user->id)
                 ->where('status', '!=', 'cancelled')
+                ->upcomingReservation()
                 ->orderByDesc('created_at')
                 ->get();
 
@@ -315,6 +396,7 @@ class CalendarController extends Controller
             $data['finalApprovalQueue'] = FacilityRequest::where('status', 'pending')
                 ->where('venue_status', 'approved')
                 ->where('equipment_status', 'approved')
+                ->upcomingReservation()
                 ->orderByDesc('created_at')
                 ->get();
             $data['finalSummary'] = [
@@ -326,13 +408,16 @@ class CalendarController extends Controller
         if ($role === 'admin') {
             $data['userCount'] = User::count();
             $data['totalRequests'] = FacilityRequest::count();
-            $data['latestRequests'] = FacilityRequest::orderByDesc('created_at')->limit(5)->get();
+            $data['latestRequests'] = FacilityRequest::upcomingReservation()
+                ->orderByDesc('created_at')
+                ->limit(5)
+                ->get();
         }
 
         return $data;
     }
 
-    private function getRequestsForCustodian($user)
+    private function getRequestsForCustodian($user, bool $upcomingOnly = true)
     {
         if (! $user) {
             return collect([]);
@@ -344,12 +429,17 @@ class CalendarController extends Controller
                 return collect([]);
             }
 
-            return FacilityRequest::where('status', '!=', 'cancelled')
+            $query = FacilityRequest::where('status', '!=', 'cancelled')
                 ->where(function ($query) use ($venueNames) {
                 foreach ($venueNames as $name) {
                     $query->orWhere(fn ($subQuery) => $subQuery->matchesVenue($name));
                 }
-            })->orderByDesc('created_at')->get();
+            });
+            if ($upcomingOnly) {
+                $query->upcomingReservation();
+            }
+
+            return $query->orderByDesc('created_at')->get();
         }
 
         if ($user->isCustodianEquipment()) {
@@ -358,12 +448,17 @@ class CalendarController extends Controller
                 return collect([]);
             }
 
-            return FacilityRequest::where('status', '!=', 'cancelled')
+            $query = FacilityRequest::where('status', '!=', 'cancelled')
                 ->where(function ($query) use ($equipmentNames) {
                 foreach ($equipmentNames as $name) {
                     $query->orWhere(fn ($subQuery) => $subQuery->matchesEquipment($name));
                 }
-            })->orderByDesc('created_at')->get();
+            });
+            if ($upcomingOnly) {
+                $query->upcomingReservation();
+            }
+
+            return $query->orderByDesc('created_at')->get();
         }
 
         return collect([]);

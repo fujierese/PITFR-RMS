@@ -487,6 +487,7 @@ class AuthController extends Controller
     {
         return match (true) {
             in_array($role, ['admin', 'facility_admin'], true) || $role === 'supply_office' => redirect()->route('supply-office.index'),
+            $role === 'igp' => redirect()->route('igp.index'),
             str_starts_with($role, 'custodian') => redirect()->route('custodian.index'),
             default => redirect()->route('requestor.index'),
         };

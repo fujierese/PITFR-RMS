@@ -14,15 +14,14 @@ class RoleMiddleware
         }
 
         $user = Auth::user();
-        $userRole = $user->role;
 
         // Check if user has any of the required roles
         foreach ($roles as $role) {
-            if ($role === 'custodian' && str_starts_with($userRole, 'custodian')) {
+            if ($role === 'custodian' && $user->isCustodian()) {
                 return $next($request);
             }
 
-            if ($role === 'admin' && $userRole === 'admin') {
+            if ($role === 'admin' && $user->hasRole('admin')) {
                 return $next($request);
             }
 
@@ -38,7 +37,7 @@ class RoleMiddleware
                 return $next($request);
             }
 
-            if ($userRole === $role) {
+            if ($user->hasRole($role)) {
                 return $next($request);
             }
         }

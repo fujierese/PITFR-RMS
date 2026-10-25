@@ -10,7 +10,21 @@ class RequestVenue extends Model
     use SoftDeletes;
     protected $table = 'request_venues';
 
-    protected $fillable = ['facility_request_id', 'venue_id', 'name'];
+    protected $fillable = [
+        'facility_request_id',
+        'venue_id',
+        'name',
+        'start_date',
+        'end_date',
+        'start_time',
+        'end_time',
+        'reservation_duration',
+    ];
+
+    protected $casts = [
+        'start_date' => 'date',
+        'end_date' => 'date',
+    ];
 
     public function facilityRequest()
     {
@@ -20,6 +34,11 @@ class RequestVenue extends Model
     public function venue()
     {
         return $this->belongsTo(Venue::class);
+    }
+
+    public function requestEquipment()
+    {
+        return $this->hasMany(RequestEquipment::class);
     }
 
     public function resolvedName(): string

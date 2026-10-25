@@ -70,38 +70,19 @@
     ];
     $requestDateLabel = $request->date_requested ? \Carbon\Carbon::parse($request->date_requested)->format('M j, Y') : 'N/A';
     $lastUpdatedLabel = $request->updated_at ? \Carbon\Carbon::parse($request->updated_at)->format('M j, Y \a\t g:i A') : null;
-    $scheduledStart = $request->reservationSchedule?->start_datetime ?? \Carbon\Carbon::parse($request->start_date . ' ' . ($request->start_time ?? '00:00'));
-    $scheduledEnd = $request->reservationSchedule?->end_datetime ?? \Carbon\Carbon::parse(($request->end_date ?? $request->start_date) . ' ' . ($request->end_time ?? $request->start_time ?? '00:00'));
-    $durationMinutes = abs($scheduledStart->diffInMinutes($scheduledEnd));
-    $durationHours = intdiv($durationMinutes, 60);
-    $durationRemainder = $durationMinutes % 60;
-    $reservationDurationLabel = ($durationHours ? $durationHours . ' hour' . ($durationHours === 1 ? '' : 's') : '')
-        . ($durationRemainder ? ($durationHours ? ' ' : '') . $durationRemainder . ' minute' . ($durationRemainder === 1 ? '' : 's') : '');
-    $reservationDurationLabel = $reservationDurationLabel ?: 'Not specified';
     $proposalFilename = $request->activity_proposal_file ?: $request->proposal_file;
     $proposalIsPdf = strtolower(pathinfo((string) $proposalFilename, PATHINFO_EXTENSION)) === 'pdf';
     $venueNames = $request->getVenueNames();
+    $venueScheduleSummaries = $request->getVenueScheduleSummaries();
     $equipmentItems = $request->getEquipmentItems();
+    $venueEquipmentAllocations = $request->getVenueEquipmentAllocations();
     $hasEquipment = !empty($equipmentItems);
     $equipmentQuantities = $request->getEquipmentQuantities();
-    $requestStartDate = $request->start_date?->copy()->setTimezone(config('app.timezone', 'Asia/Manila'));
-    $requestEndDate = ($request->end_date ?? $request->start_date)?->copy()->setTimezone(config('app.timezone', 'Asia/Manila'));
-    $reservationDateLabel = $requestStartDate && $requestEndDate && !$requestStartDate->isSameDay($requestEndDate)
-        ? $requestStartDate->format('M j, Y') . ' - ' . $requestEndDate->format('M j, Y')
-        : ($requestStartDate?->format('M j, Y') ?? 'Not specified');
-    $reservationTimeLabel = $scheduledStart->setTimezone(config('app.timezone', 'Asia/Manila'))->format('g:i A')
-        . ' - ' . $scheduledEnd->setTimezone(config('app.timezone', 'Asia/Manila'))->format('g:i A');
     $requestPriorityLabel = match (strtolower((string) ($request->priority ?? 'regular'))) {
         'institutional' => 'Institutional',
         'regular' => 'Regular',
         default => ucfirst(str_replace('_', ' ', (string) ($request->priority ?? 'regular'))),
     };
-    $wholeDayRequested = in_array(strtolower((string) ($request->reservation_duration ?? '')), ['whole_day', 'whole-day', 'whole day'], true)
-        || ($request->start_time === '00:00' && $request->end_time === '23:59');
-    if ($wholeDayRequested) {
-        $reservationTimeLabel = '12:00 AM - 11:59 PM';
-    }
-
     $approvalTone = 'amber';
     $approverTone = 'amber';
     $currentApprover = 'Venue Custodian';
@@ -303,14 +284,22 @@
         </div>
     </div>
 
-    @if($pendingRevision && $currentUser && $currentUser->id == $request->requested_by_id)
+    @if($pendingRevision && $currentUser && in_array((int) $currentUser->id, array_map('intval', $pendingRevision->affected_user_ids ?? [$request->requested_by_id]), true))
+        @php
+            $revisionResponses = $pendingRevision->responses ?? [];
+            $currentRevisionResponse = $revisionResponses[(string) $currentUser->id] ?? 'pending';
+            $currentUserMustRespond = $currentRevisionResponse === 'pending'
+                && ! ($pendingRevision->memorandum_priority
+                    && (int) $currentUser->id === (int) $request->requested_by_id
+                    && ! $currentUser->isCustodian());
+        @endphp
         <section style="margin-bottom: 24px !important;" class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm" aria-labelledby="schedule-proposal-title">
             <div class="flex items-start gap-3">
                 <div class="min-w-0 flex-1">
                     <h2 id="schedule-proposal-title" class="text-lg font-semibold text-amber-950">Schedule change proposed</h2>
-                    <p class="mt-1 text-sm text-amber-900">The Supply Office is asking to change your reservation. Your current schedule stays in place until you respond.</p>
+                    <p class="mt-1 text-sm text-amber-900">The Supply Office proposed a reservation change. The approved booking remains unchanged until required responses are received.</p>
                 </div>
-                <span class="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">Your response needed</span>
+                <span class="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">{{ $currentUserMustRespond ? 'Your response needed' : 'Notice' }}</span>
             </div>
             <dl class="mt-4 grid gap-3 rounded-2xl border border-amber-200 bg-white p-4 text-sm sm:grid-cols-2">
                 <div>
@@ -329,7 +318,17 @@
                     <dt class="font-medium text-slate-500">Reason from Supply Office</dt>
                     <dd class="mt-1 text-slate-900">{{ $pendingRevision->revision_reason }}</dd>
                 </div>
+                @if($pendingRevision->response_deadline_at)
+                    <div>
+                        <dt class="font-medium text-slate-500">Respond by</dt>
+                        <dd class="mt-1 text-slate-900">{{ $pendingRevision->response_deadline_at->format('M j, Y g:i A') }}</dd>
+                    </div>
+                @endif
             </dl>
+            @if($pendingRevision->memorandum_priority && (int) $currentUser->id === (int) $request->requested_by_id && ! $currentUser->isCustodian())
+                <p class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">This transfer is required by a memorandum. You are being informed of the destination and reason; requestor consent is not required.</p>
+            @endif
+            @if($currentUserMustRespond)
             @if($pendingRevision->conflict_detected && $pendingRevision->override_conflict)
                 <p class="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">The proposed schedule has a resource conflict that the Supply Office chose to override. Please consider this before accepting.</p>
             @endif
@@ -337,14 +336,17 @@
                 <form method="POST" action="{{ route('request.revision.respond', [$request, $pendingRevision]) }}" data-swal-confirm data-swal-title="Decline this schedule proposal?" data-swal-text="Your existing reservation schedule will remain unchanged." data-swal-confirm-text="Yes, decline" data-swal-confirm-color="#dc2626">
                     @csrf
                     <input type="hidden" name="response" value="decline">
-                    <button type="submit" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:w-auto">Decline proposal</button>
+                    <button type="submit" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:w-auto">{{ $currentUser->isCustodian() && (int) $currentUser->id !== (int) $request->requested_by_id ? 'Reject proposal' : 'Decline proposal' }}</button>
                 </form>
-                <form method="POST" action="{{ route('request.revision.respond', [$request, $pendingRevision]) }}" data-swal-confirm data-swal-title="Accept this schedule proposal?" data-swal-text="Accepting will update your reservation to the proposed schedule and notify the custodians." data-swal-confirm-text="Yes, accept schedule" data-swal-confirm-color="#059669">
+                <form method="POST" action="{{ route('request.revision.respond', [$request, $pendingRevision]) }}" data-swal-confirm data-swal-title="Confirm this schedule proposal?" data-swal-text="Your confirmation will be recorded. The booking changes only after all required responses." data-swal-confirm-text="Confirm schedule" data-swal-confirm-color="#059669">
                     @csrf
                     <input type="hidden" name="response" value="accept">
-                    <button type="submit" class="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 sm:w-auto">Accept proposed schedule</button>
+                    <button type="submit" class="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 sm:w-auto">{{ $currentUser->isCustodian() && (int) $currentUser->id !== (int) $request->requested_by_id ? 'Confirm as custodian' : 'Confirm proposed schedule' }}</button>
                 </form>
             </div>
+            @else
+                <p class="mt-3 text-sm text-slate-600">Your response has been recorded or is not required. The approved booking remains unchanged until required custodian confirmations are complete.</p>
+            @endif
         </section>
     @endif
 
@@ -410,19 +412,29 @@
             </div>
         @endif
 
-        @if(auth()->check() && auth()->user()->isRequestee() && auth()->id() === $request->requested_by_id && $request->status === 'pending')
+        @if(auth()->check() && auth()->user()->isRequestee() && auth()->id() === $request->requested_by_id && in_array($request->status, ['pending', 'approved'], true) && $request->start_date?->toDateString() > now()->toDateString())
             <div class="bg-white border border-emerald-200 rounded-3xl p-5 shadow-sm">
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900">Requestor Actions</h2>
-                        <p class="text-sm text-slate-500">View the full form and cancel your pending request before it enters the final approval stage.</p>
+                        <p class="text-sm text-slate-500">
+                            @if($request->status === 'approved')
+                                Request cancellation by the previous calendar day. Supply Office confirmation is required, and the booking remains active until confirmed.
+                            @else
+                                Cancel this pending request before it advances through approval.
+                            @endif
+                        </p>
                     </div>
-                    <form method="POST" action="{{ route('request.cancel', $request->id) }}" class="flex-shrink-0" data-swal-confirm data-swal-title="Cancel this request?" data-swal-text="This action will remove the pending request from the workflow." data-swal-confirm-text="Yes, cancel it" data-swal-confirm-color="#dc2626">
+                    @if($request->cancellation_status === 'pending')
+                        <span class="rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900">Cancellation awaiting Supply Office confirmation</span>
+                    @else
+                    <form method="POST" action="{{ route('request.cancel', $request->id) }}" class="flex-shrink-0" data-swal-confirm data-swal-title="{{ $request->status === 'approved' ? 'Request cancellation?' : 'Cancel this request?' }}" data-swal-text="{{ $request->status === 'approved' ? 'The Supply Office must confirm. Your approved reservation remains active until then.' : 'This action will cancel the pending request.' }}" data-swal-confirm-text="{{ $request->status === 'approved' ? 'Request cancellation' : 'Yes, cancel it' }}" data-swal-confirm-color="#dc2626">
                         @csrf
                         <button type="submit" class="inline-flex items-center gap-2 rounded-2xl bg-red-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-red-700">
-                            Cancel Request
+                            {{ $request->status === 'approved' ? 'Request cancellation' : 'Cancel Request' }}
                         </button>
                     </form>
+                    @endif
                 </div>
             </div>
         @endif
@@ -537,8 +549,15 @@
                         @endif
                     </div>
 
-                    @if($request->status === 'pending')
+                    @if(in_array($request->status, ['pending', 'approved'], true))
+                        @if($request->status === 'approved')
+                            <div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 mb-4">
+                                <p class="text-sm font-semibold text-emerald-900">Approval Complete</p>
+                                <p class="text-xs text-emerald-700">Only the Supply Office can propose changes to this approved reservation.</p>
+                            </div>
+                        @endif
                         <div class="grid gap-3 sm:grid-cols-2">
+                            @if($request->status === 'pending')
                             <form method="POST" action="{{ route('request.supply.final-approval', $request->id) }}" class="approval-form">
                                 @csrf
                                 <button type="button" onclick="handleFinalApproval(event)"
@@ -554,9 +573,9 @@
                                     Decline
                                 </button>
                             </form>
-
+                            @endif
                             <button type="button" id="open-reschedule-form" class="sm:col-span-2 lg:col-span-1 w-full inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-100">
-                                Reschedule Reservation
+                                {{ $request->status === 'approved' ? 'Propose Approved-Booking Change' : 'Reschedule Reservation' }}
                             </button>
                         </div>
 
@@ -564,12 +583,17 @@
                             @csrf
                             <div>
                                 <h3 class="font-semibold text-amber-950">Propose a schedule change</h3>
-                                <p class="mt-1 text-sm text-amber-900">The current schedule will stay active until the requestor accepts this proposal.</p>
+                                <p class="mt-1 text-sm text-amber-900">The existing booking remains active until all affected custodians and users confirm. Proposals expire after 24 hours if unanswered.</p>
                             </div>
                             <input type="hidden" name="facility_request_id" value="{{ $request->id }}">
-                            @foreach($venueNames as $venueName)
-                                <input type="hidden" name="venue[]" value="{{ $venueName }}">
-                            @endforeach
+                            <label class="block text-sm font-medium text-slate-700">Proposed venue(s)
+                                <select name="venue[]" multiple required class="mt-1 min-h-32 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
+                                    @foreach($venueOptions as $venueOption)
+                                        <option value="{{ $venueOption }}" @selected(in_array($venueOption, $venueNames, true))>{{ $venueOption }}</option>
+                                    @endforeach
+                                </select>
+                                <span class="mt-1 block text-xs text-slate-500">Use Ctrl or Command to select multiple venues.</span>
+                            </label>
                             @foreach($equipmentItems as $equipmentItem)
                                 <input type="hidden" name="equipment[]" value="{{ $equipmentItem }}">
                                 <input type="hidden" name="equipment_quantities[{{ $equipmentItem }}]" value="{{ $equipmentQuantities[$equipmentItem] ?? 1 }}">
@@ -591,25 +615,25 @@
                             <label class="block text-sm font-medium text-slate-700">Reason for rescheduling
                                 <textarea name="revision_reason" minlength="10" maxlength="1000" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2" placeholder="Explain why this reservation needs to be rescheduled."></textarea>
                             </label>
+                            <div class="rounded-xl border border-amber-200 bg-white p-3">
+                                <label class="flex items-start gap-2 text-sm font-medium text-slate-800">
+                                    <input type="checkbox" name="memorandum_priority" value="1" class="mt-0.5 rounded border-slate-300">
+                                    <span>Required transfer due to a CHED, OP, or OVP memorandum</span>
+                                </label>
+                                <select name="memorandum_office" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                                    <option value="">Select the issuing office if applicable</option>
+                                    <option value="CHED">CHED</option>
+                                    <option value="OP">Office of the President (OP)</option>
+                                    <option value="OVP">Office of the Vice President (OVP)</option>
+                                </select>
+                                <p class="mt-1 text-xs text-slate-500">The requestor will be informed but cannot veto a memorandum-priority transfer. Affected custodians must still confirm.</p>
+                            </div>
                             <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
                                 <button type="button" id="cancel-reschedule-form" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
                                 <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Send schedule proposal</button>
                             </div>
                             <p id="reschedule-feedback" class="hidden text-sm" role="status"></p>
                         </form>
-                    @elseif($request->status === 'approved')
-                        <div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 mb-4">
-                            <div class="flex items-center gap-3">
-                                <svg class="w-6 h-6 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                </svg>
-                                <div>
-                                    <p class="text-sm font-semibold text-emerald-900">Approval Complete</p>
-                                    <p class="text-xs text-emerald-700">This request was approved on {{ $request->approved_date ? \Carbon\Carbon::parse($request->approved_date)->format('M j, Y \a\t g:i A') : 'N/A' }}</p>
-                                </div>
-                            </div>
-                        </div>
-
                     @elseif($request->status === 'rejected')
                         <div class="rounded-2xl bg-red-50 border border-red-200 p-4">
                             <div class="flex items-center gap-3">
@@ -720,13 +744,17 @@
                     <p class="mt-2 text-sm font-semibold text-slate-900">{{ implode(', ', $venueNames) ?: '—' }}</p>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Reservation Dates</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">{{ $reservationDateLabel }}</p>
-                    <p class="mt-1 text-xs text-slate-500">{{ $reservationTimeLabel }}</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Reservation Duration</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">{{ $reservationDurationLabel }}</p>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Venue Schedules</p>
+                    <div class="mt-2 space-y-2">
+                        @forelse($venueScheduleSummaries as $schedule)
+                            <p class="text-sm text-slate-700">
+                                <span class="font-semibold text-slate-900">{{ $schedule['venue'] }}</span>
+                                <span class="block text-xs text-slate-500">{{ $schedule['label'] }} · {{ $schedule['duration'] }}</span>
+                            </p>
+                        @empty
+                            <p class="text-sm text-slate-500">Not specified</p>
+                        @endforelse
+                    </div>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-white p-4">
                     <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Expected Participants</p>
@@ -780,7 +808,24 @@
             Equipment
         </div>
         <div class="mt-5 grid gap-4 md:grid-cols-2">
-            @if(!empty($equipmentItems))
+            @if(!empty($venueEquipmentAllocations))
+                @foreach($venueEquipmentAllocations as $venueName => $venueEquipment)
+                    @foreach($venueEquipment as $equipmentName => $quantity)
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $venueName }}</p>
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="rounded-full bg-violet-100 p-2 text-violet-700">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1h2a2 2 0 012 2v2h1a2 2 0 012 2v2a2 2 0 01-2 2h-1v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2H9a2 2 0 01-2-2v-2a2 2 0 012-2h1V7a2 2 0 012-2h2z"/></svg>
+                                    </div>
+                                    <p class="text-sm font-semibold text-slate-900">{{ $equipmentName }}</p>
+                                </div>
+                                <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">Qty {{ $quantity }}</span>
+                            </div>
+                        </div>
+                    @endforeach
+                @endforeach
+            @elseif(!empty($equipmentItems))
                 @foreach($equipmentItems as $e)
                     <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <div class="flex items-center justify-between gap-3">
@@ -887,6 +932,9 @@
                         </div>
                         @if($history->detail)
                             <p class="mt-1 text-sm text-slate-600">{{ $history->detail }}</p>
+                        @endif
+                        @if($history->user)
+                            <p class="mt-1 text-xs font-medium text-slate-500">Recorded by {{ $history->user->name }}</p>
                         @endif
                     </div>
                 </div>

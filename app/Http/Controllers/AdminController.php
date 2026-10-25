@@ -26,6 +26,20 @@ class AdminController extends Controller
 {
     use ManagesAccountSettings;
 
+    private const STAFF_DEPARTMENTS = [
+        'Office of the President',
+        'Office of the Vice President for Academic Affairs',
+        'Office of the Vice President for Research, Innovation, and Extension Services',
+        'Human Resource Office (HR)',
+        'Accounting Office',
+        'Office of Student Development and Services',
+        'High School Office',
+        'Supply Office',
+        'Clinic',
+        'Auxiliary and General Services (AGS)',
+        'IGP Office',
+    ];
+
     public function index(Request $request)
     {
         return app(SupplyOfficeController::class)->index($request);
@@ -51,17 +65,19 @@ class AdminController extends Controller
     {
         $search = trim((string) $request->query('search', ''));
         $accountType = (string) $request->query('account_type', '');
-        $accountTypes = ['student', 'faculty', 'staff', 'outsider', 'custodian_venue', 'custodian_equipment'];
+        $accountTypes = ['student', 'faculty', 'staff', 'outsider', 'igp', 'custodian_venue', 'custodian_equipment'];
         if (!in_array($accountType, $accountTypes, true)) {
             $accountType = '';
         }
 
         $query = User::query()
             ->with('academicProgram')
-            ->whereNotIn('role', ['admin', 'supply_office'])
             ->orderBy('surname')
             ->orderBy('first_name')
             ->orderBy('middle_name');
+        if ($request->routeIs('admin.users')) {
+            $query->whereNotIn('role', ['admin', 'supply_office']);
+        }
         if ($search !== '') {
             $term = '%' . mb_strtolower($search) . '%';
             $query->where(function ($innerQuery) use ($term) {
@@ -83,7 +99,9 @@ class AdminController extends Controller
             });
         }
         if (str_starts_with($accountType, 'custodian_')) {
-            $query->where('role', $accountType === 'custodian_venue' ? 'custodian-venue' : 'custodian-equipment');
+            $query->withAnyRole([$accountType === 'custodian_venue' ? 'custodian-venue' : 'custodian-equipment']);
+        } elseif ($accountType === 'igp') {
+            $query->withAnyRole(['igp']);
         } elseif ($accountType !== '') {
             $query->where('requestor_type', $accountType);
         }
@@ -98,6 +116,7 @@ class AdminController extends Controller
             'colleges' => College::with('departments')->orderBy('name')->get(),
             'academicPrograms' => AcademicProgram::query()->orderBy('name')->get(),
             'studentOrganizations' => StudentOrganization::query()->where('is_active', true)->orderBy('name')->get(),
+            'staffDepartments' => self::STAFF_DEPARTMENTS,
             'searchQuery' => $search,
             'accountTypeFilter' => $accountType,
         ]);
@@ -203,8 +222,10 @@ class AdminController extends Controller
             'student' => ['role' => 'requestor', 'requestor_type' => 'student'],
             'faculty' => ['role' => 'requestor', 'requestor_type' => 'faculty'],
             'staff' => ['role' => 'requestor', 'requestor_type' => 'staff'],
+            'supply_office' => ['role' => 'supply_office', 'requestor_type' => null],
             'custodian_venue' => ['role' => 'custodian-venue', 'requestor_type' => null],
             'custodian_equipment' => ['role' => 'custodian-equipment', 'requestor_type' => null],
+            'igp' => ['role' => 'igp', 'requestor_type' => null],
             default => throw new \InvalidArgumentException('Unsupported admin-created account type.'),
         };
     }
@@ -213,17 +234,21 @@ class AdminController extends Controller
     {
         $isStudentSubmission = $request->input('account_type') === 'student';
         $isStaffSubmission = $request->input('account_type') === 'staff';
+        $isSupplyOfficeSubmission = $request->input('account_type') === 'supply_office';
         $isVenueCustodianSubmission = $request->input('account_type') === 'custodian_venue';
         $isEquipmentCustodianSubmission = $request->input('account_type') === 'custodian_equipment';
+        $isIgpSubmission = $request->input('account_type') === 'igp';
         $requiresPersonName = $isStudentSubmission
             || $isStaffSubmission
+            || $isSupplyOfficeSubmission
             || $isVenueCustodianSubmission
-            || $isEquipmentCustodianSubmission;
+            || $isEquipmentCustodianSubmission
+            || $isIgpSubmission;
         $isCreatingStudentOrganization = $isStudentSubmission
             && $request->input('student_organization_id') === '__new__';
 
         $validated = $request->validate([
-            'account_type' => ['required', 'in:student,faculty,staff,custodian_venue,custodian_equipment'],
+            'account_type' => ['required', 'in:student,faculty,staff,supply_office,custodian_venue,custodian_equipment,igp'],
             'surname' => [$requiresPersonName ? 'required' : 'nullable', 'string', 'max:100'],
             'first_name' => [$requiresPersonName ? 'required' : 'nullable', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
@@ -236,6 +261,7 @@ class AdminController extends Controller
             'grade_level' => ['nullable', Rule::in(['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'])],
             'school_id_number' => ['required_if:account_type,student', 'nullable', 'string', 'regex:/^\d{2}-\d{4}-\d{3}$/'],
             'faculty_id' => ['required_if:account_type,faculty', 'nullable', 'string', 'max:50', 'unique:users,faculty_id'],
+            'staff_id' => ['nullable', 'string', 'max:50', 'unique:users,staff_id'],
             'faculty_adviser' => ['nullable', 'in:yes,no'],
             'position' => ['nullable', 'string', 'max:100'],
             'student_organization_id' => $isCreatingStudentOrganization
@@ -253,7 +279,12 @@ class AdminController extends Controller
             ],
             'new_student_organization_acronym' => ['nullable', 'string', 'max:50'],
             'contact_number' => ['nullable', 'string', 'max:50'],
-            'office_or_organization' => ['nullable', 'string', 'max:191'],
+            'office_or_organization' => $isSupplyOfficeSubmission
+                ? ['required', Rule::in(['Supply Office'])]
+                : ($isStaffSubmission || $isIgpSubmission
+                ? ['nullable', Rule::in([...self::STAFF_DEPARTMENTS, 'other'])]
+                : ['nullable', 'string', 'max:191']),
+            'other_office_name' => ['required_if:office_or_organization,other', 'nullable', 'string', 'max:191'],
         ], [
             'school_id_number.regex' => 'Student ID must be in format: 23-0098-635 (2 digits - 4 digits - 3 digits).',
         ]);
@@ -343,7 +374,16 @@ class AdminController extends Controller
 
         $isStudent = $validated['account_type'] === 'student';
         $isStaff = $validated['account_type'] === 'staff';
+        $isSupplyOffice = $validated['account_type'] === 'supply_office';
+        $isIgp = $validated['account_type'] === 'igp';
         $isAcademic = in_array($validated['account_type'], ['student', 'faculty'], true);
+        $staffDepartment = $isSupplyOffice
+            ? 'Supply Office'
+            : ($isStaff || $isIgp
+            ? (($validated['office_or_organization'] ?? null) === 'other'
+                ? trim((string) ($validated['other_office_name'] ?? ''))
+                : ($validated['office_or_organization'] ?? null))
+            : null);
         $position = trim((string) ($validated['position'] ?? ''));
         $actor = Auth::user();
 
@@ -355,7 +395,10 @@ class AdminController extends Controller
             $department,
             $isStudent,
             $isStaff,
+            $isSupplyOffice,
+            $isIgp,
             $isAcademic,
+            $staffDepartment,
             $isHighSchoolStudent,
             $selectedCollege,
             $facultyAdviser,
@@ -386,9 +429,14 @@ class AdminController extends Controller
                 'requestor_type' => $accountMapping['requestor_type'],
                 'school_id_number' => $isStudent ? $validated['school_id_number'] : null,
                 'faculty_id' => $validated['account_type'] === 'faculty' ? $validated['faculty_id'] : null,
+                'staff_id' => in_array($validated['account_type'], ['staff', 'supply_office', 'igp', 'custodian_venue', 'custodian_equipment'], true)
+                    ? ($validated['staff_id'] ?? null)
+                    : null,
                 'position' => match ($validated['account_type']) {
                     'custodian_venue' => 'Venue Custodian',
                     'custodian_equipment' => 'Equipment Custodian',
+                    'supply_office' => $position !== '' ? $position : 'Supply Office Staff',
+                    'igp' => 'IGP Coordinator',
                     default => $position !== '' ? $position : match ($validated['account_type']) {
                         'student' => 'Student Representative',
                         'faculty' => 'Faculty',
@@ -396,11 +444,13 @@ class AdminController extends Controller
                         default => null,
                     },
                 },
-                'office_or_organization' => $isStaff
-                    ? (trim((string) ($validated['office_or_organization'] ?? '')) ?: null)
+                'office_or_organization' => $isStaff || $isSupplyOffice || $isIgp
+                    ? ($staffDepartment !== '' ? $staffDepartment : null)
                     : (! $isStudent && ($validated['office_or_organization'] ?? null)),
                 'contact_number' => $validated['contact_number'] ?? null,
-                'department' => $isHighSchoolStudent ? $selectedCollege->name : ($isAcademic ? $department?->name : null),
+                'department' => $isHighSchoolStudent
+                    ? $selectedCollege->name
+                    : ($isAcademic ? $department?->name : ($isStaff || $isSupplyOffice || $isIgp ? ($staffDepartment !== '' ? $staffDepartment : null) : null)),
                 'college_id' => $isAcademic ? $validated['college_id'] : null,
                 'department_id' => $isAcademic ? $validated['department_id'] : null,
                 'academic_program_id' => $isStudent ? ($validated['academic_program_id'] ?? null) : null,
@@ -461,6 +511,10 @@ class AdminController extends Controller
         if ($currentUser && $currentUser->id === $user->id) {
             return redirect()->route('admin.users')->with('error', 'You cannot change your own admin account.');
         }
+        if ($request->routeIs('admin.users.update')
+            && in_array($user->role, ['admin', 'facility_admin', 'supply_office'], true)) {
+            return redirect()->route('admin.users')->with('error', 'Privileged accounts can only receive secondary role assignments through Supply Office user management.');
+        }
 
         $editableRoles = ['requestor', 'custodian-venue', 'custodian-equipment', 'admin', 'supply_office', $user->role];
 
@@ -472,6 +526,9 @@ class AdminController extends Controller
             'suffix' => ['nullable', 'string', 'max:50'],
             'username' => ['required', 'string', 'max:255', 'unique:users,username,' . $user->id],
             'role' => ['required', 'in:' . implode(',', $editableRoles)],
+            'additional_roles_present' => ['nullable', 'boolean'],
+            'additional_roles' => ['nullable', 'array'],
+            'additional_roles.*' => ['string', 'distinct', 'in:custodian-venue,custodian-equipment'],
             'is_active' => ['sometimes', 'boolean'],
             'department' => ['nullable', 'string', 'max:255'],
             'requestor_type' => ['nullable', 'in:student,faculty,staff,outsider'],
@@ -479,6 +536,7 @@ class AdminController extends Controller
             'department_id' => ['nullable', 'exists:departments,id'],
             'school_id_number' => ['nullable', 'string', 'max:255'],
             'faculty_id' => ['nullable', 'string', 'max:50', 'unique:users,faculty_id,' . $user->id],
+            'staff_id' => ['nullable', 'string', 'max:50', 'unique:users,staff_id,' . $user->id],
             'faculty_adviser' => ['nullable', 'in:yes,no'],
             'position' => ['nullable', 'string', 'max:100'],
             'password' => ['nullable', 'string', 'min:12', 'confirmed'],
@@ -489,6 +547,9 @@ class AdminController extends Controller
 
         $previousRole = $user->role;
         $newRole = $validated['role'];
+        $newAdditionalRoles = $request->has('additional_roles_present')
+            ? array_values(array_diff(array_unique($validated['additional_roles'] ?? []), [$newRole]))
+            : ($user->additional_roles ?? []);
         $newRequestorType = match ($newRole) {
             'requestor' => $validated['requestor_type'] ?? $user->requestor_type,
             'student', 'faculty', 'outsider' => $newRole,
@@ -531,12 +592,21 @@ class AdminController extends Controller
             return redirect()->route('admin.users')->with('error', 'Privileged administrator roles and account status cannot be changed through user management.');
         }
 
-        if ($currentUser && in_array($currentUser->role, $adminRoles, true) && in_array($newRole, $adminRoles, true)) {
-            return redirect()->route('admin.users')->with('error', 'Admin role assignment is restricted. Please keep the existing privilege model unchanged.');
+        if ($currentUser
+            && in_array($currentUser->role, $adminRoles, true)
+            && ! in_array($previousRole, $adminRoles, true)
+            && in_array($newRole, $adminRoles, true)) {
+            if (! ($newRole === 'supply_office' && $currentUser->role === 'admin')) {
+                return redirect()->route('admin.users')->with('error', 'Admin role assignment is restricted. Please keep the existing privilege model unchanged.');
+            }
         }
 
-        $previouslyCustodian = in_array($previousRole, ['custodian', 'custodian-venue', 'custodian-equipment'], true);
-        $newlyCustodian = in_array($newRole, ['custodian', 'custodian-venue', 'custodian-equipment'], true);
+        $previouslyCustodian = $user->isCustodian();
+        $newlyCustodian = in_array($newRole, ['custodian', 'custodian-venue', 'custodian-equipment'], true)
+            || collect($newAdditionalRoles)->contains(fn (string $role): bool => str_starts_with($role, 'custodian'));
+        $isStaffIdAccount = $newRequestorType === 'staff'
+            || in_array($newRole, ['supply_office', 'igp', 'custodian', 'custodian-venue', 'custodian-equipment'], true)
+            || $newlyCustodian;
 
         if ($previouslyCustodian && ! $newlyCustodian) {
             $venueAssignments = $user->venues()->where('is_active', true)->pluck('name')->filter()->all();
@@ -553,12 +623,13 @@ class AdminController extends Controller
             'name' => $user->name,
             'username' => $user->username,
             'role' => $user->role,
+            'additional_roles' => $user->additional_roles ?? [],
             'requestor_type' => $user->requestor_type,
             'is_active' => $user->is_active,
         ];
 
         $passwordChanged = ! empty($validated['password']);
-        DB::transaction(function () use ($user, $nameToStore, $validated, $newRole, $newRequestorType, $newIsActive, $department, $passwordChanged, $facultyAdviser, $selectedOrganizationId, $currentUser, $oldValues): void {
+        DB::transaction(function () use ($user, $nameToStore, $validated, $newRole, $newAdditionalRoles, $newRequestorType, $newIsActive, $department, $passwordChanged, $facultyAdviser, $selectedOrganizationId, $currentUser, $oldValues, $isStaffIdAccount): void {
             $user->fill([
                 'name' => $nameToStore,
                 'surname' => trim((string) ($validated['surname'] ?? '')) ?: null,
@@ -573,12 +644,18 @@ class AdminController extends Controller
                 'school_id_number' => $newRequestorType === 'student' ? ($validated['school_id_number'] ?? null) : null,
                 'college_id' => in_array($newRequestorType, ['student', 'faculty'], true) ? ($validated['college_id'] ?? null) : null,
                 'department_id' => in_array($newRequestorType, ['student', 'faculty'], true) ? ($validated['department_id'] ?? null) : null,
-                'department' => in_array($newRequestorType, ['student', 'faculty'], true) ? ($department?->name ?? $validated['department'] ?? null) : null,
+                'department' => $newRole === 'supply_office'
+                    ? 'Supply Office'
+                    : (in_array($newRequestorType, ['student', 'faculty'], true) ? ($department?->name ?? $validated['department'] ?? null) : null),
                 'faculty_id' => $newRequestorType === 'faculty' ? ($validated['faculty_id'] ?? null) : null,
+                'staff_id' => $isStaffIdAccount ? ($validated['staff_id'] ?? null) : null,
                 'position' => $validated['position'] ?? null,
-                'office_or_organization' => in_array($newRequestorType, ['staff', 'outsider'], true) ? ($validated['office_or_organization'] ?? null) : null,
+                'office_or_organization' => $newRole === 'supply_office'
+                    ? 'Supply Office'
+                    : (in_array($newRequestorType, ['staff', 'outsider'], true) ? ($validated['office_or_organization'] ?? null) : null),
                 'contact_number' => $validated['contact_number'] ?? null,
             ]);
+            $user->additional_roles = $newAdditionalRoles;
             if ($passwordChanged) {
                 $user->password = Hash::make($validated['password']);
             }
@@ -608,6 +685,7 @@ class AdminController extends Controller
                 'name' => $user->name,
                 'username' => $user->username,
                 'role' => $user->role,
+                'additional_roles' => $user->additional_roles ?? [],
                 'requestor_type' => $user->requestor_type,
                 'is_active' => $user->is_active,
             ]);

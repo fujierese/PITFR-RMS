@@ -10,7 +10,7 @@ class RequestEquipment extends Model
     use SoftDeletes;
     protected $table = 'request_equipment';
 
-    protected $fillable = ['facility_request_id', 'equipment_id', 'name', 'quantity'];
+    protected $fillable = ['facility_request_id', 'request_venue_id', 'equipment_id', 'name', 'quantity'];
 
     protected $casts = [
         'quantity' => 'integer',
@@ -24,6 +24,11 @@ class RequestEquipment extends Model
     public function equipment()
     {
         return $this->belongsTo(Equipment::class);
+    }
+
+    public function requestVenue()
+    {
+        return $this->belongsTo(RequestVenue::class);
     }
 
     public function resolvedName(): string

@@ -5,7 +5,7 @@
 @php
     $startTimeValue = old('start_time', $request->start_time);
     $endTimeValue = old('end_time', $request->end_time);
-    $isWholeDay = old('reservation_duration') === 'whole_day'
+    $isWholeDay = old('reservation_duration', $request->reservation_duration) === 'whole_day'
         || (($startTimeValue === '00:00' || $startTimeValue === '00:00:00') && ($endTimeValue === '23:59' || $endTimeValue === '23:59:00'));
     $isNeedsReschedule = $request->status === 'needs_reschedule'
         || $request->venue_status === 'needs_reschedule'
@@ -72,10 +72,10 @@
                             <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
                                 <input type="radio" name="reservation_duration" value="whole_day" @checked($isWholeDay)>
                                 <span>Whole Day</span>
-                                <span class="text-xs text-slate-500">12:00 AM – 11:59 PM</span>
+                                <span class="text-xs text-slate-500">8:00 AM – 5:00 PM</span>
                             </label>
                         </div>
-                        <p class="reservation-duration-helper mt-3 text-xs text-emerald-700" aria-live="polite">Whole Day uses 12:00 AM–11:59 PM for each selected date.</p>
+                        <p class="reservation-duration-helper mt-3 text-xs text-emerald-700" aria-live="polite">Whole Day uses 8:00 AM–5:00 PM for each selected date.</p>
                     </div>
                     <div>
                         <label class="text-sm font-medium text-slate-700">Start Time</label>
@@ -120,14 +120,18 @@
                                 } else {
                                     $equipmentItems = collect([
                                         ['name' => 'Sound System', 'quantity' => 1, 'quantity_available' => 1],
-                                        ['name' => 'Wireless Microphones', 'quantity' => 1, 'quantity_available' => 1],
-                                        ['name' => 'Non-Wireless Microphones', 'quantity' => 1, 'quantity_available' => 1],
+                                        ['name' => 'Wireless Microphones', 'quantity' => 3, 'quantity_available' => 3],
+                                        ['name' => 'Non-Wireless Microphones', 'quantity' => 3, 'quantity_available' => 3],
                                         ['name' => 'Canopies', 'quantity' => 10, 'quantity_available' => 10],
                                         ['name' => 'Industrial Fans', 'quantity' => 6, 'quantity_available' => 6],
                                         ['name' => 'Iwata Cooler Fans', 'quantity' => 4, 'quantity_available' => 4],
                                         ['name' => 'Tables', 'quantity' => 10, 'quantity_available' => 10],
                                         ['name' => 'Chairs', 'quantity' => 50, 'quantity_available' => 50],
                                         ['name' => 'Monobloc Chairs', 'quantity' => 600, 'quantity_available' => 600],
+                                        ['name' => 'Lights', 'quantity' => 1, 'quantity_available' => 1],
+                                        ['name' => 'Podium', 'quantity' => 1, 'quantity_available' => 1],
+                                        ['name' => 'Television (CHIC)', 'quantity' => 1, 'quantity_available' => 1],
+                                        ['name' => 'HDMI', 'quantity' => 1, 'quantity_available' => 1],
                                     ]);
                                 }
                             @endphp

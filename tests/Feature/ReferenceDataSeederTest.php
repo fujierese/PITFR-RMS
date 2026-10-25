@@ -19,6 +19,7 @@ class ReferenceDataSeederTest extends TestCase
     {
         $this->seed(UserSeeder::class);
         $this->seed(VenueAndEquipmentSeeder::class);
+        Equipment::where('name', 'Wireless Microphones')->update(['quantity_available' => 2]);
         $this->seed(VenueAndEquipmentSeeder::class);
 
         $this->assertSame(1, Venue::where('name', 'Gymnasium')->count());
@@ -29,18 +30,21 @@ class ReferenceDataSeederTest extends TestCase
         $this->assertSame('Ritchard Villas', User::where('username', 'jrvillas@gmail.com')->value('name'));
 
         foreach ([
-            'Sound System' => 1,
-            'Wireless Microphones' => 1,
-            'Non-Wireless Microphones' => 1,
+            'Sound System' => 3,
+            'Wireless Microphones' => 3,
+            'Non-Wireless Microphones' => 3,
             'Iwata Cooler Fans' => 4,
             'Industrial Fans' => 6,
             'Tables' => 10,
+            'Chairs' => 50,
+            'Aircon' => 1,
             'Canopies' => 10,
             'Monobloc Chairs' => 600,
         ] as $name => $quantity) {
             $this->assertSame(1, Equipment::where('name', $name)->count());
             $this->assertSame($quantity, Equipment::where('name', $name)->value('quantity'));
-            $this->assertSame($quantity, Equipment::where('name', $name)->value('quantity_available'));
+            $expectedAvailable = $name === 'Wireless Microphones' ? 2 : $quantity;
+            $this->assertSame($expectedAvailable, Equipment::where('name', $name)->value('quantity_available'));
         }
 
         $this->assertSame(
@@ -51,6 +55,14 @@ class ReferenceDataSeederTest extends TestCase
             User::where('username', 'lalmerino@gmail.com')->value('id'),
             Equipment::where('name', 'Iwata Cooler Fans')->value('custodian_id'),
         );
+        $this->assertSame(
+            User::where('username', 'lalmerino@gmail.com')->value('id'),
+            Equipment::where('name', 'Aircon')->value('custodian_id'),
+        );
+        $this->assertSame(
+            User::where('username', 'mmercado@gmail.com')->value('id'),
+            Equipment::where('name', 'Chairs')->value('custodian_id'),
+        );
         $this->assertContains(
             User::where('username', 'jrvillas@gmail.com')->value('id'),
             Equipment::where('name', 'Iwata Cooler Fans')->first()->getAuthorizedCustodianIds(),
@@ -58,15 +70,27 @@ class ReferenceDataSeederTest extends TestCase
         $this->assertContains('Monobloc Chairs', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Balay Alumni'));
         $this->assertSame([
             'Sound System',
-            'Wireless Microphones',
-            'Non-Wireless Microphones',
-            'Tables',
+            'Aircon',
             'Chairs',
         ], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Balay Alumni'));
-        $this->assertSame([], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Conference Hall & Interaction Center (CHIC)'));
+        $this->assertSame([
+            'Sound System',
+            'Iwata Cooler Fans',
+            'Podium',
+            'HDMI',
+            'Television (CHIC)',
+        ], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Conference Hall & Interaction Center (CHIC)'));
+        $this->assertSame([
+            'Balay Alumni',
+            'Conference Hall & Interaction Center (CHIC)',
+        ], \App\Services\VenueEquipmentPolicy::getVenuesWithDefaultEquipment());
         $this->assertSame([], \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Gymnasium'));
+        $this->assertSame(['Balay Alumni'], \App\Services\VenueEquipmentPolicy::getVenueRestrictedEquipment()['Aircon']);
+        $this->assertNotContains('Wireless Microphones', \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Balay Alumni'));
+        $this->assertNotContains('Non-Wireless Microphones', \App\Services\VenueEquipmentPolicy::getDefaultEquipment('Conference Hall & Interaction Center (CHIC)'));
         $this->assertNotContains('Aircon', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Balay Alumni'));
-        $this->assertNotContains('Aircon', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Conference Hall & Interaction Center (CHIC)'));
+        $this->assertContains('Aircon', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Conference Hall & Interaction Center (CHIC)'));
+        $this->assertContains('Aircon', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Gymnasium'));
         $this->assertNotContains('Iwata Cooler Fans', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Balay Alumni'));
         $this->assertNotContains('Iwata Cooler Fans', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Bahay Alumni'));
         $this->assertNotContains('Iwata Cooler Fans', \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Conference Hall & Interaction Center (CHIC)'));
@@ -74,6 +98,45 @@ class ReferenceDataSeederTest extends TestCase
         $this->assertSame(
             User::where('username', 'jsuralta@gmail.com')->value('id'),
             Equipment::where('name', 'Canopies')->value('custodian_id'),
+        );
+        $this->assertSame(
+            User::where('username', 'rguillemer@gmail.com')->value('id'),
+            Equipment::where('name', 'Lights')->value('custodian_id'),
+        );
+        $this->assertSame(
+            User::where('username', 'asala@gmail.com')->value('id'),
+            Equipment::where('name', 'Podium')->value('custodian_id'),
+        );
+        $this->assertSame(
+            User::where('username', 'asala@gmail.com')->value('id'),
+            Equipment::where('name', 'HDMI')->value('custodian_id'),
+        );
+        $this->assertSame(
+            User::where('username', 'asala@gmail.com')->value('id'),
+            Equipment::where('name', 'Television (CHIC)')->value('custodian_id'),
+        );
+        $this->assertSame(
+            User::where('username', 'mmercado@gmail.com')->value('id'),
+            Equipment::where('name', 'Television (Balay Alumni)')->value('custodian_id'),
+        );
+        $this->assertSame(1, Equipment::where('name', 'Television (CHIC)')->value('quantity_available'));
+        $this->assertSame(0, Equipment::where('name', 'Television (Balay Alumni)')->value('quantity_available'));
+        $this->assertFalse((bool) Equipment::where('name', 'Television (Balay Alumni)')->value('is_active'));
+        $this->assertNotContains(
+            'Television (Balay Alumni)',
+            \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Balay Alumni'),
+        );
+        $this->assertNotContains(
+            'Television (CHIC)',
+            \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Balay Alumni'),
+        );
+        $this->assertNotContains(
+            'Television (CHIC)',
+            \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Gymnasium'),
+        );
+        $this->assertContains(
+            'Television (Balay Alumni)',
+            \App\Services\VenueEquipmentPolicy::getIncompatibleEquipment('Conference Hall & Interaction Center (CHIC)'),
         );
     }
 

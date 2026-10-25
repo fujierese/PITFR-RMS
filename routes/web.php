@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\FacilityRequestApiController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\ReservationHistoryController;
+use App\Http\Controllers\IgpController;
 
 // Legacy browser API endpoints. These expose operational request data and must
 // remain authenticated even when retained for backwards compatibility.
@@ -33,6 +35,8 @@ Route::get('/', function() {
         $user = Auth::user();
         if (in_array($user->role, ['admin', 'facility_admin'], true)) {
             return redirect()->route('supply-office.index');
+        } elseif ($user->isIgp()) {
+            return redirect()->route('igp.index');
         } elseif ($user->role === 'custodian' || str_starts_with($user->role, 'custodian')) {
             return redirect()->route('custodian.index');
         } else {
@@ -42,6 +46,15 @@ Route::get('/', function() {
     return view('welcome');
 })->name('home');
 Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar.index');
+Route::get('/calendar/embed', function () {
+    $user = Auth::user();
+    $role = ! $user ? 'guest' : ($user->isAdmin() ? 'admin' : ($user->isCustodian() ? 'custodian' : 'requestor'));
+
+    return view('calendar.embed', [
+        'role' => $role,
+        'dashboardData' => [],
+    ]);
+})->name('calendar.embed');
 Route::view('/faq', 'legal.faq')->name('faq');
 Route::view('/privacy-policy', 'legal.privacy')->name('privacy.policy');
 Route::view('/data-privacy-act', 'legal.data-privacy')->name('privacy.data-act');
@@ -63,11 +76,23 @@ Route::post('/register/verify', [AuthController::class, 'verify'])->middleware('
 Route::post('/register/verify/resend', [AuthController::class, 'resendOtp'])->name('register.verify.resend');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+Route::middleware(['auth', 'role:igp'])->prefix('igp')->group(function (): void {
+    Route::get('/dashboard', [IgpController::class, 'index'])->name('igp.index');
+    Route::post('/requests/{facilityRequest}/payment', [IgpController::class, 'recordPayment'])->name('igp.payment');
+    Route::post('/requests/{facilityRequest}/refund', [IgpController::class, 'recordRefund'])->name('igp.refund');
+    Route::get('/settings', [IgpController::class, 'settings'])->name('igp.settings');
+    Route::post('/settings/profile', [IgpController::class, 'updateProfile'])->name('igp.settings.profile');
+    Route::post('/settings/password', [IgpController::class, 'updatePassword'])->name('igp.settings.password');
+    Route::post('/settings/notifications', [IgpController::class, 'updateNotificationPreferences'])->name('igp.settings.notifications');
+    Route::post('/settings/signature', [IgpController::class, 'updateSignature'])->name('igp.settings.signature');
+});
+
 // Requestors
 Route::middleware(['auth', 'role:requestor'])->prefix('requestor')->group(function () {
     Route::get('/',        fn () => redirect()->route('requestor.index'));
     Route::get('/dashboard', [RequestorController::class, 'index'])->name('requestor.index');
     Route::post('/store',  [RequestorController::class, 'store'])->name('requestor.store');
+    Route::get('/venue/availability', [RequestorController::class, 'venueAvailability'])->name('requestor.venue.availability');
     Route::get('/requests/{facilityRequest}/edit', [RequestorController::class, 'edit'])->name('requestor.edit');
     Route::put('/requests/{facilityRequest}', [RequestorController::class, 'update'])->name('requestor.update');
     Route::post('/delete', [RequestorController::class, 'destroy'])->name('requestor.destroy');
@@ -80,7 +105,7 @@ Route::middleware(['auth', 'role:requestor'])->prefix('requestor')->group(functi
 });
 
 // Supply Office is now the canonical administrative role and dashboard.
-Route::middleware(['auth', 'role:admin'])->prefix('supply-office')->group(function () {
+Route::middleware(['auth', 'role:admin,supply_office'])->prefix('supply-office')->group(function () {
     Route::get('/',         fn () => redirect()->route('supply-office.index'));
     Route::get('/dashboard', [SupplyOfficeController::class, 'index'])->name('supply-office.index');
     Route::get('/venues', [SupplyOfficeController::class, 'venueManagement'])->name('supply-office.venues.index');
@@ -92,6 +117,8 @@ Route::middleware(['auth', 'role:admin'])->prefix('supply-office')->group(functi
     Route::put('/equipment/{equipment}', [SupplyOfficeController::class, 'updateEquipment'])->name('supply-office.equipment.update');
     Route::delete('/equipment/{equipment}', [SupplyOfficeController::class, 'destroyEquipment'])->name('supply-office.equipment.destroy');
     Route::get('/requests/pending', [SupplyOfficeController::class, 'pendingRequests'])->name('supply-office.requests.pending');
+    Route::post('/requests/availability-review', [SupplyOfficeController::class, 'reviewAvailability'])->name('supply-office.requests.availability-review');
+    Route::post('/requests/{facilityRequest}/cancellation-review', [SupplyOfficeController::class, 'reviewCancellation'])->name('supply-office.requests.cancellation-review');
     Route::get('/requests/final-approval', [SupplyOfficeController::class, 'finalApprovalRequests'])->name('supply-office.requests.final-approval');
     Route::get('/requests/approved', [SupplyOfficeController::class, 'approvedRequests'])->name('supply-office.requests.approved');
     Route::get('/requests/rejected', [SupplyOfficeController::class, 'rejectedRequests'])->name('supply-office.requests.rejected');
@@ -187,6 +214,7 @@ Route::middleware(['auth', 'role:custodian'])->prefix('custodian')->group(functi
 
 // Notifications
 Route::middleware('auth')->group(function () {
+    Route::get('/history', [ReservationHistoryController::class, 'index'])->name('history.index');
     Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])
          ->name('notifications.index');
     Route::post('/notifications/{id}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead'])

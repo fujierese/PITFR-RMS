@@ -15,7 +15,14 @@ class VenueEquipmentPolicy
         $normalizedVenue = self::normalizeVenueName($venueName);
 
         $equipment = match ($normalizedVenue) {
-            'Balay Alumni' => ['Sound System', 'Wireless Microphones', 'Non-Wireless Microphones', 'Tables', 'Chairs'],
+            'Balay Alumni' => ['Sound System', 'Aircon', 'Chairs'],
+            'Conference Hall & Interaction Center (CHIC)' => [
+                'Sound System',
+                'Iwata Cooler Fans',
+                'Podium',
+                'HDMI',
+                'Television (CHIC)',
+            ],
             default => [],
         };
 
@@ -33,7 +40,7 @@ class VenueEquipmentPolicy
     {
         $normalizedVenue = self::normalizeVenueName($venueName);
 
-        return match ($normalizedVenue) {
+        $incompatible = match ($normalizedVenue) {
             'Balay Alumni' => [
                 'Canopies',
                 'Industrial Fans',
@@ -42,14 +49,34 @@ class VenueEquipmentPolicy
             'Conference Hall & Interaction Center (CHIC)' => [
                 'Canopies',
                 'Industrial Fans',
+                'Television (Balay Alumni)',
             ],
             'Gymnasium' => [
                 'Canopies',
                 'Industrial Fans',
                 'Iwata Cooler Fans',
+                'Television (Balay Alumni)',
             ],
-            default => [],
+            default => ['Television (Balay Alumni)'],
         };
+
+        if ($normalizedVenue !== 'Balay Alumni') {
+            $incompatible[] = 'Aircon';
+        }
+
+        return array_values(array_unique($incompatible));
+    }
+
+    /**
+     * Get equipment that should only be shown for its assigned venue.
+     *
+     * @return array<string, array<int, string>>
+     */
+    public static function getVenueRestrictedEquipment(): array
+    {
+        return [
+            'Aircon' => ['Balay Alumni'],
+        ];
     }
 
     /**
@@ -70,7 +97,10 @@ class VenueEquipmentPolicy
      */
     public static function getVenuesWithDefaultEquipment(): array
     {
-        return [];
+        return [
+            'Balay Alumni',
+            'Conference Hall & Interaction Center (CHIC)',
+        ];
     }
 
     private static function normalizeVenueName(string $venueName): string

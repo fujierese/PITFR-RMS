@@ -23,7 +23,18 @@
                     <tr>
                         <td class="px-4 py-4 font-medium text-slate-900">{{ \App\Models\User::formatFullName($user->surname, $user->first_name, $user->middle_name, in_array(strtolower((string) $user->suffix), ['n/a', 'na', 'none'], true) ? null : $user->suffix) ?: $user->name }}</td>
                         <td class="px-4 py-4">{{ $user->username }}</td>
-                        <td class="px-4 py-4">{{ $user->account_type_label }}</td>
+                        <td class="px-4 py-4">
+                            {{ $user->account_type_label }}
+                            @if(!empty($user->additional_roles))
+                                <span class="mt-1 block text-xs text-slate-500">
+                                Additional: {{ collect($user->additional_roles)->map(fn (string $role): string => match ($role) {
+                                    'custodian-venue' => 'Venue custodian',
+                                        'custodian-equipment' => 'Equipment custodian',
+                                        default => $role,
+                                    })->join(', ') }}
+                                </span>
+                            @endif
+                        </td>
                         <td class="px-4 py-4">{{ $user->is_active === false ? 'Deactivated' : 'Active' }}</td>
                         <td class="px-4 py-4">
                             {{ $user->department ?? 'N/A' }}
@@ -115,6 +126,7 @@
                                                             'requestor' => 'Requestor',
                                                             'custodian-venue' => 'Venue Custodian',
                                                             'custodian-equipment' => 'Equipment Custodian',
+                                                            'supply_office' => 'Supply Office Staff',
                                                         ] as $value => $label)
                                                             <option value="{{ $value }}" @selected(old('role', $user->role) === $value)>{{ $label }}</option>
                                                         @endforeach
@@ -130,6 +142,21 @@
                                                     <span class="mt-1 block text-xs font-normal text-slate-500">Choose Requestor for someone who submits requests, then select their category below. Choose a custodian role only for venue or equipment custodians.</span>
                                                 @endif
                                             </label>
+                                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2 lg:col-span-3">
+                                                <input type="hidden" name="additional_roles_present" value="1">
+                                                <p class="text-sm font-medium text-slate-700">Additional custodian access</p>
+                                                <p class="mt-1 text-xs text-slate-500">Use this when a Supply Office staff member also serves as a custodian.</p>
+                                                <div class="mt-3 flex flex-wrap gap-4">
+                                                    @foreach(['custodian-venue' => 'Venue custodian', 'custodian-equipment' => 'Equipment custodian'] as $additionalRole => $additionalRoleLabel)
+                                                        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                                                            <input type="checkbox" name="additional_roles[]" value="{{ $additionalRole }}"
+                                                                @checked(in_array($additionalRole, (array) old('additional_roles', array_merge($user->additional_roles ?? [], in_array($user->role, ['custodian-venue', 'custodian-equipment'], true) ? [$user->role] : [])), true))
+                                                                class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                                                            <span>{{ $additionalRoleLabel }}</span>
+                                                        </label>
+                                                    @endforeach
+                                                </div>
+                                            </div>
                                             <label data-edit-field="requestor-type" class="block text-sm font-medium text-slate-700">
                                                 <span>Requestor category</span>
                                                 <select name="requestor_type" class="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
@@ -178,6 +205,9 @@
                                             </label>
                                             <label data-edit-field="faculty" class="hidden block text-sm font-medium text-slate-700">Faculty ID
                                                 <input type="text" name="faculty_id" value="{{ old('faculty_id', $user->faculty_id) }}" class="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+                                            </label>
+                                            <label data-edit-field="staff-id" class="hidden block text-sm font-medium text-slate-700">Staff ID <span class="font-normal text-slate-400">(optional)</span>
+                                                <input type="text" name="staff_id" value="{{ old('staff_id', $user->staff_id) }}" maxlength="50" class="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
                                             </label>
                                             <label data-edit-field="faculty-adviser" class="hidden block text-sm font-medium text-slate-700">Advises a student organization
                                                 <select name="faculty_adviser" class="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
@@ -242,8 +272,11 @@
                                             const isAcademic = isRequestor && ['student', 'faculty'].includes(type);
                                             const isStudent = isRequestor && type === 'student';
                                             const isFaculty = isRequestor && type === 'faculty';
-                                            const isStaff = isRequestor && type === 'staff';
+                                            const isStaff = (isRequestor && type === 'staff') || role === 'supply_office';
                                             const isOutsider = isRequestor && type === 'outsider';
+                                            const hasCustodianAccess = role.startsWith('custodian')
+                                                || Array.from(form?.querySelectorAll('[name="additional_roles[]"]:checked') || []).length > 0;
+                                            const isStaffIdAccount = isStaff || role === 'igp' || hasCustodianAccess;
                                             const isPrivileged = ['admin', 'facility_admin', 'supply_office'].includes(role);
                                             const isAdviser = isFaculty && form?.querySelector('[name="faculty_adviser"]')?.value === 'yes';
 
@@ -257,6 +290,7 @@
                                                     'student-organization': isStudent || isAdviser,
                                                     workplace: isStaff || isOutsider,
                                                     faculty: isFaculty,
+                                                    'staff-id': isStaffIdAccount,
                                                     'faculty-adviser': isFaculty,
                                                     'account-status': !isPrivileged,
                                                 }[kind] ?? true;
@@ -281,6 +315,7 @@
                                         typeField?.addEventListener('change', updateVisibility);
                                         roleField?.addEventListener('change', updateVisibility);
                                         form?.querySelector('[name="faculty_adviser"]')?.addEventListener('change', updateVisibility);
+                                        form?.querySelectorAll('[name="additional_roles[]"]').forEach(field => field.addEventListener('change', updateVisibility));
                                         updateVisibility();
                                     })();
                                 </script>

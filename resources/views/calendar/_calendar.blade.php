@@ -24,17 +24,18 @@
     $showHowToRequest = $dashboardData['showHowToRequest'] ?? ($showHowToRequest ?? ($role === 'guest'));
     $showViewOnlyCalendar = $dashboardData['showViewOnlyCalendar'] ?? ($showViewOnlyCalendar ?? ($role === 'guest'));
     $showAvailabilityPanel = $dashboardData['showAvailabilityPanel'] ?? ($showAvailabilityPanel ?? true);
+    $dateSelectionMode = $dateSelectionMode ?? false;
     $stats = $dashboardData['stats'] ?? [
         'upcoming' => 0,
         'pending' => 0,
         'approved' => 0,
     ];
-    $personalRequests = $dashboardData['personalRequests'] ?? ($user && $user->isRequestee() ? \App\Models\FacilityRequest::where('requested_by_id', $user->id)->orderByDesc('created_at')->get() : collect([]));
+    $personalRequests = $dashboardData['personalRequests'] ?? ($user && $user->isRequestee() ? \App\Models\FacilityRequest::upcomingReservation()->where('requested_by_id', $user->id)->orderByDesc('created_at')->get() : collect([]));
     $verificationQueue = $dashboardData['verificationQueue'] ?? ($user && $user->isCustodian() ? (function() use ($user) {
         if ($user->isCustodianVenue()) {
             $venueNames = $user->venues()->pluck('name');
             if ($venueNames->isEmpty()) return collect([]);
-            return \App\Models\FacilityRequest::where(function ($query) use ($venueNames) {
+            return \App\Models\FacilityRequest::upcomingReservation()->where(function ($query) use ($venueNames) {
                 foreach ($venueNames as $name) {
                     $query->orWhereJsonContains('venue', $name);
                 }
@@ -43,7 +44,7 @@
         if ($user->isCustodianEquipment()) {
             $equipmentNames = \App\Models\Equipment::where('custodian_id', $user->id)->pluck('name');
             if ($equipmentNames->isEmpty()) return collect([]);
-            return \App\Models\FacilityRequest::where(function ($query) use ($equipmentNames) {
+            return \App\Models\FacilityRequest::upcomingReservation()->where(function ($query) use ($equipmentNames) {
                 foreach ($equipmentNames as $name) {
                     $query->orWhereJsonContains('equipment', $name);
                 }
@@ -52,7 +53,7 @@
         return collect([]);
     })() : collect([]));
     $inventoryItems = $dashboardData['inventory'] ?? ($user && $user->isCustodian() ? \App\Models\Equipment::where('custodian_id', $user->id)->get() : collect([]));
-    $finalApprovalQueue = $dashboardData['finalApprovalQueue'] ?? $finalApprovalQueue ?? ($role === 'admin' ? \App\Models\FacilityRequest::where('venue_status', 'approved')->where('equipment_status', 'approved')->orderByDesc('created_at')->get() : collect([]));
+    $finalApprovalQueue = $dashboardData['finalApprovalQueue'] ?? $finalApprovalQueue ?? ($role === 'admin' ? \App\Models\FacilityRequest::upcomingReservation()->where('venue_status', 'approved')->where('equipment_status', 'approved')->orderByDesc('created_at')->get() : collect([]));
     $totalCount = $dashboardData['totalCount'] ?? $totalCount ?? ($role === 'admin' ? \App\Models\FacilityRequest::where('venue_status', 'approved')->where('equipment_status', 'approved')->count() : 0);
     $userCount = $dashboardData['userCount'] ?? ($user && $user->isAdmin() ? \App\Models\User::count() : 0);
     $totalRequests = $dashboardData['totalRequests'] ?? ($user && $user->isAdmin() ? \App\Models\FacilityRequest::count() : 0);
@@ -161,7 +162,7 @@
                         <tr>
                             <th class="px-4 py-3">Control #</th>
                             <th class="px-4 py-3">Activity</th>
-                            <th class="px-4 py-3">Date</th>
+                            <th class="px-4 py-3">Venue Schedules</th>
                             <th class="px-4 py-3">Status</th>
                             <th class="px-4 py-3">Actions</th>
                         </tr>
@@ -171,7 +172,11 @@
                             <tr data-request-row data-status="{{ $request->status }}" data-returned="{{ $request->equipment_returned_status ?? '' }}" data-upcoming="{{ $request->start_date && $request->start_date->toDateString() >= now()->toDateString() ? 'true' : 'false' }}">
                                 <td class="px-4 py-3 font-medium text-slate-800">{{ $request->control_number }}</td>
                                 <td class="px-4 py-3 text-slate-600">{{ Str::limit($request->name_of_activity, 36) }}</td>
-                                <td class="px-4 py-3 text-slate-600">{{ optional($request->start_date)->format('M d, Y') }}</td>
+                                <td class="px-4 py-3 text-slate-600">
+                                    @foreach($request->getVenueScheduleSummaries() as $schedule)
+                                        <p>{{ $schedule['venue'] }}: {{ $schedule['label'] }}</p>
+                                    @endforeach
+                                </td>
                                 <td class="px-4 py-3">
                                     <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold {{ $request->status === 'approved' ? 'bg-emerald-100 text-emerald-700' : ($request->status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700') }}">
                                         {{ $request->status === 'needs_reschedule' ? 'Needs Reschedule' : ucfirst($request->status) }}
@@ -249,7 +254,7 @@
                             <tr>
                                 <th class="px-4 py-3">Control #</th>
                                 <th class="px-4 py-3">Activity</th>
-                                <th class="px-4 py-3">Requested Date</th>
+                                <th class="px-4 py-3">Venue Schedules</th>
                                 <th class="px-4 py-3">Venue / Equipment</th>
                             </tr>
                         </thead>
@@ -258,7 +263,11 @@
                                 <tr>
                                     <td class="px-4 py-3 text-slate-700">{{ $request->control_number }}</td>
                                     <td class="px-4 py-3 text-slate-600">{{ Str::limit($request->name_of_activity, 36) }}</td>
-                                    <td class="px-4 py-3 text-slate-600">{{ optional($request->start_date)->format('M d, Y') }}</td>
+                                    <td class="px-4 py-3 text-slate-600">
+                                        @foreach($request->getVenueScheduleSummaries() as $schedule)
+                                            <p>{{ $schedule['venue'] }}: {{ $schedule['label'] }}</p>
+                                        @endforeach
+                                    </td>
                                     <td class="px-4 py-3 text-slate-600">{{ implode(', ', $request->getVenueNames()) }}</td>
                                 </tr>
                             @endforeach
@@ -285,7 +294,7 @@
                             <tr>
                                 <th class="px-4 py-3">Control #</th>
                                 <th class="px-4 py-3">Activity</th>
-                                <th class="px-4 py-3">Date</th>
+                                <th class="px-4 py-3">Venue Schedules</th>
                                 <th class="px-4 py-3">Status</th>
                                 <th class="px-4 py-3">Actions</th>
                             </tr>
@@ -295,7 +304,11 @@
                                 <tr data-request-row data-request-id="{{ $request->id }}" data-status="{{ strtolower($request->status) }}" class="group hover:bg-slate-50 transition">
                                     <td class="px-4 py-3 text-slate-700">{{ $request->control_number }}</td>
                                     <td class="px-4 py-3 text-slate-600">{{ Str::limit($request->name_of_activity, 36) }}</td>
-                                    <td class="px-4 py-3 text-slate-600">{{ optional($request->start_date)->format('M d, Y') }}</td>
+                                    <td class="px-4 py-3 text-slate-600">
+                                        @foreach($request->getVenueScheduleSummaries() as $schedule)
+                                            <p>{{ $schedule['venue'] }}: {{ $schedule['label'] }}</p>
+                                        @endforeach
+                                    </td>
                                     <td class="px-4 py-3">
                                         @if($request->status === 'pending')
                                             <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold bg-amber-100 text-amber-700">Pending</span>
@@ -357,19 +370,29 @@
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Interactive calendar</p>
-                    <p class="mt-1 text-sm text-slate-600">Tap a date to inspect request details and availability.</p>
+                    <p class="mt-1 text-sm text-slate-600">
+                        @if($dateSelectionMode)
+                            Select a start date, then an end date. The end date is inclusive; choose the same date twice for a one-day reservation.
+                        @else
+                            Tap a date to inspect request details and availability.
+                        @endif
+                    </p>
                 </div>
-                <div class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
-                    <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"><span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>Pending request</span>
-                    <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Reserved (approved)</span>
-                    <span class="text-xs text-slate-600">No event shown = no request listed for that date; check venue and time availability before submitting.</span>
-                    @if($user && $user->isAdmin())
-                        <label for="include-cancelled-events" class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
-                            <input id="include-cancelled-events" type="checkbox" class="rounded border-slate-300 text-slate-600 focus:ring-slate-500">
-                            Show cancelled
-                        </label>
-                    @endif
-                </div>
+                @unless($dateSelectionMode)
+                    <div class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
+                        <span class="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>CHIC</span>
+                        <span class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-blue-600"></span>Balay Alumni</span>
+                        <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full" style="background-color: #92400e;"></span>Gym</span>
+                        <span class="inline-flex items-center gap-2 rounded-full border border-green-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-green-600"></span>Covered Courts / Oval</span>
+                        <span class="text-xs text-slate-600">No event shown = no request listed for that date; check venue and time availability before submitting.</span>
+                        @if($user && $user->isAdmin())
+                            <label for="include-cancelled-events" class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                                <input id="include-cancelled-events" type="checkbox" class="rounded border-slate-300 text-slate-600 focus:ring-slate-500">
+                                Show cancelled
+                            </label>
+                        @endif
+                    </div>
+                @endunless
             </div>
         </div>
         <div id="calendar" class="w-full p-4 sm:p-6 min-h-[420px] sm:min-h-[520px] lg:min-h-[600px]"></div>
@@ -956,11 +979,11 @@
     font-weight: 800;
 }
 
-.venue-chic { color: #1d4ed8; }
-.venue-balay { color: #be185d; }
-.venue-oval { color: #c2410c; }
-.venue-gymnasium { color: #047857; }
-.venue-covered-court { color: #7e22ce; }
+.venue-chic { color: #dc2626; }
+.venue-balay { color: #2563eb; }
+.venue-oval { color: #16a34a; }
+.venue-gymnasium { color: #92400e; }
+.venue-covered-court { color: #16a34a; }
 .venue-volleyball { color: #0891b2; }
 .venue-other { color: #475569; }
 
@@ -1161,6 +1184,8 @@
     cursor: pointer;
     transition: all 0.2s ease;
     border-radius: 0.75rem !important;
+    background-color: transparent !important;
+    border: 1px solid #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
     font-size: 0.85rem !important;
@@ -1426,6 +1451,15 @@
     margin-right: 4px;
 }
 
+.fc .calendar-range-between {
+    background-color: #d1fae5 !important;
+}
+
+.fc .calendar-range-start,
+.fc .calendar-range-end {
+    background-color: #6ee7b7 !important;
+}
+
 </style>
 
 <!-- FullCalendar JS & CSS -->
@@ -1442,6 +1476,30 @@ document.addEventListener('DOMContentLoaded', function() {
     var calendarEl = document.getElementById('calendar');
     var currentRole = '{{ $role }}';
     var isPublicCalendar = @json(!auth()->check());
+    var calendarParams = new URLSearchParams(window.location.search);
+    var isDateSelectionMode = calendarParams.get('select') === '1';
+    var selectionStartDate = null;
+    var selectionEndDate = null;
+    function calendarDateKey(date) {
+        var year = date.getFullYear();
+        var month = String(date.getMonth() + 1).padStart(2, '0');
+        var day = String(date.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+    }
+    function renderSelectedDateRange() {
+        if (!isDateSelectionMode || !calendarEl) return;
+        var dayCells = calendarEl.querySelectorAll('[data-date]');
+        dayCells.forEach(function(cell) {
+            cell.classList.remove('calendar-range-start', 'calendar-range-between', 'calendar-range-end');
+            var cellDate = cell.dataset.date;
+            if (!selectionStartDate || !cellDate) return;
+            if (cellDate === selectionStartDate) cell.classList.add('calendar-range-start');
+            if (selectionEndDate && cellDate === selectionEndDate) cell.classList.add('calendar-range-end');
+            if (selectionEndDate && cellDate > selectionStartDate && cellDate < selectionEndDate) {
+                cell.classList.add('calendar-range-between');
+            }
+        });
+    }
 
     function normalizeVenueName(value) {
         return String(value || '').toLowerCase().trim();
@@ -1451,8 +1509,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 var normalized = normalizeVenueName(venueName);
                 if (normalized.includes('chic') || normalized.includes('conference hall')) return 'venue-chic';
                 if (normalized.includes('balay alumni')) return 'venue-balay';
-                if (normalized.includes('oval grounds')) return 'venue-oval';
-                if (normalized.includes('gymnasium')) return 'venue-gymnasium';
+                if (normalized.includes('oval')) return 'venue-oval';
+                if (normalized.includes('gym')) return 'venue-gymnasium';
                 if (normalized.includes('covered court')) return 'venue-covered-court';
                 if (normalized.includes('volleyball court')) return 'venue-volleyball';
                 return 'venue-other';
@@ -1539,6 +1597,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     try {
         function getInitialCalendarView() {
+            if (isDateSelectionMode) {
+                return 'dayGridMonth';
+            }
             if (window.innerWidth < 640) {
                 return 'timeGridDay';
             }
@@ -1547,6 +1608,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             return 'dayGridMonth';
         }
+
+        var localToday = new Date();
+        localToday = new Date(localToday.getTime() - localToday.getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 10);
 
         // Track current view for use in event callbacks
         var currentViewType = getInitialCalendarView();
@@ -1605,6 +1671,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         var calendar = new FullCalendar.Calendar(calendarEl, {
             initialView: getInitialCalendarView(),
+            validRange: isDateSelectionMode ? { start: localToday } : undefined,
             initialDate: (() => {
                 const date = new URLSearchParams(window.location.search).get('date');
                 return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
@@ -1617,7 +1684,11 @@ document.addEventListener('DOMContentLoaded', function() {
             eventDisplay: 'block',
             dayMaxEvents: false, // Show all events, don't limit
             dayMaxEventRows: false, // Don't cap rows for daygrid
-            headerToolbar: {
+            headerToolbar: isDateSelectionMode ? {
+                left: 'prev,next today',
+                center: 'title',
+                right: ''
+            } : {
                 left: 'prev,next today',
                 center: 'title',
                 right: 'dayGridMonth,timeGridWeek,timeGridDay'
@@ -1640,6 +1711,7 @@ document.addEventListener('DOMContentLoaded', function() {
             allDaySlot: true,
             windowResizeDelay: 100,
             windowResize: function() {
+                if (isDateSelectionMode) return;
                 var nextView = getInitialCalendarView();
                 if (calendar.view.type !== nextView) {
                     calendar.changeView(nextView);
@@ -1656,11 +1728,20 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             datesSet: function() {
                 refreshEventMarquees(calendarEl);
+                renderSelectedDateRange();
             },
             dayCellClassNames: function(info) {
                 var classes = [];
                 if (info.date.getDay() === 0 || info.date.getDay() === 6) {
                     classes.push('fc-day-weekend');
+                }
+                if (isDateSelectionMode && selectionStartDate) {
+                    var cellDate = calendarDateKey(info.date);
+                    if (cellDate === selectionStartDate) classes.push('calendar-range-start');
+                    if (selectionEndDate && cellDate === selectionEndDate) classes.push('calendar-range-end');
+                    if (selectionEndDate && cellDate > selectionStartDate && cellDate < selectionEndDate) {
+                        classes.push('calendar-range-between');
+                    }
                 }
                 return classes;
             },
@@ -1684,6 +1765,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 var cancelledToggle = document.getElementById('include-cancelled-events');
                 if (cancelledToggle && cancelledToggle.checked) {
                     eventsUrl.searchParams.set('include_cancelled', '1');
+                }
+                var requestedVenue = new URLSearchParams(window.location.search).get('venue');
+                if (requestedVenue) {
+                    eventsUrl.searchParams.set('venue', requestedVenue);
                 }
 
                 fetch(eventsUrl.toString(), {
@@ -1758,10 +1843,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                             if (dateText) tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Date:</strong> ' + __esc(dateText) + '</div>';
                             if (timeText) tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Time:</strong> ' + __esc(timeText) + '</div>';
-                            if (venueText) tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Venue:</strong> ' + venueText + '</div>';
+                            if (venueText) {
+                                tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Venue:</strong> ' + venueText + '</div>';
+                            }
 
                             if (!isPublicCalendar && event.extendedProps && event.extendedProps.requestor) {
                                 tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Requestor:</strong> ' + __esc(event.extendedProps.requestor) + '</div>';
+                            }
+                            if (!isPublicCalendar && event.extendedProps && event.extendedProps.assistedBy) {
+                                tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Assisted by:</strong> ' + __esc(event.extendedProps.assistedBy) + '</div>';
                             }
                             if (!isPublicCalendar && event.extendedProps && event.extendedProps.priority) {
                                 tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Priority:</strong> ' + __esc(event.extendedProps.priority) + '</div>';
@@ -1777,7 +1867,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         function createFcEvent(event, startDatetime, endDatetime, isSegment) {
                             var status = event.extendedProps && event.extendedProps.status ? event.extendedProps.status : event.status || '';
                             var venue = event.venue || (event.extendedProps && event.extendedProps.venue) || '';
-                            var statusPalette = getStatusColorInfo(status);
                             var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
 
                             return {
@@ -1786,16 +1875,16 @@ document.addEventListener('DOMContentLoaded', function() {
                                 start: startDatetime,
                                 end: endDatetime,
                                 allDay: !!event.allDay,
-                                backgroundColor: statusPalette.bg,
-                                borderColor: statusPalette.border,
-                                textColor: statusPalette.text,
+                                backgroundColor: 'transparent',
+                                borderColor: '#000000',
+                                textColor: '#111827',
                                 classNames: ['status-event', 'status-' + String(status || 'neutral').toLowerCase().replace(/\s+/g, '-')],
                                 extendedProps: Object.assign({}, event.extendedProps, {
                                     tooltipContent: createTooltipContent(event, status),
                                     status: status,
                                     venue: venue,
                                     venueClass: 'status-indicator',
-                                    venueDotColor: statusPalette.bg,
+                                    venueDotColor: '#000000',
                                     participants: !isPublicCalendar && event.extendedProps && event.extendedProps.expected_participants
                                         ? event.extendedProps.expected_participants
                                         : 0,
@@ -1953,7 +2042,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
 
-                let requestId = info.event.id || info.event.extendedProps.facilityRequestId;
+                let requestId = info.event.extendedProps.facilityRequestId || info.event.id;
 
                 if (requestId) {
                     window.location.href = '{{ url("/request") }}/' + requestId;
@@ -2042,6 +2131,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             },
             dateClick: function(info) {
+                if (isDateSelectionMode) {
+                    var clickedDate = info.dateStr.slice(0, 10);
+                    if (!selectionStartDate || selectionEndDate) {
+                        selectionStartDate = clickedDate;
+                        selectionEndDate = null;
+                    } else if (clickedDate < selectionStartDate) {
+                        selectionEndDate = selectionStartDate;
+                        selectionStartDate = clickedDate;
+                    } else {
+                        selectionEndDate = clickedDate;
+                    }
+
+                    renderSelectedDateRange();
+                    window.parent.postMessage({
+                        type: 'venue-calendar-date-selected',
+                        venue: calendarParams.get('venue') || '',
+                        startDate: selectionStartDate,
+                        endDate: selectionEndDate || ''
+                    }, window.location.origin);
+                    return;
+                }
+
                 if (currentRole === 'admin') {
                     document.getElementById('noReservationModal').classList.remove('hidden');
                     return;
@@ -2086,15 +2197,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         delay: [400, 0]
                     });
                 }
-                if (info.event.backgroundColor) {
-                    info.el.style.backgroundColor = info.event.backgroundColor;
-                }
-                if (info.event.borderColor) {
-                    info.el.style.borderColor = info.event.borderColor;
-                }
-                if (info.event.textColor) {
-                    info.el.style.color = info.event.textColor;
-                }
+                info.el.style.backgroundColor = 'transparent';
+                info.el.style.borderColor = '#000000';
+                info.el.style.color = '#111827';
 
                 refreshEventMarquees(info.el);
             }

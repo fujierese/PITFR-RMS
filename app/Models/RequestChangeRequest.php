@@ -13,10 +13,21 @@ class RequestChangeRequest extends Model
         'status',
         'decided_by_id',
         'decided_at',
+        'change_type',
+        'proposed_schedule',
+        'affected_user_ids',
+        'responses',
+        'response_deadline_at',
+        'memorandum_priority',
     ];
 
     protected $casts = [
         'decided_at' => 'datetime',
+        'proposed_schedule' => 'array',
+        'affected_user_ids' => 'array',
+        'responses' => 'array',
+        'response_deadline_at' => 'datetime',
+        'memorandum_priority' => 'boolean',
     ];
 
     public function facilityRequest()
