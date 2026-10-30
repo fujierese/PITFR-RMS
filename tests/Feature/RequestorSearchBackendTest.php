@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Equipment;
 use App\Models\FacilityRequest;
 use App\Models\User;
+use App\Models\Venue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -128,6 +130,70 @@ class RequestorSearchBackendTest extends TestCase
             ->assertOk()
             ->assertSee('Request Priority')
             ->assertSee('Regular');
+    }
+
+    public function test_my_requests_groups_equipment_by_venue_and_shows_venue_custodian_assignments(): void
+    {
+        $requestor = User::factory()->create(['role' => 'requestor']);
+        $venueCustodian = User::factory()->create(['role' => 'custodian-venue', 'name' => 'Arlene Sala']);
+        $equipmentCustodian = User::factory()->create(['role' => 'custodian-equipment', 'name' => 'Rogelio Guillermo']);
+        $chic = Venue::create(['name' => 'CHIC', 'custodian_id' => $venueCustodian->id]);
+        $court = Venue::create(['name' => 'Covered Court', 'custodian_id' => $venueCustodian->id]);
+        $soundSystem = Equipment::factory()->create(['name' => 'Sound System', 'custodian_id' => $equipmentCustodian->id]);
+        $chairs = Equipment::factory()->create(['name' => 'Chairs', 'custodian_id' => $equipmentCustodian->id]);
+
+        $request = FacilityRequest::create([
+            'requested_by_id' => $requestor->id,
+            'control_number' => 'FER-EQUIPMENT-GROUPS-001',
+            'name_of_activity' => 'Equipment display test',
+            'department' => 'Information Technology',
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+            'date_requested' => now()->toDateString(),
+            'expected_participants' => 20,
+            'start_date' => now()->addDays(2)->toDateString(),
+            'end_date' => now()->addDays(2)->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'venue' => ['CHIC', 'Covered Court'],
+            'equipment' => ['Sound System', 'Chairs'],
+            'equipment_quantities' => ['Sound System' => 3, 'Chairs' => 2],
+        ]);
+        $requestChic = $request->requestVenues()->create(['venue_id' => $chic->id, 'name' => 'CHIC']);
+        $requestCourt = $request->requestVenues()->create(['venue_id' => $court->id, 'name' => 'Covered Court']);
+        $request->requestEquipment()->create([
+            'request_venue_id' => $requestChic->id,
+            'equipment_id' => $soundSystem->id,
+            'name' => 'Sound System',
+            'quantity' => 1,
+        ]);
+        $request->requestEquipment()->create([
+            'request_venue_id' => $requestChic->id,
+            'equipment_id' => $soundSystem->id,
+            'name' => 'Sound System',
+            'quantity' => 2,
+        ]);
+        $request->requestEquipment()->create([
+            'request_venue_id' => $requestCourt->id,
+            'equipment_id' => $chairs->id,
+            'name' => 'Chairs',
+            'quantity' => 2,
+        ]);
+
+        $this->actingAs($requestor)
+            ->get(route('requestor.index', ['tab' => 'requests']))
+            ->assertOk()
+            ->assertSee('CHIC')
+            ->assertSee('Sound System')
+            ->assertSee('×3')
+            ->assertSee('Covered Court')
+            ->assertSee('Chairs')
+            ->assertSee('Custodian in charge:')
+            ->assertSee('Arlene Sala')
+            ->assertSee('Equipment custodian:')
+            ->assertSee('Rogelio Guillermo')
+            ->assertDontSee('Sound System ×1');
     }
 
     public function test_cancelled_activity_history_is_reflected_as_cancelled_in_request_list_and_details(): void

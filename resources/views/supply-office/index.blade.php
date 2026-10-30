@@ -76,11 +76,12 @@
         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h2 class="text-xl font-semibold text-slate-900">Initial Availability Review</h2>
-                <p class="mt-1 text-sm text-slate-600">Review every new request here before custodians begin approval. Calendar availability is not Supply Office confirmation.</p>
+                <p class="mt-1 text-sm text-slate-600">This queue starts after the venue custodian confirms the venue is available. Recheck the venue and requested equipment here; this is still not final approval. After confirmation, equipment custodians can review their assigned items.</p>
             </div>
             <span class="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-800">{{ $availabilityReviewQueue->total() }} waiting</span>
         </div>
         @forelse($availabilityReviewQueue as $availabilityRequest)
+            @php($availabilityGroup = 'supply-availability-' . $availabilityRequest->id)
             <article class="mb-4 rounded-2xl border border-slate-200 p-4 last:mb-0">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -88,25 +89,43 @@
                         <div class="mt-1 space-y-1 text-sm text-slate-600">
                             <p>{{ $availabilityRequest->requester?->name ?? 'Unknown' }}</p>
                             @foreach($availabilityRequest->getVenueScheduleSummaries() as $schedule)
-                                <p>{{ $schedule['venue'] }} · {{ $schedule['label'] }}</p>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <p>{{ $schedule['venue'] }} · {{ $schedule['label'] }}</p>
+                                    <x-venue-calendar-button
+                                        :venue="$schedule['venue']"
+                                        :date="$availabilityRequest->getVenueSchedule($schedule['venue'])['start_date'] ?? now()->toDateString()"
+                                        :end-date="$availabilityRequest->getVenueSchedule($schedule['venue'])['end_date'] ?? now()->toDateString()"
+                                        :start-time="$availabilityRequest->getVenueSchedule($schedule['venue'])['start_time'] ?? null"
+                                        :end-time="$availabilityRequest->getVenueSchedule($schedule['venue'])['end_time'] ?? null"
+                                        :availability-check-url="route('calendar.request-availability-check', $availabilityRequest)"
+                                        :availability-group="$availabilityGroup"
+                                        label="Check calendar"
+                                    />
+                                </div>
                             @endforeach
+                            <p data-availability-summary="{{ $availabilityGroup }}" class="mt-2 hidden text-xs font-medium text-slate-600" aria-live="polite"></p>
                         </div>
                         @if($availabilityRequest->is_emergency)
                             <p class="mt-2 text-sm font-semibold text-amber-700">Urgent: validate the attached proposal or memorandum order before confirming.</p>
                         @endif
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" class="flex flex-wrap items-center gap-2">
+                    <div data-availability-actions="{{ $availabilityGroup }}" class="hidden flex flex-wrap gap-2">
+                        <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" data-availability-confirm="{{ $availabilityGroup }}" class="flex flex-wrap items-center gap-2">
                             @csrf
                             <input type="hidden" name="id" value="{{ $availabilityRequest->id }}">
                             <input type="hidden" name="decision" value="available">
                             @if($availabilityRequest->is_emergency)
-                                <label class="flex items-center gap-2 text-xs font-medium text-amber-800">
-                                    <input type="checkbox" name="urgent_document_validated" value="1" required class="rounded border-amber-400 text-amber-600">
-                                    Memo/proposal validated
-                                </label>
+                                <div>
+                                    <label class="flex items-center gap-2 text-xs font-medium text-amber-800">
+                                        <input type="checkbox" name="urgent_document_validated" value="1" required @checked(old('urgent_document_validated') === '1') class="rounded border-amber-400 text-amber-600">
+                                        Memo/proposal validated
+                                    </label>
+                                    @error('urgent_document_validated')
+                                        <p class="mt-1 max-w-64 text-xs font-medium text-red-700">{{ $message }}</p>
+                                    @enderror
+                                </div>
                             @endif
-                            <button type="submit" class="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800">Confirm Available</button>
+                            <button type="submit" class="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800">Confirm Availability & Send to Equipment Custodians</button>
                         </form>
                         <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" class="flex flex-wrap items-center gap-2">
                             @csrf
@@ -119,12 +138,33 @@
                 </div>
             </article>
         @empty
-            <p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">No new requests are waiting for an availability review.</p>
+            <p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">No requests are waiting for Supply Office availability confirmation. Requests appear here after their venue custodian confirms the venue.</p>
         @endforelse
         @if($availabilityReviewQueue->hasPages())
             <div class="mt-4">{{ $availabilityReviewQueue->links() }}</div>
         @endif
     </section>
+
+    @if($venueRescheduleQueue->isNotEmpty())
+        <section class="rounded-3xl border border-amber-200 bg-white p-6 shadow-sm" aria-labelledby="venue-reschedule-heading">
+            <div class="mb-4">
+                <h2 id="venue-reschedule-heading" class="text-xl font-semibold text-slate-900">Venue Unavailable — Schedule Coordination Needed</h2>
+                <p class="mt-1 text-sm text-slate-600">The venue custodian could not confirm the requested slot. Contact the requestor and propose an available schedule from the request details page. The request will restart availability review after the proposal is accepted.</p>
+            </div>
+            <div class="space-y-3">
+                @foreach($venueRescheduleQueue as $venueIssue)
+                    <article class="flex flex-col gap-3 rounded-2xl border border-amber-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <a href="{{ route('request.show', $venueIssue) }}" class="font-semibold text-slate-900 hover:text-amber-700">{{ $venueIssue->control_number }} — {{ $venueIssue->name_of_activity }}</a>
+                            <p class="mt-1 text-sm text-slate-600">Requestor: {{ $venueIssue->requester?->name ?? 'Unknown' }}</p>
+                            <p class="mt-1 text-sm text-amber-900">Venue custodian note: {{ $venueIssue->venue_notes ?: 'No reason provided.' }}</p>
+                        </div>
+                        <a href="{{ route('request.show', $venueIssue) }}" class="inline-flex shrink-0 items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100">Propose an available schedule</a>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+    @endif
 
     <section class="rounded-3xl border border-rose-200 bg-white p-6 shadow-sm" aria-labelledby="cancellation-queue-heading">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">

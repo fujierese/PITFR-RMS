@@ -11,32 +11,29 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     @endif
 </head>
-<body class="h-screen overflow-hidden bg-slate-100 text-slate-100">
+<body class="h-screen overflow-hidden bg-slate-100 text-slate-900">
     <div class="relative h-screen w-full lg:grid lg:h-screen lg:grid-cols-[1.12fr_0.88fr]">
-        <section class="relative hidden min-h-screen bg-slate-950 lg:flex lg:min-h-screen lg:min-h-0 lg:flex-col lg:justify-center lg:pt-10 lg:pb-3 lg:pl-5 lg:pr-8 xl:pl-8 xl:pr-12">
-            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%)]"></div>
-            <div class="absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl"></div>
-            <div class="absolute -bottom-32 right-0 h-96 w-96 rounded-full bg-emerald-400/10 blur-3xl"></div>
+        <section class="relative hidden min-h-screen bg-white lg:flex lg:min-h-screen lg:min-h-0 lg:flex-col lg:justify-center lg:pt-10 lg:pb-3 lg:pl-5 lg:pr-8 xl:pl-8 xl:pr-12">
             <div class="relative z-10 ml-0 w-full max-w-[860px] pt-2">
                 <div class="flex items-center gap-4">
-                    <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-lg ring-1 ring-white/10">
+                    <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100">
                         <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-12 w-12 rounded-full object-cover">
                     </div>
                     <div class="leading-tight">
-                        <p class="text-[10px] uppercase tracking-[0.42em] text-slate-100">PITFR-RMS</p>
-                        <p class="mt-2 text-sm font-semibold text-slate-200">Palompon Institute of Technology</p>
+                        <p class="text-[10px] uppercase tracking-[0.42em] text-slate-600">PITFR-RMS</p>
+                        <p class="mt-2 text-sm font-semibold text-slate-700">Palompon Institute of Technology</p>
                     </div>
                 </div>
                 <div class="mt-4 flex justify-center">
-                    <div class="relative mx-auto w-full max-w-[90%] ml-8 overflow-hidden rounded-[22px] border border-white/10 bg-slate-900 shadow-[0_18px_50px_rgba(15,23,42,0.32)]">
+                    <div class="relative mx-auto w-full max-w-[90%] ml-8 overflow-hidden rounded-[22px] border border-slate-200 bg-slate-100 shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
                         <img src="{{ asset('images/loginpage2.jpg') }}" alt="PIT Facility Request Portal" class="block h-[260px] w-full object-cover sm:h-[320px] lg:h-[360px]">
                     </div>
                 </div>
                 <div class="mt-10 mb-6 max-w-[330px] pb-4 lg:max-w-[360px]">
-                    <h1 class="text-[2.1rem] font-black leading-[0.9] tracking-[-0.04em] text-white xl:text-[2.8rem]">
+                    <h1 class="text-[2.1rem] font-black leading-[0.9] tracking-[-0.04em] text-slate-900 xl:text-[2.8rem]">
                         Book the<br>
                         spaces<br>
-                        you <span class="text-emerald-400">need.</span>
+                        you <span class="text-emerald-600">need.</span>
                     </h1>
                 </div>
             </div>

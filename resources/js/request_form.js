@@ -118,6 +118,7 @@ const initializeRequestForm = function () {
     const emergencyCheckbox = urgentCheckbox;
     const emergencyJustificationWrap = document.getElementById('urgent-justification-wrap') || document.getElementById('emergency-justification-wrap');
     const emergencyJustificationInput = document.getElementById('emergency-justification');
+    const venueScheduleGroups = Array.from(form.querySelectorAll('[data-venue-schedule]'));
     const startDateInput = document.querySelector('input[name="start_date"]');
     const startTimeInput = document.querySelector('input[name="start_time"]');
     const endDateInput = document.querySelector('input[name="end_date"]');
@@ -212,26 +213,28 @@ const initializeRequestForm = function () {
                 requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
                 form.querySelector('[name="name_of_activity"]'),
                 form.querySelector('[name="purpose"]'),
-                form.querySelector('[name="start_date"]'),
-                form.querySelector('[name="end_date"]'),
                 form.querySelector('[name="expected_participants"]'),
-                form.querySelector('[name="start_time"]'),
-                form.querySelector('[name="end_time"]'),
                 form.querySelector('[name="requested_by_position"]'),
                 positionSelect?.value === 'Other' ? otherPositionInput : null,
-                form.querySelector('[name="venue"]:checked')
             ];
 
-            return requiredFields.find(function (field) {
+            const missingField = requiredFields.find(function (field) {
                 return !isChecklistFieldComplete(field);
             }) || null;
+            if (missingField) return missingField;
+
+            const selectedGroup = Array.from(form.querySelectorAll('[data-venue-schedule]')).find(function (group) {
+                return group.closest('[data-venue-option]')?.querySelector('[name="venue[]"]')?.checked;
+            });
+            if (!selectedGroup) return form.querySelector('[name="venue[]"]');
+            return Array.from(selectedGroup.querySelectorAll('.venue-schedule-input')).find(function (field) {
+                return !isChecklistFieldComplete(field);
+            }) || selectedGroup.querySelector('input[type="radio"]:checked');
         }
 
         if (checklistId === 'checklist-venue-availability') {
-            const selectedVenue = form.querySelector('[name="venue"]:checked');
-            if (!selectedVenue) {
-                return form.querySelector('[name="venue"]') || null;
-            }
+            const selectedVenues = Array.from(form.querySelectorAll('[name="venue[]"]:checked'));
+            if (!selectedVenues.length) return form.querySelector('[name="venue[]"]') || null;
 
             const selectedEquipmentRows = Array.from(form.querySelectorAll('.equipment-row')).filter(function (row) {
                 return row.querySelector('.equipment-checkbox')?.checked;
@@ -244,20 +247,37 @@ const initializeRequestForm = function () {
             });
 
             if (equipmentSelected && !hasAvailableEquipmentSelected) {
-                return form.querySelector('.equipment-row .equipment-checkbox, .equipment-row input[type="number"]') || selectedVenue;
+                return form.querySelector('.equipment-row .equipment-checkbox, .equipment-row input[type="number"]') || selectedVenues[0];
             }
 
-            return null;
+            const selectedGroup = Array.from(form.querySelectorAll('[data-venue-schedule]')).find(function (group) {
+                return group.closest('[data-venue-option]')?.querySelector('[name="venue[]"]')?.checked;
+            });
+            return selectedGroup
+                ? Array.from(selectedGroup.querySelectorAll('.venue-schedule-input')).find(function (field) {
+                    return !isChecklistFieldComplete(field);
+                }) || null
+                : selectedVenues[0];
         }
 
         if (checklistId === 'checklist-document-upload') {
             const requestContext = form.querySelector('[name="request_context"]')?.value;
             const isStudent = form.dataset.isStudent === '1';
-            const supportInput = isStudent && requestContext === 'student_organization'
-                ? form.querySelector('[name="activity_proposal_file"], [name="proposal_file"]')
-                : form.querySelector('[name="igp_receipt_file"], [name="activity_proposal_file"], [name="proposal_file"]');
+            const requestorType = form.dataset.requestorType || '';
+            const proposalInput = form.querySelector('[name="activity_proposal_file"], [name="proposal_file"]');
+            const receiptInput = form.querySelector('[name="igp_receipt_file"]');
+            const hasProposal = Boolean(proposalInput?.files?.length);
+            const hasReceipt = Boolean(receiptInput?.files?.length);
+            const isEmergency = Boolean(form.querySelector('[name="is_emergency"]')?.checked);
+            const isRequired = isStudent && requestContext === 'student_organization'
+                ? !hasProposal
+                : (isStudent || requestorType === 'faculty') && !requestContext
+                    ? !hasProposal
+                    : requestorType === 'outsider'
+                        ? isEmergency && !hasProposal
+                        : !hasReceipt;
 
-            return supportInput && !supportInput.files?.length ? supportInput : null;
+            return isRequired ? proposalInput || receiptInput : null;
         }
 
         if (checklistId === 'checklist-e-signature') {
@@ -319,24 +339,38 @@ const initializeRequestForm = function () {
             requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
             form.querySelector('[name="name_of_activity"]'),
             form.querySelector('[name="purpose"]'),
-            form.querySelector('[name="start_date"]'),
-            form.querySelector('[name="end_date"]'),
             form.querySelector('[name="expected_participants"]'),
-            form.querySelector('[name="start_time"]'),
-            form.querySelector('[name="end_time"]'),
             form.querySelector('[name="requested_by_position"]'),
             positionSelect?.value === 'Other' ? otherPositionInput : null,
-            form.querySelector('[name="venue"]:checked')
         ];
-        const allRequiredComplete = requiredFields.every(isChecklistFieldComplete);
-        const selectedVenue = form.querySelector('[name="venue"]:checked');
-        const equipmentSelected = form.querySelectorAll('.equipment-checkbox:checked').length > 0;
+        const selectedScheduleGroups = Array.from(form.querySelectorAll('[data-venue-schedule]')).filter(function (group) {
+            return group.closest('[data-venue-option]')?.querySelector('[name="venue[]"]')?.checked;
+        });
+        const schedulesComplete = selectedScheduleGroups.length > 0 && selectedScheduleGroups.every(function (group) {
+            return Array.from(group.querySelectorAll('.venue-schedule-input')).every(isChecklistFieldComplete)
+                && Boolean(group.querySelector('input[type="radio"]:checked'));
+        });
+        const allRequiredComplete = requiredFields.every(isChecklistFieldComplete) && schedulesComplete;
+        const hasEquipmentSelection = form.querySelectorAll('.equipment-row .equipment-checkbox:checked').length > 0;
+        const hasAvailableEquipmentSelected = Array.from(form.querySelectorAll('.equipment-row')).filter(function (row) {
+            return row.querySelector('.equipment-checkbox')?.checked;
+        }).every(function (row) {
+            const quantity = row.querySelector('.quantity-input-wrap input[type="number"]');
+            const requested = Number(quantity?.value);
+            return Number.isInteger(requested) && requested >= 1 && requested <= Number(row.dataset.available || 0);
+        });
 
         const requestContext = form.querySelector('[name="request_context"]')?.value;
         const isStudent = form.dataset.isStudent === '1';
-        const hasFileUpload = (isStudent && requestContext === 'student_organization')
-            ? Boolean(form.querySelector('[name="activity_proposal_file"]')?.files?.length || form.querySelector('[name="proposal_file"]')?.files?.length)
-            : Boolean(form.querySelector('[name="igp_receipt_file"]')?.files?.length || form.querySelector('[name="activity_proposal_file"]')?.files?.length || form.querySelector('[name="proposal_file"]')?.files?.length);
+        const hasProposal = Boolean(form.querySelector('[name="activity_proposal_file"]')?.files?.length || form.querySelector('[name="proposal_file"]')?.files?.length);
+        const hasReceipt = Boolean(form.querySelector('[name="igp_receipt_file"]')?.files?.length);
+        const hasSupportingDocument = isStudent && requestContext === 'student_organization'
+            ? hasProposal
+            : (isStudent || requestorType === 'faculty') && !requestContext
+                ? hasProposal
+                : requestorType === 'outsider'
+                    ? (!form.querySelector('[name="is_emergency"]')?.checked || hasProposal)
+                    : hasReceipt;
         const eSignatureSelected = Boolean(form.querySelector('[name="e_signature_file"]')?.files?.length) || form.dataset.hasSavedSignature === '1';
 
         const requiredChecklist = document.getElementById('checklist-required-fields');
@@ -344,14 +378,8 @@ const initializeRequestForm = function () {
         const documentChecklist = document.getElementById('checklist-document-upload');
         const signatureChecklist = document.getElementById('checklist-e-signature');
         if (requiredChecklist) requiredChecklist.checked = allRequiredComplete;
-        if (venueChecklist) venueChecklist.checked = Boolean(selectedVenue) && (!equipmentSelected || Array.from(form.querySelectorAll('.equipment-row')).filter(function (row) {
-            return row.querySelector('.equipment-checkbox')?.checked;
-        }).every(function (row) {
-            const quantity = row.querySelector('.quantity-input-wrap input[type="number"]');
-            const requested = Number(quantity?.value);
-            return Number.isInteger(requested) && requested >= 1 && requested <= Number(row.dataset.available || 0);
-        }));
-        if (documentChecklist) documentChecklist.checked = hasFileUpload;
+        if (venueChecklist) venueChecklist.checked = selectedScheduleGroups.length > 0 && schedulesComplete && (!hasEquipmentSelection || hasAvailableEquipmentSelected);
+        if (documentChecklist) documentChecklist.checked = hasSupportingDocument;
         if (signatureChecklist) signatureChecklist.checked = eSignatureSelected;
         if (checklistWarning && [requiredChecklist, venueChecklist, documentChecklist, signatureChecklist].every(function (item) {
             return item?.checked === true;
@@ -384,7 +412,7 @@ const initializeRequestForm = function () {
         if (summaryDetails.equipment) {
             summaryDetails.equipment.innerHTML = selectedEquipment.length
                 ? selectedEquipment.map(item => `<li class="text-sm text-slate-700">${escapeHtml(item)}</li>`).join('')
-                : '<li class="text-sm text-slate-500">No equipment selected</li>';
+                : '<li class="text-sm text-slate-500">No additional equipment selected</li>';
         }
 
         updateChecklistState();
@@ -557,6 +585,16 @@ const initializeRequestForm = function () {
                 };
             });
         }
+        form.querySelectorAll('[name="venue[]"], [data-venue-schedule] .venue-schedule-input').forEach(function (field) {
+            field.addEventListener('input', updateUrgentScheduleConstraints);
+            field.addEventListener('change', updateUrgentScheduleConstraints);
+        });
+        updateUrgentScheduleConstraints();
+        window.setInterval(function () {
+            if (emergencyCheckbox?.checked) {
+                updateUrgentScheduleConstraints();
+            }
+        }, 30000);
         return draftDatabasePromise;
     };
 
@@ -772,6 +810,7 @@ const initializeRequestForm = function () {
             form.querySelector('[name="reservation_duration"]:checked')?.dispatchEvent(new Event('change', { bubbles: true }));
             form.querySelector('[name="reservation_duration"]:checked')?.dispatchEvent(new Event('change', { bubbles: true }));
             syncOvernightEndDate();
+            updateUrgentScheduleConstraints();
             refreshAllEquipmentAvailability();
             clearTimeout(conflictCheckTimeout);
             conflictCheckTimeout = setTimeout(checkConflicts, 250);
@@ -856,7 +895,7 @@ const initializeRequestForm = function () {
         const mergedEquipment = [...selectedEquipment].map(checkbox => checkbox.value);
 
         if (mergedEquipment.length === 0) {
-            summaryEquipment.innerHTML = 'Equipment: No equipment selected.';
+            summaryEquipment.innerHTML = 'Equipment: No additional equipment selected.';
             updateFormSummary();
             return;
         }
@@ -987,6 +1026,100 @@ const initializeRequestForm = function () {
             emergencyJustificationInput.value = '';
             emergencyJustificationInput.setAttribute('disabled', 'disabled');
         }
+    };
+
+    const getSystemLocalDateTime = function () {
+        const parts = new Intl.DateTimeFormat('en-CA', {
+            timeZone: form.dataset.urgentTimezone || 'Asia/Manila',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hourCycle: 'h23'
+        }).formatToParts(new Date()).reduce(function (values, part) {
+            values[part.type] = part.value;
+            return values;
+        }, {});
+
+        return {
+            date: `${parts.year}-${parts.month}-${parts.day}`,
+            time: `${parts.hour}:${parts.minute}`
+        };
+    };
+
+    const updateUrgentScheduleConstraints = function () {
+        const isUrgent = Boolean(emergencyCheckbox?.checked);
+        const current = getSystemLocalDateTime();
+
+        venueScheduleGroups.forEach(function (group) {
+            const venueOption = group.closest('[data-venue-option]');
+            const isSelected = venueOption?.querySelector('[name="venue[]"]')?.checked === true;
+            const startDate = group.querySelector('input[name$="[start_date]"]');
+            const endDate = group.querySelector('input[name$="[end_date]"]');
+            const startTime = group.querySelector('input[name$="[start_time]"]');
+            const dates = [startDate, endDate].filter(Boolean);
+
+            dates.forEach(function (field) {
+                if (isUrgent) {
+                    field.max = current.date;
+                } else {
+                    field.removeAttribute('max');
+                }
+                if (field.dataset.urgentValidation === '1') {
+                    field.setCustomValidity('');
+                    delete field.dataset.urgentValidation;
+                }
+            });
+
+            if (startTime) {
+                if (isUrgent && startDate?.value === current.date) {
+                    startTime.min = current.time;
+                } else {
+                    startTime.removeAttribute('min');
+                }
+                if (startTime.dataset.urgentValidation === '1') {
+                    startTime.setCustomValidity('');
+                    delete startTime.dataset.urgentValidation;
+                }
+            }
+
+            if (!isUrgent || !isSelected) {
+                return;
+            }
+
+            if (startDate?.value && startDate.value !== current.date) {
+                startDate.setCustomValidity('Urgent reservations must be scheduled for today.');
+                startDate.dataset.urgentValidation = '1';
+            }
+            if (endDate?.value && endDate.value !== current.date) {
+                endDate.setCustomValidity('Urgent reservations must end today.');
+                endDate.dataset.urgentValidation = '1';
+            }
+            if (startDate?.value === current.date && startTime?.value && startTime.value < current.time) {
+                const message = 'Urgent reservations must start at the current time or later.';
+                const invalidField = startTime.readOnly ? startDate : startTime;
+                invalidField?.setCustomValidity(message);
+                if (invalidField) {
+                    invalidField.dataset.urgentValidation = '1';
+                }
+            }
+        });
+    };
+
+    const validateUrgentSchedules = function () {
+        updateUrgentScheduleConstraints();
+        return !emergencyCheckbox?.checked
+            || venueScheduleGroups
+                .filter(function (group) {
+                    return group.closest('[data-venue-option]')?.querySelector('[name="venue[]"]')?.checked === true;
+                })
+                .every(function (group) {
+                    return Array.from(group.querySelectorAll('input[type="date"], input[type="time"]'))
+                        .every(function (field) {
+                            return field.validity.valid;
+                        });
+                });
     };
 
     const setInputValidationState = function (field, valid, message = '') {
@@ -1816,6 +1949,7 @@ const initializeRequestForm = function () {
         emergencyCheckbox.addEventListener('change', function () {
             updateProposalRequirement();
             toggleEmergencyJustification();
+            updateUrgentScheduleConstraints();
             updateOtherVenueVisibility();
             saveDraft();
             clearTimeout(conflictCheckTimeout);
@@ -1972,12 +2106,13 @@ const initializeRequestForm = function () {
         const clickedButton = document.activeElement && document.activeElement.matches('button[type="submit"]') ? document.activeElement : form.querySelector('button[type="submit"]');
         const requiredOk = validateRequiredFields();
         const dateTimeOk = validateDateTimeRange();
+        const urgentScheduleOk = validateUrgentSchedules();
         const qtyOk = validateQuantities();
         const hasConflict = hasConflictBlocker;
         const checklistComplete = ['checklist-required-fields', 'checklist-venue-availability', 'checklist-document-upload', 'checklist-e-signature']
             .every(id => document.getElementById(id)?.checked === true);
 
-        if (!requiredOk || !dateTimeOk || !qtyOk || hasConflict || !checklistComplete) {
+        if (!requiredOk || !dateTimeOk || !urgentScheduleOk || !qtyOk || hasConflict || !checklistComplete) {
             e.preventDefault();
             if (!checklistComplete) {
                 if (checklistWarning) {
@@ -1987,9 +2122,10 @@ const initializeRequestForm = function () {
                 }
                 resetSubmitButtonLoading(clickedButton);
             }
-            if (!requiredOk || !dateTimeOk) {
+            if (!requiredOk || !dateTimeOk || !urgentScheduleOk) {
                 const firstInvalid = form.querySelector(':invalid');
                 firstInvalid?.focus();
+                firstInvalid?.reportValidity();
             }
             return false;
         }

@@ -371,7 +371,7 @@ class User extends Authenticatable implements CanResetPassword
 
     public function isSystemAdmin(): bool
     {
-        return $this->isFacilityAdministrator();
+        return $this->hasRole('admin');
     }
 
     public function isAdminRole(): bool

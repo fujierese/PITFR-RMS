@@ -6,6 +6,7 @@ use App\Models\Equipment;
 use App\Models\FacilityRequest;
 use App\Models\User;
 use App\Models\Venue;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -109,6 +110,202 @@ class InventoryConsistencyTest extends TestCase
 
         $eq = Equipment::where('name', 'Sound System')->first();
         $this->assertSame(5, $eq->fresh()->quantity_available);
+    }
+
+    public function test_equipment_custodian_can_record_partial_then_complete_return_from_request_details(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2030-05-04 12:00:00'));
+
+        try {
+            $custodian = User::factory()->create(['role' => 'custodian-equipment']);
+            $requester = User::factory()->create(['role' => 'requestor']);
+            $equipment = Equipment::factory()->create([
+                'name' => 'Return Workflow Projector',
+                'custodian_id' => $custodian->id,
+                'quantity' => 5,
+                'quantity_available' => 3,
+            ]);
+            $request = FacilityRequest::create([
+                'control_number' => 'TEST-RETURN-FORM',
+                'date_requested' => '2030-04-20',
+                'department' => 'IT',
+                'name_of_activity' => 'Return form workflow',
+                'expected_participants' => 10,
+                'start_date' => '2030-05-01',
+                'end_date' => '2030-05-01',
+                'start_time' => '09:00',
+                'end_time' => '10:00',
+                'venue' => [],
+                'equipment' => ['Return Workflow Projector'],
+                'equipment_quantities' => ['Return Workflow Projector' => 2],
+                'requested_by_id' => $requester->id,
+                'status' => 'approved',
+                'venue_status' => 'approved',
+                'equipment_status' => 'approved',
+            ]);
+
+            $this->actingAs($custodian)
+                ->get(route('request.show', $request))
+                ->assertOk()
+                ->assertSee('Record equipment return')
+                ->assertSee('equipment[Return Workflow Projector]', false);
+
+            $this->post(route('custodian.return', $request), [
+                'equipment' => ['Return Workflow Projector' => 1],
+            ])->assertRedirect();
+
+            $this->assertSame('partial', $request->fresh()->equipment_returned_status);
+            $this->assertSame(['Return Workflow Projector' => 1], $request->fresh()->getEquipmentReturnOutstandingQuantities());
+            $this->get(route('request.show', $request))
+                ->assertOk()
+                ->assertSee('1 of 2 still unaccounted for');
+
+            $this->post(route('custodian.return', $request), [
+                'equipment' => ['Return Workflow Projector' => 2],
+            ])->assertRedirect();
+
+            $this->assertSame('fulfilled', $request->fresh()->equipment_returned_status);
+            $this->assertSame([], $request->fresh()->getEquipmentReturnOutstandingQuantities());
+            $this->assertSame(5, $equipment->fresh()->quantity_available);
+            $this->get(route('history.index'))
+                ->assertOk()
+                ->assertSee($request->control_number);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_equipment_return_is_blocked_until_the_latest_per_venue_schedule_ends(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2030-05-01 12:00:00'));
+
+        try {
+            $custodian = User::factory()->create(['role' => 'custodian-equipment']);
+            $requester = User::factory()->create(['role' => 'requestor']);
+            Equipment::factory()->create([
+                'name' => 'Schedule Return Projector',
+                'custodian_id' => $custodian->id,
+                'quantity' => 5,
+                'quantity_available' => 4,
+            ]);
+            $request = FacilityRequest::create([
+                'control_number' => 'TEST-RETURN-LATEST-VENUE',
+                'date_requested' => '2030-04-20',
+                'department' => 'IT',
+                'name_of_activity' => 'Latest venue return check',
+                'expected_participants' => 10,
+                'start_date' => '2030-04-29',
+                'end_date' => '2030-04-29',
+                'start_time' => '09:00',
+                'end_time' => '10:00',
+                'venue' => ['CHIC'],
+                'equipment' => ['Schedule Return Projector'],
+                'equipment_quantities' => ['Schedule Return Projector' => 1],
+                'requested_by_id' => $requester->id,
+                'status' => 'approved',
+                'venue_status' => 'approved',
+                'equipment_status' => 'approved',
+            ]);
+            $request->requestVenues()->update([
+                'start_date' => '2030-05-02',
+                'end_date' => '2030-05-02',
+                'start_time' => '09:00',
+                'end_time' => '17:00',
+            ]);
+
+            $this->actingAs($custodian)
+                ->post(route('custodian.return', $request), [
+                    'equipment' => ['Schedule Return Projector' => 1],
+                ])
+                ->assertRedirect()
+                ->assertSessionHasErrors();
+
+            $this->assertNull($request->fresh()->equipment_returned_status);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_unassigned_equipment_custodian_cannot_view_or_record_another_custodians_return(): void
+    {
+        $assignedCustodian = User::factory()->create(['role' => 'custodian-equipment']);
+        $otherCustodian = User::factory()->create(['role' => 'custodian-equipment']);
+        $requester = User::factory()->create(['role' => 'requestor']);
+        Equipment::factory()->create([
+            'name' => 'Assigned-only Projector',
+            'custodian_id' => $assignedCustodian->id,
+            'quantity' => 5,
+            'quantity_available' => 4,
+        ]);
+        $request = FacilityRequest::create([
+            'control_number' => 'TEST-RETURN-UNASSIGNED',
+            'date_requested' => now()->subDays(10)->toDateString(),
+            'department' => 'IT',
+            'name_of_activity' => 'Unassigned custodian check',
+            'expected_participants' => 10,
+            'start_date' => now()->subDays(5)->toDateString(),
+            'end_date' => now()->subDays(3)->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+            'venue' => [],
+            'equipment' => ['Assigned-only Projector'],
+            'equipment_quantities' => ['Assigned-only Projector' => 1],
+            'requested_by_id' => $requester->id,
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
+
+        $this->actingAs($otherCustodian)
+            ->get(route('request.show', $request))
+            ->assertForbidden();
+
+        $this->post(route('custodian.return', $request), [
+            'equipment' => ['Assigned-only Projector' => 1],
+        ])->assertForbidden();
+
+        $this->assertNull($request->fresh()->equipment_returned_status);
+    }
+
+    public function test_custodian_queue_keeps_ended_reservations_visible_until_returns_are_accounted_for(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2030-05-04 12:00:00'));
+
+        try {
+            $custodian = User::factory()->create(['role' => 'custodian-equipment']);
+            Equipment::factory()->create([
+                'name' => 'Pending Return Queue Speaker',
+                'custodian_id' => $custodian->id,
+                'quantity' => 5,
+                'quantity_available' => 4,
+            ]);
+            $request = FacilityRequest::create([
+                'control_number' => 'TEST-RETURN-QUEUE',
+                'date_requested' => '2030-04-20',
+                'department' => 'IT',
+                'name_of_activity' => 'Pending return queue item',
+                'expected_participants' => 10,
+                'start_date' => '2030-05-01',
+                'end_date' => '2030-05-01',
+                'start_time' => '09:00',
+                'end_time' => '10:00',
+                'venue' => [],
+                'equipment' => ['Pending Return Queue Speaker'],
+                'equipment_quantities' => ['Pending Return Queue Speaker' => 1],
+                'requested_by_id' => User::factory()->create(['role' => 'requestor'])->id,
+                'status' => 'approved',
+                'venue_status' => 'approved',
+                'equipment_status' => 'approved',
+            ]);
+
+            $this->actingAs($custodian)
+                ->get(route('custodian.index'))
+                ->assertOk()
+                ->assertSee($request->control_number)
+                ->assertSee('Review');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_return_accounts_for_damage_and_missing_by_equipment_and_syncs_inventory(): void

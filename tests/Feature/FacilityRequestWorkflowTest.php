@@ -119,6 +119,7 @@ class FacilityRequestWorkflowTest extends TestCase
             'status' => 'pending',
             'venue_status' => 'pending',
             'equipment_status' => 'pending',
+            'supply_office_review_status' => 'pending',
             'priority' => 'regular',
         ]);
 
@@ -138,6 +139,72 @@ class FacilityRequestWorkflowTest extends TestCase
         Notification::assertSentTo($requester, \App\Notifications\RequestStatusChanged::class, function ($notification): bool {
             return $notification->status === 'venue_approved';
         });
+    }
+
+    public function test_custodian_assigned_to_venue_and_equipment_can_confirm_each_workflow_stage(): void
+    {
+        Notification::fake();
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $custodian = User::factory()->create(['role' => 'custodian']);
+        Venue::create([
+            'name' => 'Conference Hall & Interaction Center (CHIC)',
+            'custodian_id' => $custodian->id,
+        ]);
+        Equipment::create([
+            'name' => 'Sound System',
+            'custodian_id' => $custodian->id,
+            'quantity' => 2,
+            'quantity_available' => 2,
+        ]);
+        $facilityRequest = FacilityRequest::create([
+            'control_number' => 'TEST-DUAL-CUSTODIAN-STAGES',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Dual Custodian Workflow',
+            'expected_participants' => 20,
+            'start_date' => now()->addDays(2)->toDateString(),
+            'end_date' => now()->addDays(2)->toDateString(),
+            'start_time' => '10:00',
+            'end_time' => '12:00',
+            'venue' => ['Conference Hall & Interaction Center (CHIC)'],
+            'equipment' => ['Sound System'],
+            'equipment_quantities' => ['Sound System' => 1],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+            'priority' => 'regular',
+        ]);
+
+        $this->assertTrue($custodian->isCustodianVenue());
+        $this->assertTrue($custodian->isCustodianEquipment());
+
+        $this->actingAs($custodian)
+            ->post(route('request.custodian.verify', $facilityRequest), ['notes' => 'Venue is available'])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Venue availability confirmed. The request is now waiting for Supply Office confirmation.')
+            ->assertSessionHasNoErrors();
+
+        $facilityRequest->refresh();
+        $this->assertSame('approved', $facilityRequest->venue_status);
+        $this->assertSame('pending', $facilityRequest->equipment_status);
+
+        $facilityRequest->update(['supply_office_review_status' => 'confirmed']);
+        $this->actingAs($custodian)
+            ->get(route('request.show', $facilityRequest))
+            ->assertOk()
+            ->assertSee('Approve Assigned Equipment');
+
+        $this->actingAs($custodian)
+            ->post(route('request.custodian.verify', $facilityRequest), ['notes' => 'Equipment is available'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $facilityRequest->refresh();
+        $this->assertSame('approved', $facilityRequest->venue_status);
+        $this->assertSame('approved', $facilityRequest->equipment_status);
+        $this->assertSame('approved', $facilityRequest->getCustodianEquipmentStatus((int) $custodian->id));
     }
 
     public function test_custodian_rejection_notifies_the_requestor(): void
@@ -166,6 +233,7 @@ class FacilityRequestWorkflowTest extends TestCase
             'status' => 'pending',
             'venue_status' => 'pending',
             'equipment_status' => 'pending',
+            'supply_office_review_status' => 'pending',
             'priority' => 'regular',
         ]);
         $facilityRequest->syncRelationalItems();
@@ -174,8 +242,11 @@ class FacilityRequestWorkflowTest extends TestCase
             ->post(route('request.custodian.reject', $facilityRequest), ['notes' => 'Venue unavailable'])
             ->assertRedirect();
 
+        $facilityRequest->refresh();
+        $this->assertSame('pending', $facilityRequest->status);
+        $this->assertSame('needs_reschedule', $facilityRequest->venue_status);
         Notification::assertSentTo($requester, \App\Notifications\RequestStatusChanged::class, function ($notification): bool {
-            return $notification->status === 'rejected';
+            return $notification->status === 'venue_availability_unavailable';
         });
     }
 
@@ -192,7 +263,7 @@ class FacilityRequestWorkflowTest extends TestCase
             'end_date' => now()->addDay()->toDateString(),
             'start_time' => '08:00',
             'end_time' => '10:00',
-            'venue' => ['Conference Hall & Interaction Center (CHIC)'],
+            'venue' => ['Gymnasium'],
             'equipment' => ['Sound System'],
             'equipment_quantities' => ['Sound System' => 1],
             'requested_by_id' => $requester->id,
@@ -216,6 +287,123 @@ class FacilityRequestWorkflowTest extends TestCase
         $response->assertDontSee('>Upcoming</span>', false);
     }
 
+    public function test_request_details_separates_venue_included_equipment_from_additional_requests(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $facilityRequest = FacilityRequest::create([
+            'control_number' => 'TEST-EQUIPMENT-SECTIONS',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Equipment Section Test',
+            'expected_participants' => 20,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'venue' => ['Balay Alumni'],
+            'equipment' => ['Sound System', 'Aircon', 'Chairs', 'Tables'],
+            'equipment_quantities' => [
+                'Sound System' => 1,
+                'Aircon' => 1,
+                'Chairs' => 1,
+                'Tables' => 2,
+            ],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+            'priority' => 'regular',
+        ]);
+
+        $response = $this->actingAs($requester)
+            ->get(route('request.show', $facilityRequest));
+
+        $response->assertOk()
+            ->assertSee('3 included')
+            ->assertSee('1 additional');
+
+        $html = $response->getContent();
+        $equipmentStart = strrpos(substr($html, 0, strpos($html, 'Included with venue')), 'Equipment');
+        $proposalStart = strpos($html, 'Proposal', $equipmentStart);
+        $equipmentSection = substr($html, $equipmentStart, $proposalStart - $equipmentStart);
+
+        $this->assertSame(1, substr_count($equipmentSection, 'Sound System'));
+        $this->assertSame(1, substr_count($equipmentSection, 'Aircon'));
+        $this->assertSame(1, substr_count($equipmentSection, 'Chairs'));
+        $this->assertSame(1, substr_count($equipmentSection, 'Tables'));
+    }
+
+    public function test_request_details_shows_venue_confirmation_before_supply_office_and_skips_unneeded_equipment_review(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $facilityRequest = FacilityRequest::create([
+            'control_number' => 'TEST-WORKFLOW-AVAILABILITY-FIRST',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Venue Included Equipment Workflow Test',
+            'expected_participants' => 20,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'venue' => ['Conference Hall & Interaction Center (CHIC)'],
+            'equipment' => ['Sound System', 'Iwata Cooler Fans', 'Podium', 'HDMI', 'Television (CHIC)'],
+            'equipment_quantities' => [
+                'Sound System' => 1,
+                'Iwata Cooler Fans' => 1,
+                'Podium' => 1,
+                'HDMI' => 1,
+                'Television (CHIC)' => 1,
+            ],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+            'priority' => 'regular',
+        ]);
+
+        $response = $this->actingAs($requester)
+            ->get(route('request.show', $facilityRequest));
+
+        $response->assertOk()
+            ->assertSee('Current stage: Venue Availability Confirmation')
+            ->assertSee('Current Workflow Stage')
+            ->assertDontSee('>Equipment Review</p>', false);
+
+        $html = $response->getContent();
+        $supplyReviewPosition = strpos($html, '>Supply Office Availability Confirmation</p>');
+        $venueReviewPosition = strpos($html, '>Venue Availability Confirmation</p>');
+
+        $this->assertNotFalse($supplyReviewPosition);
+        $this->assertNotFalse($venueReviewPosition);
+        $this->assertLessThan($supplyReviewPosition, $venueReviewPosition);
+        $this->assertSame(1, substr_count($html, 'Current stage: Venue Availability Confirmation'));
+
+        $facilityRequest->forceFill([
+            'supply_office_review_status' => 'pending',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ])->save();
+
+        $this->actingAs($requester)
+            ->get(route('request.show', $facilityRequest))
+            ->assertOk()
+            ->assertSee('Current stage: Supply Office Availability Confirmation')
+            ->assertSee('Pending Supply Office Availability Confirmation')
+            ->assertDontSee('Pending Equipment Custodian Approval');
+
+        $facilityRequest->update(['supply_office_review_status' => 'confirmed']);
+
+        $this->actingAs($requester)
+            ->get(route('request.show', $facilityRequest))
+            ->assertOk()
+            ->assertSee('Current stage: Final Approval')
+            ->assertSee('Pending Final Approval')
+            ->assertDontSee('Pending Equipment Custodian Approval')
+            ->assertDontSee('>Equipment Review</p>', false);
+    }
+
     public function test_request_details_show_stage_specific_pending_and_approval_messages_with_person_and_role(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
@@ -231,13 +419,14 @@ class FacilityRequestWorkflowTest extends TestCase
             'end_date' => now()->addDay()->toDateString(),
             'start_time' => '08:00',
             'end_time' => '10:00',
-            'venue' => ['Conference Hall & Interaction Center (CHIC)'],
+            'venue' => ['Gymnasium'],
             'equipment' => ['Sound System'],
             'equipment_quantities' => ['Sound System' => 1],
             'requested_by_id' => $requester->id,
             'status' => 'pending',
-            'venue_status' => 'pending',
+            'venue_status' => 'approved',
             'equipment_status' => 'pending',
+            'supply_office_review_status' => 'confirmed',
             'priority' => 'regular',
         ]);
 
@@ -267,7 +456,7 @@ class FacilityRequestWorkflowTest extends TestCase
         $this->actingAs($requester)
             ->get(route('request.show', $pendingRequest))
             ->assertOk()
-            ->assertSee('Pending Venue Custodian Approval')
+            ->assertSee('Pending Equipment Custodian Approval')
             ->assertDontSee('Waiting for review');
 
         $this->actingAs($requester)
@@ -297,6 +486,7 @@ class FacilityRequestWorkflowTest extends TestCase
             'status' => 'pending',
             'venue_status' => 'approved',
             'equipment_status' => 'pending',
+            'supply_office_review_status' => 'confirmed',
             'priority' => 'regular',
         ]);
 
@@ -310,7 +500,7 @@ class FacilityRequestWorkflowTest extends TestCase
         $response->assertSee('Sound System');
         $response->assertSee('Qty 2');
         $response->assertSee('Pending Equipment Custodian Approval');
-        $response->assertSee('The venue has been approved and the equipment custodian is still reviewing this request.');
+        $response->assertSee('The venue custodian and Supply Office confirmed availability. The assigned equipment custodian is now reviewing this request.');
         $response->assertDontSee('Current approver');
         $response->assertDontSee('The request will continue through the existing approval workflow without changing the backend process.');
     }
@@ -337,6 +527,7 @@ class FacilityRequestWorkflowTest extends TestCase
             'status' => 'pending',
             'venue_status' => 'pending',
             'equipment_status' => 'pending',
+            'supply_office_review_status' => 'pending',
             'priority' => 'regular',
         ]);
 
@@ -433,6 +624,7 @@ class FacilityRequestWorkflowTest extends TestCase
             'status' => 'pending',
             'venue_status' => 'pending',
             'equipment_status' => 'pending',
+            'supply_office_review_status' => 'pending',
             'priority' => 'regular',
         ]);
 
@@ -448,6 +640,14 @@ class FacilityRequestWorkflowTest extends TestCase
         $response->assertRedirect();
         $facilityRequest->refresh();
         $this->assertSame('approved', $facilityRequest->venue_status);
+
+        $this->actingAs($admin)
+            ->post(route('supply-office.requests.availability-review'), [
+                'id' => $facilityRequest->id,
+                'decision' => 'available',
+            ])
+            ->assertRedirect(route('supply-office.index'))
+            ->assertSessionHasNoErrors();
 
         $response = $this->actingAs($equipmentCustodian)
             ->post(route('custodian.update'), [
@@ -473,6 +673,7 @@ class FacilityRequestWorkflowTest extends TestCase
             'user_id' => $admin->id,
         ]);
 
+        $this->travelTo($facilityRequest->getRequestedEndDateTime()->addMinute());
         $response = $this->actingAs($equipmentCustodian)
             ->post(route('custodian.update'), [
                 'id' => $facilityRequest->id,

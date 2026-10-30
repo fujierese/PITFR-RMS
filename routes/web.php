@@ -200,6 +200,7 @@ Route::middleware(['auth', 'role:custodian'])->prefix('custodian')->group(functi
     Route::post('/settings/notifications', [CustodianController::class, 'updateNotificationPreferences'])->name('custodian.settings.notifications');
     Route::post('/settings/signature', [CustodianController::class, 'updateSignature'])->name('custodian.settings.signature');
     Route::post('/update', [CustodianController::class, 'update'])->name('custodian.update');
+    Route::post('/requests/revise', [SupplyOfficeController::class, 'reviseReservation'])->name('custodian.requests.revise');
     Route::get('/equipment/availability', [RequestorController::class, 'equipmentAvailability'])->name('custodian.equipment.availability');
     Route::post('/facility-request/{id}/return', [CustodianController::class, 'returnEquipment'])->name('custodian.return');
     Route::post('/venues', [CustodianController::class, 'storeVenue'])->name('custodian.venues.store');
@@ -242,6 +243,9 @@ Route::middleware('auth')->group(function () {
 Route::get('/calendar/events', [CalendarController::class, 'getEvents'])->name('calendar.events');
 
 Route::middleware('auth')->group(function() {
+    Route::post('/calendar/requests/{facilityRequest}/availability-check', [CalendarController::class, 'checkRequestAvailability'])
+        ->middleware('role:admin,supply_office,custodian')
+        ->name('calendar.request-availability-check');
     Route::post('/calendar/return/{id}', [CustodianController::class, 'returnEquipment'])->name('calendar.return');
     Route::post('/calendar/approve/{id}', [CalendarController::class, 'approveRequest'])->name('calendar.approve');
     Route::post('/calendar/reject/{facility_request}', [FacilityRequestApiController::class, 'reject'])->name('calendar.reject');

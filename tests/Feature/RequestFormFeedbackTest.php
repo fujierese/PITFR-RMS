@@ -9,6 +9,7 @@ use App\Models\User;
 use Database\Seeders\CollegeDepartmentSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class RequestFormFeedbackTest extends TestCase
@@ -43,6 +44,7 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringContainsString('Draft autosave', $html);
         $this->assertStringContainsString('Official Request Form', $html);
         $this->assertStringContainsString('Submission checklist', $html);
+        $this->assertStringContainsString('Venue and equipment details ready for Supply Office availability review', $html);
         $this->assertStringContainsString('data-venue-availability-url', $html);
         $this->assertStringContainsString("input.addEventListener('change', function () {", $html);
         $this->assertStringContainsString('toggleScheduleFields();', $html);
@@ -68,6 +70,34 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringContainsString('calendar/embed?date=', $html);
         $this->assertStringContainsString('select=1', $html);
         $this->assertStringNotContainsString('>Calendar</button>', $html);
+    }
+
+    public function test_outsider_request_form_uses_saved_signature_and_position_fallback(): void
+    {
+        Storage::fake('local');
+        $user = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'outsider',
+            'office_or_organization' => 'External Partner Organization',
+            'position' => null,
+        ]);
+        $signature = $user->id . '_signature.png';
+        Storage::disk('local')->put('documents/e_signature/users/' . $signature, 'signature');
+        $user->update(['e_signature_file' => $signature]);
+        Auth::login($user);
+
+        $html = view('requestor.partials.request_form', [
+            'controlNumber' => 'FER-2026-001',
+            'venueOptions' => ['Gymnasium'],
+            'equipment' => collect(),
+            'errors' => new \Illuminate\Support\ViewErrorBag(),
+            'requestorType' => 'outsider',
+        ])->render();
+
+        $this->assertStringContainsString('data-has-saved-signature="1"', $html);
+        $this->assertStringContainsString('name="requested_by_position" value="External Partner"', $html);
+        $this->assertStringContainsString('alt="Saved e-signature"', $html);
+        $this->assertStringContainsString('Saved e-signature available', $html);
         $this->assertMatchesRegularExpression('/<div class="venue-schedule mt-4 hidden" data-venue-schedule data-venue-name="Gymnasium">/', $html);
         $this->assertStringContainsString('data-venue-equipment-group data-venue-name="Gymnasium"', $html);
         $this->assertStringContainsString('Equipment by Venue', $html);
@@ -77,7 +107,7 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringNotContainsString('Requested Importance', $html);
     }
 
-    public function test_selected_venue_shows_its_schedule_and_included_equipment(): void
+    public function test_selected_venue_shows_its_schedule_and_provided_equipment(): void
     {
         $requestor = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         $html = $this->withSession(['_old_input' => ['venue' => ['Balay Alumni']]])
@@ -90,13 +120,13 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertSame(1, preg_match('/name="venue_schedules\[Balay Alumni\]\[start_time\]"\s+required/', $html));
         $this->assertSame(1, preg_match('/name="venue_schedules\[Balay Alumni\]\[end_time\]"\s+required/', $html));
         $this->assertSame(2, preg_match_all('/name="venue_schedules\[Balay Alumni\]\[reservation_duration\]" value="(?:specific_time|whole_day)"(?![^>]*disabled)/', $html));
-        foreach (['Sound System', 'Aircon', 'Chairs'] as $equipment) {
-            $this->assertSame(1, preg_match('/name="venue_equipment\[Balay Alumni\]\[\]" value="'.preg_quote($equipment, '/').'"[^>]*checked/', $html));
-        }
+        $this->assertStringContainsString('Provided with this venue (not a separate equipment request): Sound System, Aircon, Chairs', $html);
+        $this->assertStringNotContainsString('name="venue_equipment[Balay Alumni][]" value="Sound System"', $html);
+        $this->assertStringNotContainsString('name="venue_equipment[Balay Alumni][]" value="Aircon"', $html);
         $this->assertSame(1, preg_match('/data-venue-equipment-group[^>]*data-venue-name="Balay Alumni"/', $html));
     }
 
-    public function test_chic_venue_auto_selects_its_equipment_without_selecting_a_microphone_type(): void
+    public function test_chic_venue_lists_provided_equipment_without_requesting_it_by_default(): void
     {
         $requestor = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         $html = $this->withSession(['_old_input' => ['venue' => ['Conference Hall & Interaction Center (CHIC)']]])
@@ -105,8 +135,9 @@ class RequestFormFeedbackTest extends TestCase
             ->assertOk()
             ->getContent();
 
+        $this->assertStringContainsString('Provided with this venue (not a separate equipment request): Sound System, Iwata Cooler Fans, Podium, HDMI, Television (CHIC)', $html);
         foreach (['Sound System', 'Iwata Cooler Fans', 'Podium', 'HDMI', 'Television (CHIC)'] as $equipment) {
-            $this->assertSame(1, preg_match('/name="venue_equipment\[Conference Hall &amp; Interaction Center \(CHIC\)\]\[\]" value="'.preg_quote($equipment, '/').'"[^>]*checked/', $html));
+            $this->assertStringNotContainsString('name="venue_equipment[Conference Hall &amp; Interaction Center (CHIC)][]" value="' . $equipment . '"', $html);
         }
         $this->assertSame(1, preg_match('/name="venue_equipment\[Conference Hall &amp; Interaction Center \(CHIC\)\]\[\]" value="Wireless Microphones"(?![^>]*checked)/', $html));
         $this->assertSame(1, preg_match('/name="venue_equipment\[Conference Hall &amp; Interaction Center \(CHIC\)\]\[\]" value="Non-Wireless Microphones"(?![^>]*checked)/', $html));
@@ -175,6 +206,9 @@ class RequestFormFeedbackTest extends TestCase
             'controlNumber' => 'FER-2026-001',
             'venueOptions' => ['Gymnasium', 'Balay Alumni'],
             'equipment' => collect(),
+            'venueDefaultEquipmentMap' => [
+                'Balay Alumni' => ['Sound System', 'Aircon', 'Chairs'],
+            ],
             'venueEquipmentVisibilityMap' => ['Aircon' => ['Balay Alumni']],
             'errors' => new \Illuminate\Support\ViewErrorBag(),
             'requestorType' => 'outsider',
@@ -189,11 +223,13 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringContainsString('placeholder="Enter qty"', $html);
         $this->assertStringNotContainsString('data-quantity-step', $html);
         $this->assertStringContainsString('Balay Alumni has 50 Chairs onsite.', $html);
-        $this->assertStringContainsString('data-name="Aircon" data-venue="Balay Alumni"', $html);
+        $this->assertStringContainsString('Provided with this venue (not a separate equipment request): Sound System, Aircon, Chairs', $html);
+        $this->assertStringNotContainsString('name="venue_equipment[Balay Alumni][]" value="Sound System"', $html);
+        $this->assertStringNotContainsString('data-name="Aircon" data-venue="Balay Alumni"', $html);
         $this->assertStringNotContainsString('value="Wireless Microphone"', $html);
         $this->assertStringNotContainsString('value="Non-wireless Microphone"', $html);
         $this->assertStringNotContainsString('value="Monobloc chairs"', $html);
-        $this->assertStringContainsString('value="Chairs"', $html);
+        $this->assertStringNotContainsString('value="Chairs"', $html);
     }
 
     public function test_request_form_checklist_items_include_scroll_targets_for_missing_fields(): void

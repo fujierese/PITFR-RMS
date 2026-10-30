@@ -29,6 +29,8 @@
     $isStudent = $effectiveRequestorType === 'student';
     $isFaculty = $effectiveRequestorType === 'faculty' || ($currentUser?->role ?? null) === 'faculty';
     $isExternal = in_array($effectiveRequestorType, ['outsider'], true);
+    $hasSavedSignature = (bool) ($currentUser?->e_signature_file
+        && \Illuminate\Support\Facades\Storage::disk('local')->exists('documents/e_signature/users/' . $currentUser->e_signature_file));
     $selectedCollegeId = old('college_id', $profileCollegeId ?? null);
     $selectedDepartmentId = old('department_id', $profileDepartmentId ?? null);
     $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
@@ -58,7 +60,7 @@
     }
 </style>
 
-<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="Submit this request?" data-swal-text="Please confirm that the request details are complete and correct." data-swal-icon="question" data-swal-confirm-text="Yes, submit request" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-venue-availability-url="{{ route('requestor.venue.availability') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-has-saved-signature="{{ $currentUser?->e_signature_file ? '1' : '0' }}" data-venue-capacities="{{ json_encode($venueCapacityMap ?? []) }}" data-venue-default-equipment="{{ json_encode($venueDefaultEquipmentMap ?? []) }}">
+<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="Submit this request?" data-swal-text="Please confirm that the request details are complete and correct." data-swal-icon="question" data-swal-confirm-text="Yes, submit request" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-venue-availability-url="{{ route('requestor.venue.availability') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-can-request-urgent="{{ $isExternal ? '0' : '1' }}" data-urgent-timezone="{{ config('app.timezone') }}" data-has-saved-signature="{{ $hasSavedSignature ? '1' : '0' }}" data-venue-capacities="{{ json_encode($venueCapacityMap ?? []) }}" data-venue-default-equipment="{{ json_encode($venueDefaultEquipmentMap ?? []) }}">
     @csrf
 
 <div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]">
@@ -354,7 +356,7 @@
                         <div class="flex items-center justify-between gap-4">
                             <div>
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Equipment by Venue</p>
-                                <p class="mt-1 text-sm text-slate-500">Select equipment separately for each venue. Venue-included equipment is preselected and still goes through custodian review.</p>
+                                <p class="mt-1 text-sm text-slate-500">Equipment already provided with a venue is included automatically. Select only additional equipment you need.</p>
                             </div>
                             <div class="flex items-center gap-2">
                                 <p class="text-xs text-slate-500">Real-time availability</p>
@@ -391,6 +393,11 @@
                             @endphp
                             <div class="venue-equipment-group {{ $venueIsSelected ? '' : 'hidden' }} rounded-2xl border border-slate-200 p-4" data-venue-equipment-group data-venue-name="{{ $venueName }}">
                                 <h4 class="mb-3 font-semibold text-slate-800">{{ $venueName }} equipment</h4>
+                                @if($venueDefaults !== [])
+                                    <p class="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                                        Provided with this venue (not a separate equipment request): {{ implode(', ', $venueDefaults) }}
+                                    </p>
+                                @endif
                                 @if($venueName === 'Balay Alumni')
                                     <div class="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900" role="note">
                                         Balay Alumni has 50 Chairs onsite. Request Monobloc Chairs only if additional seating is needed.
@@ -406,20 +413,19 @@
                                             $isVenueRequired = in_array($itemName, $venueDefaults, true);
                                             $oldVenueItems = (array) ($oldVenueEquipment[$venueName] ?? []);
                                             $legacySelected = !array_key_exists('venue_equipment', session()->getOldInput()) && $venueName === ($selectedVenues[0] ?? null) && in_array($itemName, (array) old('equipment', []), true);
-                                            $isSelected = in_array($itemName, $oldVenueItems, true) || $legacySelected || ($isVenueRequired && $venueIsSelected);
+                                            $isSelected = in_array($itemName, $oldVenueItems, true) || $legacySelected;
                                             $allowedVenues = $venueEquipmentVisibilityMap[$itemName] ?? [];
                                             $isOtherVenueEquipment = in_array($itemName, ['Podium', 'HDMI', 'Television (CHIC)'], true);
                                             $isVisible = !in_array($itemName, $venueIncompatible, true) && ($allowedVenues === [] || in_array($venueName, $allowedVenues, true));
                                             $itemIndex = $loop->parent->index . '-' . $loop->index;
                                             $itemQuantity = $oldVenueEquipmentQuantities[$venueName][$itemName] ?? ($isSelected ? 1 : '');
                                         @endphp
-                                        @if($isVisible)
-                                            <div class="equipment-row flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between {{ $itemAvailable > 0 ? 'hover:border-purple-400 hover:bg-purple-50/70' : 'border-red-100 bg-red-50/70 opacity-70' }} {{ $isSelected ? 'border-emerald-300 bg-emerald-50/60' : '' }}" data-available="{{ $itemAvailable }}" data-total="{{ $itemQty }}" data-name="{{ $itemName }}" data-venue="{{ $venueName }}" data-venue-required="{{ $isVenueRequired ? '1' : '0' }}" data-index="{{ $itemIndex }}">
+                                        @if($isVisible && !$isVenueRequired)
+                                            <div class="equipment-row flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between {{ $itemAvailable > 0 ? 'hover:border-purple-400 hover:bg-purple-50/70' : 'border-red-100 bg-red-50/70 opacity-70' }} {{ $isSelected ? 'border-emerald-300 bg-emerald-50/60' : '' }}" data-available="{{ $itemAvailable }}" data-total="{{ $itemQty }}" data-name="{{ $itemName }}" data-venue="{{ $venueName }}" data-index="{{ $itemIndex }}">
                                                 <label class="flex flex-1 cursor-pointer items-center gap-3">
-                                                    <input type="checkbox" name="venue_equipment[{{ $venueName }}][]" value="{{ $itemName }}" {{ $itemAvailable <= 0 && !$isVenueRequired ? 'disabled' : '' }} {{ $isSelected ? 'checked' : '' }} class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="{{ $itemName }}" data-venue-required="{{ $isVenueRequired ? '1' : '0' }}">
+                                                    <input type="checkbox" name="venue_equipment[{{ $venueName }}][]" value="{{ $itemName }}" {{ $itemAvailable <= 0 ? 'disabled' : '' }} {{ $isSelected ? 'checked' : '' }} class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="{{ $itemName }}">
                                                     <div class="flex flex-1 items-center gap-2">
                                                         <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
-                                                        <span data-equipment-included-badge class="{{ $isVenueRequired ? 'inline-flex' : 'hidden' }} items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Included in venue</span>
                                                         @if($isOtherVenueEquipment)
                                                             <span data-other-venue-equipment-badge class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600">{{ $venueName === 'Conference Hall & Interaction Center (CHIC)' ? 'CHIC equipment' : 'Others' }}</span>
                                                         @endif
@@ -483,7 +489,7 @@
                     <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                         <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Equipment</p>
                         <ul id="summary-equipment" class="mt-2 space-y-1 text-sm text-slate-700">
-                            <li class="text-slate-500">No equipment selected</li>
+                            <li class="text-slate-500">No additional equipment selected</li>
                         </ul>
                     </div>
                 </section>
@@ -497,7 +503,7 @@
                         <div>
                             <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Position</p>
                             <input type="text" value="{{ $currentUser?->position ?? 'Position not provided' }}" readonly class="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 cursor-not-allowed">
-                            <input type="hidden" name="requested_by_position" value="{{ $currentUser?->position ?? '' }}">
+                            <input type="hidden" name="requested_by_position" value="{{ $currentUser?->position ?: ($isExternal ? 'External Partner' : '') }}">
                         </div>
                     </div>
                 </section>
@@ -505,7 +511,13 @@
                 <section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
                     <div class="mb-5 border-b border-slate-200 pb-4">
                         <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section VI. Request Classification</p>
-                        <p class="mt-1 text-sm text-slate-500">Priority classification is determined during approval by the Custodian or Administrator. Requestors may only request urgent processing.</p>
+                        <p class="mt-1 text-sm text-slate-500">
+                            @if ($isExternal)
+                                Priority classification is determined during approval. Outside organization requests follow the standard review process.
+                            @else
+                                Priority classification is determined during approval. Institute requestors may request urgent processing for events scheduled today.
+                            @endif
+                        </p>
                     </div>
                     <div class="grid grid-cols-1 gap-5 lg:grid-cols-[1.2fr_0.8fr]">
                         <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
@@ -525,7 +537,7 @@
                                     <p class="mt-1 text-sm font-semibold text-slate-700">{{ $requestClassification }}</p>
                                 </div>
                             </div>
-                            <div id="urgent-request-indicator" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 {{ $urgentRequested ? '' : 'hidden' }}">
+                            <div id="urgent-request-indicator" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 {{ $urgentRequested && !$isExternal ? '' : 'hidden' }}">
                                 <span class="font-semibold">🔴 Urgent Processing Requested</span>
                                 <p class="mt-1 text-xs text-red-600">This is an indicator only and does not automatically change the request priority.</p>
                             </div>
@@ -533,18 +545,22 @@
                         </div>
                         <div class="rounded-3xl border border-amber-200 bg-amber-50/80 p-5 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Urgent Request</p>
-                            <p class="mt-3 text-xs leading-5 text-slate-600">Urgent processing is available only for requests starting within the next 48 hours. Enter a reason and upload the required documents. Final approval and priority classification remain subject to the Custodian or Administrator.</p>
-                            <label class="mt-4 flex items-start gap-3 cursor-pointer">
-                                <input type="checkbox" name="is_emergency" id="urgent-processing-checkbox" value="1" {{ old('is_emergency') ? 'checked' : '' }} class="mt-1 h-4 w-4 rounded border-amber-300 text-amber-600">
-                                <span class="text-sm font-semibold text-amber-800">Request Urgent Processing</span>
-                            </label>
-                            <div id="urgent-justification-wrap" class="mt-4 {{ old('is_emergency') ? '' : 'hidden' }} rounded-3xl border border-amber-200 bg-white p-3">
-                                <label for="emergency-justification" class="text-xs font-semibold text-amber-700">Reason for Urgent Processing</label>
-                                <textarea name="emergency_justification" id="emergency-justification" rows="3" class="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" placeholder="Describe why this request requires urgent processing" {{ old('is_emergency') ? '' : 'disabled' }}>{{ old('emergency_justification') }}</textarea>
-                                @error('emergency_justification')
-                                    <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
-                                @enderror
-                            </div>
+                            @if ($isExternal)
+                                <p class="mt-3 text-xs leading-5 text-slate-600">Urgent processing is available only to Institute requestors. Outside organization requests follow the standard review process.</p>
+                            @else
+                                <p class="mt-3 text-xs leading-5 text-slate-600">Available only for events scheduled today. The start time must be now or later. Enter a reason and upload the required supporting document. Urgent processing is subject to review and is not guaranteed.</p>
+                                <label class="mt-4 flex items-start gap-3 cursor-pointer">
+                                    <input type="checkbox" name="is_emergency" id="urgent-processing-checkbox" value="1" {{ old('is_emergency') ? 'checked' : '' }} class="mt-1 h-4 w-4 rounded border-amber-300 text-amber-600">
+                                    <span class="text-sm font-semibold text-amber-800">Request Urgent Processing</span>
+                                </label>
+                                <div id="urgent-justification-wrap" class="mt-4 {{ old('is_emergency') ? '' : 'hidden' }} rounded-3xl border border-amber-200 bg-white p-3">
+                                    <label for="emergency-justification" class="text-xs font-semibold text-amber-700">Reason for Urgent Processing</label>
+                                    <textarea name="emergency_justification" id="emergency-justification" rows="3" class="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" placeholder="Describe why this request requires urgent processing" {{ old('is_emergency') ? '' : 'disabled' }}>{{ old('emergency_justification') }}</textarea>
+                                    @error('emergency_justification')
+                                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+                            @endif
                         </div>
                     </div>
                 </section>
@@ -708,7 +724,7 @@
                             </div>
 
                             <div class="rounded-2xl border border-emerald-200 bg-white p-4">
-                                @if($currentUser?->e_signature_file)
+                                @if($hasSavedSignature)
                                     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                         <div class="flex items-center gap-3">
                                             <img src="{{ route('user.signature', ['user' => $currentUser->id]) }}" alt="Saved e-signature" class="h-14 max-w-[220px] rounded-lg border border-slate-200 bg-white object-contain p-2 shadow-sm">
@@ -753,7 +769,7 @@
                         <div class="flex items-start gap-3">
                             <input id="checklist-venue-availability" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
                             <button type="button" data-checklist-target="checklist-venue-availability" class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
-                                Venue and equipment availability confirmed
+                                Venue and equipment details ready for Supply Office availability review
                             </button>
                         </div>
                         <div class="flex items-start gap-3">
@@ -765,7 +781,7 @@
                         <div class="flex items-start gap-3">
                             <input id="checklist-e-signature" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
                             <button type="button" data-checklist-target="checklist-e-signature" class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
-                                E-signature uploaded
+                                Saved e-signature available
                             </button>
                         </div>
                     </div>
@@ -1261,7 +1277,7 @@
                 if (selectedEquipment.length) {
                     summaryDetails.equipment.innerHTML = selectedEquipment.map((item) => `<li class="text-sm text-slate-700">${item}</li>`).join('');
                 } else {
-                    summaryDetails.equipment.innerHTML = '<li class="text-sm text-slate-500">No equipment selected</li>';
+                    summaryDetails.equipment.innerHTML = '<li class="text-sm text-slate-500">No additional equipment selected</li>';
                 }
             }
 
@@ -1270,7 +1286,6 @@
         }
 
         const venueInputs = form.querySelectorAll('input[name="venue[]"]');
-        const venueDefaultEquipment = JSON.parse(form.dataset.venueDefaultEquipment || '{}');
         const venueAvailabilityContainer = document.getElementById('venue-conflict-alert-wrap');
         let venueAvailabilityState = null;
         let venueAvailabilitySequence = 0;
@@ -1430,20 +1445,10 @@
                     const checkbox = row.querySelector('.equipment-checkbox');
                     const quantityWrap = row.querySelector('.quantity-input-wrap');
                     const quantity = quantityWrap?.querySelector('input[type="number"]');
-                    const includedBadge = row.querySelector('[data-equipment-included-badge]');
                     if (!checkbox) return;
-
-                    const isVenueRequired = (venueDefaultEquipment[venue] || []).includes(row.dataset.name);
-                    checkbox.dataset.venueRequired = isVenueRequired ? '1' : '0';
-                    if (includedBadge) {
-                        includedBadge.classList.toggle('hidden', !isVenueRequired);
-                        includedBadge.classList.toggle('inline-flex', isVenueRequired);
-                    }
 
                     if (!venueIsSelected) {
                         checkbox.checked = false;
-                    } else if (isVenueRequired && !checkbox.disabled) {
-                        checkbox.checked = true;
                     }
 
                     const isSelected = venueIsSelected && checkbox.checked;
@@ -1462,9 +1467,6 @@
 
         form.querySelectorAll('.equipment-checkbox').forEach((checkbox) => {
             checkbox.addEventListener('change', () => {
-                if (checkbox.dataset.venueRequired === '1' && !checkbox.checked) {
-                    checkbox.checked = true;
-                }
                 if (checkbox.checked && ['Wireless Microphones', 'Non-Wireless Microphones'].includes(checkbox.value)) {
                     const otherMicrophone = checkbox.value === 'Wireless Microphones' ? 'Non-Wireless Microphones' : 'Wireless Microphones';
                     const otherCheckbox = checkbox.closest('[data-venue-equipment-group]')?.querySelector(`.equipment-checkbox[value="${otherMicrophone}"]`);
@@ -1692,7 +1694,6 @@
             if (checklistVenueAvailability) {
                 checklistVenueAvailability.checked = Boolean(selectedVenue)
                     && schedulesComplete
-                    && venueAvailabilityState === true
                     && (!hasEquipmentSelection || hasAvailableEquipmentSelected);
             }
 

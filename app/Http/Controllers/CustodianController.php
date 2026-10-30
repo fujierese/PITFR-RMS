@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use App\Http\Controllers\Concerns\ManagesAccountSettings;
 use Illuminate\Support\Facades\Log;
 
@@ -232,7 +233,11 @@ class CustodianController extends Controller
         $validated = $request->validate([
             'id'     => 'required|integer|exists:facility_requests,id',
             'action' => 'required|in:approve,reject,return',
-            'notes'  => 'nullable|string',
+            'notes'  => [
+                $custodianType === 'venue' && $request->input('action') === 'reject' ? 'required' : 'nullable',
+                'string',
+                'max:1000',
+            ],
             'equipment' => 'nullable|array',
             'equipment.*' => 'integer|min:0',
             'damaged_quantity' => 'nullable|array',
@@ -327,6 +332,29 @@ class CustodianController extends Controller
             $this->authorize($validated['action'] === 'approve' ? 'approve' : 'reject', $fr);
 
             // ─── APPROVE / REJECT ACTION ─────────────────────────────────────
+            if ($fr->revisionHistories()->where('status', 'pending')->exists()) {
+                DB::rollBack();
+                return back()->withErrors(['action' => 'A schedule proposal is awaiting responses. Custodian availability actions are paused until it is answered.']);
+            }
+            if ($custodianType === 'equipment' && $fr->supply_office_review_status !== 'confirmed') {
+                DB::rollBack();
+                return back()->withErrors(['action' => 'The venue custodian and Supply Office must confirm availability before equipment review begins.']);
+            }
+            if ($custodianType === 'venue'
+                && ($fr->supply_office_review_status !== 'pending' || $fr->venue_status !== 'pending')) {
+                DB::rollBack();
+                return back()->withErrors(['action' => 'Venue availability can only be confirmed before the Supply Office review.']);
+            }
+            if ($custodianType === 'venue' && $validated['action'] === 'approve') {
+                $availability = app(\App\Services\AvailabilityService::class);
+                $availability->lockResourcesForFacilityRequests($fr);
+                $conflict = $availability->checkFacilityRequestForReview($fr);
+                if ($conflict) {
+                    DB::rollBack();
+                    return back()->withErrors(['action' => $conflict]);
+                }
+            }
+
             $statusField   = $custodianType . '_status';
             $notesField    = $custodianType . '_notes';
             $statusValue   = $validated['action'] === 'approve' ? 'approved' : 'rejected';
@@ -388,7 +416,7 @@ class CustodianController extends Controller
                 $equipmentStatusChanged = !$wasEquipmentPreviouslyApproved && $fr->equipment_status === 'approved';
 
             } else {
-                // Venue custodian — simple single approval
+                // Venue confirmation is the availability check, not a reservation approval.
                 $originalVenueStatus = $fr->{$statusField};
                 
                 if ($originalVenueStatus === $statusValue) {
@@ -397,10 +425,19 @@ class CustodianController extends Controller
                         ->with('info', 'This request already has the selected ' . $custodianType . ' status.');
                 }
 
-                $fr->update([
-                    $statusField => $statusValue,
-                    $notesField  => $validated['notes'] ?? '',
-                ]);
+                if ($statusValue === 'rejected') {
+                    $fr->update([
+                        'status' => 'pending',
+                        $statusField => 'needs_reschedule',
+                        'supply_office_review_status' => 'pending',
+                        $notesField => trim((string) ($validated['notes'] ?? '')),
+                    ]);
+                } else {
+                    $fr->update([
+                        $statusField => $statusValue,
+                        $notesField => $validated['notes'] ?? '',
+                    ]);
+                }
 
                 if ($statusValue === 'approved') {
                     $fr->recordApprovalSignature('venue', $user);
@@ -408,7 +445,9 @@ class CustodianController extends Controller
                 }
             }
 
-            $historyAction = $statusField . '_' . $statusValue;
+            $historyAction = $custodianType === 'venue' && $statusValue === 'rejected'
+                ? 'venue_availability_unavailable'
+                : $statusField . '_' . $statusValue;
             if ($fr->histories()->where('action', $historyAction)->where('user_id', $user->id)->exists()) {
                 DB::commit();
                 return redirect()->route('custodian.index')
@@ -417,11 +456,33 @@ class CustodianController extends Controller
 
             $fr->addHistory(
                 $historyAction,
-                'Custodian ' . $user->name . ' ' . $statusValue . ' the request',
+                $custodianType === 'venue'
+                    ? 'Venue availability ' . ($statusValue === 'approved' ? 'confirmed' : 'marked unavailable; Supply Office coordination is required') . ' by ' . $user->name
+                    : 'Equipment custodian ' . $user->name . ' ' . $statusValue . ' the request',
                 $user->id
             );
 
             DB::commit();
+
+            if ($custodianType === 'venue' && $statusValue === 'rejected') {
+                $reason = trim((string) ($validated['notes'] ?? 'The selected venue is unavailable.'));
+                $notification = new \App\Notifications\RequestStatusChanged(
+                    $fr,
+                    'venue_availability_unavailable',
+                    $reason,
+                    $user->name
+                );
+                $fr->requester?->notify(new \App\Notifications\RequestStatusChanged(
+                    $fr,
+                    'venue_availability_unavailable',
+                    $reason,
+                    $user->name
+                ));
+                Notification::send(
+                    User::query()->withAnyRole(['admin', 'supply_office'])->get(),
+                    $notification
+                );
+            }
 
             // Fire Laravel event for broadcasting
             $eventClass = $statusValue === 'approved' ? \App\Events\RequestApproved::class : \App\Events\RequestRejected::class;
@@ -465,6 +526,14 @@ class CustodianController extends Controller
 
             return FacilityRequest::with(['requester', 'requestVenues.venue', 'reservationSchedule'])
                 ->upcomingReservation()
+                ->where(function ($stageQuery): void {
+                    $stageQuery->where('status', 'approved')
+                        ->orWhere(function ($pendingQuery): void {
+                            $pendingQuery->where('status', 'pending')
+                                ->where('venue_status', 'pending')
+                                ->where('supply_office_review_status', 'pending');
+                        });
+                })
                 ->where(function ($query) use ($venueIds, $venueNames) {
                 $query->whereHas('requestVenues', function ($venueQuery) use ($venueIds) {
                     $venueQuery->whereIn('venue_id', $venueIds);
@@ -488,13 +557,42 @@ class CustodianController extends Controller
                 return collect([]);
             }
 
-            return FacilityRequest::with('requester')->upcomingReservation()->where(function ($query) use ($equipmentNames) {
+            $today = now()->toDateString();
+
+            return FacilityRequest::with(['requester', 'requestVenues'])
+                ->where(function ($stageQuery): void {
+                    $stageQuery->where('status', 'approved')
+                        ->orWhere(function ($pendingQuery): void {
+                            $pendingQuery->where('status', 'pending')
+                                ->where('supply_office_review_status', 'confirmed');
+                        });
+                })
+                ->where(function ($dateQuery) use ($today): void {
+                    $dateQuery->upcomingReservation()
+                        ->orWhere(function ($pastDateQuery) use ($today): void {
+                            $pastDateQuery->whereDate('end_date', '<', $today)
+                                ->orWhere(function ($legacyDateQuery) use ($today): void {
+                                    $legacyDateQuery->whereNull('end_date')
+                                        ->whereDate('start_date', '<', $today);
+                                })
+                                ->orWhereHas('requestVenues', fn ($venueQuery) => $venueQuery->whereDate('end_date', '<=', $today));
+                        });
+                })
+                ->where(function ($query) use ($equipmentNames) {
                 foreach ($equipmentNames as $name) {
                     $query->orWhere(fn ($subQuery) => $subQuery->matchesEquipment($name));
                 }
             })
             ->orderByDesc('created_at')
-            ->get();
+            ->get()
+            ->filter(function (FacilityRequest $facilityRequest): bool {
+                if (in_array($facilityRequest->status, ['approved', 'completed'], true)) {
+                    return $facilityRequest->getReservationLifecycleState() !== 'completed';
+                }
+
+                return $facilityRequest->getReservationLifecycleEndDateTime()->gte(now());
+            })
+            ->values();
         }
 
         // Fallback for generic custodians: show requests for any of their assigned venues or equipment.

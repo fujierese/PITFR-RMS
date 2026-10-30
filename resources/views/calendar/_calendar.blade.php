@@ -377,6 +377,7 @@
                             Tap a date to inspect request details and availability.
                         @endif
                     </p>
+                    <p id="requested-calendar-highlight" class="mt-2 hidden rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-900" aria-live="polite"></p>
                 </div>
                 @unless($dateSelectionMode)
                     <div class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
@@ -384,6 +385,13 @@
                         <span class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-blue-600"></span>Balay Alumni</span>
                         <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full" style="background-color: #92400e;"></span>Gym</span>
                         <span class="inline-flex items-center gap-2 rounded-full border border-green-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-green-600"></span>Covered Courts / Oval</span>
+                        @if($user && $user->isCustodianVenue())
+                            <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
+                                <span class="h-2.5 w-2.5 rounded-sm border border-dashed border-amber-700 bg-amber-100"></span>
+                                Awaiting venue confirmation
+                            </span>
+                            <span class="text-xs text-amber-900">Tentative request, not an approved booking. Select it to review and confirm availability.</span>
+                        @endif
                         <span class="text-xs text-slate-600">No event shown = no request listed for that date; check venue and time availability before submitting.</span>
                         @if($user && $user->isAdmin())
                             <label for="include-cancelled-events" class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
@@ -757,6 +765,11 @@
     box-shadow: inset 0 0 0 1px rgba(234, 88, 12, 0.4) !important;
 }
 
+.awaiting-venue-confirmation-event {
+    border-style: dashed !important;
+    box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.45) !important;
+}
+
 .neutral-event {
     opacity: 0.9 !important;
 }
@@ -1094,6 +1107,12 @@
     background: rgba(245, 158, 11, 0.12);
     color: #92400e;
     border-color: rgba(245, 158, 11, 0.26);
+}
+
+.event-status-badge.status-awaiting-venue-confirmation {
+    background: #fef3c7;
+    color: #78350f;
+    border-color: #f59e0b;
 }
 
 .event-status-badge.status-rejected,
@@ -1460,6 +1479,22 @@
     background-color: #6ee7b7 !important;
 }
 
+.fc .requested-reservation-date {
+    background-color: #cffafe !important;
+    box-shadow: inset 0 0 0 2px rgba(8, 145, 178, 0.55) !important;
+}
+
+.fc .requested-reservation-date-start,
+.fc .requested-reservation-date-end {
+    background-color: #a5f3fc !important;
+    box-shadow: inset 0 0 0 2px #0891b2 !important;
+}
+
+.fc .requested-reservation-window {
+    background-color: #22d3ee !important;
+    opacity: 0.28 !important;
+}
+
 </style>
 
 <!-- FullCalendar JS & CSS -->
@@ -1478,6 +1513,16 @@ document.addEventListener('DOMContentLoaded', function() {
     var isPublicCalendar = @json(!auth()->check());
     var calendarParams = new URLSearchParams(window.location.search);
     var isDateSelectionMode = calendarParams.get('select') === '1';
+    var requestedStartDate = calendarParams.get('start_date') || '';
+    var requestedEndDate = calendarParams.get('end_date') || requestedStartDate;
+    var requestedStartTime = calendarParams.get('start_time') || '';
+    var requestedEndTime = calendarParams.get('end_time') || '';
+    var hasRequestedDateRange = /^\d{4}-\d{2}-\d{2}$/.test(requestedStartDate)
+        && /^\d{4}-\d{2}-\d{2}$/.test(requestedEndDate)
+        && requestedEndDate >= requestedStartDate;
+    var hasRequestedTimeRange = /^\d{2}:\d{2}(?::\d{2})?$/.test(requestedStartTime)
+        && /^\d{2}:\d{2}(?::\d{2})?$/.test(requestedEndTime);
+    var requestedScheduleHighlightSent = false;
     var selectionStartDate = null;
     var selectionEndDate = null;
     function calendarDateKey(date) {
@@ -1485,6 +1530,34 @@ document.addEventListener('DOMContentLoaded', function() {
         var month = String(date.getMonth() + 1).padStart(2, '0');
         var day = String(date.getDate()).padStart(2, '0');
         return year + '-' + month + '-' + day;
+    }
+    function formatRequestedDate(dateValue) {
+        var parts = dateValue.split('-');
+        return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    }
+    function formatRequestedTime(timeValue) {
+        var parts = timeValue.split(':');
+        var date = new Date();
+        date.setHours(Number(parts[0]), Number(parts[1]), Number(parts[2] || 0), 0);
+        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+    if (hasRequestedDateRange) {
+        var requestedScheduleNotice = document.getElementById('requested-calendar-highlight');
+        if (requestedScheduleNotice) {
+            var dateLabel = formatRequestedDate(requestedStartDate);
+            if (requestedEndDate !== requestedStartDate) {
+                dateLabel += ' – ' + formatRequestedDate(requestedEndDate);
+            }
+            var timeLabel = hasRequestedTimeRange
+                ? ' · ' + formatRequestedTime(requestedStartTime) + '–' + formatRequestedTime(requestedEndTime)
+                : '';
+            requestedScheduleNotice.textContent = 'Requested schedule highlighted in cyan: ' + dateLabel + timeLabel;
+            requestedScheduleNotice.classList.remove('hidden');
+        }
     }
     function renderSelectedDateRange() {
         if (!isDateSelectionMode || !calendarEl) return;
@@ -1523,7 +1596,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 var labelMap = {
                     approved: 'Approved',
                     pending: 'Pending',
-                    rejected: 'Rejected',
+                'awaiting venue confirmation': 'Awaiting venue confirmation',
+                rejected: 'Rejected',
                     cancelled: 'Cancelled',
                     completed: 'Completed',
                     needs_reschedule: 'Needs Reschedule',
@@ -1546,6 +1620,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 if (normalized === 'pending') {
                     return 'status-pending';
+                }
+                if (normalized === 'awaiting venue confirmation') {
+                    return 'status-awaiting-venue-confirmation';
                 }
                 if (['rejected', 'conflict', 'urgent'].includes(normalized)) {
                     return 'status-rejected';
@@ -1609,6 +1686,18 @@ document.addEventListener('DOMContentLoaded', function() {
             return 'dayGridMonth';
         }
 
+        function getRequestedScheduleInitialView() {
+            if (!hasRequestedDateRange || !hasRequestedTimeRange) return getInitialCalendarView();
+
+            var startParts = requestedStartDate.split('-').map(Number);
+            var endParts = requestedEndDate.split('-').map(Number);
+            var startUtc = Date.UTC(startParts[0], startParts[1] - 1, startParts[2]);
+            var endUtc = Date.UTC(endParts[0], endParts[1] - 1, endParts[2]);
+            var days = Math.round((endUtc - startUtc) / 86400000);
+
+            return days === 0 ? 'timeGridDay' : (days <= 6 ? 'timeGridWeek' : getInitialCalendarView());
+        }
+
         var localToday = new Date();
         localToday = new Date(localToday.getTime() - localToday.getTimezoneOffset() * 60000)
             .toISOString()
@@ -1670,10 +1759,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         var calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: getInitialCalendarView(),
+            initialView: getRequestedScheduleInitialView(),
             validRange: isDateSelectionMode ? { start: localToday } : undefined,
             initialDate: (() => {
-                const date = new URLSearchParams(window.location.search).get('date');
+                const date = requestedStartDate || calendarParams.get('date');
                 return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
             })(),
             nextDayThreshold: '00:00:00',
@@ -1687,7 +1776,7 @@ document.addEventListener('DOMContentLoaded', function() {
             headerToolbar: isDateSelectionMode ? {
                 left: 'prev,next today',
                 center: 'title',
-                right: ''
+                right: hasRequestedDateRange ? 'dayGridMonth,timeGridWeek,timeGridDay' : ''
             } : {
                 left: 'prev,next today',
                 center: 'title',
@@ -1730,6 +1819,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 refreshEventMarquees(calendarEl);
                 renderSelectedDateRange();
             },
+            eventsSet: function(events) {
+                if (requestedScheduleHighlightSent || !hasRequestedDateRange || !hasRequestedTimeRange) return;
+                if (!events.some(function(event) { return event.id === 'requested-reservation-window'; })) return;
+
+                requestedScheduleHighlightSent = true;
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'pitfr-requested-schedule-highlighted',
+                        venue: calendarParams.get('venue') || '',
+                        startDate: requestedStartDate,
+                        endDate: requestedEndDate
+                    }, window.location.origin);
+                }
+            },
             dayCellClassNames: function(info) {
                 var classes = [];
                 if (info.date.getDay() === 0 || info.date.getDay() === 6) {
@@ -1742,6 +1845,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (selectionEndDate && cellDate > selectionStartDate && cellDate < selectionEndDate) {
                         classes.push('calendar-range-between');
                     }
+                }
+                if (hasRequestedDateRange) {
+                    var requestedDate = calendarDateKey(info.date);
+                    if (requestedDate >= requestedStartDate && requestedDate <= requestedEndDate) {
+                        classes.push('requested-reservation-date');
+                    }
+                    if (requestedDate === requestedStartDate) classes.push('requested-reservation-date-start');
+                    if (requestedDate === requestedEndDate) classes.push('requested-reservation-date-end');
                 }
                 return classes;
             },
@@ -1825,7 +1936,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                             var tooltipContent = '<div class="calendar-event-tooltip">';
                             var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
-                            var statusText = status ? __esc(status) : 'Pending';
+                            var displayStatus = event.extendedProps && event.extendedProps.displayStatus;
+                            var statusText = displayStatus ? __esc(displayStatus) : (status ? __esc(status) : 'Pending');
                             var canonicalStart = event.start_datetime || event.start || '';
                             var canonicalEnd = event.end_datetime || event.end || '';
                             var startDate = formatDate(canonicalStart);
@@ -1866,8 +1978,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Helper function to create a single FC event object
                         function createFcEvent(event, startDatetime, endDatetime, isSegment) {
                             var status = event.extendedProps && event.extendedProps.status ? event.extendedProps.status : event.status || '';
+                            var awaitingVenueConfirmation = !!(event.extendedProps && event.extendedProps.awaitingVenueConfirmation);
                             var venue = event.venue || (event.extendedProps && event.extendedProps.venue) || '';
                             var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
+                            var classNames = ['status-event', 'status-' + String(status || 'neutral').toLowerCase().replace(/\s+/g, '-')];
+                            if (awaitingVenueConfirmation) classNames.push('awaiting-venue-confirmation-event');
 
                             return {
                                 id: event.id,
@@ -1875,12 +1990,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 start: startDatetime,
                                 end: endDatetime,
                                 allDay: !!event.allDay,
-                                backgroundColor: 'transparent',
-                                borderColor: '#000000',
+                                backgroundColor: awaitingVenueConfirmation ? '#fffbeb' : 'transparent',
+                                borderColor: awaitingVenueConfirmation ? '#d97706' : '#000000',
                                 textColor: '#111827',
-                                classNames: ['status-event', 'status-' + String(status || 'neutral').toLowerCase().replace(/\s+/g, '-')],
+                                classNames: classNames,
                                 extendedProps: Object.assign({}, event.extendedProps, {
-                                    tooltipContent: createTooltipContent(event, status),
+                                    tooltipContent: createTooltipContent(event, event.extendedProps && event.extendedProps.displayStatus || status),
                                     status: status,
                                     venue: venue,
                                     venueClass: 'status-indicator',
@@ -1889,7 +2004,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                         ? event.extendedProps.expected_participants
                                         : 0,
                                     statusClass: String(status || 'neutral').toLowerCase(),
-                                    displayStatus: status,
+                                    displayStatus: event.extendedProps && event.extendedProps.displayStatus || status,
                                     isSegment: !!isSegment
                                 })
                             };
@@ -1972,6 +2087,18 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                         });
 
+                        if (hasRequestedDateRange && hasRequestedTimeRange) {
+                            mapped.push({
+                                id: 'requested-reservation-window',
+                                start: requestedStartDate + 'T' + (requestedStartTime.length === 5 ? requestedStartTime + ':00' : requestedStartTime),
+                                end: requestedEndDate + 'T' + (requestedEndTime.length === 5 ? requestedEndTime + ':00' : requestedEndTime),
+                                display: 'background',
+                                allDay: false,
+                                editable: false,
+                                classNames: ['requested-reservation-window']
+                            });
+                        }
+
                         console.log('✅ Rendered', mapped.length, 'segments for', viewType);
                         successCallback(mapped);
                         
@@ -2042,8 +2169,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
 
-                let requestId = info.event.extendedProps.facilityRequestId || info.event.id;
+                let requestUrl = info.event.extendedProps && info.event.extendedProps.requestUrl;
+                if (requestUrl) {
+                    window.location.href = requestUrl;
+                    return;
+                }
 
+                let requestId = info.event.extendedProps.facilityRequestId || info.event.id;
                 if (requestId) {
                     window.location.href = '{{ url("/request") }}/' + requestId;
                 }
@@ -2185,6 +2317,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             },
             eventDidMount: function(info) {
+                if (info.event.display === 'background') {
+                    return;
+                }
+
                 // Add tooltip on mount
                 if (info.event.extendedProps.tooltipContent && typeof tippy !== 'undefined') {
                     tippy(info.el, {
@@ -2197,9 +2333,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         delay: [400, 0]
                     });
                 }
-                info.el.style.backgroundColor = 'transparent';
-                info.el.style.borderColor = '#000000';
+                if (!info.event.extendedProps.awaitingVenueConfirmation) {
+                    info.el.style.backgroundColor = 'transparent';
+                    info.el.style.borderColor = '#000000';
+                }
                 info.el.style.color = '#111827';
+                if (info.event.extendedProps.requestUrl) {
+                    info.el.style.cursor = 'pointer';
+                }
+                info.el.title = info.event.extendedProps.awaitingVenueConfirmation
+                    ? 'Awaiting venue confirmation. Select to review this request.'
+                    : 'Select to review request details.';
 
                 refreshEventMarquees(info.el);
             }

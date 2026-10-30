@@ -263,7 +263,7 @@ class RequestorController extends Controller
                 return false;
             }
 
-            $lockedRequest->update([
+            $updates = [
                 'start_date' => $newState['start_date'],
                 'end_date' => $newState['end_date'],
                 'start_time' => $newState['start_time'],
@@ -271,7 +271,25 @@ class RequestorController extends Controller
                 'venue' => $newState['venue'],
                 'equipment' => $newState['equipment'],
                 'equipment_quantities' => $newState['equipment_quantities'],
-            ]);
+            ];
+            if ($lockedRequest->status !== 'approved') {
+                $updates += [
+                    'status' => 'pending',
+                    'venue_status' => 'pending',
+                    'equipment_status' => empty($newState['equipment']) ? 'approved' : 'pending',
+                    'equipment_custodian_statuses' => [],
+                    'venue_notes' => null,
+                    'equipment_notes' => null,
+                    'supply_office_review_status' => 'pending',
+                    'supply_office_reviewed_by_id' => null,
+                    'supply_office_reviewed_at' => null,
+                    'supply_office_review_notes' => null,
+                    'approved_by' => null,
+                    'approved_by_id' => null,
+                    'approved_date' => null,
+                ];
+            }
+            $lockedRequest->update($updates);
             $lockedRequest->syncRelationalItems();
             $lockedRevision->update([
                 'status' => 'accepted',
@@ -396,7 +414,13 @@ class RequestorController extends Controller
 
         $query = FacilityRequest::with(['requestVenues', 'requestEquipment', 'reservationSchedule', 'histories'])
             ->where('requested_by_id', $user->id)
-            ->upcomingReservation();
+            ->where(function ($reservationDates): void {
+                $reservationDates->upcomingReservation()
+                    ->orWhere(function ($pastReservations): void {
+                        $pastReservations->pastReservation()
+                            ->whereIn('status', ['approved', 'completed']);
+                    });
+            });
 
         if ($search !== '') {
             $searchTerm = '%' . mb_strtolower($search) . '%';
@@ -460,10 +484,16 @@ class RequestorController extends Controller
             ->orderBy('start_time', $sortDirection)
             ->orderBy('created_at', $sortDirection);
 
-        $requests = $query->get();
+        $allRequests = $query->get();
+        $completedRequests = $allRequests
+            ->filter(fn (FacilityRequest $requestItem): bool => $requestItem->isReservationComplete())
+            ->values();
+        $requests = $allRequests
+            ->reject(fn (FacilityRequest $requestItem): bool => $requestItem->isReservationComplete())
+            ->values();
         $equipment = \App\Models\Equipment::where('is_active', true)->get();
 
-        // Separate by future/past dates and approval status
+        // Keep ended reservations with outstanding equipment visible until their return is recorded.
         $today = now()->toDateString();
         $upcomingRequests = $requests->filter(function ($request) use ($today) {
             $schedule = $request->reservationSchedule;
@@ -471,13 +501,10 @@ class RequestorController extends Controller
             return $request->status === 'approved' && $start && $start->toDateString() >= $today;
         });
         $pastRequests = $requests->filter(function ($request) use ($today) {
-            $schedule = $request->reservationSchedule;
-            $start = $schedule ? $schedule->start_datetime : $request->start_date;
-            return $start && $start->toDateString() < $today;
+            return $request->getRequestedEndDateTime()->toDateString() < $today;
         });
  
-        $activeRequests    = $requests->where('equipment_returned_status', '!=', 'returned');
-        $completedRequests = $requests->where('equipment_returned_status', 'returned');
+        $activeRequests    = $requests;
         $latestRequest     = $requests->sortByDesc('created_at')->first();
         $nextPendingRequest = $activeRequests->where('status', 'pending')->sortBy('start_date')->first();
         $currentSemester   = $this->determineSemester(now());
@@ -811,6 +838,16 @@ class RequestorController extends Controller
             $validated['end_date'] ?? $validated['start_date'],
             $validated['end_time']
         );
+        if ($facilityRequest->is_emergency) {
+            $isUrgentScheduleValid = $scheduleRange['start']->toDateString() === now()->toDateString()
+                && $scheduleRange['end']->toDateString() === now()->toDateString()
+                && $scheduleRange['start']->gte(now()->startOfMinute());
+            if (! $isUrgentScheduleValid) {
+                return back()
+                    ->withErrors(['start_time' => 'An urgent reservation must start today at the current time or later.'])
+                    ->withInput();
+            }
+        }
         $validated['start_time'] = $scheduleRange['start']->format('H:i');
         $validated['end_time'] = $scheduleRange['end']->format('H:i');
         $validated['end_date'] = $scheduleRange['end']?->toDateString() ?? $validated['end_date'] ?? $validated['start_date'];
@@ -914,7 +951,7 @@ class RequestorController extends Controller
             'equipment_quantities' => $validated['equipment_quantities'],
             'status' => 'pending',
             'venue_status' => 'pending',
-            'equipment_status' => 'pending',
+            'equipment_status' => empty($validated['equipment']) ? 'approved' : 'pending',
             'approved_by' => null,
             'approved_by_id' => null,
             'approved_date' => null,
@@ -922,6 +959,10 @@ class RequestorController extends Controller
             'venue_notes' => null,
             'equipment_notes' => null,
             'equipment_custodian_statuses' => [],
+            'supply_office_review_status' => 'pending',
+            'supply_office_reviewed_by_id' => null,
+            'supply_office_reviewed_at' => null,
+            'supply_office_review_notes' => null,
         ];
 
         if (!$isNeedsReschedule) {
@@ -940,7 +981,11 @@ class RequestorController extends Controller
 
         $facilityRequest->status = 'pending';
         $facilityRequest->venue_status = 'pending';
-        $facilityRequest->equipment_status = 'pending';
+        $facilityRequest->equipment_status = empty($validated['equipment']) ? 'approved' : 'pending';
+        $facilityRequest->supply_office_review_status = 'pending';
+        $facilityRequest->supply_office_reviewed_by_id = null;
+        $facilityRequest->supply_office_reviewed_at = null;
+        $facilityRequest->supply_office_review_notes = null;
         $facilityRequest->approved_by = null;
         $facilityRequest->approved_by_id = null;
         $facilityRequest->approved_date = null;
@@ -1119,6 +1164,11 @@ class RequestorController extends Controller
         }
         if (!$user || !$user->isRequestee()) {
             return redirect()->route('login')->withErrors(['authorization' => 'Only registered requestors may submit facility/equipment requests.']);
+        }
+        if ($user->isOutsider() && $request->boolean('is_emergency')) {
+            return back()
+                ->withErrors(['is_emergency' => 'Urgent processing is available only to Institute requestors.'])
+                ->withInput();
         }
 
         // Build validation rules
@@ -1327,6 +1377,13 @@ class RequestorController extends Controller
                     ->withErrors(['is_emergency' => 'Urgent requests must be submitted and held entirely on the same local calendar day.'])
                     ->withInput();
             }
+            if (collect($scheduleRanges)->contains(
+                fn (array $range): bool => $range['start']->lt(now()->startOfMinute())
+            )) {
+                return back()
+                    ->withErrors(['is_emergency' => 'Urgent reservations must start at the current time or later.'])
+                    ->withInput();
+            }
         }
 
         $hasSavedSignature = (bool) ($user->e_signature_file && Storage::disk('local')->exists('documents/e_signature/users/' . $user->e_signature_file));
@@ -1437,10 +1494,6 @@ class RequestorController extends Controller
             $normalizedItems = self::normalizeEquipmentSelection(array_values(array_filter(
                 $venueItems,
                 fn ($item): bool => is_string($item) && trim($item) !== ''
-            )));
-            $normalizedItems = array_values(array_unique(array_merge(
-                $normalizedItems,
-                VenueEquipmentPolicy::getDefaultEquipment($venueName)
             )));
             $unsupportedEquipment = array_values(array_diff($normalizedItems, self::EQUIPMENT_OPTIONS));
             if ($unsupportedEquipment !== []) {
@@ -1655,7 +1708,7 @@ class RequestorController extends Controller
             'requested_by_id'          => $user->id,
             'status'                   => 'pending',
             'venue_status'             => 'pending',
-            'equipment_status'         => 'pending',
+            'equipment_status'         => $equipment === [] ? 'approved' : 'pending',
             'supply_office_review_status' => 'pending',
             'urgent_document_status'   => $isUrgentRequest ? 'pending' : 'not_required',
             'igp_payment_status'       => $user->isOutsider() ? 'awaiting_availability' : null,
@@ -1796,19 +1849,30 @@ class RequestorController extends Controller
         $currentCustodianEquipment = $currentUser && $currentUser->isCustodian()
             ? $request->getAssignedEquipmentForCustodian((int) Auth::id())
             : [];
+        $venueCalendarName = $currentUser?->isCustodianVenue() && $request->getVenueNames() !== []
+            ? $request->getVenueNames()[0]
+            : null;
+        $venueCalendarDate = $venueCalendarName
+            ? ($request->getVenueSchedule($venueCalendarName)['start_date'] ?? $request->start_date?->toDateString())
+            : null;
 
-        // Check if current custodian has already endorsed this request
         $hasEndorsed = false;
         if ($currentUser && $currentUser->isCustodian()) {
-            $hasEndorsed = $request->histories()
-                ->where('user_id', $currentUser->id)
-                ->where('action', 'custodian_endorsed')
-                ->exists();
+            $awaitingVenueConfirmation = $request->venue_status === 'pending'
+                && $request->supply_office_review_status === 'pending';
+            $awaitingEquipmentReview = $request->supply_office_review_status === 'confirmed'
+                && $currentUser->isCustodianEquipment()
+                && $request->getAssignedEquipmentForCustodian((int) $currentUser->id) !== [];
 
-            if (!$hasEndorsed) {
-                $hasEndorsed = $currentUser->isCustodianVenue()
-                    ? $request->venue_status === 'approved'
-                    : $request->getCustodianEquipmentStatus((int) $currentUser->id) === 'approved';
+            if ($awaitingVenueConfirmation && $currentUser->isCustodianVenue()) {
+                $hasEndorsed = $request->venue_status === 'approved';
+            } elseif ($awaitingEquipmentReview) {
+                $hasEndorsed = $request->getCustodianEquipmentStatus((int) $currentUser->id) === 'approved';
+            } else {
+                $hasEndorsed = $request->histories()
+                    ->where('user_id', $currentUser->id)
+                    ->where('action', 'custodian_endorsed')
+                    ->exists();
             }
         }
  
@@ -1821,6 +1885,8 @@ class RequestorController extends Controller
             'custodialEndorsements'   => $custodialEndorsements,
             'currentCustodianEquipment' => $currentCustodianEquipment,
             'hasEndorsed'             => $hasEndorsed,
+            'venueCalendarName'       => $venueCalendarName,
+            'venueCalendarDate'       => $venueCalendarDate,
         ]);
     }
 
@@ -1901,12 +1967,8 @@ class RequestorController extends Controller
         $request = FacilityRequest::findOrFail($id);
         $this->authorize('view', $request);
 
-        $filename = $request->activity_proposal_file ?: $request->proposal_file;
-        if (!$filename) {
-            abort(404);
-        }
-
-        [$disk, $filePath] = $this->resolveProposalPath($request, $filename);
+        $documentType = request()->query('document', 'proposal');
+        [$filename, $disk, $filePath] = $this->resolveRequestDocument($request, $documentType);
         $mimeType = match (strtolower(pathinfo($filename, PATHINFO_EXTENSION))) {
             'pdf' => 'application/pdf',
             'jpg', 'jpeg' => 'image/jpeg',
@@ -1951,16 +2013,54 @@ class RequestorController extends Controller
         $request = FacilityRequest::findOrFail($id);
         $this->authorize('view', $request);
 
-        $filename = $request->activity_proposal_file ?: $request->proposal_file;
-        if (!$filename) {
-            abort(404);
-        }
-
-        [$disk, $filePath] = $this->resolveProposalPath($request, $filename);
+        $documentType = request()->query('document', 'proposal');
+        [$filename, $disk, $filePath] = $this->resolveRequestDocument($request, $documentType);
 
         return Storage::disk($disk)->download($filePath, basename($filename), [
             'X-Content-Type-Options' => 'nosniff',
         ]);
+    }
+
+    /** @return array{0: string, 1: string, 2: string} */
+    private function resolveRequestDocument(FacilityRequest $request, mixed $documentType): array
+    {
+        if (!is_string($documentType)) {
+            abort(404);
+        }
+
+        if ($documentType === 'receipt') {
+            $filename = $request->igp_receipt_file;
+            $paths = $filename ? [['local', 'documents/igp_receipt/' . $filename]] : [];
+        } elseif ($documentType === 'proposal') {
+            $filename = $request->activity_proposal_file ?: $request->proposal_file;
+            if (!$filename) {
+                abort(404);
+            }
+
+            [$disk, $path] = $this->resolveProposalPath($request, $filename);
+
+            return [$filename, $disk, $path];
+        } else {
+            abort(404);
+        }
+
+        if (
+            !$filename
+            || $filename === '.'
+            || $filename === '..'
+            || str_contains($filename, '/')
+            || str_contains($filename, '\\')
+        ) {
+            abort(404);
+        }
+
+        foreach ($paths as [$disk, $path]) {
+            if (Storage::disk($disk)->exists($path)) {
+                return [$filename, $disk, $path];
+            }
+        }
+
+        abort(404);
     }
 
     /** @return array{0: string, 1: string} */

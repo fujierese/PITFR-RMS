@@ -162,7 +162,7 @@ class SupplyOfficeWorkflowTest extends TestCase
     {
         $request = $this->makeRequest([
             'supply_office_review_status' => 'pending',
-            'venue_status' => 'pending',
+            'venue_status' => 'approved',
             'equipment_status' => 'pending',
         ]);
         $staff = User::factory()->create([
@@ -174,7 +174,9 @@ class SupplyOfficeWorkflowTest extends TestCase
 
         $this->actingAs($staff)
             ->get(route('supply-office.index'))
-            ->assertOk();
+            ->assertOk()
+            ->assertSee('Check calendar')
+            ->assertSee('id="staff-venue-calendar-modal"', false);
 
         $this->actingAs($staff)
             ->post(route('supply-office.requests.availability-review'), [
@@ -201,6 +203,331 @@ class SupplyOfficeWorkflowTest extends TestCase
         $calendar->assertOk();
         $event = collect($calendar->json())->firstWhere('extendedProps.facilityRequestId', $request->id);
         $this->assertSame($staff->name, $event['extendedProps']['assistedBy']);
+    }
+
+    public function test_initial_availability_actions_wait_for_calendar_validation(): void
+    {
+        $request = $this->makeRequest([
+            'supply_office_review_status' => 'pending',
+            'venue_status' => 'approved',
+        ]);
+        $staff = User::factory()->create(['role' => 'supply_office']);
+        $group = 'supply-availability-' . $request->id;
+
+        $this->actingAs($staff)
+            ->get(route('supply-office.index'))
+            ->assertOk()
+            ->assertSee('data-availability-check-url="' . route('calendar.request-availability-check', $request) . '"', false)
+            ->assertSee('data-availability-group="' . $group . '"', false)
+            ->assertSee('data-availability-actions="' . $group . '" class="hidden flex flex-wrap gap-2"', false)
+            ->assertSee('data-availability-confirm="' . $group . '"', false);
+
+        $this->actingAs($staff)
+            ->postJson(route('calendar.request-availability-check', $request), ['venue' => 'Gymnasium'])
+            ->assertOk()
+            ->assertJsonPath('available', true);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)
+            ->postJson(route('calendar.request-availability-check', $request), ['venue' => 'Gymnasium'])
+            ->assertOk()
+            ->assertJsonPath('available', true);
+    }
+
+    public function test_pending_venue_schedule_conflict_blocks_confirmation_and_is_returned_by_calendar_check(): void
+    {
+        $request = $this->makeRequest([
+            'supply_office_review_status' => 'pending',
+            'venue_status' => 'approved',
+        ]);
+        $this->makeRequest([
+            'control_number' => 'TEST-PENDING-VENUE-CONFLICT',
+            'start_date' => $request->start_date->toDateString(),
+            'end_date' => $request->end_date->toDateString(),
+            'start_time' => $request->start_time,
+            'end_time' => $request->end_time,
+            'venue' => ['Gymnasium'],
+        ]);
+        $staff = User::factory()->create(['role' => 'supply_office']);
+
+        $this->actingAs($staff)
+            ->postJson(route('calendar.request-availability-check', $request), ['venue' => 'Gymnasium'])
+            ->assertOk()
+            ->assertJsonPath('available', false)
+            ->assertJsonPath('message', 'Another request for this venue and time is still awaiting review. Resolve that request before confirming availability.');
+
+        $this->actingAs($staff)
+            ->from(route('supply-office.index'))
+            ->post(route('supply-office.requests.availability-review'), [
+                'id' => $request->id,
+                'decision' => 'available',
+            ])
+            ->assertRedirect(route('supply-office.index'))
+            ->assertSessionHasErrors('decision');
+
+        $this->assertSame('pending', $request->fresh()->supply_office_review_status);
+    }
+
+    public function test_requestors_cannot_run_staff_availability_checks(): void
+    {
+        $request = $this->makeRequest([
+            'supply_office_review_status' => 'pending',
+            'venue_status' => 'approved',
+        ]);
+        $requestor = User::findOrFail($request->requested_by_id);
+
+        $this->actingAs($requestor)
+            ->postJson(route('calendar.request-availability-check', $request), ['venue' => 'Gymnasium'])
+            ->assertForbidden();
+    }
+
+    public function test_supply_office_cannot_confirm_until_venue_custodian_has_confirmed(): void
+    {
+        $request = $this->makeRequest([
+            'supply_office_review_status' => 'pending',
+            'venue_status' => 'pending',
+        ]);
+        $staff = User::factory()->create(['role' => 'supply_office']);
+
+        $this->actingAs($staff)
+            ->from(route('supply-office.index'))
+            ->post(route('supply-office.requests.availability-review'), [
+                'id' => $request->id,
+                'decision' => 'available',
+            ])
+            ->assertRedirect(route('supply-office.index'))
+            ->assertSessionHasErrors();
+
+        $this->assertSame('pending', $request->fresh()->venue_status);
+        $this->assertSame('pending', $request->fresh()->supply_office_review_status);
+    }
+
+    public function test_venue_custodian_cannot_confirm_a_schedule_with_a_recorded_conflict(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+        Venue::create([
+            'name' => 'Gymnasium',
+            'custodian_id' => $custodian->id,
+            'is_active' => true,
+        ]);
+        $request = $this->makeRequest([
+            'venue_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+        ]);
+        $this->makeRequest([
+            'control_number' => 'TEST-VENUE-CONFLICT',
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+            'start_date' => $request->start_date->toDateString(),
+            'end_date' => $request->end_date->toDateString(),
+            'start_time' => $request->start_time,
+            'end_time' => $request->end_time,
+        ]);
+
+        $this->actingAs($custodian)
+            ->postJson(route('calendar.request-availability-check', $request), ['venue' => 'Gymnasium'])
+            ->assertOk()
+            ->assertJsonPath('available', false);
+
+        $this->actingAs($custodian)
+            ->from(route('request.show', $request))
+            ->post(route('request.custodian.verify', $request))
+            ->assertRedirect(route('request.show', $request))
+            ->assertSessionHasErrors();
+
+        $this->assertSame('pending', $request->fresh()->venue_status);
+    }
+
+    public function test_supply_office_cannot_finally_approve_before_availability_is_confirmed(): void
+    {
+        $request = $this->makeRequest([
+            'supply_office_review_status' => 'pending',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+        ]);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->from(route('supply-office.index'))
+            ->post(route('supply-office.update'), [
+                'id' => $request->id,
+                'action' => 'approve',
+            ])
+            ->assertRedirect(route('supply-office.index'))
+            ->assertSessionHasErrors();
+
+        $this->assertSame('pending', $request->fresh()->status);
+    }
+
+    public function test_venue_custodian_can_review_calendar_and_propose_a_reschedule(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+        Venue::create([
+            'name' => 'Gymnasium',
+            'custodian_id' => $custodian->id,
+            'is_active' => true,
+        ]);
+        $request = $this->makeRequest([
+            'venue_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+        ]);
+
+        $this->actingAs($custodian)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertSee('Check venue calendar')
+            ->assertSee('calendar/embed?venue=Gymnasium', false)
+            ->assertSee('id="staff-venue-calendar-modal"', false)
+            ->assertSee('<dialog', false)
+            ->assertDontSee('Open full calendar in a new tab')
+            ->assertSee('Confirm Venue Availability')
+            ->assertSee('data-availability-confirm="custodian-venue-' . $request->id . '"', false)
+            ->assertSee('class="hidden"', false)
+            ->assertSee('data-availability-check-url="' . route('calendar.request-availability-check', $request) . '"', false)
+            ->assertSee('data-swal-title="Confirm venue availability?"', false)
+            ->assertSee('Propose Reschedule')
+            ->assertSee('The system will recheck availability before sending the proposal.');
+
+        $this->actingAs($custodian)
+            ->postJson(route('calendar.request-availability-check', $request), ['venue' => 'Gymnasium'])
+            ->assertOk()
+            ->assertJsonPath('available', true);
+
+        $newDate = now()->addDays(4)->toDateString();
+        $this->actingAs($custodian)
+            ->from(route('request.show', $request))
+            ->post(route('custodian.requests.revise'), [
+                'facility_request_id' => $request->id,
+                'start_date' => $newDate,
+                'end_date' => $newDate,
+                'start_time' => '12:00',
+                'end_time' => '14:00',
+                'venue' => ['Gymnasium'],
+                'revision_reason' => 'Requested schedule conflicts with another booking.',
+            ])
+            ->assertRedirect(route('request.show', $request))
+            ->assertSessionHasNoErrors();
+
+        $revision = $request->revisionHistories()->where('status', 'pending')->firstOrFail();
+        $this->assertSame($custodian->id, $revision->revised_by_id);
+        $this->assertSame('accepted', $revision->responses[(string) $custodian->id]);
+        $this->assertSame('pending', $revision->responses[(string) $request->requested_by_id]);
+        $this->assertSame('pending', $request->fresh()->venue_status);
+
+        $this->actingAs($custodian)
+            ->post(route('request.custodian.verify', $request))
+            ->assertSessionHasErrors();
+        $this->assertSame('pending', $request->fresh()->venue_status);
+
+        $requester = User::findOrFail($request->requested_by_id);
+        $this->actingAs($requester)
+            ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
+            ->assertRedirect(route('request.show', $request))
+            ->assertSessionHasNoErrors();
+
+        $request->refresh();
+        $this->assertSame($newDate, $request->start_date->toDateString());
+        $this->assertSame('pending', $request->status);
+        $this->assertSame('pending', $request->venue_status);
+        $this->assertSame('pending', $request->supply_office_review_status);
+    }
+
+    public function test_urgent_availability_requires_document_confirmation_only_for_available_decision(): void
+    {
+        $urgentRequest = $this->makeRequest([
+            'is_emergency' => true,
+            'proposal_file' => 'urgent-memo.pdf',
+            'urgent_document_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+        ]);
+        $staff = User::factory()->create(['role' => 'supply_office']);
+
+        $this->actingAs($staff)
+            ->from(route('supply-office.index'))
+            ->post(route('supply-office.requests.availability-review'), [
+                'id' => $urgentRequest->id,
+                'decision' => 'available',
+            ])
+            ->assertRedirect(route('supply-office.index'))
+            ->assertSessionHasErrors([
+                'urgent_document_validated' => 'Confirm that you reviewed the urgent supporting document before confirming availability.',
+            ]);
+
+        $this->assertSame('pending', $urgentRequest->fresh()->supply_office_review_status);
+        $this->assertSame('pending', $urgentRequest->fresh()->urgent_document_status);
+
+        $this->actingAs($staff)
+            ->from(route('supply-office.index'))
+            ->post(route('supply-office.requests.availability-review'), [
+                'id' => $urgentRequest->id,
+                'decision' => 'available',
+                'urgent_document_validated' => '1',
+            ])
+            ->assertRedirect(route('supply-office.index'))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('validated', $urgentRequest->fresh()->urgent_document_status);
+        $this->assertSame('confirmed', $urgentRequest->fresh()->supply_office_review_status);
+    }
+
+    public function test_urgent_document_confirmation_is_not_required_when_availability_is_unavailable(): void
+    {
+        $urgentRequest = $this->makeRequest([
+            'is_emergency' => true,
+            'urgent_document_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+        ]);
+        $staff = User::factory()->create(['role' => 'supply_office']);
+
+        $this->actingAs($staff)
+            ->from(route('supply-office.index'))
+            ->post(route('supply-office.requests.availability-review'), [
+                'id' => $urgentRequest->id,
+                'decision' => 'unavailable',
+                'notes' => 'The requested venue is unavailable.',
+            ])
+            ->assertRedirect(route('supply-office.index'))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('needs_reschedule', $urgentRequest->fresh()->status);
+        $this->assertSame('unavailable', $urgentRequest->fresh()->supply_office_review_status);
+        $this->assertSame('pending', $urgentRequest->fresh()->urgent_document_status);
+    }
+
+    public function test_schedule_proposal_has_explicit_confirmation_and_success_feedback(): void
+    {
+        $request = $this->makeRequest(['status' => 'approved']);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertSee('Send this schedule proposal?', false)
+            ->assertSee('Yes, send proposal', false)
+            ->assertSee('Proposal sent', false)
+            ->assertSee('View updated request', false);
+    }
+
+    public function test_ajax_schedule_proposal_errors_are_returned_as_json_instead_of_redirecting(): void
+    {
+        $request = $this->makeRequest(['status' => 'approved']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        Venue::create(['name' => 'Gymnasium', 'capacity' => 100, 'custodian_id' => $admin->id, 'is_active' => true]);
+
+        $this->actingAs($admin)
+            ->postJson(route('supply-office.requests.revise'), [
+                'facility_request_id' => $request->id,
+                'start_date' => now()->addDays(3)->toDateString(),
+                'end_date' => now()->addDays(3)->toDateString(),
+                'start_time' => '05:00',
+                'end_time' => '17:00',
+                'venue' => ['Gymnasium'],
+                'revision_reason' => 'The existing schedule needs an alternative time.',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.end_time.0', 'Reservations cannot start or end between 12:00 AM and 5:00 AM. Choose times after 5:00 AM.')
+            ->assertJsonMissingPath('errors.urgent_document_validated');
     }
 
     public function test_supply_office_rejection_records_audit_and_notification_without_approval_fields(): void

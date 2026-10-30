@@ -73,11 +73,19 @@ class SupplyOfficeController extends Controller
         $availabilityReviewQueue = $this->buildRequestListQuery($request)
             ->where('status', 'pending')
             ->where('supply_office_review_status', 'pending')
+            ->where('venue_status', 'approved')
             ->orderBy('start_date')
             ->orderBy('start_time')
             ->orderBy('created_at')
             ->paginate(15, ['*'], 'availability_page')
             ->appends($request->query());
+        $venueRescheduleQueue = $this->buildRequestListQuery($request)
+            ->where('status', 'pending')
+            ->where('venue_status', 'needs_reschedule')
+            ->orderBy('start_date')
+            ->orderBy('start_time')
+            ->orderBy('created_at')
+            ->get();
         $cancellationQueue = FacilityRequest::query()
             ->with(['requester'])
             ->upcomingReservation()
@@ -109,6 +117,7 @@ class SupplyOfficeController extends Controller
             'requests'          => $filteredRequests,
             'finalApprovalQueue' => $finalApprovalQueue,
             'availabilityReviewQueue' => $availabilityReviewQueue,
+            'venueRescheduleQueue' => $venueRescheduleQueue,
             'cancellationQueue' => $cancellationQueue,
             'pendingFinalApprovalCount' => $finalApprovalQueue->total(),
             'totalCount'        => $totalCount,
@@ -133,33 +142,35 @@ class SupplyOfficeController extends Controller
             'id' => ['required', 'integer', 'exists:facility_requests,id'],
             'decision' => ['required', 'in:available,unavailable'],
             'notes' => ['required_if:decision,unavailable', 'nullable', 'string', 'max:1000'],
-            'urgent_document_validated' => ['nullable', 'accepted'],
         ]);
 
         $user = Auth::user();
 
         try {
-            $facilityRequest = DB::transaction(function () use ($validated, $user): FacilityRequest {
+            $facilityRequest = DB::transaction(function () use ($validated, $user, $request): FacilityRequest {
                 $facilityRequest = FacilityRequest::whereKey($validated['id'])->lockForUpdate()->firstOrFail();
                 if ($facilityRequest->status !== 'pending'
-                    || $facilityRequest->supply_office_review_status !== 'pending') {
+                    || $facilityRequest->supply_office_review_status !== 'pending'
+                    || $facilityRequest->venue_status !== 'approved') {
                     abort(409, 'This request is no longer awaiting initial Supply Office review.');
                 }
 
                 if ($validated['decision'] === 'available') {
                     $availability = app(\App\Services\AvailabilityService::class);
                     $availability->lockResourcesForFacilityRequests($facilityRequest);
-                    $conflict = $availability->checkFacilityRequest($facilityRequest, $facilityRequest->id);
+                    $conflict = $availability->checkFacilityRequestForReview($facilityRequest);
                     if ($conflict) {
                         throw \Illuminate\Validation\ValidationException::withMessages(['decision' => $conflict]);
                     }
 
                     if ($facilityRequest->is_emergency) {
-                        if (! request()->boolean('urgent_document_validated')) {
-                            throw \Illuminate\Validation\ValidationException::withMessages([
-                                'urgent_document_validated' => 'Validate the urgent supporting document before confirming availability.',
-                            ]);
-                        }
+                        $request->validate(
+                            ['urgent_document_validated' => ['required', 'accepted']],
+                            [
+                                'urgent_document_validated.required' => 'Confirm that you reviewed the urgent supporting document before confirming availability.',
+                                'urgent_document_validated.accepted' => 'Confirm that you reviewed the urgent supporting document before confirming availability.',
+                            ]
+                        );
                         if (! $facilityRequest->proposal_file && ! $facilityRequest->activity_proposal_file) {
                             throw \Illuminate\Validation\ValidationException::withMessages([
                                 'decision' => 'An urgent request must include its proposal or memorandum order.',
@@ -215,14 +226,11 @@ class SupplyOfficeController extends Controller
         }
 
         if ($validated['decision'] === 'available') {
-            $custodianIds = array_values(array_unique(array_merge(
-                $facilityRequest->getAssignedEquipmentCustodianIds(),
-                Venue::whereIn('name', $facilityRequest->getVenueNames())->pluck('custodian_id')->filter()->all(),
-            )));
+            $custodianIds = $facilityRequest->getAssignedEquipmentCustodianIds();
             foreach (User::whereIn('id', $custodianIds)->get() as $custodian) {
                 $custodian->notify(new \App\Notifications\NewFacilityRequestNotification($facilityRequest));
             }
-            $message = 'Availability confirmed. The request has been forwarded to the assigned custodians.';
+            $message = 'Supply Office availability confirmed. The request has been forwarded to the equipment custodians for approval.';
         } else {
             $facilityRequest->requester?->notify(new RequestStatusChanged(
                 $facilityRequest,
@@ -631,16 +639,18 @@ class SupplyOfficeController extends Controller
     }
 
     /**
-     * Admin/Supply Office proposes a reservation revision for requestor approval.
+     * Supply Office or an assigned venue custodian proposes a schedule revision.
      * Checks availability, detects conflicts, and allows authorized overrides.
      */
     public function reviseReservation(Request $request)
     {
-        $this->ensureAdminAccess();
+        $user = Auth::user();
+        $isVenueCustodian = $user?->isCustodianVenue() ?? false;
+        abort_unless($user && ($user->isAdmin() || $isVenueCustodian), 403);
 
         $validated = $request->validate([
             'facility_request_id' => ['required', 'integer', 'exists:facility_requests,id'],
-            'start_date' => ['required', 'date'],
+            'start_date' => ['required', 'date', 'after_or_equal:today'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'start_time' => ['required', 'string', 'regex:/^\d{2}:\d{2}$/'],
             'end_time' => ['required', 'string', 'regex:/^\d{2}:\d{2}$/'],
@@ -657,23 +667,44 @@ class SupplyOfficeController extends Controller
         ]);
 
         $facilityRequest = FacilityRequest::findOrFail($validated['facility_request_id']);
+        if ($isVenueCustodian) {
+            $assignedVenues = $user->venues()->pluck('name')->map(fn (string $name): string => mb_strtolower($name));
+            $requestedVenues = collect($validated['venue'])->map(fn (string $name): string => mb_strtolower($name));
+            abort_unless(
+                $facilityRequest->status === 'pending'
+                && in_array($facilityRequest->venue_status, ['pending', 'needs_reschedule'], true)
+                && in_array($facilityRequest->supply_office_review_status, ['pending', 'unavailable'], true)
+                && collect($facilityRequest->getVenueNames())
+                    ->map(fn (string $name): string => mb_strtolower($name))
+                    ->intersect($assignedVenues)
+                    ->isNotEmpty()
+                && $requestedVenues->isNotEmpty()
+                && $requestedVenues->diff($assignedVenues)->isEmpty(),
+                403,
+                'You may only propose a new schedule for a pending request assigned to one of your venues.'
+            );
+            if (($validated['override_conflict'] ?? false) || ($validated['memorandum_priority'] ?? false)) {
+                abort(403, 'Venue custodians cannot override schedule conflicts or submit memorandum-priority transfers.');
+            }
+        }
         if ($validated['start_time'] <= '05:00' || $validated['end_time'] <= '05:00') {
-            return redirect()->back()
-                ->withInput()
-                ->withErrors(['end_time' => 'Reservations cannot start or end between 12:00 AM and 5:00 AM. Choose times after 5:00 AM.']);
+            return $this->revisionFailure(
+                $request,
+                'Reservations cannot start or end between 12:00 AM and 5:00 AM. Choose times after 5:00 AM.',
+                'end_time'
+            );
         }
 
         // Check if revision is allowed
         if (!$facilityRequest->canBeRevised()) {
-            return redirect()->back()->withErrors([
-                'revision' => $facilityRequest->getRevisionLockReason() ?? 'Cannot revise this reservation.',
-            ]);
+            return $this->revisionFailure(
+                $request,
+                $facilityRequest->getRevisionLockReason() ?? 'Cannot revise this reservation.'
+            );
         }
 
         if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
-            return redirect()->back()->withErrors([
-                'revision' => 'A schedule change proposal is already waiting for the requestor to respond.',
-            ]);
+            return $this->revisionFailure($request, 'A schedule change proposal is already waiting for the requestor to respond.', 'revision', 409);
         }
 
         // Capture old state
@@ -689,7 +720,6 @@ class SupplyOfficeController extends Controller
             'equipment' => $validated['equipment'] ?? [],
             'equipment_quantities' => $validated['equipment_quantities'] ?? [],
         ];
-        $user = Auth::user();
         $memoPriority = (bool) ($validated['memorandum_priority'] ?? false);
         if ($memoPriority) {
             $validated['revision_reason'] = 'Memorandum-priority transfer required by '
@@ -716,6 +746,9 @@ class SupplyOfficeController extends Controller
                 && ! $custodianUserIds->contains($affectedUserId)
                 ? 'not_required'
                 : 'pending';
+        }
+        if ($isVenueCustodian) {
+            $responses[(string) $user->id] = 'accepted';
         }
 
         // Check availability for new schedule
@@ -763,12 +796,11 @@ class SupplyOfficeController extends Controller
 
             // If not overriding, reject the revision
             if (!($validated['override_conflict'] ?? false)) {
-                return redirect()->back()
-                    ->withInput()
-                    ->withErrors([
-                        'conflict' => "Scheduling conflict detected: $conflictDetails. Provide an override reason to proceed.",
-                    ])
-                    ->with('conflict_detected', true);
+                return $this->revisionFailure(
+                    $request,
+                    "Scheduling conflict detected: $conflictDetails. Provide an override reason to proceed.",
+                    'conflict'
+                );
             }
         }
 
@@ -830,8 +862,11 @@ class SupplyOfficeController extends Controller
                 ]);
             }
 
-            return redirect()->route('supply-office.index')
-                ->with('success', 'Schedule change proposal sent to the requestor for approval.');
+            $successRedirect = $isVenueCustodian
+                ? redirect()->route('request.show', $facilityRequest)
+                : redirect()->route('supply-office.index');
+
+            return $successRedirect->with('success', 'Schedule change proposal sent to the requestor and affected custodians for confirmation.');
         } catch (\RuntimeException $e) {
             if (str_contains($e->getMessage(), 'already waiting')) {
                 if ($request->expectsJson()) {
@@ -855,6 +890,18 @@ class SupplyOfficeController extends Controller
                 ->withInput()
                 ->withErrors(['revision' => 'Failed to send the schedule proposal. Please try again.']);
         }
+    }
+
+    private function revisionFailure(Request $request, string $message, string $errorKey = 'revision', int $status = 422)
+    {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'errors' => [$errorKey => [$message]],
+            ], $status);
+        }
+
+        return redirect()->back()->withInput()->withErrors([$errorKey => $message]);
     }
 
     public function storeVenue(Request $request)

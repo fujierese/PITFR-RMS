@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\FacilityRequest;
 use App\Models\ReservationSchedule;
 use App\Models\User;
+use App\Models\Venue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -17,6 +18,10 @@ class CalendarEventPayloadTest extends TestCase
         $response = $this->get(route('calendar.embed', [
             'date' => '2026-10-26',
             'venue' => 'Balay Alumni',
+            'start_date' => '2026-10-26',
+            'end_date' => '2026-10-28',
+            'start_time' => '09:00',
+            'end_time' => '12:30',
             'select' => 1,
         ]));
 
@@ -26,8 +31,29 @@ class CalendarEventPayloadTest extends TestCase
             ->assertSee('selectionStartDate = clickedDate', false)
             ->assertSee('selectionEndDate = clickedDate', false)
             ->assertSee('calendar-range-between', false)
+            ->assertSee('requested-reservation-date', false)
+            ->assertSee('requested-reservation-window', false)
+            ->assertSee('Requested schedule highlighted in cyan', false)
+            ->assertSee('timeGridWeek', false)
+            ->assertSee("pitfr-requested-schedule-highlighted", false)
             ->assertSee('venue-calendar-date-selected', false)
             ->assertDontSee('dashboard-sidebar');
+    }
+
+    public function test_venue_calendar_button_passes_the_full_requested_schedule_to_the_embed(): void
+    {
+        $url = route('calendar.embed', [
+            'venue' => 'Balay Alumni',
+            'date' => '2026-10-26',
+            'start_date' => '2026-10-26',
+            'end_date' => '2026-10-28',
+            'start_time' => '09:00',
+            'end_time' => '12:30',
+        ]);
+
+        $this->blade(
+            '<x-venue-calendar-button venue="Balay Alumni" date="2026-10-26" end-date="2026-10-28" start-time="09:00" end-time="12:30" />'
+        )->assertSee('data-venue-calendar-url="' . e($url) . '"', false);
     }
 
     public function test_calendar_events_include_rich_request_details_for_modal_display(): void
@@ -82,6 +108,121 @@ class CalendarEventPayloadTest extends TestCase
         $this->assertTrue($event['extendedProps']['isUrgent']);
         $this->assertSame($admin->name, $event['extendedProps']['assistedBy']);
         $this->assertSame(route('request.show', $request->id), $event['extendedProps']['requestUrl']);
+    }
+
+    public function test_venue_custodian_calendar_marks_unconfirmed_venue_requests_as_tentative_and_linkable(): void
+    {
+        $requestor = User::factory()->create(['role' => 'requestor']);
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+        Venue::create([
+            'name' => 'Gymnasium',
+            'capacity' => 100,
+            'custodian_id' => $custodian->id,
+        ]);
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-2026-CUSTODIAN-CALENDAR',
+            'date_requested' => now()->toDateString(),
+            'department' => 'BSIT',
+            'name_of_activity' => 'Tentative Workshop',
+            'expected_participants' => 25,
+            'start_date' => '2026-11-12',
+            'end_date' => '2026-11-12',
+            'start_time' => '09:00',
+            'end_time' => '11:00',
+            'venue' => ['Gymnasium'],
+            'requested_by_id' => $requestor->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($custodian)->getJson(route('calendar.events'));
+        $response->assertOk();
+
+        $event = collect($response->json())
+            ->firstWhere('extendedProps.facilityRequestId', $request->id);
+
+        $this->assertNotNull($event);
+        $this->assertSame('Awaiting venue confirmation', $event['extendedProps']['displayStatus']);
+        $this->assertTrue($event['extendedProps']['awaitingVenueConfirmation']);
+        $this->assertSame(route('request.show', $request->id), $event['extendedProps']['requestUrl']);
+
+        $this->get(route('calendar.index'))
+            ->assertOk()
+            ->assertSee('Awaiting venue confirmation')
+            ->assertSee('Tentative request, not an approved booking. Select it to review and confirm availability.');
+    }
+
+    public function test_venue_custodian_calendar_only_shows_schedules_for_their_assigned_venues(): void
+    {
+        $requestor = User::factory()->create(['role' => 'requestor']);
+        $chicCustodian = User::factory()->create(['role' => 'custodian-venue']);
+        $courtCustodian = User::factory()->create(['role' => 'custodian-venue']);
+        $chic = Venue::create([
+            'name' => 'Conference Hall & Interaction Center (CHIC)',
+            'capacity' => 100,
+            'custodian_id' => $chicCustodian->id,
+        ]);
+        $court = Venue::create([
+            'name' => 'Covered Court',
+            'capacity' => 100,
+            'custodian_id' => $courtCustodian->id,
+        ]);
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-2026-MULTI-VENUE-CALENDAR',
+            'date_requested' => now()->toDateString(),
+            'department' => 'BSIT',
+            'name_of_activity' => 'Two venue schedules',
+            'expected_participants' => 25,
+            'start_date' => '2026-11-23',
+            'end_date' => '2026-11-23',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'venue' => [$chic->name, $court->name],
+            'requested_by_id' => $requestor->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+        ]);
+        $request->requestVenues()->forceDelete();
+        $request->requestVenues()->createMany([
+            [
+                'venue_id' => $chic->id,
+                'name' => $chic->name,
+                'start_date' => '2026-11-23',
+                'end_date' => '2026-11-23',
+                'start_time' => '12:00',
+                'end_time' => '17:00',
+                'reservation_duration' => 'specific_time',
+            ],
+            [
+                'venue_id' => $court->id,
+                'name' => $court->name,
+                'start_date' => '2026-11-23',
+                'end_date' => '2026-11-23',
+                'start_time' => '08:00',
+                'end_time' => '12:00',
+                'reservation_duration' => 'specific_time',
+            ],
+        ]);
+        $this->assertSame('12:00', $request->fresh()->getVenueSchedule($chic->name)['start_time']);
+        $this->assertSame('08:00', $request->fresh()->getVenueSchedule($court->name)['start_time']);
+
+        $chicEvents = $this->actingAs($chicCustodian)
+            ->getJson(route('calendar.events'))
+            ->assertOk()
+            ->json();
+        $this->assertCount(1, $chicEvents);
+        $this->assertSame($chic->name, $chicEvents[0]['extendedProps']['venue']);
+        $this->assertSame('2026-11-23 12:00:00', $chicEvents[0]['start_datetime']);
+
+        $courtEvents = $this->actingAs($courtCustodian)
+            ->getJson(route('calendar.events'))
+            ->assertOk()
+            ->json();
+        $this->assertCount(1, $courtEvents);
+        $this->assertSame($court->name, $courtEvents[0]['extendedProps']['venue']);
+        $this->assertSame('2026-11-23 08:00:00', $courtEvents[0]['start_datetime']);
     }
 
     public function test_calendar_events_use_reservation_schedule_for_multi_day_range_and_requestor_metadata(): void

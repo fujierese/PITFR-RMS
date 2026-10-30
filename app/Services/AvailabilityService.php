@@ -170,6 +170,61 @@ class AvailabilityService
         return null;
     }
 
+    public function checkVenueScheduleForReview(FacilityRequest $facilityRequest, string $venueName): ?string
+    {
+        $canonicalVenueName = collect($facilityRequest->getVenueNames())
+            ->first(fn (string $name): bool => mb_strtolower(trim($name)) === mb_strtolower(trim($venueName)));
+
+        if ($canonicalVenueName === null) {
+            return 'The selected venue is not part of this request.';
+        }
+
+        $range = $facilityRequest->getVenueScheduleRange($canonicalVenueName);
+        $availability = $this->checkVenueAvailability(
+            $canonicalVenueName,
+            $range['start'],
+            $range['end'],
+            $facilityRequest->id
+        );
+        if (! $availability['available']) {
+            return $availability['message'] ?? 'The selected venue schedule is unavailable.';
+        }
+
+        $pendingConflict = FacilityRequest::query()
+            ->where('status', 'pending')
+            ->whereKeyNot($facilityRequest->id)
+            ->where(fn ($query) => $query->matchesVenue($canonicalVenueName))
+            ->with(['requestVenues', 'reservationSchedule'])
+            ->get()
+            ->contains(function (FacilityRequest $otherRequest) use ($canonicalVenueName, $range): bool {
+                $otherRange = $otherRequest->getVenueScheduleRange($canonicalVenueName);
+
+                return $otherRange['start']->lt($range['end'])
+                    && $otherRange['end']->gt($range['start']);
+            });
+
+        return $pendingConflict
+            ? 'Another request for this venue and time is still awaiting review. Resolve that request before confirming availability.'
+            : null;
+    }
+
+    public function checkFacilityRequestForReview(FacilityRequest $facilityRequest): ?string
+    {
+        $conflict = $this->checkFacilityRequest($facilityRequest, $facilityRequest->id);
+        if ($conflict !== null) {
+            return $conflict;
+        }
+
+        foreach ($facilityRequest->getVenueNames() as $venueName) {
+            $conflict = $this->checkVenueScheduleForReview($facilityRequest, $venueName);
+            if ($conflict !== null) {
+                return $conflict;
+            }
+        }
+
+        return null;
+    }
+
     public function getVenueCapacity(string $venueName): ?int
     {
         $venue = Venue::where('name', $venueName)->first();

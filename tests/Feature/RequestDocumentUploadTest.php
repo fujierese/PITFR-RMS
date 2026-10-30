@@ -162,6 +162,20 @@ class RequestDocumentUploadTest extends TestCase
         ]);
     }
 
+    public function test_outsider_cannot_request_urgent_processing_and_form_explains_the_rule(): void
+    {
+        $this->actingAs($this->externalUser)
+            ->get(route('requestor.index', ['tab' => 'create']))
+            ->assertOk()
+            ->assertSee('Urgent processing is available only to Institute requestors.')
+            ->assertDontSee('Request Urgent Processing');
+
+        $this->post(route('requestor.store'), ['is_emergency' => true])
+            ->assertSessionHasErrors([
+                'is_emergency' => 'Urgent processing is available only to Institute requestors.',
+            ]);
+    }
+
     public function test_external_signature_is_required_but_receipt_is_not_required_before_availability(): void
     {
         $this->actingAs($this->externalUser);
@@ -225,6 +239,89 @@ class RequestDocumentUploadTest extends TestCase
 
         $response->assertSessionHasErrors(['activity_proposal_file', 'e_signature_file']);
         $this->assertDatabaseCount('facility_requests', 0);
+    }
+
+    public function test_outsider_request_details_show_payment_receipt_and_supply_office_availability_review(): void
+    {
+        Storage::fake('local');
+        $receiptFilename = 'external-receipt.pdf';
+        Storage::disk('local')->put('documents/igp_receipt/' . $receiptFilename, 'receipt content');
+
+        $request = FacilityRequest::create([
+            'control_number' => 'FER-2026-OUTSIDER-RECEIPT',
+            'date_requested' => now()->toDateString(),
+            'department' => 'External Org',
+            'name_of_activity' => 'Partnership Event',
+            'expected_participants' => 30,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '14:00',
+            'end_time' => '16:00',
+            'venue' => ['Gymnasium'],
+            'equipment' => ['Tables'],
+            'equipment_quantities' => ['Tables' => 5],
+            'requested_by_id' => $this->externalUser->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+            'igp_receipt_file' => $receiptFilename,
+            'priority' => 'regular',
+        ]);
+        $this->assertSame($receiptFilename, $request->fresh()->igp_receipt_file);
+        Storage::disk('local')->assertExists('documents/igp_receipt/' . $receiptFilename);
+
+        $this->actingAs($this->externalUser)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertSee('Request Documents')
+            ->assertSee('Payment Receipt')
+            ->assertSee($receiptFilename)
+            ->assertDontSee('Payment Receipt:')
+            ->assertSee('Pending Venue Availability Confirmation')
+            ->assertSee('The venue custodian is checking whether the selected venue is available for your requested date and time.')
+            ->assertDontSee('No activity proposal uploaded')
+            ->assertDontSee('Pending Venue Custodian Approval')
+            ->assertDontSee('Assigned reviewer(s):');
+
+        $this->get(route('request.proposal', ['id' => $request->id, 'document' => 'receipt']))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+        $this->get(route('request.proposal.download', ['id' => $request->id, 'document' => 'receipt']))
+            ->assertOk()
+            ->assertHeader('Content-Disposition', 'attachment; filename=external-receipt.pdf');
+
+        $proposalFilename = 'internal-proposal.pdf';
+        Storage::disk('local')->put('documents/activity_proposal/' . $proposalFilename, 'proposal content');
+        $internalRequest = FacilityRequest::create([
+            'control_number' => 'FER-2026-INTERNAL-PROPOSAL',
+            'date_requested' => now()->toDateString(),
+            'department' => 'Computer Science',
+            'name_of_activity' => 'Student Workshop',
+            'expected_participants' => 25,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'venue' => ['Gymnasium'],
+            'equipment' => [],
+            'equipment_quantities' => [],
+            'requested_by_id' => $this->studentUser->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+            'activity_proposal_file' => $proposalFilename,
+            'priority' => 'regular',
+        ]);
+
+        $this->actingAs($this->studentUser)
+            ->get(route('request.show', $internalRequest))
+            ->assertOk()
+            ->assertSee('Document Attachment')
+            ->assertSee('Activity Proposal')
+            ->assertSee($proposalFilename)
+            ->assertDontSee('No activity proposal uploaded');
     }
 
     public function test_student_can_submit_with_activity_proposal_and_e_signature(): void
@@ -452,6 +549,41 @@ class RequestDocumentUploadTest extends TestCase
         $this->assertNull($request->activity_proposal_file);
     }
 
+    public function test_student_can_submit_venue_only_request_with_venue_provided_equipment(): void
+    {
+        $this->actingAs($this->studentUser);
+        $venue = 'Conference Hall & Interaction Center (CHIC)';
+        $date = now()->addDay()->toDateString();
+
+        $response = $this->post(route('requestor.store'), [
+            'department' => 'Computer Science',
+            'name_of_activity' => 'Venue Only Seminar',
+            'expected_participants' => 25,
+            'venue' => [$venue],
+            'venue_schedules' => [
+                $venue => [
+                    'start_date' => $date,
+                    'end_date' => $date,
+                    'start_time' => '09:00',
+                    'end_time' => '11:00',
+                    'reservation_duration' => 'specific_time',
+                ],
+            ],
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+
+        $request = FacilityRequest::where('requested_by_id', $this->studentUser->id)->firstOrFail();
+        $this->assertSame([], $request->getEquipmentItems());
+        $this->assertSame('approved', $request->equipment_status);
+        $this->assertSame('pending', $request->venue_status);
+        $this->assertSame([], $request->getAssignedEquipmentCustodianIds());
+        $this->assertCount(0, $request->requestEquipment);
+    }
+
     public function test_student_can_request_for_an_organization(): void
     {
         $this->actingAs($this->studentUser);
@@ -573,6 +705,30 @@ class RequestDocumentUploadTest extends TestCase
 
         $response->assertSessionHasErrors([
             'is_emergency' => 'Urgent requests must be submitted and held entirely on the same local calendar day.',
+        ]);
+    }
+
+    public function test_urgent_request_cannot_start_in_a_past_time_today(): void
+    {
+        $this->travelTo(now()->setTime(16, 0));
+        $this->actingAs($this->studentUser);
+
+        $this->post(route('requestor.store'), [
+            'department' => 'Computer Science',
+            'name_of_activity' => 'Past-time urgent workshop',
+            'expected_participants' => 30,
+            'start_date' => now()->toDateString(),
+            'end_date' => now()->toDateString(),
+            'start_time' => '15:00',
+            'end_time' => '17:00',
+            'venue' => 'Covered Court',
+            'equipment' => [],
+            'is_emergency' => true,
+            'emergency_justification' => 'This request needs urgent review.',
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
+        ])->assertSessionHasErrors([
+            'is_emergency' => 'Urgent reservations must start at the current time or later.',
         ]);
     }
 

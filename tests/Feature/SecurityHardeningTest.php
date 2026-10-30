@@ -227,6 +227,7 @@ class SecurityHardeningTest extends TestCase
         ]);
         $request = $this->facilityRequest(User::factory()->create(['role' => 'requestor']), [], ['Sound System' => 1], [
             'venue_status' => 'approved',
+            'supply_office_review_status' => 'confirmed',
         ]);
 
         Sanctum::actingAs($custodian);

@@ -71,6 +71,44 @@ class BroadcastCustodianTest extends TestCase
         $this->assertDatabaseCount('facility_requests', 0);
     }
 
+    public function test_api_does_not_allow_outsiders_to_submit_urgent_requests(): void
+    {
+        $outsider = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'outsider',
+        ]);
+
+        $this->actingAs($outsider)
+            ->postJson('/api/facility-requests', ['is_emergency' => true])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('is_emergency');
+
+        $this->assertDatabaseCount('facility_requests', 0);
+    }
+
+    public function test_api_urgent_request_cannot_start_in_a_past_time_today(): void
+    {
+        $this->travelTo(now()->setTime(16, 0));
+        $requestor = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+
+        $this->actingAs($requestor)
+            ->postJson('/api/facility-requests', [
+                'name_of_activity' => 'Past-time urgent activity',
+                'expected_participants' => 10,
+                'start_date' => now()->toDateString(),
+                'end_date' => now()->toDateString(),
+                'start_time' => '15:00',
+                'end_time' => '17:00',
+                'department' => 'IT',
+                'is_emergency' => true,
+                'emergency_justification' => 'Urgent review requested.',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('is_emergency');
+
+        $this->assertDatabaseCount('facility_requests', 0);
+    }
+
     public function test_api_rejects_a_specific_time_ending_between_midnight_and_five_am(): void
     {
         $requestor = User::factory()->create(['role' => 'requestor']);

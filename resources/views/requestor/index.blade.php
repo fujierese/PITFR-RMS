@@ -89,6 +89,21 @@
         'regular' => 'bg-slate-100 text-slate-700 ring-slate-200',
     ];
 
+    $equipmentGroupsFor = static function ($requestItem): array {
+        $allocations = $requestItem->getVenueEquipmentAllocations();
+        if ($allocations !== []) {
+            return $allocations;
+        }
+
+        $equipmentGroups = [];
+        $quantities = $requestItem->getEquipmentQuantities();
+        foreach (array_unique($requestItem->getEquipmentItems()) as $equipmentName) {
+            $equipmentGroups['Equipment requested'][$equipmentName] = $quantities[$equipmentName] ?? 1;
+        }
+
+        return $equipmentGroups;
+    };
+
     $upcomingReservations = $requests
         ->filter(function ($requestItem) {
             $requestDate = $requestItem->start_date instanceof \Carbon\Carbon ? $requestItem->start_date : null;
@@ -239,7 +254,7 @@
                                             ? 'bg-rose-100 text-rose-700 ring-rose-200'
                                             : ($priorityLabel ? ($priorityBadgeClasses[$priorityValue] ?? 'bg-slate-100 text-slate-700 ring-slate-200') : null);
                                         $venueLabel = implode(', ', $requestItem->getVenueNames()) ?: '-';
-                                        $equipmentLabel = implode(', ', $requestItem->getVenueEquipmentLabels() ?: $requestItem->getEquipmentItems()) ?: '-';
+                                        $equipmentGroups = $equipmentGroupsFor($requestItem);
                                         $venueScheduleSummaries = $requestItem->getVenueScheduleSummaries();
                                         $canEdit = $statusKey === 'needs_reschedule'
                                             || $requestItem->venue_status === 'needs_reschedule'
@@ -273,7 +288,30 @@
                                             <div class="mt-1 text-xs text-slate-500">{{ $requestItem->department ?? 'N/A' }}</div>
                                         </td>
                                         <td class="px-4 py-4">{{ $venueLabel }}</td>
-                                        <td class="px-4 py-4">{{ $equipmentLabel }}</td>
+                                        <td class="px-4 py-4 align-top">
+                                            @forelse ($equipmentGroups as $equipmentVenue => $equipmentItems)
+                                                <div class="mb-3 last:mb-0">
+                                                    <div class="font-semibold text-slate-900">{{ $equipmentVenue }}</div>
+                                                    <ul class="mt-1 space-y-1 text-xs leading-5 text-slate-600">
+                                                        @foreach (array_slice($equipmentItems, 0, 2, true) as $equipmentName => $quantity)
+                                                            <li class="break-words">{{ $equipmentName }} <span class="whitespace-nowrap font-medium text-slate-500">×{{ $quantity }}</span></li>
+                                                        @endforeach
+                                                    </ul>
+                                                    @if (count($equipmentItems) > 2)
+                                                        <details class="mt-1">
+                                                            <summary class="cursor-pointer text-xs font-medium text-emerald-700 hover:text-emerald-800">Show {{ count($equipmentItems) - 2 }} more</summary>
+                                                            <ul class="mt-1 space-y-1 text-xs leading-5 text-slate-600">
+                                                                @foreach (array_slice($equipmentItems, 2, null, true) as $equipmentName => $quantity)
+                                                                    <li class="break-words">{{ $equipmentName }} <span class="whitespace-nowrap font-medium text-slate-500">×{{ $quantity }}</span></li>
+                                                                @endforeach
+                                                            </ul>
+                                                        </details>
+                                                    @endif
+                                                </div>
+                                            @empty
+                                                <span class="text-slate-400">—</span>
+                                            @endforelse
+                                        </td>
                                         <td class="px-4 py-4">
                                             @forelse($venueScheduleSummaries as $schedule)
                                                 <div class="mb-2 last:mb-0">
@@ -349,7 +387,7 @@
                                 ? 'bg-rose-100 text-rose-700 ring-rose-200'
                                 : ($priorityLabel ? ($priorityBadgeClasses[$priorityValue] ?? 'bg-slate-100 text-slate-700 ring-slate-200') : null);
                             $venueLabel = implode(', ', $requestItem->getVenueNames()) ?: '-';
-                            $equipmentLabel = implode(', ', $requestItem->getVenueEquipmentLabels() ?: $requestItem->getEquipmentItems()) ?: '-';
+                            $equipmentGroups = $equipmentGroupsFor($requestItem);
                             $venueScheduleSummaries = $requestItem->getVenueScheduleSummaries();
                             $canEdit = $statusKey === 'needs_reschedule'
                                 || $requestItem->venue_status === 'needs_reschedule'
@@ -376,7 +414,21 @@
                             </div>
                             <div class="mt-4 space-y-2 text-sm text-slate-600">
                                 <div><span class="font-semibold text-slate-900">Venue:</span> {{ $venueLabel }}</div>
-                                <div><span class="font-semibold text-slate-900">Equipment:</span> {{ $equipmentLabel }}</div>
+                                <div>
+                                    <span class="font-semibold text-slate-900">Equipment:</span>
+                                    @forelse ($equipmentGroups as $equipmentVenue => $equipmentItems)
+                                        <div class="mt-2 rounded-xl border border-slate-200 bg-white p-3">
+                                            <p class="text-xs font-semibold text-slate-800">{{ $equipmentVenue }}</p>
+                                            <ul class="mt-1 space-y-1 text-xs leading-5 text-slate-600">
+                                                @foreach ($equipmentItems as $equipmentName => $quantity)
+                                                    <li class="break-words">{{ $equipmentName }} <span class="whitespace-nowrap font-medium text-slate-500">×{{ $quantity }}</span></li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @empty
+                                        <span>—</span>
+                                    @endforelse
+                                </div>
                                 <div>
                                     <span class="font-semibold text-slate-900">Venue Schedules:</span>
                                     <ul class="mt-1 space-y-1">

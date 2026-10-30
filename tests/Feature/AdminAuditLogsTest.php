@@ -192,6 +192,28 @@ class AdminAuditLogsTest extends TestCase
             ->assertSee(route('supply-office.index'));
     }
 
+    public function test_supply_office_staff_only_sees_pages_allowed_for_their_role(): void
+    {
+        $staff = User::factory()->create(['role' => 'supply_office']);
+
+        $this->assertFalse($staff->isSystemAdmin());
+        $this->actingAs($staff)
+            ->get(route('supply-office.audit-logs'))
+            ->assertForbidden();
+
+        $this->view('components.dashboard-sidebar', ['user' => $staff])
+            ->assertSee('Reports')
+            ->assertSee('Settings')
+            ->assertDontSee('Users')
+            ->assertDontSee('Venue Management')
+            ->assertDontSee('Equipment Management')
+            ->assertDontSee('Audit Logs')
+            ->assertDontSee(route('supply-office.users'))
+            ->assertDontSee(route('supply-office.venues.index'))
+            ->assertDontSee(route('supply-office.equipment.index'))
+            ->assertDontSee(route('supply-office.audit-logs'));
+    }
+
     public function test_student_representative_sidebar_shows_person_organization_and_representative_role(): void
     {
         $user = User::factory()->create([

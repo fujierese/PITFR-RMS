@@ -499,6 +499,107 @@ class FacilityRequest extends Model
         });
     }
 
+    public function hasAdditionalEquipmentToReturn(): bool
+    {
+        return $this->getAdditionalEquipmentQuantities() !== [];
+    }
+
+    public function getAdditionalEquipmentQuantities(): array
+    {
+        $venueIncludedEquipment = [];
+        foreach ($this->getVenueNames() as $venueName) {
+            $venueIncludedEquipment = array_merge(
+                $venueIncludedEquipment,
+                \App\Services\VenueEquipmentPolicy::getDefaultEquipment($venueName)
+            );
+        }
+
+        $normalizedVenueIncludedEquipment = array_map(
+            static fn (string $name): string => mb_strtolower(trim($name)),
+            array_unique($venueIncludedEquipment)
+        );
+
+        return array_filter(
+            $this->resolvedQuantities(),
+            static fn ($quantity, $equipmentName): bool => (int) $quantity > 0
+                && ! in_array(mb_strtolower(trim((string) $equipmentName)), $normalizedVenueIncludedEquipment, true),
+            ARRAY_FILTER_USE_BOTH
+        );
+    }
+
+    public function getReservationLifecycleState(?Carbon $at = null): string
+    {
+        if (! in_array($this->status, ['approved', 'completed'], true)) {
+            return (string) $this->status;
+        }
+
+        $at ??= now();
+        [$start, $end] = $this->getReservationLifecycleBounds();
+
+        if ($at->lt($start)) {
+            return 'approved';
+        }
+
+        if ($at->lt($end)) {
+            return 'ongoing';
+        }
+
+        if ($this->hasAdditionalEquipmentToReturn()
+            && ! in_array($this->equipment_returned_status, ['returned', 'fulfilled'], true)) {
+            return 'equipment_return_pending';
+        }
+
+        return 'completed';
+    }
+
+    public function isReservationComplete(?Carbon $at = null): bool
+    {
+        return $this->getReservationLifecycleState($at) === 'completed';
+    }
+
+    public function getReservationLifecycleLabel(?Carbon $at = null): string
+    {
+        return match ($this->getReservationLifecycleState($at)) {
+            'approved' => 'Approved — Awaiting Reservation',
+            'ongoing' => 'Ongoing Event',
+            'equipment_return_pending' => 'Event Ended — Equipment Return Pending',
+            'completed' => 'Reservation Completed',
+            'rejected' => 'Rejected',
+            'cancelled' => 'Cancelled',
+            'needs_reschedule' => 'Needs Reschedule',
+            default => ucfirst(str_replace('_', ' ', (string) $this->status)),
+        };
+    }
+
+    /**
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function getReservationLifecycleBounds(): array
+    {
+        $ranges = [];
+        foreach ($this->getVenueNames() as $venueName) {
+            $ranges[] = $this->getVenueScheduleRange($venueName);
+        }
+
+        if ($ranges === []) {
+            return [$this->getRequestedStartDateTime(), $this->getRequestedEndDateTime()];
+        }
+
+        $starts = array_column($ranges, 'start');
+        $ends = array_column($ranges, 'end');
+        usort($starts, static fn (Carbon $left, Carbon $right): int => $left->getTimestamp() <=> $right->getTimestamp());
+        usort($ends, static fn (Carbon $left, Carbon $right): int => $right->getTimestamp() <=> $left->getTimestamp());
+
+        return [$starts[0], $ends[0]];
+    }
+
+    public function getReservationLifecycleEndDateTime(): Carbon
+    {
+        [, $end] = $this->getReservationLifecycleBounds();
+
+        return $end;
+    }
+
     public function syncRelationalItems(?array $venueSchedules = null, ?array $venueEquipment = null): void
     {
         if ($venueEquipment === null && Schema::hasTable('request_equipment') && Schema::hasColumn('request_equipment', 'request_venue_id')) {
@@ -1350,7 +1451,7 @@ class FacilityRequest extends Model
         $statuses = $this->equipment_custodian_statuses ?? [];
 
         if (empty($itemNames)) {
-            $this->equipment_status = 'pending';
+            $this->equipment_status = 'approved';
             $this->save();
             return;
         }
@@ -1398,7 +1499,7 @@ class FacilityRequest extends Model
     // ─── MARK EQUIPMENT AS RETURNED ──────────────────────────────────────────
     public function markEquipmentReturned(int $custodianId, array $returnedEquipment, ?string $notes = null, array $damageDetails = [], array $missingDetails = [], array $damageRemarks = [], array $missingRemarks = []): void
     {
-        if (now()->lt($this->getRequestedEndDateTime())) {
+        if (now()->lt($this->getReservationLifecycleEndDateTime())) {
             throw new \InvalidArgumentException('Equipment cannot be returned before the event has ended.');
         }
 
@@ -1551,7 +1652,7 @@ class FacilityRequest extends Model
 
     private function isAllEquipmentReturned(array $returnedItems): bool
     {
-        $totalRequested = $this->resolvedQuantities();
+        $totalRequested = $this->getAdditionalEquipmentQuantities();
 
         if (empty($totalRequested)) return true;
 
@@ -1573,6 +1674,49 @@ class FacilityRequest extends Model
         }
 
         return true;
+    }
+
+    public function getEquipmentReturnOutstandingQuantities(): array
+    {
+        $requestedQuantities = $this->getAdditionalEquipmentQuantities();
+        $returnedItems = $this->equipment_returned_items ?? [];
+
+        if ($requestedQuantities === [] || in_array($this->equipment_returned_status, ['returned', 'fulfilled'], true)) {
+            return [];
+        }
+
+        $accountedQuantities = [];
+        foreach ($returnedItems as $custodianData) {
+            if (! is_array($custodianData)) {
+                continue;
+            }
+
+            if (isset($custodianData['equipment']) && is_array($custodianData['equipment'])) {
+                foreach ($custodianData['equipment'] as $itemName => $quantity) {
+                    $accountedQuantities[$itemName] = ($accountedQuantities[$itemName] ?? 0) + max(0, (int) $quantity);
+                }
+                foreach ($custodianData['missing'] ?? [] as $itemName => $quantity) {
+                    $accountedQuantities[$itemName] = ($accountedQuantities[$itemName] ?? 0) + max(0, (int) $quantity);
+                }
+                continue;
+            }
+
+            foreach ($custodianData as $itemName => $quantity) {
+                if (is_numeric($quantity)) {
+                    $accountedQuantities[$itemName] = ($accountedQuantities[$itemName] ?? 0) + max(0, (int) $quantity);
+                }
+            }
+        }
+
+        $outstanding = [];
+        foreach ($requestedQuantities as $itemName => $quantity) {
+            $remaining = max(0, (int) $quantity - min((int) $quantity, (int) ($accountedQuantities[$itemName] ?? 0)));
+            if ($remaining > 0) {
+                $outstanding[$itemName] = $remaining;
+            }
+        }
+
+        return $outstanding;
     }
 
     public function getInventoryOutstandingQuantities(): array
@@ -1660,7 +1804,7 @@ class FacilityRequest extends Model
 
     public function isOverdue(): bool
     {
-        return now()->gt($this->getRequestedEndDateTime())
+        return now()->gt($this->getReservationLifecycleEndDateTime())
             && ! in_array($this->equipment_returned_status, ['returned', 'fulfilled'], true);
     }
 

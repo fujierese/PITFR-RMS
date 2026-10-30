@@ -149,13 +149,6 @@
                         'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4a4 4 0 100 8 4 4 0 000-8zm-7 16a7 7 0 0114 0"/></svg>',
                     ];
                     $navigation[] = [
-                        'key' => 'reports',
-                        'label' => 'Reports',
-                        'route' => route('supply-office.usage-reports'),
-                        'route_name' => 'supply-office.usage-reports',
-                        'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M7 16V8m5 8V5m5 11v-6"/></svg>',
-                    ];
-                    $navigation[] = [
                         'key' => 'venue-management',
                         'label' => 'Venue Management',
                         'route' => route('supply-office.venues.index'),
@@ -170,18 +163,31 @@
                         'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m-1 0V3m0 2h-2"/></svg>',
                     ];
                 }
-            // Account & Administration
             $navigation[] = [
-                'section' => 'Monitoring',
+                'section' => 'Reports',
                 'type' => 'section-header',
             ];
             $navigation[] = [
-                'key' => 'audit-logs',
-                'label' => 'Audit Logs',
-                'route' => route('supply-office.audit-logs'),
-                'route_name' => 'supply-office.audit-logs',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M5 21h14a2 2 0 002-2V7l-5-5H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+                'key' => 'reports',
+                'label' => 'Reports',
+                'route' => route('supply-office.usage-reports'),
+                'route_name' => 'supply-office.usage-reports',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19h16M7 16V8m5 8V5m5 11v-6"/></svg>',
             ];
+
+            $navigation[] = [
+                'section' => 'Account',
+                'type' => 'section-header',
+            ];
+            if ($user->isSystemAdmin()) {
+                $navigation[] = [
+                    'key' => 'audit-logs',
+                    'label' => 'Audit Logs',
+                    'route' => route('supply-office.audit-logs'),
+                    'route_name' => 'supply-office.audit-logs',
+                    'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M5 21h14a2 2 0 00-2-2V7l-5-5H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+                ];
+            }
             $navigation[] = [
                 'key' => 'settings',
                 'label' => 'Settings',
@@ -431,17 +437,18 @@
             ];
         }
 
-        $navigation[] = [
-            'section' => 'Records',
-            'type' => 'section-header',
-        ];
-        $navigation[] = [
+        $historyNavigationItem = [
             'key' => 'history',
             'label' => 'Reservation History',
             'route' => route('history.index'),
             'route_name' => 'history.index',
             'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
         ];
+        $navigationKeys = array_map(static fn ($item) => $item['key'] ?? null, $navigation);
+        $calendarIndex = array_search('calendar', $navigationKeys, true);
+        $dashboardIndex = array_search('dashboard', $navigationKeys, true);
+        $navigationIndex = $calendarIndex !== false ? $calendarIndex + 1 : ($dashboardIndex !== false ? $dashboardIndex + 1 : 0);
+        array_splice($navigation, $navigationIndex, 0, [$historyNavigationItem]);
     }
 
     if ($currentRoute === 'requestor.index' && $activeTab === 'create') {
@@ -504,25 +511,25 @@
     $isActive = fn($key) => $activeKey === $key;
 @endphp
 
-<div class="flex h-full flex-col bg-slate-950 text-slate-100 shadow-[0_20px_60px_rgba(2,6,23,0.35)]">
-    <div class="flex-shrink-0 border-b border-white/10 p-4">
+<div class="flex h-full flex-col bg-white text-slate-900 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+    <div class="flex-shrink-0 border-b border-slate-200 p-4">
         <div class="flex items-center justify-between gap-2">
             <a href="{{ $dashboardRoute }}" class="flex min-w-0 items-center gap-3">
-                <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-10 w-10 rounded-full border border-white/10 object-cover shadow-sm">
+                <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-10 w-10 rounded-full border border-slate-200 object-cover shadow-sm">
                 <div class="min-w-0">
-                    <p class="truncate text-xs font-semibold uppercase tracking-[0.18em] text-white">PITFR - RMS</p>
-                    <p class="truncate text-[11px] text-slate-400">Facility Reservation System</p>
+                    <p class="truncate text-xs font-semibold uppercase tracking-[0.18em] text-slate-900">PITFR - RMS</p>
+                    <p class="truncate text-[11px] text-slate-500">Facility Reservation System</p>
                 </div>
             </a>
-            <button id="sidebar-close" type="button" aria-label="Close navigation menu" title="Close navigation menu" class="rounded-lg border border-white/10 bg-white/5 p-2 text-slate-200 transition hover:bg-emerald-500/20 hover:text-white lg:hidden">
+            <button id="sidebar-close" type="button" aria-label="Close navigation menu" title="Close navigation menu" class="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-800 lg:hidden">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </div>
 
-        <div class="group mt-3 rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/20 via-emerald-500/10 to-slate-800/80 p-2.5 shadow-[0_8px_24px_rgba(16,185,129,0.08)] transition duration-300 ease-out motion-safe:animate-[sidebar-card-in_400ms_ease-out_both] hover:-translate-y-0.5 hover:border-emerald-300/50 hover:shadow-[0_10px_28px_rgba(16,185,129,0.16)]">
-            <p class="text-[9px] font-semibold uppercase tracking-[0.28em] text-slate-400">Signed in as</p>
-            <p class="mt-1 break-words text-sm font-semibold text-white">{{ $displayName }}</p>
-            <p class="break-words text-xs text-slate-300">{{ $displayIdentity }}</p>
+        <div class="group mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5 shadow-sm transition duration-300 ease-out motion-safe:animate-[sidebar-card-in_400ms_ease-out_both] hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md">
+            <p class="text-[9px] font-semibold uppercase tracking-[0.28em] text-slate-500">Signed in as</p>
+            <p class="mt-1 break-words text-sm font-semibold text-slate-900">{{ $displayName }}</p>
+            <p class="break-words text-xs text-slate-600">{{ $displayIdentity }}</p>
         </div>
     </div>
     <nav class="flex-1 min-h-0 overflow-y-auto px-2.5 py-3">
@@ -538,8 +545,8 @@
                 @elseif($item['label'] === 'Settings' || $item['label'] === 'Account Settings')
                     <div class="space-y-1">
                         <a href="{{ $item['route'] }}" data-sidebar-close="true"
-                           class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition {{ $isActive($item['key']) ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
-                            <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg {{ $isActive($item['key']) ? 'bg-white/15 text-white' : 'bg-slate-800 text-slate-400 group-hover:text-white' }}">
+                           class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition {{ $isActive($item['key']) ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-800' }}">
+                            <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg {{ $isActive($item['key']) ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500 group-hover:text-emerald-700' }}">
                                 {!! $item['icon'] ?? '' !!}
                             </span>
                             <span>{{ $item['label'] }}</span>
@@ -547,8 +554,8 @@
 
                         <form method="POST" action="{{ route('logout') }}" class="ml-8">
                             @csrf
-                            <button type="submit" data-sidebar-close="true" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/10 hover:text-white">
-                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-slate-400">
+                            <button type="submit" data-sidebar-close="true" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-500">
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1"/></svg>
                                 </span>
                                 <span>Logout</span>
@@ -557,8 +564,8 @@
                     </div>
                 @else
                     <a href="{{ $item['route'] }}" data-sidebar-close="true"
-                       class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition {{ $isActive($item['key']) ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
-                        <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg {{ $isActive($item['key']) ? 'bg-white/15 text-white' : 'bg-slate-800 text-slate-400 group-hover:text-white' }}">
+                       class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition {{ $isActive($item['key']) ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-800' }}">
+                        <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg {{ $isActive($item['key']) ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500 group-hover:text-emerald-700' }}">
                             {!! $item['icon'] ?? '' !!}
                         </span>
                         <span>{{ $item['label'] }}</span>

@@ -25,7 +25,7 @@
 
 <div class="min-h-screen bg-slate-100">
     @auth
-        <aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-50 h-screen w-72 -translate-x-full transform overflow-hidden border-r border-emerald-500/20 bg-slate-950 shadow-[24px_0_60px_rgba(2,6,23,0.3)] transition-transform duration-300 sm:w-80 lg:fixed lg:inset-y-0 lg:left-0 lg:h-screen lg:w-80 lg:translate-x-0 lg:overflow-hidden">
+        <aside id="dashboard-sidebar" class="fixed inset-y-0 left-0 z-50 h-screen w-72 -translate-x-full transform overflow-hidden border-r border-slate-200 bg-white shadow-[24px_0_60px_rgba(15,23,42,0.12)] transition-transform duration-300 sm:w-80 lg:fixed lg:inset-y-0 lg:left-0 lg:h-screen lg:w-80 lg:translate-x-0 lg:overflow-hidden">
             @include('components.dashboard-sidebar')
         </aside>
         <div id="sidebar-backdrop" class="fixed inset-0 z-40 hidden bg-slate-950/40 backdrop-blur-sm lg:hidden"></div>
@@ -79,6 +79,7 @@
         </nav>
         <p class="mt-2 text-xs text-slate-500">Privacy information is a draft and must be reviewed by PIT before official use.</p>
     </footer>
+    @include('components.venue-calendar-modal')
     @include('components.faq-modal')
 </div>
 

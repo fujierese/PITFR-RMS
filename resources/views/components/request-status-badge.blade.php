@@ -7,11 +7,23 @@
     $overallStatus = strtolower((string) ($request->status ?? 'pending'));
     $venueStatus = strtolower((string) ($request->venue_status ?? 'pending'));
     $equipmentStatus = strtolower((string) ($request->equipment_status ?? 'pending'));
-    $venueCustodians = $request->requestVenues()->with('venue.custodian')->get()
-        ->map(fn ($requestVenue) => $requestVenue->venue?->custodian?->name)
-        ->filter()
-        ->unique()
+    $venueAssignments = $request->requestVenues()->with('venue.custodian')->get()
+        ->map(fn ($requestVenue) => [
+            'venue' => $requestVenue->resolvedName(),
+            'custodian' => $requestVenue->venue?->custodian?->name,
+        ])
+        ->filter(fn ($assignment) => $assignment['venue'] !== '')
+        ->unique(fn ($assignment) => mb_strtolower($assignment['venue'] . '|' . ($assignment['custodian'] ?? '')))
         ->values();
+    if ($venueAssignments->isEmpty()) {
+        $venueAssignments = \App\Models\Venue::query()
+            ->with('custodian')
+            ->whereIn('name', $request->getVenueNames())
+            ->get()
+            ->map(fn ($venue) => ['venue' => $venue->name, 'custodian' => $venue->custodian?->name])
+            ->values();
+    }
+    $venueCustodians = $venueAssignments->pluck('custodian')->filter()->unique()->values();
     $equipmentCustodians = $request->requestEquipment()->with('equipment.custodian')->get()
         ->map(fn ($requestEquipment) => $requestEquipment->equipment?->custodian?->name)
         ->filter()
@@ -21,8 +33,7 @@
 
     $statusLabel = match ($overallStatus) {
         'cancelled' => 'Cancelled',
-        'approved' => 'Approved',
-        'completed' => 'Completed',
+        'approved', 'completed' => $request->getReservationLifecycleLabel(),
         'rejected' => 'Rejected',
         'needs_reschedule' => 'Needs Revision',
         default => match (true) {
@@ -44,7 +55,7 @@
     };
 
     $badgeStatus = match ($overallStatus) {
-        'approved', 'completed' => 'approved',
+        'approved', 'completed' => $request->getReservationLifecycleState() === 'equipment_return_pending' ? 'pending' : 'approved',
         'rejected' => 'rejected',
         'cancelled' => 'cancelled',
         default => 'pending',
@@ -98,10 +109,14 @@
 @if (!$showWorkflowStage && $badgeStatus === 'pending' && $overallStatus === 'pending')
     <div class="mt-1 space-y-0.5 text-[11px] leading-4 text-slate-500" title="Current request handlers">
         @if ($venueStatus === 'pending')
-            <p><span class="font-semibold text-slate-700">{{ $showWorkflowStage ? 'Venue review by:' : 'Venue:' }}</span> {{ $formatCustodians($venueCustodians) }}</p>
+            @forelse ($venueAssignments as $assignment)
+                <p><span class="font-semibold text-slate-700">Venue:</span> {{ $assignment['venue'] }} · <span class="font-semibold text-slate-700">Custodian in charge:</span> {{ $assignment['custodian'] ?: 'assigned custodian' }}</p>
+            @empty
+                <p><span class="font-semibold text-slate-700">Venue custodian:</span> {{ $formatCustodians($venueCustodians) }}</p>
+            @endforelse
         @endif
         @if ($equipmentStatus === 'pending')
-            <p><span class="font-semibold text-slate-700">{{ $showWorkflowStage ? 'Equipment review by:' : 'Equipment:' }}</span> {{ $formatCustodians($equipmentCustodians) }}</p>
+            <p><span class="font-semibold text-slate-700">Equipment custodian:</span> {{ $formatCustodians($equipmentCustodians) }}</p>
         @endif
         @if (!$showWorkflowStage && $venueStatus === 'approved' && $equipmentStatus === 'approved')
             <p><span class="font-semibold text-slate-700">Next:</span> Supply Office</p>

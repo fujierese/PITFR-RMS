@@ -111,6 +111,12 @@ class FacilityRequestApiController extends Controller
     public function store(Request $request)
     {
         $this->authorize('create', FacilityRequest::class);
+        $user = Auth::user();
+        if ($user?->isOutsider() && $request->boolean('is_emergency')) {
+            throw ValidationException::withMessages([
+                'is_emergency' => 'Urgent processing is available only to Institute requestors.',
+            ]);
+        }
         $request->merge([
             'start_date' => $request->input('start_date', $request->input('requesting_date')),
             'end_date' => $request->input('end_date', $request->input('requesting_end_date')),
@@ -172,8 +178,6 @@ class FacilityRequestApiController extends Controller
             ]);
         }
 
-        $user = Auth::user();
-
         $validated['reservation_duration'] = strtolower((string) ($validated['reservation_duration'] ?? 'specific_time'));
         $scheduleRange = FacilityRequest::resolveReservationDuration(
             $validated['reservation_duration'],
@@ -199,6 +203,11 @@ class FacilityRequestApiController extends Controller
                 || $requestedEnd->toDateString() !== now()->toDateString())) {
             throw ValidationException::withMessages([
                 'is_emergency' => 'Urgent requests must be submitted and held entirely on the same local calendar day.',
+            ]);
+        }
+        if (! empty($validated['is_emergency']) && $requestedStart->lt(now()->startOfMinute())) {
+            throw ValidationException::withMessages([
+                'is_emergency' => 'Urgent reservations must start at the current time or later.',
             ]);
         }
 
@@ -230,13 +239,6 @@ class FacilityRequestApiController extends Controller
         }
 
         $isUrgentRequest = !empty($validated['is_emergency']) && (bool) $validated['is_emergency'];
-        if ($isUrgentRequest && $requestedStart->gt(now()->addHours(48))) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Emergency requests are only allowed within 48 hours of the reservation schedule.',
-            ], 422);
-        }
-
         // Urgent requests are flagged for human Supply Office review; they do not
         // automatically override conflicts at final approval.
         if (!empty($validated['venue']) && !$isUrgentRequest) {
@@ -293,7 +295,8 @@ class FacilityRequestApiController extends Controller
                 'requested_by_id' => $user->id,
                 'status' => 'pending',
                 'venue_status' => 'pending',
-                'equipment_status' => 'pending',
+                'equipment_status' => empty($validated['equipment'] ?? []) ? 'approved' : 'pending',
+                'supply_office_review_status' => 'pending',
                 'priority' => $isUrgentRequest ? 'institutional' : 'regular',
                 'requested_priority' => $isUrgentRequest ? 'institutional' : null,
                 'requested_is_emergency' => $validated['is_emergency'] ?? false,
@@ -396,6 +399,12 @@ class FacilityRequestApiController extends Controller
         $this->authorize('approve', $facilityRequest);
 
         $user = Auth::user();
+        if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'A schedule proposal is awaiting responses. Custodian actions are paused until it is answered.',
+            ], 409);
+        }
         $approvalType = $request->validate([
             'type' => ['required', 'in:venue,equipment'],
         ])['type'];
@@ -417,6 +426,22 @@ class FacilityRequestApiController extends Controller
                 return response()->json([
                     'success' => false,
                     'error' => ucfirst($approvalType) . ' has already been processed for this request.',
+                ], 409);
+            }
+            if ($approvalType === 'venue'
+                && $facilityRequest->supply_office_review_status !== 'pending') {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Venue availability must be confirmed before the Supply Office review.',
+                ], 409);
+            }
+            if ($approvalType === 'equipment'
+                && $facilityRequest->supply_office_review_status !== 'confirmed') {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'error' => 'The venue custodian and Supply Office must confirm availability before equipment review begins.',
                 ], 409);
             }
 
@@ -490,29 +515,63 @@ class FacilityRequestApiController extends Controller
         $this->authorize('reject', $facilityRequest);
 
         $user = Auth::user();
+        if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'A schedule proposal is awaiting responses. Custodian actions are paused until it is answered.',
+            ], 409);
+        }
         $reason = $request->input('reason', '');
         $rejectionType = $request->validate([
             'type' => ['required', 'in:venue,equipment'],
-            'reason' => ['nullable', 'string'],
+            'reason' => ['required_if:type,venue', 'nullable', 'string', 'max:1000'],
         ])['type'];
+        $reason = trim((string) $reason);
 
         $this->authorize('reject' . ucfirst($rejectionType), $facilityRequest);
+        if ($rejectionType === 'venue'
+            && $facilityRequest->supply_office_review_status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'error' => 'Venue availability can only be confirmed before the Supply Office review.',
+            ], 409);
+        }
+        if ($rejectionType === 'venue' && $facilityRequest->venue_status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'error' => 'Venue availability has already been reviewed.',
+            ], 409);
+        }
+        if ($rejectionType === 'equipment'
+            && $facilityRequest->supply_office_review_status !== 'confirmed') {
+            return response()->json([
+                'success' => false,
+                'error' => 'The venue custodian and Supply Office must confirm availability before equipment review begins.',
+            ], 409);
+        }
 
         DB::beginTransaction();
 
         try {
             if ($rejectionType === 'venue') {
-                $facilityRequest->venue_status = 'rejected';
+                $facilityRequest->venue_status = 'needs_reschedule';
                 $facilityRequest->venue_notes = $reason;
+                $facilityRequest->status = 'pending';
+                $facilityRequest->supply_office_review_status = 'pending';
             } elseif ($rejectionType === 'equipment') {
                 $facilityRequest->equipment_status = 'rejected';
                 $facilityRequest->equipment_notes = $reason;
+                $facilityRequest->status = 'rejected';
             }
 
-            $facilityRequest->status = 'rejected';
             $facilityRequest->save();
 
-            $facilityRequest->addHistory('rejected', ucfirst($rejectionType) . ' rejected by ' . $user->name . ': ' . $reason, $user->id);
+            $facilityRequest->addHistory(
+                $rejectionType === 'venue' ? 'venue_availability_unavailable' : 'rejected',
+                ($rejectionType === 'venue' ? 'Venue availability marked unavailable by ' : 'Equipment rejected by ')
+                    . $user->name . ': ' . $reason,
+                $user->id
+            );
 
             DB::commit();
 
@@ -522,6 +581,23 @@ class FacilityRequestApiController extends Controller
             $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
 
             \App\Events\RequestRejected::dispatch($facilityRequest->id, $facilityRequest->control_number, $rejectionType, $reason, $user->name, $facilityRequest->requested_by_id, $custodianIds);
+
+            if ($rejectionType === 'venue') {
+                $message = new RequestStatusChanged(
+                    $facilityRequest->fresh(),
+                    'venue_availability_unavailable',
+                    $reason,
+                    $user->name
+                );
+                $requester = $facilityRequest->requester;
+                if ($requester) {
+                    $requester->notify($message);
+                }
+                Notification::send(
+                    User::query()->whereIn('role', ['admin', 'supply_office'])->get(),
+                    $message
+                );
+            }
 
             return response()->json([
                 'success' => true,

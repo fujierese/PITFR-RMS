@@ -216,7 +216,23 @@ class RequestActionController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
         abort_unless($user && $user->isCustodian(), 403);
-        $this->authorize('approve', $facilityRequest);
+        $isVenueConfirmation = $user->isCustodianVenue()
+            && $facilityRequest->supply_office_review_status === 'pending'
+            && $facilityRequest->venue_status === 'pending';
+        $isEquipmentApproval = ! $isVenueConfirmation
+            && $user->isCustodianEquipment()
+            && $facilityRequest->supply_office_review_status === 'confirmed'
+            && $facilityRequest->getAssignedEquipmentForCustodian($user->id) !== [];
+        if ($isVenueConfirmation) {
+            $this->authorize('approveVenue', $facilityRequest);
+            $authorizedAction = 'venue';
+        } elseif ($isEquipmentApproval) {
+            $this->authorize('approveEquipment', $facilityRequest);
+            $authorizedAction = 'equipment';
+        } else {
+            $this->authorize('approve', $facilityRequest);
+            $authorizedAction = null;
+        }
 
         DB::beginTransaction();
 
@@ -226,19 +242,54 @@ class RequestActionController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($facilityRequest->supply_office_review_status === 'pending'
-                || $facilityRequest->supply_office_review_status === 'unavailable') {
+            if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
                 DB::rollBack();
-                return redirect()->back()->withErrors('The Supply Office must confirm venue availability before custodian review can begin.');
+                return redirect()->back()->withErrors('A schedule proposal is awaiting responses. Custodian actions are paused until it is answered.');
             }
 
-            $conflictMessage = $this->checkHybridResources($facilityRequest);
+            $isVenueConfirmation = $user->isCustodianVenue()
+                && $facilityRequest->supply_office_review_status === 'pending'
+                && $facilityRequest->venue_status === 'pending';
+            $assignedEquipment = $facilityRequest->getAssignedEquipmentForCustodian($user->id);
+            $isEquipmentApproval = ! $isVenueConfirmation
+                && $user->isCustodianEquipment()
+                && $facilityRequest->supply_office_review_status === 'confirmed'
+                && $assignedEquipment !== [];
+
+            if (($isVenueConfirmation && $authorizedAction !== 'venue')
+                || ($isEquipmentApproval && $authorizedAction !== 'equipment')) {
+                DB::rollBack();
+                return redirect()->back()->withErrors('The request workflow changed. Refresh the page and review the current action.');
+            }
+
+            if ($isVenueConfirmation) {
+                $this->authorize('approveVenue', $facilityRequest);
+            } elseif ($isEquipmentApproval) {
+                $this->authorize('approveEquipment', $facilityRequest);
+            } elseif ($user->isCustodianVenue()) {
+                DB::rollBack();
+                return redirect()->back()->withErrors('Venue availability can only be confirmed before the Supply Office review.');
+            } elseif ($user->isCustodianEquipment()) {
+                DB::rollBack();
+                return redirect()->back()->withErrors('The venue custodian and Supply Office must confirm availability before equipment review can begin.');
+            } else {
+                DB::rollBack();
+                abort(403);
+            }
+
+            $conflictMessage = $isVenueConfirmation
+                ? $this->availabilityService->checkFacilityRequestForReview($facilityRequest)
+                : $this->checkHybridResources($facilityRequest);
             if ($conflictMessage) {
                 DB::rollBack();
                 return redirect()->back()->withErrors($conflictMessage);
             }
 
-            if ($facilityRequest->histories()->where('action', 'custodian_endorsed')->where('user_id', $user->id)->exists()) {
+            if ($isVenueConfirmation && $facilityRequest->venue_status === 'approved') {
+                DB::rollBack();
+                return redirect()->back()->with('info', 'Your endorsement has already been recorded.');
+            }
+            if ($isEquipmentApproval && $facilityRequest->getCustodianEquipmentStatus((int) $user->id) === 'approved') {
                 DB::rollBack();
                 return redirect()->back()->with('info', 'Your endorsement has already been recorded.');
             }
@@ -248,22 +299,16 @@ class RequestActionController extends Controller
                 return redirect()->back()->with('info', 'This request is no longer awaiting custodial verification.');
             }
 
-            if ($user->isCustodianEquipment() && $facilityRequest->equipment_status === 'approved') {
+            if ($isEquipmentApproval && $facilityRequest->equipment_status === 'approved') {
                 DB::rollBack();
                 return redirect()->back()->with('info', 'This equipment requirement is already satisfied by an authorized custodian.');
             }
 
-            if ($user->isCustodianVenue()) {
+            if ($isVenueConfirmation) {
                 $facilityRequest->venue_status = 'approved';
                 $facilityRequest->recordApprovalSignature('venue', $user);
                 $facilityRequest->addHistory('custodian_endorsed', 'Venue request verified and endorsed by ' . $user->name, $user->id);
-            } elseif ($user->isCustodianEquipment()) {
-                $assigned = $facilityRequest->getAssignedEquipmentForCustodian($user->id);
-                if (empty($assigned)) {
-                    DB::rollBack();
-                    return redirect()->back()->withErrors('You are not assigned to any equipment in this request, so you cannot endorse it yet.');
-                }
-
+            } elseif ($isEquipmentApproval) {
                 $statuses = $facilityRequest->equipment_custodian_statuses ?? [];
                 $statuses[$user->id] = 'approved';
                 $facilityRequest->equipment_custodian_statuses = $statuses;
@@ -277,14 +322,19 @@ class RequestActionController extends Controller
             $facilityRequest->save();
             $this->notifyRequestorForStatusChange(
                 $facilityRequest,
-                $user->isCustodianVenue() ? 'venue_approved' : 'equipment_approved',
+                $isVenueConfirmation ? 'venue_approved' : 'equipment_approved',
                 $request->input('notes', ''),
-                $user->isCustodianVenue() ? $this->venueActorLabel($facilityRequest, $user) : null,
-                $user->isCustodianVenue() ? [] : [$this->equipmentActorLabel($facilityRequest, $user)],
+                $isVenueConfirmation ? $this->venueActorLabel($facilityRequest, $user) : null,
+                $isVenueConfirmation ? [] : [$this->equipmentActorLabel($facilityRequest, $user)],
             );
             DB::commit();
 
-            return redirect()->back()->with('success', 'Request verified and forwarded to Administrator.');
+            return redirect()->back()->with(
+                'success',
+                $isVenueConfirmation
+                    ? 'Venue availability confirmed. The request is now waiting for Supply Office confirmation.'
+                    : 'Assigned equipment approval recorded.'
+            );
         } catch (\Throwable $e) {
             DB::rollBack();
             Log::error('Custodian verification failed for request ' . $facilityRequest->id, ['exception' => $e]);
@@ -347,9 +397,27 @@ class RequestActionController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
         abort_unless($user && $user->isCustodian(), 403);
-        $this->authorize('reject', $facilityRequest);
+        $isVenueAction = $user->isCustodianVenue()
+            && $facilityRequest->supply_office_review_status === 'pending'
+            && $facilityRequest->venue_status === 'pending';
+        $isEquipmentAction = ! $isVenueAction
+            && $user->isCustodianEquipment()
+            && $facilityRequest->supply_office_review_status === 'confirmed'
+            && $facilityRequest->getAssignedEquipmentForCustodian($user->id) !== [];
+        if ($isVenueAction) {
+            $this->authorize('rejectVenue', $facilityRequest);
+        } elseif ($isEquipmentAction) {
+            $this->authorize('rejectEquipment', $facilityRequest);
+        } else {
+            $this->authorize('reject', $facilityRequest);
+        }
 
         $notes = trim((string) $request->input('notes', ''));
+        if ($isVenueAction) {
+            $request->validate(['notes' => ['required', 'string', 'max:1000']]);
+        } elseif (! $isEquipmentAction) {
+            abort(409, 'The venue custodian and Supply Office must confirm availability before equipment review begins.');
+        }
 
         DB::beginTransaction();
 
@@ -358,14 +426,25 @@ class RequestActionController extends Controller
                 DB::rollBack();
                 return redirect()->back()->with('info', 'This request is verified and endorsed to Supply Office for Approval.');
             }
+            if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
+                DB::rollBack();
+                return redirect()->back()->withErrors('A schedule proposal is awaiting responses. Custodian actions are paused until it is answered.');
+            }
 
-            $statusField = $user->isCustodianVenue() ? 'venue_status' : 'equipment_status';
-            $notesField = $user->isCustodianVenue() ? 'venue_notes' : 'equipment_notes';
-            $statusUpdates = [
-                $statusField => 'rejected',
-                $notesField => $notes,
-                'status' => 'rejected',
-            ];
+            $statusField = $isVenueAction ? 'venue_status' : 'equipment_status';
+            $notesField = $isVenueAction ? 'venue_notes' : 'equipment_notes';
+            $statusUpdates = $isVenueAction
+                ? [
+                    $statusField => 'needs_reschedule',
+                    $notesField => $notes,
+                    'status' => 'pending',
+                    'supply_office_review_status' => 'pending',
+                ]
+                : [
+                    $statusField => 'rejected',
+                    $notesField => $notes,
+                    'status' => 'rejected',
+                ];
 
             if ($statusField === 'equipment_status') {
                 $equipmentCustodianStatuses = $facilityRequest->equipment_custodian_statuses ?? [];
@@ -375,19 +454,27 @@ class RequestActionController extends Controller
 
             $facilityRequest->update($statusUpdates);
             $facilityRequest->addHistory(
-                $statusField . '_rejected',
-                'Request rejected by ' . $user->name . ($notes !== '' ? ': ' . $notes : ''),
+                $isVenueAction ? 'venue_availability_unavailable' : $statusField . '_rejected',
+                $isVenueAction
+                    ? 'Venue availability marked unavailable by ' . $user->name . ($notes !== '' ? ': ' . $notes : '') . ' Supply Office coordination is required.'
+                    : 'Request rejected by ' . $user->name . ($notes !== '' ? ': ' . $notes : ''),
                 $user->id
             );
             $this->notifyRequestorForStatusChange(
                 $facilityRequest,
-                'rejected',
+                $isVenueAction ? 'venue_availability_unavailable' : 'rejected',
                 $notes,
-                $user->isCustodianVenue() ? $this->venueActorLabel($facilityRequest, $user) : null,
-                $user->isCustodianVenue() ? [] : [$this->equipmentActorLabel($facilityRequest, $user)],
+                $isVenueAction ? $this->venueActorLabel($facilityRequest, $user) : null,
+                $isVenueAction ? [] : [$this->equipmentActorLabel($facilityRequest, $user)],
             );
 
             DB::commit();
+            if ($isVenueAction) {
+                Notification::send(
+                    User::query()->withAnyRole(['admin', 'supply_office'])->get(),
+                    new RequestStatusChanged($facilityRequest, 'venue_availability_unavailable', $notes, $user->name)
+                );
+            }
             return redirect()->back()->with('success', 'Request rejected successfully.');
         } catch (\Throwable $e) {
             DB::rollBack();

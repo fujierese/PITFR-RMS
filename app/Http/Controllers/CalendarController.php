@@ -7,6 +7,8 @@ use App\Models\Equipment;
 use App\Models\FacilityRequest;
 use App\Models\User;
 use App\Models\Venue;
+use App\Services\AvailabilityService;
+use Illuminate\Support\Facades\DB;
 
 class CalendarController extends Controller
 {
@@ -60,12 +62,32 @@ class CalendarController extends Controller
         }
 
         $requests->loadMissing('supplyOfficeReviewer', 'approvedBy');
+        $assignedVenueNames = $user && ! $user->isAdmin() && $user->isCustodianVenue()
+            ? $user->venues()->pluck('name')->map(fn (string $name): string => mb_strtolower(trim($name)))
+            : collect();
 
-        $events = $requests->flatMap(function($req) use ($role, $user, $venueFilter) {
-            $venueNames = $venueFilter !== '' ? [$venueFilter] : $req->getVenueNames();
-            $eventVenueNames = $venueNames ?: [null];
+        $events = $requests->flatMap(function($req) use ($role, $user, $venueFilter, $assignedVenueNames) {
+            $requestVenueNames = collect($req->getVenueNames());
+            if ($venueFilter !== '') {
+                $requestVenueNames = $requestVenueNames->filter(
+                    fn (string $name): bool => mb_strtolower(trim($name)) === mb_strtolower($venueFilter)
+                );
+            }
+            if ($user && ! $user->isAdmin() && $user->isCustodianVenue()) {
+                $requestVenueNames = $requestVenueNames->filter(
+                    fn (string $name): bool => $assignedVenueNames->contains(mb_strtolower(trim($name)))
+                );
+            }
 
-            return collect($eventVenueNames)->map(function (?string $eventVenueName) use ($req, $role, $user): array {
+            if ($requestVenueNames->isEmpty()) {
+                if ($req->getVenueNames() !== [] || $venueFilter !== '' || ($user && ! $user->isAdmin() && $user->isCustodianVenue())) {
+                    return collect();
+                }
+
+                $requestVenueNames = collect([null]);
+            }
+
+            return $requestVenueNames->map(function (?string $eventVenueName) use ($req, $role, $user): array {
                 if (
                     ! $user
                     || ($user->isRequestee() && $user->id !== $req->requested_by_id)
@@ -128,6 +150,10 @@ class CalendarController extends Controller
 
             // Determine event color based on role and status
             $eventColor = $this->getEventColor($req, $role, $venueNames);
+            $awaitingVenueConfirmation = $user
+                && $user->isCustodianVenue()
+                && $req->status === 'pending'
+                && $req->venue_status === 'pending';
 
             if ($isAllDay && $eventEnd) {
                 $eventEnd = $endDateTime->copy()->addDay()->startOfDay()->format('Y-m-d\TH:i:s');
@@ -151,6 +177,10 @@ class CalendarController extends Controller
                 'className' => $eventColor['className'],
                 'extendedProps' => [
                     'status' => ucfirst($req->status),
+                    'displayStatus' => $awaitingVenueConfirmation
+                        ? 'Awaiting venue confirmation'
+                        : ucfirst(str_replace('_', ' ', (string) $req->status)),
+                    'awaitingVenueConfirmation' => $awaitingVenueConfirmation,
                     'venue' => implode(', ', $venueNames),
                     'equipment' => $req->getEquipmentItems(),
                     'requestor' => $requestor ? $requestor->name : 'Unknown',
@@ -559,5 +589,53 @@ class CalendarController extends Controller
                 ? 'Conflicts detected with existing reservations'
                 : 'No conflicts found'
         ]);
+    }
+
+    public function checkRequestAvailability(Request $request, FacilityRequest $facilityRequest)
+    {
+        $validated = $request->validate([
+            'venue' => ['required', 'string', 'max:255'],
+        ]);
+        $user = $request->user();
+
+        abort_unless($user, 403);
+
+        return DB::transaction(function () use ($facilityRequest, $validated, $user): \Illuminate\Http\JsonResponse {
+            $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
+            $isSupplyOfficeReview = $user->isAdmin()
+                && $lockedRequest->status === 'pending'
+                && $lockedRequest->supply_office_review_status === 'pending'
+                && $lockedRequest->venue_status === 'approved';
+            $isVenueCustodianReview = $user->isCustodianVenue()
+                && $lockedRequest->status === 'pending'
+                && $lockedRequest->supply_office_review_status === 'pending'
+                && $lockedRequest->venue_status === 'pending'
+                && $user->venues()
+                    ->whereIn('name', $lockedRequest->getVenueNames())
+                    ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($validated['venue']))])
+                    ->exists();
+
+            abort_unless($isSupplyOfficeReview || $isVenueCustodianReview, 403);
+
+            if ($lockedRequest->revisionHistories()->where('status', 'pending')->exists()) {
+                return response()->json([
+                    'available' => false,
+                    'message' => 'A schedule proposal is awaiting responses. Availability review is paused.',
+                ], 409);
+            }
+
+            $venueName = collect($lockedRequest->getVenueNames())
+                ->first(fn (string $name): bool => mb_strtolower(trim($name)) === mb_strtolower(trim($validated['venue'])));
+            abort_unless($venueName !== null, 422, 'The selected venue is not part of this request.');
+
+            $availability = app(AvailabilityService::class);
+            $availability->lockResourcesForFacilityRequests($lockedRequest);
+            $conflict = $availability->checkFacilityRequestForReview($lockedRequest);
+
+            return response()->json([
+                'available' => $conflict === null,
+                'message' => $conflict ?? 'No approved booking, pending request, maintenance block, or holiday conflicts with the requested schedules or equipment.',
+            ]);
+        });
     }
 }

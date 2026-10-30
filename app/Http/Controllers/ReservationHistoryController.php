@@ -6,6 +6,7 @@ use App\Models\Equipment;
 use App\Models\FacilityRequest;
 use App\Models\Venue;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class ReservationHistoryController extends Controller
 {
@@ -14,7 +15,24 @@ class ReservationHistoryController extends Controller
         $user = $request->user();
         $query = FacilityRequest::query()
             ->with('requestVenues')
-            ->pastReservation()
+            ->where(function ($dateRange): void {
+                $today = now()->toDateString();
+                $dateRange->whereDate('end_date', '<=', $today)
+                    ->orWhere(function ($legacyRange) use ($today): void {
+                        $legacyRange->whereNull('end_date')
+                            ->whereDate('start_date', '<=', $today);
+                    })
+                    ->orWhereHas('requestVenues', function ($venueRange) use ($today): void {
+                        $venueRange->where(function ($scheduleRange) use ($today): void {
+                            $scheduleRange->whereDate('end_date', '<=', $today)
+                                ->orWhere(function ($legacyVenueRange) use ($today): void {
+                                    $legacyVenueRange->whereNull('end_date')
+                                        ->whereDate('start_date', '<=', $today);
+                                });
+                        });
+                    });
+            })
+            ->whereIn('status', ['approved', 'completed'])
             ->orderByDesc('start_date')
             ->orderByDesc('start_time');
 
@@ -54,8 +72,20 @@ class ReservationHistoryController extends Controller
             });
         }
 
+        $completedReservations = $query->get()
+            ->filter(fn (FacilityRequest $reservation): bool => $reservation->isReservationComplete())
+            ->values();
+        $perPage = 30;
+        $page = LengthAwarePaginator::resolveCurrentPage();
+
         return view('history.index', [
-            'reservations' => $query->paginate(30)->withQueryString(),
+            'reservations' => new LengthAwarePaginator(
+                $completedReservations->forPage($page, $perPage)->values(),
+                $completedReservations->count(),
+                $perPage,
+                $page,
+                ['path' => $request->url(), 'query' => $request->query()]
+            ),
         ]);
     }
 }

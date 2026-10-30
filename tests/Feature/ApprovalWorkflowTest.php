@@ -311,6 +311,7 @@ class ApprovalWorkflowTest extends TestCase
             'status' => 'pending',
             'venue_status' => 'pending',
             'equipment_status' => 'approved',
+            'supply_office_review_status' => 'pending',
         ]);
 
         $this->actingAs($venueCustodian, 'sanctum')

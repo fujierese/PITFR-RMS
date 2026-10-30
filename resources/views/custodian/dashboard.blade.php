@@ -34,9 +34,9 @@
         <div>
             <h2 id="custodian-workflow-heading" class="text-sm font-semibold text-slate-950">Your review step</h2>
             @if($custodianType === 'equipment')
-                <p class="mt-1 text-sm leading-6 text-slate-700">Check requested quantities and equipment availability. Verify requests you can fulfill, reject requests that cannot proceed with a clear note, and record equipment returns after the activity.</p>
+                <p class="mt-1 text-sm leading-6 text-slate-700">After the venue custodian and Supply Office confirm availability, check requested quantities and equipment availability. Approve the items you can provide or reject with a clear reason. Record equipment returns after the activity.</p>
             @else
-                <p class="mt-1 text-sm leading-6 text-slate-700">Check the venue, date, time, and capacity. Verify requests that can proceed, or reject requests that cannot be accommodated with a clear note. The Supply Office handles final approval.</p>
+                <p class="mt-1 text-sm leading-6 text-slate-700">Your first step is to confirm whether the venue is available for the requested date and time. This is an availability check, not an approval. The Supply Office will recheck availability next; custodian approvals and final approval happen afterward.</p>
             @endif
         </div>
     </div>

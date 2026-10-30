@@ -7,7 +7,7 @@
     <header class="rounded-3xl bg-slate-900 p-6 text-white shadow-lg">
         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Records</p>
         <h1 class="mt-2 text-3xl font-bold">Reservation History</h1>
-        <p class="mt-2 max-w-3xl text-sm text-slate-300">Past reservation records are visible to signed-in users. Request details and documents remain protected by role-based access.</p>
+        <p class="mt-2 max-w-3xl text-sm text-slate-300">Completed reservations appear here after their scheduled end time and, when requested, after borrowed equipment has been accounted for. Request details and documents remain protected by role-based access.</p>
     </header>
 
     <form method="GET" action="{{ route('history.index') }}" class="flex flex-col gap-3 sm:flex-row">
@@ -46,7 +46,7 @@
                                     <p class="mb-1 last:mb-0">{{ $schedule['venue'] }}: {{ $schedule['label'] }}</p>
                                 @endforeach
                             </td>
-                            <td class="px-5 py-4"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{{ ucfirst(str_replace('_', ' ', $reservation->status)) }}</span></td>
+                            <td class="px-5 py-4"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{{ $reservation->getReservationLifecycleLabel() }}</span></td>
                             <td class="px-5 py-4">
                                 @if($canViewDetails)
                                     <a class="font-semibold text-emerald-700 hover:text-emerald-900" href="{{ route('request.show', $reservation->id) }}">View details</a>

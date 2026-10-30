@@ -37,6 +37,7 @@ class RequestStatusChanged extends Notification
         $statusMap = [
             'needs_revision' => 'Needs revision',
             'needs_reschedule' => 'Needs reschedule',
+            'venue_availability_unavailable' => 'Venue unavailable',
             'venue_approved' => 'Venue approved',
             'equipment_approved' => 'Equipment approved',
             'final_approved' => 'Final approved',
@@ -97,6 +98,7 @@ class RequestStatusChanged extends Notification
             'rejected' => 'Request Rejected',
             'needs_reschedule' => 'Request Rescheduled',
             'needs_revision' => 'Request Needs Revision',
+            'venue_availability_unavailable' => 'Venue Unavailable',
             'request_cancelled' => 'Request Cancelled',
             'venue_approved' => 'Venue Approved',
             'equipment_approved' => 'Equipment Approved',
@@ -124,6 +126,9 @@ class RequestStatusChanged extends Notification
             'needs_reschedule' => $recipientType === 'requestor'
                 ? (($this->supplyOffice ? "Your request was rescheduled by {$this->supplyOffice}." : 'Your request was rescheduled.') )
                 : (($this->supplyOffice ? "Request {$controlNumber} was rescheduled by {$this->supplyOffice}." : "Request {$controlNumber} was rescheduled.")),
+            'venue_availability_unavailable' => $recipientType === 'requestor'
+                ? 'The venue custodian marked the requested schedule unavailable. The Supply Office will coordinate an alternative.'
+                : "The venue for request {$controlNumber} was marked unavailable and needs Supply Office coordination.",
             'needs_revision' => $recipientType === 'requestor'
                 ? (($this->supplyOffice ? "Your request needs revision from {$this->supplyOffice}." : 'Your request needs revision.') )
                 : (($this->supplyOffice ? "Request {$controlNumber} needs revision from {$this->supplyOffice}." : "Request {$controlNumber} needs revision.")),

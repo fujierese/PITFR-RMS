@@ -2,7 +2,7 @@
 <div class="py-16 text-center">
     <div class="text-5xl mb-4">✅</div>
     <p class="text-gray-400 font-semibold text-lg">No completed requests yet</p>
-    <p class="text-gray-300 text-sm mt-1">Completed requests will appear here after equipment is returned</p>
+    <p class="text-gray-300 text-sm mt-1">Reservations appear here after the event ends and any borrowed equipment is accounted for</p>
 </div>
 @else
 <div class="space-y-4">
@@ -20,9 +20,11 @@
                 <span class="shrink-0 px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">
                     ✅ Completed
                 </span>
-                <span class="text-xs text-gray-500">
-                    Returned: {{ $req->equipment_returned_date->format('M j, Y') }}
-                </span>
+                @if($req->equipment_returned_date)
+                    <span class="text-xs text-gray-500">Equipment return recorded: {{ $req->equipment_returned_date->format('M j, Y') }}</span>
+                @else
+                    <span class="text-xs text-gray-500">Event ended: {{ $req->getRequestedEndDateTime()->format('M j, Y') }}</span>
+                @endif
             </div>
         </div>
 
@@ -55,9 +57,11 @@
             <span class="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium bg-green-100 text-green-700">
                 ✅ Final: {{ ucfirst($req->status) }}
             </span>
-            <span class="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium bg-emerald-100 text-emerald-700">
-                🔄 Return: Completed
-            </span>
+            @if($req->hasAdditionalEquipmentToReturn())
+                <span class="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium bg-emerald-100 text-emerald-700">🔄 Equipment return: Completed</span>
+            @else
+                <span class="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium bg-slate-100 text-slate-700">No additional equipment return required</span>
+            @endif
         </div>
 
         {{-- Venues --}}

@@ -124,6 +124,35 @@ class PastReservationListVisibilityTest extends TestCase
             ->assertSee($todayReservation->control_number);
     }
 
+    public function test_ended_reservation_stays_in_my_requests_until_equipment_is_accounted_for_then_moves_to_history(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $reservation = $this->makeReservation($requester, 'RETURN-LIFECYCLE', [
+            'status' => 'approved',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+            'equipment' => ['Portable Speaker'],
+            'equipment_quantities' => ['Portable Speaker' => 1],
+        ]);
+
+        $this->actingAs($requester)
+            ->get(route('requestor.index', ['tab' => 'requests']))
+            ->assertOk()
+            ->assertSee($reservation->control_number)
+            ->assertSee('Event Ended — Equipment Return Pending');
+
+        $reservation->update(['equipment_returned_status' => 'fulfilled']);
+
+        $this->get(route('requestor.index', ['tab' => 'requests']))
+            ->assertOk()
+            ->assertDontSee($reservation->control_number);
+
+        $this->get(route('history.index'))
+            ->assertOk()
+            ->assertSee($reservation->control_number)
+            ->assertSee('Reservation Completed');
+    }
+
     public function test_request_lists_display_the_full_inclusive_date_range(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'outsider']);
