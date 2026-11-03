@@ -281,8 +281,20 @@ class RequestActionController extends Controller
                 ? $this->availabilityService->checkFacilityRequestForReview($facilityRequest)
                 : $this->checkHybridResources($facilityRequest);
             if ($conflictMessage) {
-                DB::rollBack();
-                return redirect()->back()->withErrors($conflictMessage);
+                if ($isVenueConfirmation && $facilityRequest->is_emergency) {
+                    $approvedConflicts = $this->availabilityService->getApprovedVenueConflicts($facilityRequest);
+                    $conflictIds = $approvedConflicts->pluck('control_number')->filter()->implode(', ');
+                    $facilityRequest->addHistory(
+                        'urgent_conflict_detected',
+                        'Urgent priority conflict detected during Venue Custodian review.'
+                            . ($conflictIds !== '' ? ' Affected approved reservation(s): ' . $conflictIds . '.' : '')
+                            . ' Human decision required before Supply Office confirmation; no reservation was cancelled or moved.',
+                        $user->id
+                    );
+                } else {
+                    DB::rollBack();
+                    return redirect()->back()->withErrors($conflictMessage);
+                }
             }
 
             if ($isVenueConfirmation && $facilityRequest->venue_status === 'approved') {
@@ -307,7 +319,18 @@ class RequestActionController extends Controller
             if ($isVenueConfirmation) {
                 $facilityRequest->venue_status = 'approved';
                 $facilityRequest->recordApprovalSignature('venue', $user);
-                $facilityRequest->addHistory('custodian_endorsed', 'Venue request verified and endorsed by ' . $user->name, $user->id);
+                $venueNames = $facilityRequest->getVenueNames();
+                $venueLabel = $venueNames !== [] ? implode(', ', $venueNames) : 'Venue';
+                $startDate = $facilityRequest->start_date
+                    ? \Carbon\Carbon::parse($facilityRequest->start_date)->format('M j, Y')
+                    : 'N/A';
+                $facilityRequest->addHistory(
+                    'custodian_endorsed',
+                    'Venue Availability confirmed by ' . $user->name . ', ' . $venueLabel . "\n"
+                        . $startDate . "\n"
+                        . 'Validation: No approved booking or active scheduling conflict found',
+                    $user->id
+                );
             } elseif ($isEquipmentApproval) {
                 $statuses = $facilityRequest->equipment_custodian_statuses ?? [];
                 $statuses[$user->id] = 'approved';
@@ -489,7 +512,7 @@ class RequestActionController extends Controller
 
         /** @var User|null $user */
         $user = Auth::user();
-        abort_unless($user && $user->isAdmin(), 403);
+        abort_unless($user && $user->isFinalApprover(), 403);
 
         DB::beginTransaction();
 
@@ -612,7 +635,7 @@ class RequestActionController extends Controller
 
         /** @var User|null $user */
         $user = Auth::user();
-        abort_unless($user && $user->isAdmin(), 403);
+        abort_unless($user && $user->isFinalApprover(), 403);
 
         DB::beginTransaction();
 

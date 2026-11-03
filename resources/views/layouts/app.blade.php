@@ -279,21 +279,42 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             if (result.isConfirmed) {
+                const submitPreparations = [];
+                form.dispatchEvent(new CustomEvent('confirmed-submit', {
+                    detail: {
+                        waitUntil: function (promise) {
+                            submitPreparations.push(Promise.resolve(promise));
+                        }
+                    }
+                }));
+
+                try {
+                    await Promise.all(submitPreparations);
+                } catch (error) {
+                    console.error('Confirmed form submission preparation failed', error);
+                    await Swal.fire('Unable to continue', 'The form could not be prepared for submission. Please try again.', 'error');
+                    return;
+                }
+
                 const submitButton = form.querySelector('button[type="submit"]');
                 const buttonText = (submitButton?.textContent || '').toLowerCase();
-                let loadingText = 'Deleting...';
+                let loadingText = form.dataset.swalLoadingText || 'Submitting...';
 
-                if (buttonText.includes('approve')) {
+                if (!form.dataset.swalLoadingText && (buttonText.includes('confirm') || buttonText.includes('availability'))) {
+                    loadingText = 'Confirming availability...';
+                } else if (!form.dataset.swalLoadingText && buttonText.includes('approve')) {
                     loadingText = 'Approving...';
-                } else if (buttonText.includes('verify') || buttonText.includes('endorse')) {
+                } else if (!form.dataset.swalLoadingText && (buttonText.includes('verify') || buttonText.includes('endorse'))) {
                     loadingText = 'Verifying...';
-                } else if (buttonText.includes('reject')) {
+                } else if (!form.dataset.swalLoadingText && buttonText.includes('reject')) {
                     loadingText = 'Rejecting...';
-                } else if (buttonText.includes('return') || buttonText.includes('revision')) {
+                } else if (!form.dataset.swalLoadingText && (buttonText.includes('return') || buttonText.includes('revision'))) {
                     loadingText = 'Returning...';
-                } else if (buttonText.includes('save')) {
+                } else if (!form.dataset.swalLoadingText && buttonText.includes('save')) {
                     loadingText = 'Saving...';
-                } else if (buttonText.includes('submit')) {
+                } else if (!form.dataset.swalLoadingText && buttonText.includes('delete')) {
+                    loadingText = 'Deleting...';
+                } else if (!form.dataset.swalLoadingText && buttonText.includes('submit')) {
                     loadingText = 'Submitting...';
                 }
 

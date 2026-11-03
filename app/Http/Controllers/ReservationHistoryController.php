@@ -75,17 +75,71 @@ class ReservationHistoryController extends Controller
         $completedReservations = $query->get()
             ->filter(fn (FacilityRequest $reservation): bool => $reservation->isReservationComplete())
             ->values();
+
+        $years = $completedReservations
+            ->flatMap(function (FacilityRequest $reservation): array {
+                return collect($reservation->getVenueNames())
+                    ->map(function (string $venueName) use ($reservation): ?int {
+                        $startDate = $reservation->getVenueSchedule($venueName)['start_date'];
+
+                        return $startDate ? (int) substr($startDate, 0, 4) : null;
+                    })
+                    ->all();
+            })
+            ->filter()
+            ->unique()
+            ->sortDesc()
+            ->values();
+        $venues = $completedReservations
+            ->flatMap(fn (FacilityRequest $reservation): array => $reservation->getVenueNames())
+            ->unique(fn (string $venueName): string => mb_strtolower($venueName))
+            ->sort()
+            ->values();
+
+        if ($request->filled('year')) {
+            $year = (int) $request->input('year');
+            $completedReservations = $completedReservations->filter(
+                function (FacilityRequest $reservation) use ($year): bool {
+                    foreach ($reservation->getVenueNames() as $venueName) {
+                        $startDate = $reservation->getVenueSchedule($venueName)['start_date'];
+                        if ($startDate && (int) substr($startDate, 0, 4) === $year) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+            )->values();
+        }
+
+        if ($request->filled('venue')) {
+            $venue = mb_strtolower(trim((string) $request->input('venue')));
+            $completedReservations = $completedReservations->filter(
+                fn (FacilityRequest $reservation): bool => collect($reservation->getVenueNames())
+                    ->contains(fn (string $venueName): bool => mb_strtolower($venueName) === $venue)
+            )->values();
+        }
+
+        if ($request->input('sort') === 'oldest') {
+            $completedReservations = $completedReservations->sortBy(
+                fn (FacilityRequest $reservation): string => $reservation->getRequestedStartDateTime()->toDateTimeString()
+            )->values();
+        }
+
         $perPage = 30;
         $page = LengthAwarePaginator::resolveCurrentPage();
+        $reservations = new LengthAwarePaginator(
+            $completedReservations->forPage($page, $perPage)->values(),
+            $completedReservations->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         return view('history.index', [
-            'reservations' => new LengthAwarePaginator(
-                $completedReservations->forPage($page, $perPage)->values(),
-                $completedReservations->count(),
-                $perPage,
-                $page,
-                ['path' => $request->url(), 'query' => $request->query()]
-            ),
+            'reservations' => $reservations,
+            'years' => $years,
+            'venues' => $venues,
         ]);
     }
 }

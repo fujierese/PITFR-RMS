@@ -118,6 +118,7 @@ class SettingsPageTest extends TestCase
         $response->assertSee('for="settings_contact_number"', false);
         $response->assertSee('style="background-color: #047857; color: #ffffff;"', false);
         $response->assertSee('Save Preferences');
+        $response->assertSee('href="https://signaturely.com/online-signature/draw/" target="_blank" rel="noopener noreferrer"', false);
     }
 
     public function test_requestor_cannot_change_department_through_profile_settings(): void

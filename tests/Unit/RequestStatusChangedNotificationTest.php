@@ -25,6 +25,6 @@ class RequestStatusChangedNotificationTest extends TestCase
 
         $notification = new RequestStatusChanged($request, 'approved', 'All set');
 
-        $this->assertSame(['mail', 'database', 'broadcast'], $notification->via($notifiable));
+        $this->assertSame(['database', 'broadcast'], $notification->via($notifiable));
     }
 }

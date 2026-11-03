@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -10,6 +11,7 @@ use Illuminate\Notifications\Notification;
 class EquipmentIssueReported extends Notification
 {
     use Queueable;
+    use UsesWorkflowNotificationChannels;
 
     public function __construct(
         protected $equipment,
@@ -21,7 +23,7 @@ class EquipmentIssueReported extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        return $this->workflowChannels($notifiable);
     }
 
     public function toDatabase(object $notifiable): array

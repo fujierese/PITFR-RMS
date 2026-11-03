@@ -78,7 +78,7 @@ class ApprovalWorkflowTest extends TestCase
         ]);
 
         $request->syncRelationalItems();
-        $adminUser = User::factory()->create(['role' => 'admin']);
+        $adminUser = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
 
         $adminResponse = $this->actingAs($adminUser)->get(route('admin.final-approval'));
         $adminResponse->assertOk();
@@ -93,7 +93,7 @@ class ApprovalWorkflowTest extends TestCase
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         $request = $this->createRequestForApproval($requester);
-        $adminUser = User::factory()->create(['role' => 'admin']);
+        $adminUser = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
 
         $response = $this->actingAs($adminUser)
             ->post(route('supply-office.update'), [
@@ -120,7 +120,7 @@ class ApprovalWorkflowTest extends TestCase
     public function test_calendar_final_approval_requires_both_custodian_approvals(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
         $request = $this->createRequestForApproval($requester);
         $request->update(['venue_status' => 'pending']);
 
@@ -149,7 +149,7 @@ class ApprovalWorkflowTest extends TestCase
     public function test_calendar_final_approval_does_not_allow_admin_to_approve_custodian_stages(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
         $request = $this->createRequestForApproval($requester);
         $request->update(['venue_status' => 'pending']);
 
@@ -164,7 +164,7 @@ class ApprovalWorkflowTest extends TestCase
     public function test_calendar_final_approval_succeeds_after_both_custodian_stages(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
         $request = $this->createRequestForApproval($requester);
 
         $this->actingAs($admin)
@@ -189,7 +189,7 @@ class ApprovalWorkflowTest extends TestCase
     public function test_second_overlapping_venue_request_cannot_be_finally_approved(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
         $firstRequest = $this->createRequestForApproval($requester);
         $secondRequest = $this->createRequestForApproval($requester);
         $secondRequest->update(['control_number' => 'FER-2026-031']);
@@ -216,7 +216,7 @@ class ApprovalWorkflowTest extends TestCase
     public function test_second_overlapping_equipment_request_cannot_exceed_inventory(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
         $equipmentCustodian = User::factory()->create(['role' => 'custodian-equipment']);
         Equipment::create([
             'name' => 'Single Projector',
@@ -265,7 +265,7 @@ class ApprovalWorkflowTest extends TestCase
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         $request = $this->createRequestForApproval($requester);
-        $adminUser = User::factory()->create(['role' => 'admin']);
+        $adminUser = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
 
         $response = $this->actingAs($adminUser)
             ->post(route('supply-office.update'), [
@@ -366,7 +366,7 @@ class ApprovalWorkflowTest extends TestCase
     public function test_legacy_admin_rejection_clears_final_approval_metadata(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
         $request = FacilityRequest::factory()->create([
             'requested_by_id' => $requester->id,
             'status' => 'pending',

@@ -121,6 +121,29 @@ class RevisionHistory extends Model
         $this->update(['custodian_notified_at' => now()]);
     }
 
+    public function getResponsesRequiringConfirmation(int $requestorId, bool $requestorWillAccept = false): array
+    {
+        $responses = $this->responses ?? [];
+        $proposerId = (int) $this->revised_by_id;
+        $requestorAccepted = in_array(
+            $responses[(string) $requestorId] ?? 'pending',
+            ['accepted', 'not_required'],
+            true
+        ) || $requestorWillAccept;
+
+        if (
+            $this->status === 'pending'
+            && $requestorAccepted
+            && $proposerId !== $requestorId
+            && ($responses[(string) $proposerId] ?? 'pending') === 'accepted'
+            && $this->revisedBy?->isCustodianVenue()
+        ) {
+            $responses[(string) $proposerId] = 'pending';
+        }
+
+        return $responses;
+    }
+
     /**
      * Check if this revision had conflicts
      */

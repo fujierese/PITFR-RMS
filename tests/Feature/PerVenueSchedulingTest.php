@@ -71,6 +71,73 @@ class PerVenueSchedulingTest extends TestCase
         $this->assertSame('1:00 PM – 5:00 PM', $summaries['Test Court']['time']);
     }
 
+    public function test_multi_day_schedule_summary_counts_daily_reservation_hours_and_excludes_whole_day_lunch(): void
+    {
+        $requestor = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'student',
+        ]);
+        $this->createTestVenues();
+        $startDate = now()->addDays(5)->toDateString();
+        $endDate = now()->addDays(6)->toDateString();
+
+        $request = FacilityRequest::create([
+            'control_number' => 'TEST-MULTI-DAY-DURATION',
+            'date_requested' => now()->toDateString(),
+            'department' => 'Test Department',
+            'name_of_activity' => 'Multi-day daytime schedule',
+            'expected_participants' => 10,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'reservation_duration' => 'whole_day',
+            'venue' => ['Test Hall'],
+            'requested_by_id' => $requestor->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+        ]);
+
+        $request->syncRelationalItems([
+            'Test Hall' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'start_time' => '08:00',
+                'end_time' => '17:00',
+                'reservation_duration' => 'whole_day',
+            ],
+        ]);
+
+        $summary = $request->fresh()->getVenueScheduleSummaries()[0];
+        $this->assertSame('8:00 AM – 5:00 PM', $summary['time']);
+        $this->assertSame('16 hours', $summary['duration']);
+
+        $request->syncRelationalItems([
+            'Test Hall' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'start_time' => '08:00',
+                'end_time' => '17:00',
+                'reservation_duration' => 'specific_time',
+            ],
+        ]);
+        $this->assertSame('18 hours', $request->fresh()->getVenueScheduleSummaries()[0]['duration']);
+
+        $request->syncRelationalItems([
+            'Test Hall' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'start_time' => '16:00',
+                'end_time' => '01:00',
+                'reservation_duration' => 'specific_time',
+            ],
+        ]);
+        $invalidSummary = $request->fresh()->getVenueScheduleSummaries()[0];
+        $this->assertSame('Schedule needs review', $invalidSummary['time']);
+        $this->assertSame('Schedule needs review', $invalidSummary['duration']);
+    }
+
     public function test_equipment_is_saved_against_each_selected_venue(): void
     {
         $requestor = User::factory()->create([

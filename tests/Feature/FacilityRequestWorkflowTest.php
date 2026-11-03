@@ -319,6 +319,10 @@ class FacilityRequestWorkflowTest extends TestCase
             ->get(route('request.show', $facilityRequest));
 
         $response->assertOk()
+            ->assertSee('Reservation Details')
+            ->assertSee('Requestor Information')
+            ->assertDontSee('Request Summary')
+            ->assertDontSee('Activity Details')
             ->assertSee('3 included')
             ->assertSee('1 additional');
 
@@ -402,6 +406,38 @@ class FacilityRequestWorkflowTest extends TestCase
             ->assertSee('Pending Final Approval')
             ->assertDontSee('Pending Equipment Custodian Approval')
             ->assertDontSee('>Equipment Review</p>', false);
+    }
+
+    public function test_request_progress_identifies_the_next_workflow_action(): void
+    {
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $facilityRequest = FacilityRequest::create([
+            'control_number' => 'TEST-WORKFLOW-NEXT-ACTION',
+            'date_requested' => now()->toDateString(),
+            'department' => 'IT Department',
+            'name_of_activity' => 'Workflow Next Action Test',
+            'expected_participants' => 20,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'venue' => ['Conference Hall & Interaction Center (CHIC)'],
+            'equipment' => [],
+            'equipment_quantities' => [],
+            'requested_by_id' => $requester->id,
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'equipment_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+            'priority' => 'regular',
+        ]);
+
+        $this->actingAs($requester)
+            ->get(route('request.show', $facilityRequest))
+            ->assertOk()
+            ->assertSee('Workflow progress')
+            ->assertSee('Next action:')
+            ->assertSee('Waiting for the assigned venue custodian to confirm availability.');
     }
 
     public function test_request_details_show_stage_specific_pending_and_approval_messages_with_person_and_role(): void

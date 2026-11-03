@@ -66,6 +66,60 @@ class ReservationHistoryTest extends TestCase
         $this->get(route('request.show', $past->id))->assertForbidden();
     }
 
+    public function test_history_can_be_filtered_by_year_and_venue_and_has_mobile_friendly_summaries(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2030-01-01 09:00:00'));
+
+        try {
+            $requester = User::factory()->create(['role' => 'requestor']);
+            $matchingReservation = FacilityRequest::create([
+                'control_number' => 'HISTORY-FILTER-MATCH',
+                'date_requested' => '2029-10-01',
+                'department' => 'History Department',
+                'name_of_activity' => 'Matching Reservation',
+                'expected_participants' => 10,
+                'start_date' => '2029-10-10',
+                'end_date' => '2029-10-10',
+                'start_time' => '08:00',
+                'end_time' => '11:59',
+                'venue' => ['CHIC'],
+                'equipment' => [],
+                'equipment_quantities' => [],
+                'requested_by_id' => $requester->id,
+                'status' => 'approved',
+            ]);
+            FacilityRequest::create([
+                'control_number' => 'HISTORY-FILTER-OTHER',
+                'date_requested' => '2028-08-01',
+                'department' => 'History Department',
+                'name_of_activity' => 'Other Reservation',
+                'expected_participants' => 10,
+                'start_date' => '2028-08-10',
+                'end_date' => '2028-08-10',
+                'start_time' => '09:00',
+                'end_time' => '10:00',
+                'venue' => ['Gymnasium'],
+                'equipment' => [],
+                'equipment_quantities' => [],
+                'requested_by_id' => $requester->id,
+                'status' => 'approved',
+            ]);
+
+            $this->actingAs($requester)
+                ->get(route('history.index', ['year' => '2029', 'venue' => 'CHIC']))
+                ->assertOk()
+                ->assertSee($matchingReservation->control_number)
+                ->assertDontSee('HISTORY-FILTER-OTHER')
+                ->assertSee('1 reservation found')
+                ->assertSee('value="2029" selected', false)
+                ->assertSee('value="CHIC" selected', false)
+                ->assertSee('Oct 10, 2029 · 8:00 AM – 11:59 AM')
+                ->assertDontSee('CHIC: Oct 10, 2029');
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_history_includes_completed_ranges_but_not_reservations_still_in_progress_today(): void
     {
         Carbon::setTestNow(Carbon::parse('2030-05-01 09:30:00'));
@@ -210,7 +264,7 @@ class ReservationHistoryTest extends TestCase
                 ->get(route('history.index'))
                 ->assertOk()
                 ->assertSee($reservation->control_number)
-                ->assertSee('Reservation Completed');
+                ->assertSee('Completed');
         } finally {
             Carbon::setTestNow();
         }

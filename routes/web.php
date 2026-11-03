@@ -49,9 +49,11 @@ Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar.in
 Route::get('/calendar/embed', function () {
     $user = Auth::user();
     $role = ! $user ? 'guest' : ($user->isAdmin() ? 'admin' : ($user->isCustodian() ? 'custodian' : 'requestor'));
+    $dateSelectionMode = $user?->isRequestee() && request()->boolean('select');
 
     return view('calendar.embed', [
         'role' => $role,
+        'dateSelectionMode' => $dateSelectionMode,
         'dashboardData' => [],
     ]);
 })->name('calendar.embed');

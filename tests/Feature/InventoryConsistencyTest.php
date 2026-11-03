@@ -156,9 +156,14 @@ class InventoryConsistencyTest extends TestCase
 
             $this->assertSame('partial', $request->fresh()->equipment_returned_status);
             $this->assertSame(['Return Workflow Projector' => 1], $request->fresh()->getEquipmentReturnOutstandingQuantities());
-            $this->get(route('request.show', $request))
+            $partialHistory = $request->fresh()->histories()->where('action', 'equipment_returned')->latest('id')->firstOrFail();
+            $this->assertStringContainsString('Equipment return partially recorded', $partialHistory->detail);
+            $this->assertStringContainsString('Returned: Return Workflow Projector × 1', $partialHistory->detail);
+            $this->actingAs($requester)->get(route('request.show', $request))
                 ->assertOk()
+                ->assertSee('border-amber-200 bg-amber-50/60', false)
                 ->assertSee('1 of 2 still unaccounted for');
+            $this->actingAs($custodian);
 
             $this->post(route('custodian.return', $request), [
                 'equipment' => ['Return Workflow Projector' => 2],
@@ -167,6 +172,25 @@ class InventoryConsistencyTest extends TestCase
             $this->assertSame('fulfilled', $request->fresh()->equipment_returned_status);
             $this->assertSame([], $request->fresh()->getEquipmentReturnOutstandingQuantities());
             $this->assertSame(5, $equipment->fresh()->quantity_available);
+            $history = $request->fresh()->histories()->where('action', 'equipment_returned')->latest('id')->firstOrFail();
+            $this->assertStringContainsString('Equipment return completed', $history->detail);
+            $this->assertStringContainsString('Returned: Return Workflow Projector × 2', $history->detail);
+            $this->assertStringNotContainsString('custodian ID', $history->detail);
+
+            $historyResponse = $this->actingAs($requester)->get(route('request.show', $request));
+            $historyResponse->assertOk()
+                ->assertSee('border-emerald-200 bg-emerald-50/60', false)
+                ->assertSee('Equipment return completed')
+                ->assertSee('Returned: Return Workflow Projector × 2')
+                ->assertDontSee('custodian ID:');
+
+            $history->detail = 'Equipment return recorded by custodian ID: ' . $custodian->id;
+            $history->save();
+            $this->get(route('request.show', $request))
+                ->assertOk()
+                ->assertSee('Returned: Return Workflow Projector × 2')
+                ->assertDontSee('custodian ID:');
+
             $this->get(route('history.index'))
                 ->assertOk()
                 ->assertSee($request->control_number);
@@ -358,6 +382,10 @@ class InventoryConsistencyTest extends TestCase
         $this->assertSame(['Speaker' => 1, 'Projector' => 2], $request->getInventoryOutstandingQuantities());
         $this->assertSame(4, $speaker->fresh()->quantity_available);
         $this->assertSame(3, $projector->fresh()->quantity_available);
+        $returnHistory = $request->histories()->where('action', 'equipment_returned')->latest('id')->firstOrFail();
+        $this->assertStringContainsString('Returned: Speaker × 2, Projector × 2', $returnHistory->detail);
+        $this->assertStringContainsString('Damaged: Speaker × 1, Projector × 1', $returnHistory->detail);
+        $this->assertStringContainsString('Missing: Projector × 1', $returnHistory->detail);
 
         $this->artisan('equipment:sync-availability')->assertExitCode(0);
 

@@ -43,18 +43,28 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 21a9 9 0 110-18 9 9 0 010 18z"/>
             </svg>
             <div>
-                <h2 id="supply-office-workflow-heading" class="text-sm font-semibold text-slate-950">Final review guide</h2>
-                <p class="mt-1 text-sm leading-6 text-slate-700">Open a request after custodian review and confirm the complete schedule, venue, and equipment details. Approve when everything is ready, request a reschedule when the request needs changes, or reject it when it cannot proceed. Add a clear note whenever you reschedule or reject.</p>
+                @if(auth()->user()->isFinalApprover())
+                    <h2 id="supply-office-workflow-heading" class="text-sm font-semibold text-slate-950">Final approval guide</h2>
+                    <p class="mt-1 text-sm leading-6 text-slate-700">Review requests after all required custodians and Supply Office staff have completed their checks. Final approval and rejection are restricted to the designated Admin account.</p>
+                @elseif(auth()->user()->isSystemAdmin())
+                    <h2 id="supply-office-workflow-heading" class="text-sm font-semibold text-slate-950">Final approval assignment</h2>
+                    <p class="mt-1 text-sm leading-6 text-slate-700">Final approval is assigned to the configured Admin account. Supply Office staff continue to handle availability checks.</p>
+                @else
+                    <h2 id="supply-office-workflow-heading" class="text-sm font-semibold text-slate-950">Availability review</h2>
+                    <p class="mt-1 text-sm leading-6 text-slate-700">Confirm availability after the venue custodian review, or mark the request unavailable when a conflict requires rescheduling. Final approval is handled separately by the system administrator.</p>
+                @endif
             </div>
         </div>
     </section>
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <a href="{{ route('supply-office.final-approval') }}" class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm transition hover:bg-amber-100">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Review Queue</p>
-            <p class="mt-3 text-2xl font-semibold text-slate-900">{{ $pendingFinalApprovalCount }}</p>
-            <p class="mt-2 text-sm text-slate-600">Pending final approval requests</p>
-        </a>
+        @if(auth()->user()->isFinalApprover())
+            <a href="{{ route('supply-office.final-approval') }}" class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm transition hover:bg-amber-100">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Review Queue</p>
+                <p class="mt-3 text-2xl font-semibold text-slate-900">{{ $pendingFinalApprovalCount }}</p>
+                <p class="mt-2 text-sm text-slate-600">Pending final approval requests</p>
+            </a>
+        @endif
         <a href="{{ route('supply-office.users') }}" class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm transition hover:bg-emerald-100">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Users</p>
             <p class="mt-3 text-2xl font-semibold text-slate-900">{{ \App\Models\User::count() }}</p>
@@ -75,8 +85,8 @@
     <section class="rounded-3xl border border-cyan-200 bg-white p-6 shadow-sm ring-1 ring-cyan-100">
         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
-                <h2 class="text-xl font-semibold text-slate-900">Initial Availability Review</h2>
-                <p class="mt-1 text-sm text-slate-600">This queue starts after the venue custodian confirms the venue is available. Recheck the venue and requested equipment here; this is still not final approval. After confirmation, equipment custodians can review their assigned items.</p>
+                <h2 class="text-xl font-semibold text-slate-900">Availability Review Required</h2>
+                <p class="mt-1 text-sm text-slate-600">The venue custodian has confirmed the venue. Check every requested venue, review the current calendar, and confirm or mark unavailable. Equipment custodians will review their assigned items only after this step.</p>
             </div>
             <span class="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-800">{{ $availabilityReviewQueue->total() }} waiting</span>
         </div>
@@ -97,6 +107,7 @@
                                         :end-date="$availabilityRequest->getVenueSchedule($schedule['venue'])['end_date'] ?? now()->toDateString()"
                                         :start-time="$availabilityRequest->getVenueSchedule($schedule['venue'])['start_time'] ?? null"
                                         :end-time="$availabilityRequest->getVenueSchedule($schedule['venue'])['end_time'] ?? null"
+                                        :facility-request="$availabilityRequest"
                                         :availability-check-url="route('calendar.request-availability-check', $availabilityRequest)"
                                         :availability-group="$availabilityGroup"
                                         label="Check calendar"
@@ -110,7 +121,7 @@
                         @endif
                     </div>
                     <div data-availability-actions="{{ $availabilityGroup }}" class="hidden flex flex-wrap gap-2">
-                        <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" data-availability-confirm="{{ $availabilityGroup }}" class="flex flex-wrap items-center gap-2">
+                        <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" data-availability-confirm="{{ $availabilityGroup }}" data-swal-confirm data-swal-title="Confirm venue and equipment availability?" data-swal-text="This request will move to equipment custodian review. The server will recheck conflicts before saving." data-swal-confirm-text="Yes, confirm availability" data-swal-confirm-color="#059669" class="flex flex-wrap items-center gap-2">
                             @csrf
                             <input type="hidden" name="id" value="{{ $availabilityRequest->id }}">
                             <input type="hidden" name="decision" value="available">
@@ -126,13 +137,6 @@
                                 </div>
                             @endif
                             <button type="submit" class="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800">Confirm Availability & Send to Equipment Custodians</button>
-                        </form>
-                        <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" class="flex flex-wrap items-center gap-2">
-                            @csrf
-                            <input type="hidden" name="id" value="{{ $availabilityRequest->id }}">
-                            <input type="hidden" name="decision" value="unavailable">
-                            <input type="text" name="notes" required maxlength="1000" placeholder="Conflict / reschedule note" class="w-52 rounded-xl border border-slate-300 px-3 py-2 text-xs">
-                            <button type="submit" class="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100">Mark Unavailable</button>
                         </form>
                     </div>
                 </div>
@@ -166,16 +170,17 @@
         </section>
     @endif
 
-    <section class="rounded-3xl border border-rose-200 bg-white p-6 shadow-sm" aria-labelledby="cancellation-queue-heading">
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <h2 id="cancellation-queue-heading" class="text-xl font-semibold text-slate-900">Approved Reservation Cancellations</h2>
-                <p class="mt-1 text-sm text-slate-600">Confirm with the requestor before cancelling; the booking remains active while awaiting your decision.</p>
+    @if($cancellationQueue->isNotEmpty())
+        <section class="rounded-3xl border border-rose-200 bg-white p-6 shadow-sm" aria-labelledby="cancellation-queue-heading">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 id="cancellation-queue-heading" class="text-xl font-semibold text-slate-900">Cancellation Requests Awaiting Review</h2>
+                    <p class="mt-1 text-sm text-slate-600">The requestor asked to cancel an approved reservation. It remains active until you confirm or decline the cancellation.</p>
+                </div>
+                <span class="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-800">{{ $cancellationQueue->count() }} awaiting review</span>
             </div>
-            <span class="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-800">{{ $cancellationQueue->count() }} awaiting</span>
-        </div>
-        @forelse($cancellationQueue as $cancellationRequest)
-            <article class="mb-3 flex flex-col gap-3 rounded-2xl border border-rose-100 p-4 last:mb-0 lg:flex-row lg:items-center lg:justify-between">
+            @foreach($cancellationQueue as $cancellationRequest)
+                <article class="mb-3 flex flex-col gap-3 rounded-2xl border border-rose-100 p-4 last:mb-0 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                     <a href="{{ route('request.show', $cancellationRequest) }}" class="font-semibold text-slate-900 hover:text-rose-700">{{ $cancellationRequest->control_number }} — {{ $cancellationRequest->name_of_activity }}</a>
                     <p class="mt-1 text-sm text-slate-600">Requestor: {{ $cancellationRequest->requester?->name ?? 'Unknown' }}</p>
@@ -190,20 +195,19 @@
                     <form method="POST" action="{{ route('supply-office.requests.cancellation-review', $cancellationRequest) }}" class="flex flex-wrap gap-2">
                         @csrf
                         <input type="hidden" name="decision" value="confirm">
-                        <button type="submit" class="rounded-xl bg-rose-700 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-800">Confirm cancellation</button>
+                        <button type="submit" data-swal-confirm data-swal-title="Cancel this approved reservation?" data-swal-text="This will cancel the reservation and release its assigned equipment. This action cannot be undone." data-swal-confirm-text="Yes, cancel reservation" data-swal-confirm-color="#be123c" class="rounded-xl bg-rose-700 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-800">Confirm cancellation</button>
                     </form>
                     <form method="POST" action="{{ route('supply-office.requests.cancellation-review', $cancellationRequest) }}" class="flex flex-wrap gap-2">
                         @csrf
                         <input type="hidden" name="decision" value="decline">
                         <input type="text" name="notes" required maxlength="1000" placeholder="Reason to decline" class="w-44 rounded-xl border border-slate-300 px-3 py-2 text-xs">
-                        <button type="submit" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Keep reservation</button>
+                        <button type="submit" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Decline — keep reservation</button>
                     </form>
                 </div>
-            </article>
-        @empty
-            <p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">No approved reservations are awaiting cancellation confirmation.</p>
-        @endforelse
-    </section>
+                </article>
+            @endforeach
+        </section>
+    @endif
 
     <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/50">
         <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

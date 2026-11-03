@@ -3,16 +3,13 @@
 namespace App\Notifications;
 
 use App\Models\RevisionHistory;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use App\Notifications\Concerns\UsesNotificationPreferences;
 
-class ReservationRescheduleProposed extends Notification implements ShouldQueue
+class ReservationRescheduleProposed extends Notification
 {
-    use Queueable;
-    use UsesNotificationPreferences;
+    use UsesWorkflowNotificationChannels;
 
     public function __construct(public RevisionHistory $revision)
     {
@@ -20,17 +17,18 @@ class ReservationRescheduleProposed extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return $this->channelsWithPreference($notifiable, 'request_updates', ['mail', 'database']);
+        return $this->workflowChannels($notifiable);
     }
 
     public function toMail(object $notifiable): MailMessage
     {
         $request = $this->revision->facilityRequest;
+        $proposer = $this->revision->revisedBy;
 
         return (new MailMessage)
             ->subject('Schedule change proposal: ' . $request->control_number)
             ->greeting('Hello ' . ($notifiable->name ?? 'there') . '!')
-            ->line('The Supply Office proposed a schedule change for reservation ' . $request->control_number . '.')
+            ->line(($proposer?->name ?? 'A staff member') . ' proposed a schedule change for reservation ' . $request->control_number . '.')
             ->line('Proposed schedule: ' . $this->formatSchedule())
             ->line('Reason: ' . $this->revision->revision_reason)
             ->line('Your current reservation will remain unchanged until you respond.')
@@ -39,12 +37,14 @@ class ReservationRescheduleProposed extends Notification implements ShouldQueue
 
     public function toArray(object $notifiable): array
     {
+        $proposer = $this->revision->revisedBy;
+
         return [
             'facility_request_id' => $this->revision->facility_request_id,
             'revision_id' => $this->revision->id,
             'control_number' => $this->revision->facilityRequest->control_number,
             'title' => 'Schedule change proposed',
-            'message' => 'The Supply Office proposed a new schedule. Review it and accept or decline the change.',
+            'message' => ($proposer?->name ?? 'A staff member') . ' proposed a new schedule. Review it and accept or decline the change.',
             'proposed_schedule' => $this->formatSchedule(),
             'revision_reason' => $this->revision->revision_reason,
             'status' => 'reschedule_proposed',

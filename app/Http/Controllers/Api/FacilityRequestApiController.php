@@ -159,6 +159,7 @@ class FacilityRequestApiController extends Controller
             'department' => 'required|string|max:100',
             'is_emergency' => 'nullable|boolean',
             'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
+            'emergency_office' => ['required_if:is_emergency,1', 'nullable', Rule::in(['CHED', 'OP', 'OVP'])],
         ]);
 
         if (
@@ -302,6 +303,12 @@ class FacilityRequestApiController extends Controller
                 'requested_is_emergency' => $validated['is_emergency'] ?? false,
                 'is_emergency' => $validated['is_emergency'] ?? false,
                 'emergency_justification' => $validated['emergency_justification'] ?? null,
+                'document_metadata' => ($validated['is_emergency'] ?? false)
+                    ? ['urgent_priority' => [
+                        'office' => $validated['emergency_office'] ?? null,
+                        'recorded_at' => now()->toDateTimeString(),
+                    ]]
+                    : [],
             ]);
 
             $fr->addHistory('submitted', 'Request submitted via API by ' . $user->name, $user->id);
@@ -343,6 +350,34 @@ class FacilityRequestApiController extends Controller
 
         $user = Auth::user();
         if ($user->isCustodian()) {
+            $requestor = $facilityRequest->requester;
+            $requestorType = $requestor?->requestor_type;
+            $requestContext = $facilityRequest->request_context;
+            $requestorDetails = [
+                'name' => $requestor?->name,
+                'type' => $requestorType,
+            ];
+
+            if (in_array($requestorType, ['student', 'student_organization', 'faculty', 'staff'], true)) {
+                $requestorDetails['department'] = $facilityRequest->department;
+            }
+
+            if (in_array($requestorType, ['faculty', 'staff'], true)) {
+                $requestorDetails['position'] = $requestor?->position;
+            }
+
+            if (
+                $requestorType === 'outsider'
+                || $requestContext === 'outside_organization'
+                || $requestContext === 'student_organization'
+            ) {
+                $requestorDetails['organization'] = $facilityRequest->organization_name;
+            }
+
+            if ($requestorType === 'outsider') {
+                $requestorDetails['organization_type'] = $requestor?->organization_type;
+            }
+
             $assignedVenues = $user->isCustodianVenue()
                 ? $user->venues()->pluck('name')->map(fn (string $name): string => mb_strtolower($name))->all()
                 : [];
@@ -369,10 +404,15 @@ class FacilityRequestApiController extends Controller
                 'start_time' => $facilityRequest->start_time,
                 'end_time' => $facilityRequest->end_time,
                 'venue' => $venueNames,
+                'expected_participants' => $facilityRequest->expected_participants,
+                'department' => $facilityRequest->department,
+                'request_context' => $requestContext,
+                'requestor' => $requestorDetails,
                 'equipment_quantities' => $equipmentQuantities,
                 'status' => $facilityRequest->status,
                 'venue_status' => $user->isCustodianVenue() ? $facilityRequest->venue_status : null,
                 'equipment_status' => $user->isCustodianEquipment() ? $facilityRequest->equipment_status : null,
+                'supply_office_review_status' => $facilityRequest->supply_office_review_status,
             ]);
         }
 

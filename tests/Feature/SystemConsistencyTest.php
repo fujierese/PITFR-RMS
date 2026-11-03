@@ -52,7 +52,11 @@ class SystemConsistencyTest extends TestCase
 
     private function admin(): User
     {
-        return User::factory()->create(['role' => 'admin', 'name' => 'Consistency Supply Office']);
+        return User::factory()->create([
+            'role' => 'admin',
+            'username' => 'asala@gmail.com',
+            'name' => 'Consistency Supply Office',
+        ]);
     }
 
     public function test_approval_keeps_request_data_status_history_notification_and_calendar_consistent(): void
@@ -99,7 +103,7 @@ class SystemConsistencyTest extends TestCase
         Notification::assertSentToTimes($requester, RequestStatusChanged::class, 1);
 
         $event = collect($this->getJson(route('calendar.events'))->json())
-            ->firstWhere('id', $request->id);
+            ->firstWhere('extendedProps.facilityRequestId', $request->id);
         $this->assertNotNull($event);
         $this->assertSame('approved', $event['status']);
         $this->assertSame($request->start_date->toDateString(), substr($event['start'], 0, 10));
@@ -156,7 +160,7 @@ class SystemConsistencyTest extends TestCase
         Notification::assertNothingSent();
 
         $event = collect($this->getJson(route('calendar.events'))->json())
-            ->firstWhere('id', $request->id);
+            ->firstWhere('extendedProps.facilityRequestId', $request->id);
         $this->assertNotNull($event);
         $this->assertSame('pending', $event['status']);
         $this->assertSame($requester->id, $request->requested_by_id);

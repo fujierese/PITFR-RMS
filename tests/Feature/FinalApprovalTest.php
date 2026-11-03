@@ -48,18 +48,19 @@ class FinalApprovalTest extends TestCase
         ], $overrides));
     }
 
-    private function supplyOffice(): User
+    private function finalApprover(): User
     {
         return User::factory()->create([
-            'role' => 'supply_office',
-            'name' => 'Supply Office Final Approver',
+            'role' => 'admin',
+            'username' => 'asala@gmail.com',
+            'name' => 'Arlene L. Sala',
         ]);
     }
 
-    public function test_eligible_request_is_final_approved_by_supply_office_once(): void
+    public function test_eligible_request_is_final_approved_by_system_admin_once(): void
     {
         $request = $this->createRequest();
-        $approver = $this->supplyOffice();
+        $approver = $this->finalApprover();
 
         $response = $this->actingAs($approver)->post(
             route('request.supply.final-approval', $request),
@@ -89,12 +90,12 @@ class FinalApprovalTest extends TestCase
         Notification::assertSentToTimes(User::findOrFail($request->requested_by_id), RequestStatusChanged::class, 1);
     }
 
-    public function test_final_approval_records_signature_snapshot_for_supply_office(): void
+    public function test_final_approval_records_signature_snapshot_for_system_admin(): void
     {
         Storage::fake('local');
 
         $request = $this->createRequest();
-        $approver = $this->supplyOffice();
+        $approver = $this->finalApprover();
         $approver->update(['e_signature_file' => 'final-approver-signature.png']);
 
         Storage::disk('local')->put(
@@ -121,7 +122,7 @@ class FinalApprovalTest extends TestCase
             'equipment_status' => 'pending',
         ]);
 
-        $response = $this->actingAs(User::factory()->create(['role' => 'admin']))
+        $response = $this->actingAs($this->finalApprover())
             ->get(route('supply-office.requests.final-approval'));
 
         $response->assertOk()->assertSee($ready->control_number)->assertDontSee($incomplete->control_number);
@@ -129,7 +130,7 @@ class FinalApprovalTest extends TestCase
 
     public function test_direct_final_approval_rejects_incomplete_venue_or_equipment_endorsement(): void
     {
-        $approver = $this->supplyOffice();
+        $approver = $this->finalApprover();
 
         foreach ([
             ['venue_status' => 'pending', 'equipment_status' => 'approved'],
@@ -155,7 +156,7 @@ class FinalApprovalTest extends TestCase
 
     public function test_rejected_revision_and_cancelled_requests_cannot_be_final_approved(): void
     {
-        $approver = $this->supplyOffice();
+        $approver = $this->finalApprover();
 
         foreach (['rejected', 'needs_reschedule'] as $status) {
             $request = $this->createRequest(['status' => $status]);
@@ -180,7 +181,7 @@ class FinalApprovalTest extends TestCase
     public function test_already_final_approved_request_is_idempotent(): void
     {
         $request = $this->createRequest();
-        $approver = $this->supplyOffice();
+        $approver = $this->finalApprover();
 
         $this->actingAs($approver)
             ->post(route('request.supply.final-approval', $request))
@@ -199,14 +200,16 @@ class FinalApprovalTest extends TestCase
         Notification::assertSentToTimes(User::findOrFail($request->requested_by_id), RequestStatusChanged::class, 1);
     }
 
-    public function test_only_administrative_supply_office_role_can_finalize_approval(): void
+    public function test_only_system_admin_can_finalize_approval(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         $venueCustodian = User::factory()->create(['role' => 'custodian-venue']);
         $equipmentCustodian = User::factory()->create(['role' => 'custodian-equipment']);
-        $admin = User::factory()->create(['role' => 'admin']);
+        $supplyOfficeStaff = User::factory()->create(['role' => 'supply_office']);
+        $otherAdmin = User::factory()->create(['role' => 'admin', 'username' => 'other-admin']);
+        $admin = $this->finalApprover();
 
-        foreach ([$requester, $venueCustodian, $equipmentCustodian] as $unauthorized) {
+        foreach ([$requester, $venueCustodian, $equipmentCustodian, $supplyOfficeStaff, $otherAdmin] as $unauthorized) {
             $request = $this->createRequest(['requested_by_id' => $requester->id]);
 
             $this->actingAs($unauthorized)
@@ -224,16 +227,56 @@ class FinalApprovalTest extends TestCase
         $this->assertSame('approved', $adminRequest->fresh()->status);
     }
 
+    public function test_non_designated_admin_cannot_see_final_approval_controls(): void
+    {
+        $request = $this->createRequest(['supply_office_review_status' => 'confirmed']);
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'username' => 'other-admin',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertSee('Awaiting Admin Final Approval')
+            ->assertDontSee(route('request.supply.final-approval', $request), false);
+
+        $this->post(route('request.supply.final-approval', $request))->assertForbidden();
+    }
+
+    public function test_supply_office_staff_cannot_access_final_approval_queue_or_actions(): void
+    {
+        $request = $this->createRequest();
+        $staff = User::factory()->create(['role' => 'supply_office']);
+
+        $this->actingAs($staff)
+            ->get(route('supply-office.requests.final-approval'))
+            ->assertForbidden();
+
+        $this->post(route('request.supply.final-approval', $request))
+            ->assertForbidden();
+
+        $this->post(route('request.supply.decline', $request))
+            ->assertForbidden();
+
+        $this->post(route('supply-office.update'), [
+            'id' => $request->id,
+            'action' => 'approve',
+        ])->assertForbidden();
+
+        $this->assertSame('pending', $request->fresh()->status);
+    }
+
     public function test_final_approved_activity_is_returned_by_calendar_with_schedule_data(): void
     {
         $request = $this->createRequest();
-        $this->actingAs($this->supplyOffice())
+        $this->actingAs($this->finalApprover())
             ->post(route('request.supply.final-approval', $request))
             ->assertRedirect();
 
         $response = $this->getJson(route('calendar.events'));
         $response->assertOk();
-        $event = collect($response->json())->firstWhere('id', $request->id);
+        $event = collect($response->json())->firstWhere('extendedProps.facilityRequestId', $request->id);
 
         $this->assertNotNull($event);
         $this->assertSame('approved', $event['status']);

@@ -2,14 +2,15 @@
 namespace App\Notifications;
 
 use App\Models\FacilityRequest;
+use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 use Illuminate\Bus\Queueable;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use App\Notifications\Concerns\UsesNotificationPreferences;
 
 class NewFacilityRequestNotification extends Notification
 {
     use Queueable;
-    use UsesNotificationPreferences;
+    use UsesWorkflowNotificationChannels;
 
     public function __construct(public FacilityRequest $facilityRequest, public ?string $actor = null)
     {
@@ -17,7 +18,19 @@ class NewFacilityRequestNotification extends Notification
 
     public function via($notifiable): array
     {
-        return $this->channelsWithPreference($notifiable, 'request_updates', ['database']);
+        return $this->workflowChannels($notifiable);
+    }
+
+    public function toMail($notifiable): MailMessage
+    {
+        $requestorName = $this->actor ?? $this->facilityRequest->requester?->name ?? 'Unknown requestor';
+
+        return (new MailMessage)
+            ->subject('New facility request: ' . $this->facilityRequest->control_number)
+            ->greeting('Hello ' . ($notifiable->name ?? 'there') . '!')
+            ->line($requestorName . ' submitted a facility request for "' . ($this->facilityRequest->name_of_activity ?: 'Untitled activity') . '".')
+            ->line('Control number: ' . $this->facilityRequest->control_number)
+            ->action('Review request', route('request.show', $this->facilityRequest));
     }
 
     public function toArray($notifiable): array

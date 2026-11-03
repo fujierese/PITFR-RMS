@@ -8,6 +8,36 @@
     <title>PIT – Facility & Equipment Request System</title>
     <style>
         html { scroll-padding-top: 4rem; scroll-behavior: smooth; }
+        @media (max-height: 740px) {
+            #home {
+                min-height: calc(100vh - 4rem);
+                min-height: calc(100svh - 4rem);
+                padding-top: 1rem;
+                padding-bottom: 1.25rem;
+            }
+
+            #home .guest-hero-logo {
+                width: 12rem;
+                height: 12rem;
+                margin-bottom: 0.75rem;
+            }
+
+            #home .guest-hero-logo img {
+                width: 11rem;
+                height: 11rem;
+            }
+
+            #home h1 {
+                margin-bottom: 0.5rem;
+                font-size: clamp(1.75rem, 4vw, 2.5rem);
+                line-height: 1.05;
+            }
+
+            #home .guest-hero-description {
+                margin-bottom: 0;
+                padding: 0.75rem 1rem;
+            }
+        }
         @media (prefers-reduced-motion: reduce) {
             html { scroll-behavior: auto; }
         }
@@ -24,13 +54,13 @@
     <nav class="mx-auto flex w-full max-w-[1600px] items-center justify-between px-2 py-3 sm:px-4 lg:px-5" aria-label="Guest navigation">
         <a href="#home" class="ml-2 min-w-0 flex-shrink-0 text-left text-base font-bold tracking-tight text-emerald-300 transition hover:text-emerald-200 lg:text-lg">PIT Facility &amp; Equipment Request System</a>
 
-        <button id="guest-mobile-menu-button" type="button" class="ml-auto inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10 lg:hidden" aria-expanded="false" aria-controls="guest-mobile-menu" aria-label="Toggle menu">
+        <button id="guest-mobile-menu-button" type="button" class="ml-auto inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10 xl:hidden" aria-expanded="false" aria-controls="guest-mobile-menu" aria-label="Toggle menu">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
             </svg>
         </button>
 
-        <div class="hidden min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap text-sm font-semibold text-slate-100 lg:ml-auto lg:flex lg:gap-2">
+        <div class="hidden min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap text-sm font-semibold text-slate-100 xl:ml-auto xl:flex xl:gap-2">
             <a href="#home" class="group relative whitespace-nowrap rounded-md px-2 py-2 transition duration-300 hover:-translate-y-0.5 hover:text-emerald-300 focus-visible:-translate-y-0.5 focus-visible:text-emerald-300">
                 <span class="relative z-10">Home</span>
                 <span class="absolute inset-x-1 bottom-1.5 h-0.5 origin-left scale-x-0 rounded-full bg-emerald-300 transition-transform duration-300 group-hover:scale-x-100"></span>
@@ -63,7 +93,7 @@
         </div>
     </nav>
 
-    <div id="guest-mobile-menu" class="hidden border-t border-white/10 bg-slate-950/95 px-4 py-3 lg:hidden">
+    <div id="guest-mobile-menu" class="hidden border-t border-white/10 bg-slate-950/95 px-4 py-3 xl:hidden">
         <div class="flex flex-col gap-2 text-sm font-semibold text-slate-200">
             <a href="#home" class="rounded-lg px-3 py-2 transition hover:bg-white/10">Home</a>
             <a href="#calendar-section" class="rounded-lg px-3 py-2 transition hover:bg-white/10">View Facility Calendar</a>
@@ -82,7 +112,7 @@
         style="background-image: url('{{ asset('images/GPD-BG.jpg') }}');">
     <div class="absolute inset-0 bg-slate-950/50"></div>
     <div class="relative z-10 mx-auto max-w-4xl">
-        <div class="mx-auto mb-8 flex items-center justify-center sm:h-64 sm:w-64 lg:h-72 lg:w-72">
+        <div class="guest-hero-logo mx-auto mb-8 flex items-center justify-center sm:h-64 sm:w-64 lg:h-72 lg:w-72">
             <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo"
                  class="h-44 w-44 object-contain drop-shadow-[0_18px_24px_rgba(15,23,42,0.35)] sm:h-56 sm:w-56 lg:h-64 lg:w-64">
         </div>
@@ -92,7 +122,7 @@
         <p class="text-lg font-semibold text-emerald-200 mb-2">
             Palompon Institute of Technology
         </p>
-        <div class="mx-auto mb-8 max-w-2xl rounded-2xl border border-white/25 bg-slate-950/45 px-5 py-4 shadow-xl backdrop-blur-md">
+        <div class="guest-hero-description mx-auto mb-8 max-w-2xl rounded-2xl border border-white/25 bg-slate-950/45 px-5 py-4 shadow-xl backdrop-blur-md">
             <p class="text-base font-medium leading-relaxed text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] sm:text-lg">
                 Preview public facility availability, explore venue schedules, and sign in to submit reservation requests for PIT venues and equipment.
             </p>

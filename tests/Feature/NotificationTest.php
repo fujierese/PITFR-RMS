@@ -7,12 +7,16 @@ use App\Models\User;
 use App\Models\Venue;
 use App\Notifications\NewFacilityRequestNotification;
 use App\Notifications\PasswordChangedNotification;
+use App\Notifications\ReservationReminderNotification;
 use App\Notifications\ResetPasswordNotification;
 use App\Notifications\RequestStatusChanged;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Notifications\Events\NotificationFailed;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -270,6 +274,16 @@ class NotificationTest extends TestCase
             'created_at' => now()->subMinute(),
             'updated_at' => now()->subMinute(),
         ]);
+        $requestor->notifications()->create([
+            'id' => (string) Str::uuid(),
+            'type' => RequestStatusChanged::class,
+            'data' => [
+                'status' => 'final_approved',
+                'body' => 'Your request has been approved.',
+            ],
+            'created_at' => now()->subMinutes(2),
+            'updated_at' => now()->subMinutes(2),
+        ]);
 
         $response = $this->actingAs($requestor)->get(route('notifications.index'));
 
@@ -278,7 +292,10 @@ class NotificationTest extends TestCase
             ->assertSee('Your request status has been updated to Needs Revision. Control No: FER-2026-695')
             ->assertSee('Request Venue Approved')
             ->assertSee('Your request status has been updated to Venue Approved. Control No: FER-2026-695')
-            ->assertSee('🔄')
+            ->assertSee('Request Final Approved')
+            ->assertSee('data-notification-icon="reschedule"', false)
+            ->assertSee('data-notification-icon="venue"', false)
+            ->assertSee('data-notification-icon="final-approval"', false)
             ->assertDontSee('Needs_revision')
             ->assertDontSee('Venue_approved');
     }
@@ -287,6 +304,7 @@ class NotificationTest extends TestCase
     {
         $user = User::factory()->create([
             'role' => 'requestor',
+            'username' => 'requestor@example.test',
             'notification_preferences' => [
                 'request_updates' => false,
                 'security_alerts' => true,
@@ -294,18 +312,96 @@ class NotificationTest extends TestCase
         ]);
         $request = FacilityRequest::factory()->create(['requested_by_id' => $user->id]);
 
-        $this->assertSame([], (new RequestStatusChanged($request, 'approved'))->via($user));
-        $this->assertSame([], (new NewFacilityRequestNotification($request))->via($user));
+        $this->assertSame(['database', 'broadcast', 'mail'], (new RequestStatusChanged($request, 'approved'))->via($user));
+        $this->assertSame(['database', 'mail'], (new NewFacilityRequestNotification($request))->via($user));
         $this->assertSame(['database', 'mail'], (new PasswordChangedNotification())->via($user));
+        $this->assertSame([], (new ReservationReminderNotification($request, 'one_day_before', now()))->via($user));
 
         $user->notification_preferences = [
             'request_updates' => true,
             'security_alerts' => false,
         ];
 
-        $this->assertSame(['mail', 'database', 'broadcast'], (new RequestStatusChanged($request, 'approved'))->via($user));
+        $this->assertSame(['database', 'broadcast', 'mail'], (new RequestStatusChanged($request, 'approved'))->via($user));
         $this->assertSame([], (new PasswordChangedNotification())->via($user));
         $this->assertSame(['mail'], (new ResetPasswordNotification('token'))->via($user));
+    }
+
+    public function test_new_request_notification_has_email_content_and_essential_updates_ignore_reminder_preference(): void
+    {
+        [$requester, , $request] = $this->createOverrideScenario();
+        $custodian = User::factory()->create([
+            'role' => 'custodian-venue',
+            'username' => 'custodian@example.test',
+            'notification_preferences' => ['request_updates' => false],
+        ]);
+        $notification = new NewFacilityRequestNotification($request);
+        $mail = $notification->toMail($custodian);
+
+        $this->assertSame(['database', 'mail'], $notification->via($custodian));
+        $this->assertSame('New facility request: ' . $request->control_number, $mail->subject);
+        $this->assertSame('Review request', $mail->actionText);
+        $this->assertSame($requester->name, $notification->toArray($custodian)['requestor_name']);
+    }
+
+    public function test_reschedule_proposal_notifications_are_immediate_and_database_first(): void
+    {
+        $requester = User::factory()->create([
+            'role' => 'requestor',
+            'username' => 'requestor@example.test',
+        ]);
+        $request = FacilityRequest::factory()->create(['requested_by_id' => $requester->id]);
+        $revision = $request->revisionHistories()->create([
+            'revised_by_id' => User::factory()->create(['role' => 'admin'])->id,
+            'old_start_date' => now()->addDay()->toDateString(),
+            'old_end_date' => now()->addDay()->toDateString(),
+            'old_start_time' => '09:00',
+            'old_end_time' => '11:00',
+            'old_venue' => ['Main Hall'],
+            'new_start_date' => now()->addDays(2)->toDateString(),
+            'new_end_date' => now()->addDays(2)->toDateString(),
+            'new_start_time' => '10:00',
+            'new_end_time' => '12:00',
+            'new_venue' => ['Main Hall'],
+            'revision_reason' => 'Schedule adjustment requested.',
+            'status' => 'pending',
+            'affected_user_ids' => [$requester->id],
+            'responses' => [(string) $requester->id => 'pending'],
+        ]);
+        $notification = new \App\Notifications\ReservationRescheduleProposed($revision);
+
+        $this->assertSame(['database', 'mail'], $notification->via($requester));
+        $this->assertNotInstanceOf(\Illuminate\Contracts\Queue\ShouldQueue::class, $notification);
+    }
+
+    public function test_workflow_mail_is_skipped_for_invalid_addresses_without_suppressing_in_app_notice(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'requestor',
+            'username' => 'invalid-address',
+        ]);
+        $request = FacilityRequest::factory()->create(['requested_by_id' => $user->id]);
+
+        $this->assertSame(['database', 'broadcast'], (new RequestStatusChanged($request, 'approved'))->via($user));
+    }
+
+    public function test_notification_channel_failures_are_logged_with_recipient_and_channel_context(): void
+    {
+        $user = User::factory()->create(['role' => 'requestor', 'username' => 'requestor@example.test']);
+        $request = FacilityRequest::factory()->create(['requested_by_id' => $user->id]);
+        $notification = new RequestStatusChanged($request, 'approved');
+        $exception = new \RuntimeException('SMTP unavailable');
+        Log::spy();
+
+        Event::dispatch(new NotificationFailed($user, $notification, 'mail', ['exception' => $exception]));
+
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->withArgs(static fn (string $message, array $context): bool => $message === 'Notification delivery failed.'
+                && $context['notification'] === RequestStatusChanged::class
+                && $context['channel'] === 'mail'
+                && $context['notifiable_id'] === $user->id
+                && $context['exception'] === $exception);
     }
 
     public function test_password_change_security_alert_renders_without_request_metadata(): void
@@ -324,7 +420,7 @@ class NotificationTest extends TestCase
         $response->assertOk()
             ->assertSee('Password Changed')
             ->assertSee('Your PITFR-RMS account password was changed.')
-            ->assertSee('🛡️')
+            ->assertSee('data-notification-icon="security"', false)
             ->assertDontSee('Requestor:');
     }
 
@@ -397,6 +493,7 @@ class NotificationTest extends TestCase
 
         $response->assertOk()
             ->assertSee('New Request Submitted')
+            ->assertSee('data-notification-icon="new-request"', false)
             ->assertSee('A new request from ' . $requester->name . ' for "' . $request->name_of_activity . '" is waiting for your verification.')
             ->assertSee('Requestor: <strong>' . e($requester->name) . '</strong>', false)
             ->assertSee('Activity: <strong>' . e($request->name_of_activity) . '</strong>', false)

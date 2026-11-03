@@ -61,6 +61,13 @@ class RequestorController extends Controller
             abort(403, 'Memorandum-priority transfers do not require requestor consent.');
         }
 
+        $revisionResponses = $revision->getResponsesRequiringConfirmation((int) $facilityRequest->requested_by_id);
+        $requestorResponse = $revisionResponses[(string) $facilityRequest->requested_by_id] ?? 'pending';
+        $isRequestor = (int) $user->id === (int) $facilityRequest->requested_by_id;
+        if ($validated['response'] === 'accept' && ! $isRequestor && $requestorResponse === 'pending') {
+            return back()->withErrors(['revision' => 'The requestor must accept the proposed schedule before custodians can review it.']);
+        }
+
         if ($revision->response_deadline_at && $revision->response_deadline_at->isPast()) {
             $revision->update(['status' => 'expired', 'responded_at' => now()]);
             $facilityRequest->addHistory('revision_expired', 'Schedule proposal expired without changing the approved reservation.', $user->id);
@@ -72,7 +79,7 @@ class RequestorController extends Controller
         }
 
         if ($validated['response'] === 'decline') {
-            $declined = DB::transaction(function () use ($facilityRequest, $revision, $user): bool {
+            $declined = DB::transaction(function () use ($facilityRequest, $revision, $user, $isRequestor): bool {
                 $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
                 $lockedRevision = RevisionHistory::query()->lockForUpdate()->findOrFail($revision->id);
                 if ($lockedRevision->status !== 'pending' || $lockedRevision->facility_request_id !== $lockedRequest->id) {
@@ -86,7 +93,19 @@ class RequestorController extends Controller
                     'responded_at' => now(),
                     'responses' => $responses,
                 ]);
-                $lockedRequest->addHistory('revision_declined', $user->name . ' declined the proposed schedule change. The approved reservation remains unchanged.', $user->id);
+                if ($isRequestor && $lockedRequest->status !== 'approved') {
+                    $lockedRequest->update([
+                        'status' => 'needs_reschedule',
+                        'venue_status' => 'needs_reschedule',
+                    ]);
+                }
+                $lockedRequest->addHistory(
+                    'revision_declined',
+                    $isRequestor && $lockedRequest->status !== 'approved'
+                        ? $user->name . ' declined the proposed schedule and may edit the request for another venue or schedule.'
+                        : $user->name . ' declined the proposed schedule change. The current reservation remains unchanged.',
+                    $user->id,
+                );
                 return true;
             });
             if (!$declined) {
@@ -101,10 +120,23 @@ class RequestorController extends Controller
             );
 
             return redirect()->route('request.show', $facilityRequest)
-                ->with('success', 'You declined the schedule proposal. The current approved reservation remains unchanged.');
+                ->with('success', $isRequestor && $facilityRequest->status !== 'approved'
+                    ? 'You declined the proposed schedule. Edit your request to choose another venue, date, or time; it will return to venue review.'
+                    : 'You declined the schedule proposal. The current reservation remains unchanged.');
         }
 
-        $responseProgress = DB::transaction(function () use ($facilityRequest, $revision, $user): ?bool {
+        if ($user->isCustodian()) {
+            $availabilityConflict = $this->availabilityService->checkRevisionAvailabilityForCustodian(
+                $facilityRequest,
+                $revision,
+                $user,
+            );
+            if ($availabilityConflict !== null && ! $revision->override_conflict) {
+                return back()->withErrors(['revision' => $availabilityConflict]);
+            }
+        }
+
+        $responseProgress = DB::transaction(function () use ($facilityRequest, $revision, $user, $isRequestor): ?bool {
             $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
             $lockedRevision = RevisionHistory::query()->lockForUpdate()->findOrFail($revision->id);
             if ($lockedRevision->status !== 'pending' || $lockedRevision->facility_request_id !== $lockedRequest->id) {
@@ -116,11 +148,20 @@ class RequestorController extends Controller
                 return null;
             }
 
-            $responses = $lockedRevision->responses ?? [];
+            $responses = $lockedRevision->getResponsesRequiringConfirmation(
+                (int) $lockedRequest->requested_by_id,
+                $isRequestor,
+            );
             $responses[(string) $user->id] = 'accepted';
             $lockedRevision->responses = $responses;
             $lockedRevision->save();
-            $lockedRequest->addHistory('revision_response_received', $user->name . ' accepted the proposed schedule change.', $user->id);
+            $responseDetail = $user->name . ' accepted the proposed schedule change.';
+            if ($user->isCustodianVenue()) {
+                $responseDetail .= ' Venue availability was rechecked against the proposed schedule.';
+            } elseif ($user->isCustodianEquipment()) {
+                $responseDetail .= ' Assigned equipment availability was rechecked for the proposed schedule.';
+            }
+            $lockedRequest->addHistory('revision_response_received', $responseDetail, $user->id);
 
             foreach ($lockedRevision->affected_user_ids ?? [$lockedRequest->requested_by_id] as $requiredUserId) {
                 if (($responses[(string) $requiredUserId] ?? 'pending') === 'pending') {
@@ -134,8 +175,26 @@ class RequestorController extends Controller
             return back()->withErrors(['revision' => 'This proposal is no longer active or has expired. The approved reservation remains unchanged.']);
         }
         if ($responseProgress === false) {
+            if ($isRequestor) {
+                $effectiveResponses = $revision->getResponsesRequiringConfirmation(
+                    (int) $facilityRequest->requested_by_id,
+                    $isRequestor,
+                );
+                $pendingUserIds = collect($revision->affected_user_ids ?? [])
+                    ->filter(fn ($userId): bool => ($effectiveResponses[(string) $userId] ?? 'pending') === 'pending')
+                    ->map(fn ($userId): int => (int) $userId)
+                    ->reject(fn (int $userId): bool => $userId === (int) $user->id)
+                    ->values();
+                $pendingUsers = User::query()->whereIn('id', $pendingUserIds)->get();
+                $reviewRecipients = $pendingUsers->push($revision->revisedBy)->filter()->unique('id');
+                Notification::send(
+                    $reviewRecipients,
+                    new \App\Notifications\ReservationRescheduleReviewRequired($revision, $user->name),
+                );
+            }
+
             return redirect()->route('request.show', $facilityRequest)
-                ->with('success', 'Your acceptance was recorded. The approved reservation stays unchanged until all affected custodians and users respond.');
+                ->with('success', 'Your acceptance was recorded. The reservation remains unchanged while affected custodians review the proposed schedule.');
         }
 
         if (!$facilityRequest->canBeRevised()) {
@@ -152,6 +211,7 @@ class RequestorController extends Controller
             'venue' => $revision->new_venue ?? [],
             'equipment' => $revision->new_equipment ?? [],
             'equipment_quantities' => $revision->new_equipment_quantities ?? [],
+            'reservation_duration' => 'specific_time',
         ];
         if ($newState['start_time'] <= '05:00' || $newState['end_time'] <= '05:00') {
             return back()->withErrors([
@@ -167,12 +227,12 @@ class RequestorController extends Controller
         $availabilityService = $this->availabilityService;
         $venueConflict = false;
         foreach ($newState['venue'] as $venueName) {
-            if (! $availabilityService->checkVenueAvailability(
+            if ($availabilityService->checkVenueTimeRangeForReview(
                 $venueName,
                 $range['start'],
                 $range['end'],
                 $facilityRequest->id
-            )['available']) {
+            ) !== null) {
                 $venueConflict = true;
                 break;
             }
@@ -208,6 +268,12 @@ class RequestorController extends Controller
             ->unique()
             ->values();
         $accepted = DB::transaction(function () use ($facilityRequest, $revision, $user, $newState, $range): bool {
+            $proposedResources = new FacilityRequest([
+                'venue' => $newState['venue'],
+                'equipment' => $newState['equipment'],
+                'equipment_quantities' => $newState['equipment_quantities'],
+            ]);
+            app(AvailabilityService::class)->lockResourcesForFacilityRequests($facilityRequest, $proposedResources);
             $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
             $lockedRevision = RevisionHistory::query()->lockForUpdate()->findOrFail($revision->id);
             if ($lockedRevision->status !== 'pending' || $lockedRevision->facility_request_id !== $lockedRequest->id) {
@@ -235,12 +301,12 @@ class RequestorController extends Controller
             $availabilityService = app(AvailabilityService::class);
             $venueAvailable = true;
             foreach ($newState['venue'] as $venueName) {
-                if (! $availabilityService->checkVenueAvailability(
+                if ($availabilityService->checkVenueTimeRangeForReview(
                     $venueName,
                     $range['start'],
                     $range['end'],
                     $lockedRequest->id
-                )['available']) {
+                ) !== null) {
                     $venueAvailable = false;
                     break;
                 }
@@ -263,6 +329,16 @@ class RequestorController extends Controller
                 return false;
             }
 
+            $venueCustodianIds = Venue::query()
+                ->whereIn('name', $newState['venue'])
+                ->pluck('custodian_id')
+                ->filter()
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->values();
+            $confirmedVenueCustodianId = $venueCustodianIds->first(
+                fn (int $custodianId): bool => ($lockedRevision->responses[(string) $custodianId] ?? 'pending') === 'accepted'
+            );
             $updates = [
                 'start_date' => $newState['start_date'],
                 'end_date' => $newState['end_date'],
@@ -271,11 +347,12 @@ class RequestorController extends Controller
                 'venue' => $newState['venue'],
                 'equipment' => $newState['equipment'],
                 'equipment_quantities' => $newState['equipment_quantities'],
+                'reservation_duration' => 'specific_time',
             ];
             if ($lockedRequest->status !== 'approved') {
                 $updates += [
                     'status' => 'pending',
-                    'venue_status' => 'pending',
+                    'venue_status' => $confirmedVenueCustodianId !== null ? 'approved' : 'pending',
                     'equipment_status' => empty($newState['equipment']) ? 'approved' : 'pending',
                     'equipment_custodian_statuses' => [],
                     'venue_notes' => null,
@@ -291,6 +368,17 @@ class RequestorController extends Controller
             }
             $lockedRequest->update($updates);
             $lockedRequest->syncRelationalItems();
+            if ($confirmedVenueCustodianId !== null) {
+                $venueApprover = User::query()->find($confirmedVenueCustodianId);
+                if ($venueApprover) {
+                    $lockedRequest->recordApprovalSignature('venue', $venueApprover);
+                    $lockedRequest->addHistory(
+                        'custodian_endorsed',
+                        'Venue availability for the proposed schedule confirmed by ' . $venueApprover->name . '.',
+                        $venueApprover->id,
+                    );
+                }
+            }
             $lockedRevision->update([
                 'status' => 'accepted',
                 'responded_at' => now(),
@@ -329,26 +417,34 @@ class RequestorController extends Controller
             ->map(fn ($id): int => (int) $id)
             ->unique()
             ->values();
-        foreach (User::query()->whereIn('id', $custodianIds)->get() as $custodian) {
-            $custodian->notify($notification);
-        }
         $notifiedCustodians = $custodianIds->all();
         if ($notifiedCustodians !== []) {
             $revision->markCustodianNotified();
         }
 
-        $notificationRecipients = User::query()
-            ->whereIn('id', collect($revision->affected_user_ids ?? [])
+        $notificationRecipientIds = collect($revision->affected_user_ids ?? [])
                 ->merge([(int) $facilityRequest->requested_by_id])
                 ->merge($custodianIds)
-                ->unique()
-                ->all())
-            ->get();
+                ->unique();
+        if (
+            $facilityRequest->status === 'pending'
+            && $facilityRequest->supply_office_review_status === 'pending'
+        ) {
+            $notificationRecipientIds = $notificationRecipientIds->merge(
+                User::query()->whereIn('role', ['admin', 'supply_office'])->pluck('id')
+            )->unique();
+        }
+        $notificationRecipients = User::query()->whereIn('id', $notificationRecipientIds)->get();
         Notification::send($notificationRecipients, $notification);
         $revision->markRequestorNotified();
 
+        $successMessage = $facilityRequest->status === 'pending'
+            && $facilityRequest->supply_office_review_status === 'pending'
+                ? 'You accepted the proposal. The schedule is updated, but the request still needs Supply Office review and any remaining custodian approvals.'
+                : 'You accepted the proposal. The reservation schedule has been updated and the custodians have been notified.';
+
         return redirect()->route('request.show', $facilityRequest)
-            ->with('success', 'You accepted the proposal. The reservation schedule has been updated and the custodians have been notified.');
+            ->with('success', $successMessage);
     }
 
     private const VENUE_OPTIONS = [
@@ -1227,6 +1323,7 @@ class RequestorController extends Controller
             'equipment_quantities.*' => ['nullable', 'integer', 'min:1'],
             'other_venue'           => 'prohibited',
             'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
+            'emergency_office' => ['required_if:is_emergency,1', 'nullable', Rule::in(['CHED', 'OP', 'OVP'])],
             'is_emergency'          => 'nullable|boolean',
             'e_signature_file'      => $hasSavedSignature
                 ? 'nullable|file|mimes:jpeg,jpg,png|max:10240'
@@ -1602,6 +1699,12 @@ class RequestorController extends Controller
         $igpReceiptFileName = null;
         $eSignatureFileName = null;
         $documentMetadata = [];
+        if ($request->boolean('is_emergency') && in_array((string) $request->input('emergency_office'), ['CHED', 'OP', 'OVP'], true)) {
+            $documentMetadata['urgent_priority'] = [
+                'office' => $request->input('emergency_office'),
+                'recorded_at' => now()->toDateTimeString(),
+            ];
+        }
 
         // Get the document upload service
         $documentUploadService = app(\App\Services\DocumentUploadService::class);
@@ -1810,6 +1913,14 @@ class RequestorController extends Controller
         $request   = FacilityRequest::with(['requestVenues', 'requestEquipment', 'reservationSchedule', 'histories'])->findOrFail($id);
         $this->authorize('view', $request);
         $pendingRevision = $request->revisionHistories()->where('status', 'pending')->first();
+        $pendingRevisionResponses = $pendingRevision?->getResponsesRequiringConfirmation((int) $request->requested_by_id) ?? [];
+        $pendingRevisionUserIds = collect($pendingRevision?->affected_user_ids ?? [])
+            ->filter(fn ($userId): bool => ($pendingRevisionResponses[(string) $userId] ?? 'pending') === 'pending')
+            ->map(fn ($userId): int => (int) $userId)
+            ->values();
+        $pendingRevisionUsers = $pendingRevisionUserIds->isNotEmpty()
+            ? User::query()->whereIn('id', $pendingRevisionUserIds)->get()->keyBy('id')
+            : collect();
         $equipment = \App\Models\Equipment::where('is_active', true)->get();
         $venueCustodians = Venue::query()
             ->whereIn('name', $request->getVenueNames())
@@ -1836,6 +1947,9 @@ class RequestorController extends Controller
             ->values();
         /** @var \App\Models\User|null $currentUser */
         $currentUser = $this->currentUser();
+        $assignedVenueOptions = $currentUser?->isCustodianVenue()
+            ? $currentUser->venues()->where('is_active', true)->orderBy('name')->pluck('name')
+            : collect();
         if ($currentUser && $currentUser->isCustodian()) {
             $assignedVenueNames = $request->getVenueNames();
             $assignedEquipment = $request->getAssignedEquipmentForCustodian((int) $currentUser->id);
@@ -1879,6 +1993,9 @@ class RequestorController extends Controller
         return view('requestor.show', [
             'request'                 => $request,
             'pendingRevision'         => $pendingRevision,
+            'pendingRevisionResponses' => $pendingRevisionResponses,
+            'pendingRevisionUsers'    => $pendingRevisionUsers,
+            'assignedVenueOptions'   => $assignedVenueOptions,
             'venueOptions'            => self::VENUE_OPTIONS,
             'equipOptions'            => self::EQUIPMENT_OPTIONS,
             'equipment'               => $equipment,

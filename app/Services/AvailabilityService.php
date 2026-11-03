@@ -6,7 +6,9 @@ use App\Models\Equipment;
 use App\Models\FacilityRequest;
 use App\Models\Holiday;
 use App\Models\MaintenanceSchedule;
+use App\Models\RevisionHistory;
 use App\Models\Venue;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -75,15 +77,16 @@ class AvailabilityService
 
         if (! $ignoreVenueConflicts) {
             foreach ($facilityRequest->getVenueNames() as $venueName) {
-                $venueRange = $facilityRequest->getVenueScheduleRange($venueName);
-                $availability = $this->checkVenueAvailability(
-                    $venueName,
-                    $venueRange['start'],
-                    $venueRange['end'],
-                    $excludeRequestId
-                );
-                if (!$availability['available']) {
-                    return $availability['message'] ?? 'Venue booking conflict detected.';
+                foreach ($facilityRequest->getVenueScheduleRanges($venueName) as $venueRange) {
+                    $availability = $this->checkVenueAvailability(
+                        $venueName,
+                        $venueRange['start'],
+                        $venueRange['end'],
+                        $excludeRequestId
+                    );
+                    if (!$availability['available']) {
+                        return $availability['message'] ?? 'Venue booking conflict detected.';
+                    }
                 }
             }
         }
@@ -95,12 +98,13 @@ class AvailabilityService
                 if (! is_array($items) || ! in_array($venueName, $facilityRequest->getVenueNames(), true)) {
                     continue;
                 }
-                $venueRange = $facilityRequest->getVenueScheduleRange($venueName);
-                foreach ($items as $itemName => $quantity) {
-                    $equipmentRanges[$itemName][] = [
-                        ...$venueRange,
-                        'quantity' => (int) $quantity,
-                    ];
+                foreach ($facilityRequest->getVenueScheduleRanges($venueName) as $venueRange) {
+                    foreach ($items as $itemName => $quantity) {
+                        $equipmentRanges[$itemName][] = [
+                            ...$venueRange,
+                            'quantity' => (int) $quantity,
+                        ];
+                    }
                 }
             }
 
@@ -146,11 +150,8 @@ class AvailabilityService
         }
 
         $equipmentRanges = collect($facilityRequest->getVenueNames())
-            ->map(fn (string $venueName): array => $facilityRequest->getVenueScheduleRange($venueName))
-            ->whenEmpty(fn (Collection $ranges): Collection => collect([[
-                'start' => $requestedStart,
-                'end' => $requestedEnd,
-            ]]));
+            ->flatMap(fn (string $venueName): array => $facilityRequest->getVenueScheduleRanges($venueName))
+            ->whenEmpty(fn (Collection $ranges): Collection => collect($facilityRequest->getScheduleRanges()));
 
         foreach ($facilityRequest->getEquipmentQuantities() as $itemName => $quantity) {
             foreach ($equipmentRanges as $range) {
@@ -179,15 +180,17 @@ class AvailabilityService
             return 'The selected venue is not part of this request.';
         }
 
-        $range = $facilityRequest->getVenueScheduleRange($canonicalVenueName);
-        $availability = $this->checkVenueAvailability(
-            $canonicalVenueName,
-            $range['start'],
-            $range['end'],
-            $facilityRequest->id
-        );
-        if (! $availability['available']) {
-            return $availability['message'] ?? 'The selected venue schedule is unavailable.';
+        $ranges = $facilityRequest->getVenueScheduleRanges($canonicalVenueName);
+        foreach ($ranges as $range) {
+            $availability = $this->checkVenueAvailability(
+                $canonicalVenueName,
+                $range['start'],
+                $range['end'],
+                $facilityRequest->id
+            );
+            if (! $availability['available']) {
+                return $availability['message'] ?? 'The selected venue schedule is unavailable.';
+            }
         }
 
         $pendingConflict = FacilityRequest::query()
@@ -196,16 +199,123 @@ class AvailabilityService
             ->where(fn ($query) => $query->matchesVenue($canonicalVenueName))
             ->with(['requestVenues', 'reservationSchedule'])
             ->get()
-            ->contains(function (FacilityRequest $otherRequest) use ($canonicalVenueName, $range): bool {
-                $otherRange = $otherRequest->getVenueScheduleRange($canonicalVenueName);
+            ->contains(function (FacilityRequest $otherRequest) use ($canonicalVenueName, $ranges): bool {
+                foreach ($otherRequest->getVenueScheduleRanges($canonicalVenueName) as $otherRange) {
+                    foreach ($ranges as $range) {
+                        if ($otherRange['start']->lt($range['end']) && $otherRange['end']->gt($range['start'])) {
+                            return true;
+                        }
+                    }
+                }
 
-                return $otherRange['start']->lt($range['end'])
-                    && $otherRange['end']->gt($range['start']);
+                return false;
             });
 
         return $pendingConflict
             ? 'Another request for this venue and time is still awaiting review. Resolve that request before confirming availability.'
             : null;
+    }
+
+    public function checkRevisionVenueAvailability(FacilityRequest $facilityRequest, RevisionHistory $revision, string $venueName): ?string
+    {
+        $canonicalVenueName = collect($revision->new_venue ?? [])
+            ->first(fn (string $name): bool => mb_strtolower(trim($name)) === mb_strtolower(trim($venueName)));
+
+        if ($canonicalVenueName === null) {
+            return 'The selected venue is not part of the proposed schedule.';
+        }
+
+        $range = FacilityRequest::normalizeScheduleRange(
+            $revision->new_start_date,
+            $revision->new_start_time,
+            $revision->new_end_date,
+            $revision->new_end_time,
+        );
+        return $this->checkVenueTimeRangeForReview(
+            $canonicalVenueName,
+            $range['start'],
+            $range['end'],
+            $facilityRequest->id,
+        );
+    }
+
+    public function checkVenueTimeRangeForReview(
+        string $venueName,
+        Carbon $requestedStart,
+        Carbon $requestedEnd,
+        ?int $excludeRequestId = null,
+    ): ?string {
+        $availability = $this->checkVenueAvailability($venueName, $requestedStart, $requestedEnd, $excludeRequestId);
+        if (! $availability['available']) {
+            return $availability['message'] ?? 'The proposed venue schedule is unavailable.';
+        }
+
+        $pendingConflict = FacilityRequest::query()
+            ->where('status', 'pending')
+            ->when($excludeRequestId !== null, fn ($query) => $query->whereKeyNot($excludeRequestId))
+            ->where(fn ($query) => $query->matchesVenue($venueName))
+            ->with(['requestVenues', 'reservationSchedule'])
+            ->get()
+            ->contains(fn (FacilityRequest $otherRequest): bool => $otherRequest->overlapsVenueScheduleRange(
+                $venueName,
+                $requestedStart,
+                $requestedEnd,
+            ));
+
+        return $pendingConflict
+            ? 'Another request for this venue and time is still awaiting review. Resolve that request before confirming availability.'
+            : null;
+    }
+
+    public function checkRevisionAvailabilityForCustodian(
+        FacilityRequest $facilityRequest,
+        RevisionHistory $revision,
+        User $custodian
+    ): ?string {
+        $venueNames = $revision->new_venue ?? [];
+        if ($custodian->isCustodianVenue()) {
+            $assignedVenues = $custodian->venues()
+                ->whereIn('name', $venueNames)
+                ->pluck('name')
+                ->all();
+
+            foreach ($assignedVenues as $venueName) {
+                $conflict = $this->checkRevisionVenueAvailability($facilityRequest, $revision, $venueName);
+                if ($conflict !== null) {
+                    return $conflict;
+                }
+            }
+        }
+
+        if ($custodian->isCustodianEquipment()) {
+            $equipmentNames = $revision->new_equipment ?? [];
+            $assignedEquipment = $custodian->equipmentItems()
+                ->whereIn('name', $equipmentNames)
+                ->pluck('name')
+                ->all();
+            $range = FacilityRequest::normalizeScheduleRange(
+                $revision->new_start_date,
+                $revision->new_start_time,
+                $revision->new_end_date,
+                $revision->new_end_time,
+            );
+            $quantities = $revision->new_equipment_quantities ?? [];
+
+            foreach ($assignedEquipment as $equipmentName) {
+                $availability = $this->checkEquipmentAvailability(
+                    $equipmentName,
+                    (int) ($quantities[$equipmentName] ?? 1),
+                    $range['start'],
+                    $range['end'],
+                    $facilityRequest->id,
+                );
+                if (! $availability['available']) {
+                    return $availability['message'] ?? 'The proposed equipment schedule is unavailable.';
+                }
+            }
+        }
+
+        return null;
     }
 
     public function checkFacilityRequestForReview(FacilityRequest $facilityRequest): ?string
@@ -223,6 +333,39 @@ class AvailabilityService
         }
 
         return null;
+    }
+
+    public function getApprovedVenueConflicts(FacilityRequest $facilityRequest, ?string $venueName = null): Collection
+    {
+        $venues = $venueName !== null ? [$venueName] : $facilityRequest->getVenueNames();
+        $requestedRanges = [];
+        foreach ($venues as $name) {
+            $requestedRanges[mb_strtolower(trim($name))] = $facilityRequest->getVenueScheduleRanges($name);
+        }
+
+        return FacilityRequest::query()
+            ->where('status', 'approved')
+            ->whereKeyNot($facilityRequest->id)
+            ->with(['requestVenues', 'reservationSchedule'])
+            ->get()
+            ->filter(function (FacilityRequest $request) use ($requestedRanges): bool {
+                foreach ($requestedRanges as $normalizedName => $ranges) {
+                    $name = $normalizedName;
+                    if (! collect($request->getVenueNames())
+                        ->contains(fn (string $requestVenue): bool => mb_strtolower(trim($requestVenue)) === $normalizedName)) {
+                        continue;
+                    }
+
+                    foreach ($ranges as $range) {
+                        if ($request->overlapsVenueScheduleRange($name, $range['start'], $range['end'])) {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            })
+            ->values();
     }
 
     public function getVenueCapacity(string $venueName): ?int
@@ -301,9 +444,7 @@ class AvailabilityService
                     return false;
                 }
 
-                $range = $request->getVenueScheduleRange($venueName);
-
-                return $range['start']->lt($requestedEnd) && $range['end']->gt($requestedStart);
+                return $request->overlapsVenueScheduleRange($venueName, $requestedStart, $requestedEnd);
             });
 
         $maintenanceConflict = MaintenanceSchedule::where(function ($query) use ($venueName, $venueRecord) {
@@ -384,8 +525,7 @@ class AvailabilityService
         }
 
         foreach ($venueNames as $venueName) {
-            $range = $request->getVenueScheduleRange($venueName);
-            if ($range['start']->lt($requestedEnd) && $range['end']->gt($requestedStart)) {
+            if ($request->overlapsVenueScheduleRange($venueName, $requestedStart, $requestedEnd)) {
                 return true;
             }
         }

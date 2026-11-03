@@ -6,12 +6,12 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
-use App\Notifications\Concerns\UsesNotificationPreferences;
+use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 
 class RequestStatusChanged extends Notification
 {
     use Queueable;
-    use UsesNotificationPreferences;
+    use UsesWorkflowNotificationChannels;
 
     public function __construct(
         public FacilityRequest $facilityRequest,
@@ -26,7 +26,7 @@ class RequestStatusChanged extends Notification
 
     public function via($notifiable): array
     {
-        return $this->channelsWithPreference($notifiable, 'request_updates', ['mail', 'database', 'broadcast']);
+        return $this->workflowChannels($notifiable, ['database', 'broadcast', 'mail']);
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Venue;
 use App\Services\AvailabilityService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class CalendarController extends Controller
 {
@@ -96,41 +97,26 @@ class CalendarController extends Controller
                 }
 
                 $venueNames = $eventVenueName !== null ? [$eventVenueName] : [];
-                if ($eventVenueName !== null) {
-                    $scheduleRange = $req->getVenueScheduleRange($eventVenueName);
-                    $startDateTime = $scheduleRange['start'];
-                    $endDateTime = $scheduleRange['end'];
-                } elseif ($schedule = $req->reservationSchedule) {
-                    $startDateTime = $schedule->start_datetime;
-                    $endDateTime = $schedule->end_datetime;
-                } else {
-                    $startDateTime = $req->start_date instanceof \Illuminate\Support\Carbon
-                        ? $req->start_date->copy()->setTimeFromTimeString($req->start_time ?? '00:00')
-                        : \Illuminate\Support\Carbon::parse((string) ($req->start_date ?? now()->toDateString()))->setTimeFromTimeString($req->start_time ?? '00:00');
+                $canonicalSchedule = $req->getCanonicalCalendarSchedule($eventVenueName);
+                $startDateTime = $canonicalSchedule['start'];
+                $endDateTime = $canonicalSchedule['end'];
+                $isAllDay = $canonicalSchedule['all_day'];
 
-                    $endDate = $req->end_date ?? $req->start_date ?? now()->toDateString();
-                    $endDateTime = $endDate instanceof \Illuminate\Support\Carbon
-                        ? $endDate->copy()->setTimeFromTimeString($req->end_time ?? $req->start_time ?? '00:00')
-                        : \Illuminate\Support\Carbon::parse((string) $endDate)->setTimeFromTimeString($req->end_time ?? $req->start_time ?? '00:00');
-                }
-
-            // Ensure times are Carbon instances in the app timezone (Asia/Manila)
-            if (!$startDateTime instanceof \Illuminate\Support\Carbon) {
-                $startDateTime = \Illuminate\Support\Carbon::parse($startDateTime);
+            // Normalize every calendar payload boundary to Philippine local time.
+            // The API sends wall-clock Manila values (without browser timezone conversion).
+            $manilaTimezone = config('app.timezone', 'Asia/Manila');
+            if (! $startDateTime instanceof \Illuminate\Support\Carbon) {
+                $startDateTime = \Illuminate\Support\Carbon::parse($startDateTime, $manilaTimezone);
             }
-            if (!$endDateTime instanceof \Illuminate\Support\Carbon) {
-                $endDateTime = \Illuminate\Support\Carbon::parse($endDateTime);
+            if (! $endDateTime instanceof \Illuminate\Support\Carbon) {
+                $endDateTime = \Illuminate\Support\Carbon::parse($endDateTime, $manilaTimezone);
             }
+            $startDateTime = $startDateTime->copy()->setTimezone($manilaTimezone);
+            $endDateTime = $endDateTime->copy()->setTimezone($manilaTimezone);
 
             // Calendar design requirement:
-            // - explicit whole-day reservations are all-day events
-            // - timed reservations must keep their exact start/end timestamps
-            $normalizedDuration = strtolower((string) (
-                $eventVenueName !== null
-                    ? $req->getVenueSchedule($eventVenueName)['reservation_duration']
-                    : ($req->reservation_duration ?? '')
-            ));
-            $isAllDay = in_array($normalizedDuration, ['whole_day', 'whole-day', 'whole day'], true);
+            // - ReservationSchedule is authoritative for every timed reservation.
+            // - Venue/request metadata supplies geometry only when no exact schedule exists.
 
             $eventStart = $startDateTime->copy()->format('Y-m-d\TH:i:s');
             $eventEnd = $endDateTime->copy()->format('Y-m-d\TH:i:s');
@@ -192,6 +178,7 @@ class CalendarController extends Controller
                     'department' => $department,
                     'organization' => $organization,
                     'participants' => $req->expected_participants,
+                    'expected_participants' => $req->expected_participants,
                     'priority' => $req->priority ?? 'regular',
                     'isUrgent' => (bool) ($req->is_emergency ?? false),
                     'urgentReason' => $req->emergency_justification ?? null,
@@ -200,6 +187,8 @@ class CalendarController extends Controller
                     'facilityRequestId' => $req->id,
                     'requestUrl' => route('request.show', $req->id),
                     'isOwner' => $role === 'requestor' && $user->id === $req->requested_by_id,
+                    'scheduleType' => $canonicalSchedule['schedule_type'],
+                    'scheduleSource' => $canonicalSchedule['source'],
                 ],
             ];
             });
@@ -212,37 +201,19 @@ class CalendarController extends Controller
     private function toPublicCalendarEvent(FacilityRequest $request, ?string $venueName = null): array
     {
         $venueNames = $venueName !== null ? [$venueName] : $request->getVenueNames();
-        if ($venueName !== null) {
-            $scheduleRange = $request->getVenueScheduleRange($venueName);
-            $startDateTime = $scheduleRange['start'];
-            $endDateTime = $scheduleRange['end'];
-        } elseif ($schedule = $request->reservationSchedule) {
-            $startDateTime = $schedule->start_datetime;
-            $endDateTime = $schedule->end_datetime;
-        } else {
-            $startDate = $request->start_date instanceof \Illuminate\Support\Carbon
-                ? $request->start_date
-                : \Illuminate\Support\Carbon::parse((string) ($request->start_date ?? now()->toDateString()));
-            $endDate = $request->end_date ?? $request->start_date ?? now()->toDateString();
-            $endDateValue = $endDate instanceof \Illuminate\Support\Carbon
-                ? $endDate
-                : \Illuminate\Support\Carbon::parse((string) $endDate);
+        $canonicalSchedule = $request->getCanonicalCalendarSchedule($venueName);
+        $startDateTime = $canonicalSchedule['start'];
+        $endDateTime = $canonicalSchedule['end'];
 
-            $startDateTime = $startDate->copy()->setTimeFromTimeString($request->start_time ?? '00:00');
-            $endDateTime = $endDateValue->copy()->setTimeFromTimeString($request->end_time ?? $request->start_time ?? '00:00');
-        }
-
+        $manilaTimezone = config('app.timezone', 'Asia/Manila');
         $startDateTime = $startDateTime instanceof \Illuminate\Support\Carbon
-            ? $startDateTime
-            : \Illuminate\Support\Carbon::parse($startDateTime);
+            ? $startDateTime->copy()->setTimezone($manilaTimezone)
+            : \Illuminate\Support\Carbon::parse($startDateTime, $manilaTimezone);
         $endDateTime = $endDateTime instanceof \Illuminate\Support\Carbon
-            ? $endDateTime
-            : \Illuminate\Support\Carbon::parse($endDateTime);
+            ? $endDateTime->copy()->setTimezone($manilaTimezone)
+            : \Illuminate\Support\Carbon::parse($endDateTime, $manilaTimezone);
 
-        $duration = $venueName !== null
-            ? $request->getVenueSchedule($venueName)['reservation_duration']
-            : ($request->reservation_duration ?? '');
-        $isAllDay = in_array(strtolower((string) $duration), ['whole_day', 'whole-day', 'whole day'], true);
+        $isAllDay = $canonicalSchedule['all_day'];
         $eventEnd = $isAllDay ? $endDateTime->copy()->addDay()->startOfDay() : $endDateTime;
         $status = (string) $request->status;
         $statusColors = match ($status) {
@@ -567,8 +538,8 @@ class CalendarController extends Controller
                     return $query->where('id', '!=', $excludeId);
                 })
                 ->get()
-                ->filter(function($conflict) use ($requestedStart, $requestedEnd) {
-                    return $conflict->overlapsTimeRange($requestedStart, $requestedEnd);
+                ->filter(function($conflict) use ($venue, $requestedStart, $requestedEnd) {
+                    return $conflict->overlapsVenueScheduleRange($venue, $requestedStart, $requestedEnd);
                 });
 
             if ($venueConflicts->count() > 0) {
@@ -600,42 +571,91 @@ class CalendarController extends Controller
 
         abort_unless($user, 403);
 
-        return DB::transaction(function () use ($facilityRequest, $validated, $user): \Illuminate\Http\JsonResponse {
-            $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
-            $isSupplyOfficeReview = $user->isAdmin()
-                && $lockedRequest->status === 'pending'
-                && $lockedRequest->supply_office_review_status === 'pending'
-                && $lockedRequest->venue_status === 'approved';
-            $isVenueCustodianReview = $user->isCustodianVenue()
-                && $lockedRequest->status === 'pending'
-                && $lockedRequest->supply_office_review_status === 'pending'
-                && $lockedRequest->venue_status === 'pending'
-                && $user->venues()
-                    ->whereIn('name', $lockedRequest->getVenueNames())
-                    ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($validated['venue']))])
-                    ->exists();
+        try {
+            return DB::transaction(function () use ($facilityRequest, $validated, $user): \Illuminate\Http\JsonResponse {
+                $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
+                $pendingRevision = $lockedRequest->revisionHistories()->where('status', 'pending')->first();
+                $revisionResponses = $pendingRevision?->responses ?? [];
+                $requestorAccepted = $pendingRevision
+                    && in_array(
+                        $revisionResponses[(string) $lockedRequest->requested_by_id] ?? 'pending',
+                        ['accepted', 'not_required'],
+                        true,
+                    );
+                $isSupplyOfficeReview = $user->isAdmin()
+                    && $lockedRequest->status === 'pending'
+                    && $lockedRequest->supply_office_review_status === 'pending'
+                    && $lockedRequest->venue_status === 'approved';
+                $isVenueCustodianReview = $user->isCustodianVenue()
+                    && $lockedRequest->status === 'pending'
+                    && $lockedRequest->supply_office_review_status === 'pending'
+                    && $lockedRequest->venue_status === 'pending'
+                    && $user->venues()
+                        ->whereIn('name', $lockedRequest->getVenueNames())
+                        ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($validated['venue']))])
+                        ->exists();
+                $isRevisionVenueReview = $pendingRevision
+                    && $requestorAccepted
+                    && $user->isCustodianVenue()
+                    && in_array((string) ($revisionResponses[(string) $user->id] ?? 'pending'), ['pending', 'accepted'], true)
+                    && $user->venues()
+                        ->whereIn('name', $pendingRevision->new_venue ?? [])
+                        ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($validated['venue']))])
+                        ->exists();
 
-            abort_unless($isSupplyOfficeReview || $isVenueCustodianReview, 403);
+                abort_unless($isSupplyOfficeReview || $isVenueCustodianReview || $isRevisionVenueReview, 403);
 
-            if ($lockedRequest->revisionHistories()->where('status', 'pending')->exists()) {
+                if ($pendingRevision && ! $isRevisionVenueReview) {
+                    return response()->json([
+                        'available' => false,
+                        'message' => 'A schedule proposal is awaiting responses. Availability review is paused.',
+                    ], 409);
+                }
+
+                $venueName = collect($lockedRequest->getVenueNames())
+                    ->first(fn (string $name): bool => mb_strtolower(trim($name)) === mb_strtolower(trim($validated['venue'])));
+                abort_unless($venueName !== null, 422, 'The selected venue is not part of this request.');
+
+                $availability = app(AvailabilityService::class);
+                if ($isRevisionVenueReview && $pendingRevision) {
+                    $proposedResources = new FacilityRequest([
+                        'venue' => $pendingRevision->new_venue ?? [],
+                        'equipment' => $pendingRevision->new_equipment ?? [],
+                        'equipment_quantities' => $pendingRevision->new_equipment_quantities ?? [],
+                    ]);
+                    $availability->lockResourcesForFacilityRequests($lockedRequest, $proposedResources);
+                    $conflict = $availability->checkRevisionVenueAvailability($lockedRequest, $pendingRevision, $venueName);
+
+                    return response()->json([
+                        'available' => $conflict === null,
+                        'message' => $conflict ?? 'The proposed venue schedule is available.',
+                    ]);
+                }
+
+                $availability->lockResourcesForFacilityRequests($lockedRequest);
+                $conflict = $availability->checkFacilityRequestForReview($lockedRequest);
+
                 return response()->json([
-                    'available' => false,
-                    'message' => 'A schedule proposal is awaiting responses. Availability review is paused.',
-                ], 409);
-            }
-
-            $venueName = collect($lockedRequest->getVenueNames())
-                ->first(fn (string $name): bool => mb_strtolower(trim($name)) === mb_strtolower(trim($validated['venue'])));
-            abort_unless($venueName !== null, 422, 'The selected venue is not part of this request.');
-
-            $availability = app(AvailabilityService::class);
-            $availability->lockResourcesForFacilityRequests($lockedRequest);
-            $conflict = $availability->checkFacilityRequestForReview($lockedRequest);
+                    'available' => $conflict === null,
+                    'message' => $conflict ?? 'No approved booking, pending request, maintenance block, or holiday conflicts with the requested schedules or equipment.',
+                ]);
+            });
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            Log::error('Availability check failed', [
+                'request_id' => $facilityRequest->getKey(),
+                'venue' => $validated['venue'],
+                'user_id' => $user->getKey(),
+                'role' => $user->role,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
 
             return response()->json([
-                'available' => $conflict === null,
-                'message' => $conflict ?? 'No approved booking, pending request, maintenance block, or holiday conflicts with the requested schedules or equipment.',
-            ]);
-        });
+                'available' => false,
+                'message' => 'The schedule could not be checked because the server is temporarily unavailable. Please try again.',
+            ], 503);
+        }
     }
 }

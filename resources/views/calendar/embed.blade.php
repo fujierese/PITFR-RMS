@@ -32,7 +32,7 @@
             'showHowToRequest' => false,
             'showViewOnlyCalendar' => false,
         ]),
-        'dateSelectionMode' => true,
+        'dateSelectionMode' => $dateSelectionMode,
     ])
 </body>
 </html>

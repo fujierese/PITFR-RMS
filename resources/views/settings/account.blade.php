@@ -198,7 +198,7 @@
                     @csrf
                     <label for="request_updates" class="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4 text-sm text-slate-800 transition hover:border-emerald-300 hover:bg-emerald-50/40">
                         <input id="request_updates" type="checkbox" name="request_updates" value="1" @checked($preferences['request_updates'] ?? true) class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600">
-                        <span><strong class="block font-semibold">Request status updates</strong><span class="mt-1 block text-slate-600">Reservation submissions, status changes, schedule reminders, resource availability, and equipment returns.</span></span>
+                        <span><strong class="block font-semibold">Optional reservation reminders</strong><span class="mt-1 block text-slate-600">Controls reminder emails and in-app reminders only. Important request workflow updates are always sent by email and shown in the website notifications.</span></span>
                     </label>
                     <label for="security_alerts" class="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4 text-sm text-slate-800 transition hover:border-emerald-300 hover:bg-emerald-50/40">
                         <input id="security_alerts" type="checkbox" name="security_alerts" value="1" @checked($preferences['security_alerts'] ?? true) class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600">
@@ -214,7 +214,7 @@
                         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Documents</p>
                         <h2 class="mt-1 text-xl font-bold text-slate-950">E-signature Management</h2>
                         <p class="mt-1 text-sm text-slate-600">Manage the signature image used for printable facility documents.</p>
-                        <p class="mt-2 text-sm text-slate-600">Need to create a signature image? <a href="https://signaturely.com/online-signature/" target="_blank" rel="noopener noreferrer" class="font-semibold text-emerald-700 underline hover:text-emerald-800">Create an e-signature with Signaturely</a>.</p>
+                        <p class="mt-2 text-sm text-slate-600">Need to create a signature image? <a href="https://signaturely.com/online-signature/draw/" target="_blank" rel="noopener noreferrer" class="font-semibold text-emerald-700 underline hover:text-emerald-800">Create an e-signature with Signaturely</a>.</p>
                     </div>
 
                     @if($user->e_signature_file)

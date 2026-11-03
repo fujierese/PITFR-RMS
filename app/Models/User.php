@@ -374,6 +374,15 @@ class User extends Authenticatable implements CanResetPassword
         return $this->hasRole('admin');
     }
 
+    public function isFinalApprover(): bool
+    {
+        $finalApproverUsername = trim((string) config('pitfr.final_approver_username'));
+
+        return $this->isSystemAdmin()
+            && $finalApproverUsername !== ''
+            && strcasecmp(trim((string) $this->username), $finalApproverUsername) === 0;
+    }
+
     public function isAdminRole(): bool
     {
         return $this->isFacilityAdministrator();

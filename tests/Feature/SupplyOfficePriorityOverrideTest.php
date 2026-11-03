@@ -77,7 +77,7 @@ class SupplyOfficePriorityOverrideTest extends TestCase
             'equipment_status' => 'approved',
         ]);
 
-        $adminUser = User::factory()->create(['role' => 'admin']);
+        $adminUser = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
 
         $response = $this->actingAs($adminUser)
             ->post(route('supply-office.update'), [
@@ -110,7 +110,7 @@ class SupplyOfficePriorityOverrideTest extends TestCase
             'equipment_status' => 'approved',
         ]);
 
-        $adminUser = User::factory()->create(['role' => 'admin']);
+        $adminUser = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
 
         $response = $this->actingAs($adminUser)
             ->get(route('supply-office.priority-override.confirm', [
@@ -151,7 +151,7 @@ class SupplyOfficePriorityOverrideTest extends TestCase
             'equipment_status' => 'approved',
         ]);
 
-        $adminUser = User::factory()->create(['role' => 'admin']);
+        $adminUser = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
 
         $response = $this->actingAs($adminUser)
             ->post(route('supply-office.priority-override.submit'), [
@@ -179,39 +179,41 @@ class SupplyOfficePriorityOverrideTest extends TestCase
             'equipment_status' => 'approved',
         ]);
 
-        $adminUser = User::factory()->create(['role' => 'admin']);
+        $adminUser = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
 
         $response = $this->actingAs($adminUser)
             ->post(route('supply-office.priority-override.submit'), [
                 'urgent_request_id' => $urgentRequest->id,
                 'conflicting_request_id' => $conflictingRequest->id,
                 'override_reason' => 'Institutional priority override',
+                'new_start_date' => now()->addDays(2)->toDateString(),
+                'new_end_date' => now()->addDays(2)->toDateString(),
+                'new_start_time' => '13:00',
+                'new_end_time' => '16:00',
             ]);
 
         $response->assertRedirect(route('supply-office.index'));
-        $response->assertSessionHas('success', 'Priority override completed successfully.');
+        $response->assertSessionHas('success', 'Priority transfer proposal created. The approved reservation remains active until the proposal is accepted.');
 
         $conflictingRequest->refresh();
         $urgentRequest->refresh();
 
-        $this->assertSame('needs_reschedule', $conflictingRequest->status);
-        $this->assertSame('needs_reschedule', $conflictingRequest->venue_status);
-        $this->assertSame('needs_reschedule', $conflictingRequest->equipment_status);
-        $this->assertNull($conflictingRequest->approved_by);
-        $this->assertNull($conflictingRequest->approved_date);
+        $this->assertSame('approved', $conflictingRequest->status);
+        $this->assertSame('approved', $conflictingRequest->venue_status);
+        $this->assertSame('approved', $conflictingRequest->equipment_status);
 
-        $this->assertSame('approved', $urgentRequest->status);
+        $this->assertSame('pending', $urgentRequest->status);
         $this->assertSame('approved', $urgentRequest->venue_status);
         $this->assertSame('approved', $urgentRequest->equipment_status);
         $this->assertSame($conflictingRequest->id, $conflictingRequest->id);
 
         $this->assertDatabaseHas('request_histories', [
             'facility_request_id' => $conflictingRequest->id,
-            'action' => 'needs_reschedule',
+            'action' => 'priority_transfer_proposed',
         ]);
         $this->assertDatabaseHas('request_histories', [
             'facility_request_id' => $urgentRequest->id,
-            'action' => 'approved',
+            'action' => 'urgent_priority_transfer_pending',
         ]);
 
         Notification::assertSentTo($requester, RequestStatusChanged::class);
@@ -234,7 +236,7 @@ class SupplyOfficePriorityOverrideTest extends TestCase
             'equipment_status' => 'approved',
         ]);
 
-        $adminUser = User::factory()->create(['role' => 'admin']);
+        $adminUser = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
 
         $conflictingRequest->update(['status' => 'rejected']);
 
@@ -243,10 +245,13 @@ class SupplyOfficePriorityOverrideTest extends TestCase
                 'urgent_request_id' => $urgentRequest->id,
                 'conflicting_request_id' => $conflictingRequest->id,
                 'override_reason' => 'Institutional priority override',
+                'new_start_date' => now()->addDays(2)->toDateString(),
+                'new_end_date' => now()->addDays(2)->toDateString(),
+                'new_start_time' => '13:00',
+                'new_end_time' => '16:00',
             ]);
 
-        $response->assertRedirect(route('supply-office.index'));
-        $response->assertSessionHas('warning', 'The conflicting request is no longer approved, so the override could not be applied.');
+        $response->assertSessionHas('warning', 'The conflicting request is no longer an active approved reservation.');
 
         $this->assertSame('rejected', $conflictingRequest->fresh()->status);
         $this->assertSame('pending', $urgentRequest->fresh()->status);

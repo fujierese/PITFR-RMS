@@ -3,15 +3,15 @@ namespace App\Notifications;
 
 use App\Models\Venue;
 use App\Models\Equipment;
+use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
-use App\Notifications\Concerns\UsesNotificationPreferences;
 
 class ResourceStatusChanged extends Notification
 {
     use Queueable;
-    use UsesNotificationPreferences;
+    use UsesWorkflowNotificationChannels;
 
     /**
      * @param Venue|Equipment $resource
@@ -27,7 +27,7 @@ class ResourceStatusChanged extends Notification
 
     public function via($notifiable): array
     {
-        return $this->channelsWithPreference($notifiable, 'request_updates', ['database', 'mail']);
+        return $this->workflowChannels($notifiable);
     }
 
     public function toMail($notifiable): MailMessage

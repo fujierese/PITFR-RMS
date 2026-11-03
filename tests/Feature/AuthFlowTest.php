@@ -13,6 +13,28 @@ class AuthFlowTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_guest_and_login_layouts_adapt_to_compact_viewports(): void
+    {
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('id="guest-mobile-menu-button"', false)
+            ->assertSee('xl:hidden', false)
+            ->assertSee('xl:flex', false)
+            ->assertSee('max-height: 740px', false)
+            ->assertSee('guest-hero-description', false);
+
+        $this->get(route('login'))
+            ->assertOk()
+            ->assertSee('xl:grid xl:min-h-screen xl:grid-cols-', false)
+            ->assertSee('login-brand-image img', false)
+            ->assertSee('aspect-ratio: 1.42', false)
+            ->assertSee('width: min(90%, 653px)', false)
+            ->assertSee('max-height: 820px', false)
+            ->assertSee('calc((100svh - 340px) * 1.42)', false)
+            ->assertDontSee('height: 240px !important', false)
+            ->assertDontSee('```', false);
+    }
+
     public function test_user_can_log_in_with_registered_email(): void
     {
         $user = User::factory()->create([

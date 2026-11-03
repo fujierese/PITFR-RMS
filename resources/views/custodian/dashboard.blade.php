@@ -42,33 +42,114 @@
     </div>
 </section>
 
-<section class="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200/70" aria-labelledby="assigned-requests-heading">
+<section class="mb-6 rounded-3xl border border-cyan-200 bg-white p-5 shadow-sm ring-1 ring-cyan-100 sm:p-6" aria-labelledby="custodian-review-queue-heading">
+    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h2 id="custodian-review-queue-heading" class="text-xl font-semibold text-slate-900">
+                {{ $custodianType === 'venue' ? 'Venue Availability Review Required' : 'Equipment Review Required' }}
+            </h2>
+            <p class="mt-1 text-sm text-slate-600">
+                @if($custodianType === 'venue')
+                    Check each assigned venue schedule. Confirm availability if it is open, or propose a reschedule if there is a conflict.
+                @else
+                    Review only your assigned equipment after the venue and Supply Office availability checks are complete.
+                @endif
+            </p>
+        </div>
+        <span class="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-800">{{ $reviewRequiredCount }} waiting</span>
+    </div>
+
+    <div class="space-y-3">
+        @forelse($reviewRequiredRequests as $req)
+            <article class="rounded-2xl border border-slate-200 p-4">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="min-w-0 flex-1">
+                        <a href="{{ route('request.show', $req->id) }}" class="font-semibold text-slate-900 hover:text-cyan-700">
+                            {{ $req->control_number }} — {{ $req->name_of_activity ?? 'Untitled activity' }}
+                        </a>
+                        <p class="mt-1 text-sm text-slate-600">{{ $req->requester?->name ?? $req->requested_by }}@if($req->department) <span aria-hidden="true">·</span> {{ $req->department }}@endif</p>
+                        <div class="mt-3">
+                            @include('custodian.partials.request-resources', [
+                                'requestItem' => $req,
+                                'custodianType' => $custodianType,
+                                'assignedVenueNames' => $assignedVenueNames,
+                                'assignedEquipmentNames' => $assignedEquipmentNames,
+                            ])
+                        </div>
+                    </div>
+                    <div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+                        <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                            {{ $custodianType === 'venue' ? 'Availability check required' : 'Your equipment review required' }}
+                        </span>
+                        <a href="{{ route('request.show', $req->id) }}" class="inline-flex items-center justify-center rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-800">
+                            Review request
+                        </a>
+                    </div>
+                </div>
+            </article>
+        @empty
+            <p class="rounded-2xl bg-slate-50 p-5 text-sm text-slate-600">
+                {{ $custodianType === 'venue' ? 'No venue availability checks are waiting for you.' : 'No equipment reviews are waiting for you.' }}
+            </p>
+        @endforelse
+    </div>
+    @if($reviewRequiredCount > $reviewRequiredRequests->count())
+        <div class="mt-4 text-right">
+            <a href="{{ route('custodian.index', ['filter' => 'pending']) }}" class="text-sm font-semibold text-cyan-800 hover:text-cyan-900">View all {{ $reviewRequiredCount }} waiting requests</a>
+        </div>
+    @endif
+</section>
+
+@if($custodianType === 'equipment' && $equipmentReturnsPending->isNotEmpty())
+    <section class="mb-6 rounded-3xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm sm:p-6" aria-labelledby="equipment-returns-heading">
+        <div class="mb-4">
+            <h2 id="equipment-returns-heading" class="text-xl font-semibold text-slate-900">Equipment Returns Required</h2>
+            <p class="mt-1 text-sm text-slate-600">Record returned, damaged, or missing equipment for completed activities.</p>
+        </div>
+        <div class="space-y-3">
+            @foreach($equipmentReturnsPending as $req)
+                <article class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-white p-4">
+                    <div>
+                        <a href="{{ route('request.show', $req->id) }}" class="font-semibold text-slate-900 hover:text-amber-800">{{ $req->control_number }} — {{ $req->name_of_activity ?? 'Untitled activity' }}</a>
+                        <p class="mt-1 text-sm text-slate-600">{{ $req->requester?->name ?? $req->requested_by }}</p>
+                    </div>
+                    <a href="{{ route('request.show', $req->id) }}" class="inline-flex items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100">Record equipment return</a>
+                </article>
+            @endforeach
+        </div>
+    </section>
+@endif
+
+<section class="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200/70" aria-labelledby="upcoming-reservations-heading">
     <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-        <h2 id="assigned-requests-heading" class="text-lg font-semibold text-slate-950">Requests for Your Resources</h2>
+        <div>
+            <h2 id="upcoming-reservations-heading" class="text-lg font-semibold text-slate-950">Upcoming &amp; Active Reservations</h2>
+            <p class="mt-1 text-sm text-slate-500">Approved bookings for your assigned resources.</p>
+        </div>
         <a href="{{ route('custodian.index', ['filter' => 'all']) }}" class="text-sm font-semibold text-emerald-700 hover:text-emerald-800">View all</a>
     </div>
-    @forelse($allRequests as $req)
-        <a href="{{ route('request.show', $req->id) }}" class="block border-b border-slate-100 px-5 py-4 last:border-b-0 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500">
+    @forelse($upcomingReservations as $req)
+        <article class="border-b border-slate-100 px-5 py-4 last:border-b-0">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0 flex-1">
-                    <p class="font-semibold text-slate-900">{{ $req->name_of_activity ?? 'Untitled activity' }}</p>
+                    <a href="{{ route('request.show', $req->id) }}" class="font-semibold text-slate-900 hover:text-emerald-700">{{ $req->name_of_activity ?? 'Untitled activity' }}</a>
                     <p class="mt-1 text-sm text-slate-600">{{ $req->control_number }} <span aria-hidden="true">·</span> {{ $req->requester?->name ?? $req->requested_by }}</p>
-                    <div class="mt-1 space-y-1 text-sm text-slate-500">
-                        @forelse($req->getVenueScheduleSummaries() as $schedule)
-                            <p>{{ $schedule['venue'] }} <span aria-hidden="true">·</span> {{ $schedule['label'] }}</p>
-                        @empty
-                            <p>No venue schedule listed</p>
-                        @endforelse
+                    <div class="mt-3">
+                        @include('custodian.partials.request-resources', [
+                            'requestItem' => $req,
+                            'custodianType' => $custodianType,
+                            'assignedVenueNames' => $assignedVenueNames,
+                            'assignedEquipmentNames' => $assignedEquipmentNames,
+                        ])
                     </div>
-                    <p class="mt-1 text-sm text-slate-500">Equipment: {{ implode(', ', $req->getVenueEquipmentLabels() ?: $req->getEquipmentItems()) ?: 'None requested' }}</p>
                 </div>
                 <div class="w-full sm:w-64 sm:shrink-0">
-                    <x-request-status-badge :request="$req" :show-workflow-stage="true" />
+                    <x-request-status-badge :request="$req" />
                 </div>
             </div>
-        </a>
+        </article>
     @empty
-        <p class="px-5 py-8 text-sm text-slate-500">There are no requests for your assigned resources yet.</p>
+        <p class="px-5 py-8 text-sm text-slate-500">There are no upcoming or active approved reservations for your resources.</p>
     @endforelse
 </section>
 @endsection

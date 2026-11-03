@@ -60,7 +60,7 @@
     }
 </style>
 
-<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="Submit this request?" data-swal-text="Please confirm that the request details are complete and correct." data-swal-icon="question" data-swal-confirm-text="Yes, submit request" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-venue-availability-url="{{ route('requestor.venue.availability') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-can-request-urgent="{{ $isExternal ? '0' : '1' }}" data-urgent-timezone="{{ config('app.timezone') }}" data-has-saved-signature="{{ $hasSavedSignature ? '1' : '0' }}" data-venue-capacities="{{ json_encode($venueCapacityMap ?? []) }}" data-venue-default-equipment="{{ json_encode($venueDefaultEquipmentMap ?? []) }}">
+<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="Submit this request?" data-swal-text="Please confirm that the request details are complete and correct." data-swal-icon="question" data-swal-confirm-text="Yes, submit request" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-venue-availability-url="{{ route('requestor.venue.availability') }}" data-draft-owner-id="{{ $currentUser?->id ?? '' }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-can-request-urgent="{{ $isExternal ? '0' : '1' }}" data-urgent-timezone="{{ config('app.timezone') }}" data-has-saved-signature="{{ $hasSavedSignature ? '1' : '0' }}" data-venue-capacities="{{ json_encode($venueCapacityMap ?? []) }}" data-venue-default-equipment="{{ json_encode($venueDefaultEquipmentMap ?? []) }}">
     @csrf
 
 <div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]">
@@ -72,11 +72,15 @@
                     <h2 class="mt-2 text-2xl font-semibold text-slate-950">Request for the Use of Facility and Equipment</h2>
                     <p class="mt-3 text-sm leading-6 text-slate-600">Please complete all required fields before submitting your request. Fields marked with <span class="required-asterisk">*</span> are required.</p>
                 </div>
-                <div class="flex shrink-0 items-center sm:justify-end">
+                <div class="flex shrink-0 flex-wrap items-center gap-y-2 sm:justify-end">
                     <span id="draft-status" class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm ring-1 ring-amber-200">
                         <span data-draft-status-indicator class="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500 animate-pulse"></span>
                         <span data-draft-status-label>Draft autosave</span>
                     </span>
+                    <span class="ml-3 text-xs text-slate-500">Saved on this browser for up to 30 days.</span>
+                    <button type="button" data-discard-request-draft aria-label="Discard this account's saved request draft" class="ml-3 text-xs font-semibold text-slate-600 underline decoration-slate-300 underline-offset-2 transition hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
+                        Discard saved draft
+                    </button>
                 </div>
             </div>
 
@@ -554,7 +558,17 @@
                                     <span class="text-sm font-semibold text-amber-800">Request Urgent Processing</span>
                                 </label>
                                 <div id="urgent-justification-wrap" class="mt-4 {{ old('is_emergency') ? '' : 'hidden' }} rounded-3xl border border-amber-200 bg-white p-3">
-                                    <label for="emergency-justification" class="text-xs font-semibold text-amber-700">Reason for Urgent Processing</label>
+                                    <label for="emergency-office" class="text-xs font-semibold text-amber-700">Issuing Priority Office</label>
+                                    <select name="emergency_office" id="emergency-office" class="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm" {{ old('is_emergency') ? '' : 'disabled' }}>
+                                        <option value="">Select office</option>
+                                        <option value="CHED" @selected(old('emergency_office') === 'CHED')>CHED</option>
+                                        <option value="OP" @selected(old('emergency_office') === 'OP')>Office of the President</option>
+                                        <option value="OVP" @selected(old('emergency_office') === 'OVP')>Office of the Vice President</option>
+                                    </select>
+                                    @error('emergency_office')
+                                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                                    @enderror
+                                    <label for="emergency-justification" class="mt-3 block text-xs font-semibold text-amber-700">Reason for Urgent Processing</label>
                                     <textarea name="emergency_justification" id="emergency-justification" rows="3" class="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" placeholder="Describe why this request requires urgent processing" {{ old('is_emergency') ? '' : 'disabled' }}>{{ old('emergency_justification') }}</textarea>
                                     @error('emergency_justification')
                                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
@@ -809,7 +823,7 @@
 </div>
 </form>
 <dialog id="venue-calendar-modal" style="width:min(96vw,1100px);max-width:none;height:min(92vh,900px);max-height:92vh;margin:auto" class="overflow-hidden rounded-2xl border-0 p-0 shadow-2xl backdrop:bg-slate-950/60">
-    <div class="flex h-full flex-col bg-white">
+    <div class="relative flex h-full flex-col bg-white">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
             <div>
                 <h2 id="venue-calendar-modal-title" class="text-lg font-semibold text-slate-900">Venue calendar</h2>
@@ -821,6 +835,16 @@
             </div>
         </div>
         <iframe id="venue-calendar-modal-frame" title="Choose reservation date range" class="min-h-0 w-full flex-1 bg-slate-50" src="about:blank"></iframe>
+        <section id="venue-calendar-confirmation" hidden role="alertdialog" aria-modal="true" aria-labelledby="venue-calendar-confirmation-title" aria-describedby="venue-calendar-confirmation-description" class="absolute inset-0 z-10 hidden items-center justify-center bg-slate-950/50 p-4">
+            <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
+                <h3 id="venue-calendar-confirmation-title" class="text-lg font-semibold text-slate-900">Use these reservation dates?</h3>
+                <p id="venue-calendar-confirmation-description" class="mt-2 text-sm leading-6 text-slate-600"></p>
+                <div class="mt-5 flex flex-wrap justify-end gap-2">
+                    <button type="button" data-cancel-calendar-date-confirmation class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500">Keep selecting</button>
+                    <button type="button" data-confirm-calendar-dates class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">Yes, use dates</button>
+                </div>
+            </div>
+        </section>
     </div>
 </dialog>
 <script>
@@ -1069,9 +1093,22 @@
         const venueCalendarTitle = document.getElementById('venue-calendar-modal-title');
         const venueCalendarSelectionStatus = document.getElementById('venue-calendar-selection-status');
         const applyVenueCalendarDates = venueCalendarModal?.querySelector('[data-apply-venue-calendar-dates]');
+        const venueCalendarConfirmation = document.getElementById('venue-calendar-confirmation');
+        const venueCalendarConfirmationDescription = document.getElementById('venue-calendar-confirmation-description');
+        const cancelVenueCalendarConfirmation = venueCalendarConfirmation?.querySelector('[data-cancel-calendar-date-confirmation]');
+        const confirmVenueCalendarDates = venueCalendarConfirmation?.querySelector('[data-confirm-calendar-dates]');
         let selectedCalendarRange = null;
+        let pendingCalendarRange = null;
+        let pendingCalendarVenue = '';
+        const setCalendarConfirmationVisible = (visible) => {
+            if (!venueCalendarConfirmation) return;
+            venueCalendarConfirmation.hidden = !visible;
+            venueCalendarConfirmation.classList.toggle('hidden', !visible);
+            venueCalendarConfirmation.classList.toggle('flex', visible);
+        };
         const closeVenueCalendarModal = () => {
             if (!venueCalendarModal?.open) return;
+            setCalendarConfirmationVisible(false);
             venueCalendarModal.close();
             if (venueCalendarFrame) venueCalendarFrame.src = 'about:blank';
         };
@@ -1082,6 +1119,9 @@
                 const venueName = button.dataset.venueName || 'Venue';
                 venueCalendarModal.dataset.venueName = venueName;
                 selectedCalendarRange = null;
+                pendingCalendarRange = null;
+                pendingCalendarVenue = '';
+                setCalendarConfirmationVisible(false);
                 if (applyVenueCalendarDates) applyVenueCalendarDates.disabled = true;
                 if (venueCalendarSelectionStatus) {
                     venueCalendarSelectionStatus.textContent = 'Select a start date, then an end date. The end date is inclusive.';
@@ -1096,7 +1136,15 @@
             if (event.target === venueCalendarModal) closeVenueCalendarModal();
         });
         venueCalendarModal?.addEventListener('close', () => {
+            pendingCalendarRange = null;
+            pendingCalendarVenue = '';
+            setCalendarConfirmationVisible(false);
             if (venueCalendarFrame) venueCalendarFrame.src = 'about:blank';
+        });
+        venueCalendarModal?.addEventListener('cancel', (event) => {
+            if (!venueCalendarConfirmation || venueCalendarConfirmation.hidden) return;
+            event.preventDefault();
+            cancelVenueCalendarConfirmation?.click();
         });
         window.addEventListener('message', (event) => {
             if (
@@ -1126,13 +1174,42 @@
         applyVenueCalendarDates?.addEventListener('click', () => {
             if (!selectedCalendarRange || !venueCalendarModal?.dataset.venueName) return;
 
+            pendingCalendarRange = { ...selectedCalendarRange };
+            pendingCalendarVenue = venueCalendarModal.dataset.venueName;
+            if (venueCalendarConfirmationDescription) {
+                venueCalendarConfirmationDescription.textContent = `${pendingCalendarVenue}: ${pendingCalendarRange.startDate} – ${pendingCalendarRange.endDate} (inclusive).`;
+            }
+            setCalendarConfirmationVisible(true);
+            cancelVenueCalendarConfirmation?.focus();
+        });
+
+        cancelVenueCalendarConfirmation?.addEventListener('click', () => {
+            pendingCalendarRange = null;
+            pendingCalendarVenue = '';
+            setCalendarConfirmationVisible(false);
+            if (applyVenueCalendarDates) {
+                applyVenueCalendarDates.disabled = false;
+                applyVenueCalendarDates.focus();
+            }
+        });
+
+        confirmVenueCalendarDates?.addEventListener('click', () => {
+            if (!pendingCalendarRange || !pendingCalendarVenue) return;
+            const rangeToApply = pendingCalendarRange;
             const venueSchedule = [...form.querySelectorAll('[data-venue-schedule]')]
-                .find((group) => group.dataset.venueName === venueCalendarModal.dataset.venueName);
-            if (!venueSchedule) return;
+                .find((group) => group.dataset.venueName === pendingCalendarVenue);
+            if (!venueSchedule) {
+                setCalendarConfirmationVisible(false);
+                pendingCalendarRange = null;
+                pendingCalendarVenue = '';
+                if (applyVenueCalendarDates) applyVenueCalendarDates.disabled = false;
+                venueCalendarSelectionStatus.textContent = 'Could not find the schedule fields for this venue.';
+                return;
+            }
 
             [
-                ['start_date', selectedCalendarRange.startDate],
-                ['end_date', selectedCalendarRange.endDate],
+                ['start_date', rangeToApply.startDate],
+                ['end_date', rangeToApply.endDate],
             ].forEach(([fieldName, date]) => {
                 const field = venueSchedule.querySelector(`[name$="[${fieldName}]"]`);
                 if (!field) return;
@@ -1140,6 +1217,8 @@
                 field.dispatchEvent(new Event('input', { bubbles: true }));
                 field.dispatchEvent(new Event('change', { bubbles: true }));
             });
+            pendingCalendarRange = null;
+            pendingCalendarVenue = '';
             closeVenueCalendarModal();
         });
 

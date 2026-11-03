@@ -23,6 +23,11 @@ class CustodianController extends Controller
         $user = Auth::user();
         $custodianType = $user->custodianType()
             ?? ($user->venues()->exists() ? 'venue' : ($user->equipmentItems()->exists() ? 'equipment' : 'venue'));
+        $assignedVenueNames = Venue::where('custodian_id', $user->id)->pluck('name')->all();
+        $assignedEquipmentNames = Equipment::where(function ($query) use ($user): void {
+            $query->where('custodian_id', $user->id)
+                ->orWhereJsonContains('authorized_custodian_ids', (string) $user->id);
+        })->pluck('name')->all();
 
         $allRequests = $this->getRequestsForCustodian($custodianType, $user->id);
 
@@ -50,20 +55,27 @@ class CustodianController extends Controller
                 ? $allRequests->where('custodian_status', 'approved')->count()
                 : $allRequests->where($custodianType . '_status', 'approved')->count(),
         ];
-        $pendingRequests = $allRequests->filter(fn ($requestItem) => $custodianType === 'equipment'
-            ? $requestItem->custodian_status === 'pending'
-            : $requestItem->{$custodianType . '_status'} === 'pending');
-        $pendingRequests = $pendingRequests
-            ->sortBy([['start_date', 'asc'], ['start_time', 'asc'], ['created_at', 'asc']])
-            ->take(5);
+        $reviewRequiredRequests = $allRequests->filter(fn ($requestItem) => $requestItem->status === 'pending'
+            && ($custodianType === 'equipment'
+                ? $requestItem->custodian_status === 'pending'
+                : $requestItem->venue_status === 'pending'));
+        $reviewRequiredCount = $reviewRequiredRequests->count();
+        $reviewRequiredRequests = $reviewRequiredRequests
+            ->sortBy(fn ($requestItem) => $requestItem->getRequestedStartDateTime()->timestamp)
+            ->take(5)
+            ->values();
 
-        // Separate recent/upcoming requests from old/completed requests
         $today = now()->toDateString();
-        $upcomingRequests = $allRequests->filter(function ($request) use ($today) {
-            $schedule = $request->reservationSchedule;
-            $start = $schedule ? $schedule->start_datetime : $request->start_date;
-            return $start && $start->toDateString() >= $today;
-        })->sortBy([['start_date', 'asc'], ['start_time', 'asc'], ['created_at', 'asc']])->take(5);
+        $upcomingReservations = $allRequests->filter(fn ($requestItem) => $requestItem->status === 'approved'
+            && $requestItem->getRequestedEndDateTime()->gte(now()))
+            ->sortBy(fn ($requestItem) => $requestItem->getRequestedStartDateTime()->timestamp)
+            ->take(5)
+            ->values();
+        $equipmentReturnsPending = $custodianType === 'equipment'
+            ? $allRequests->filter(fn ($requestItem) => $requestItem->getReservationLifecycleState() === 'equipment_return_pending')
+                ->sortBy(fn ($requestItem) => $requestItem->getRequestedEndDateTime()->timestamp)
+                ->values()
+            : collect();
         $pastRequests = $allRequests->filter(function ($request) use ($today) {
             $schedule = $request->reservationSchedule;
             $start = $schedule ? $schedule->start_datetime : $request->start_date;
@@ -138,10 +150,14 @@ class CustodianController extends Controller
         $viewData = [
             'user'               => $user,
             'custodianType'      => $custodianType,
+            'assignedVenueNames' => $assignedVenueNames,
+            'assignedEquipmentNames' => $assignedEquipmentNames,
             'requests'           => $requests,
             'allRequests'        => $allRequests,
-            'pendingRequests'    => $pendingRequests,
-            'upcomingRequests'   => $upcomingRequests,
+            'reviewRequiredRequests' => $reviewRequiredRequests,
+            'reviewRequiredCount' => $reviewRequiredCount,
+            'upcomingReservations' => $upcomingReservations,
+            'equipmentReturnsPending' => $equipmentReturnsPending,
             'pastRequests'       => $pastRequests,
             'filter'             => $filter,
             'reviewRequest'      => $reviewRequest,
@@ -524,7 +540,7 @@ class CustodianController extends Controller
                 return collect([]);
             }
 
-            return FacilityRequest::with(['requester', 'requestVenues.venue', 'reservationSchedule'])
+            return FacilityRequest::with(['requester', 'requestVenues.venue', 'requestEquipment.requestVenue.venue', 'requestEquipment.equipment', 'reservationSchedule'])
                 ->upcomingReservation()
                 ->where(function ($stageQuery): void {
                     $stageQuery->where('status', 'approved')
@@ -559,7 +575,7 @@ class CustodianController extends Controller
 
             $today = now()->toDateString();
 
-            return FacilityRequest::with(['requester', 'requestVenues'])
+            return FacilityRequest::with(['requester', 'requestVenues.venue', 'requestEquipment.requestVenue.venue', 'requestEquipment.equipment', 'reservationSchedule'])
                 ->where(function ($stageQuery): void {
                     $stageQuery->where('status', 'approved')
                         ->orWhere(function ($pendingQuery): void {

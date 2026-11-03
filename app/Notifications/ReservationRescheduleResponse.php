@@ -3,16 +3,13 @@
 namespace App\Notifications;
 
 use App\Models\RevisionHistory;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use App\Notifications\Concerns\UsesNotificationPreferences;
 
-class ReservationRescheduleResponse extends Notification implements ShouldQueue
+class ReservationRescheduleResponse extends Notification
 {
-    use Queueable;
-    use UsesNotificationPreferences;
+    use UsesWorkflowNotificationChannels;
 
     public function __construct(public RevisionHistory $revision)
     {
@@ -20,7 +17,7 @@ class ReservationRescheduleResponse extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return $this->channelsWithPreference($notifiable, 'request_updates', ['mail', 'database']);
+        return $this->workflowChannels($notifiable);
     }
 
     public function toMail(object $notifiable): MailMessage

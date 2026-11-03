@@ -49,7 +49,7 @@ class SupplyOfficeWorkflowTest extends TestCase
 
     public function test_supply_office_assigns_each_resource_only_to_matching_custodian_types(): void
     {
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
         $venueCustodian = User::factory()->create([
             'role' => 'custodian-venue',
             'name' => 'Venue Custodian Person',
@@ -128,7 +128,11 @@ class SupplyOfficeWorkflowTest extends TestCase
     public function test_supply_office_can_view_ready_requests_and_finalize_through_the_dashboard_route(): void
     {
         $request = $this->makeRequest();
-        $admin = User::factory()->create(['role' => 'admin', 'name' => 'Dashboard Approver']);
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'username' => 'asala@gmail.com',
+            'name' => 'Dashboard Approver',
+        ]);
         $requester = User::findOrFail($request->requested_by_id);
 
         $this->actingAs($admin)
@@ -150,6 +154,7 @@ class SupplyOfficeWorkflowTest extends TestCase
         $this->assertSame($admin->getKey(), $request->approved_by_id);
         $this->assertSame($admin->name, $request->approved_by);
         $this->assertNotNull($request->approved_date);
+        $this->assertNotNull($request->final_approval_signature);
         $this->assertDatabaseHas('request_histories', [
             'facility_request_id' => $request->id,
             'action' => 'approved',
@@ -192,6 +197,8 @@ class SupplyOfficeWorkflowTest extends TestCase
         $history = $request->histories()->where('action', 'availability_confirmed')->firstOrFail();
         $this->assertSame($staff->id, $history->user_id);
         $this->assertStringContainsString($staff->name, $history->detail);
+        $this->assertStringContainsString("\n", $history->detail);
+        $this->assertStringNotContainsString('\\n', $history->detail);
 
         $requester = User::findOrFail($request->requested_by_id);
         $this->actingAs($requester)
@@ -203,6 +210,73 @@ class SupplyOfficeWorkflowTest extends TestCase
         $calendar->assertOk();
         $event = collect($calendar->json())->firstWhere('extendedProps.facilityRequestId', $request->id);
         $this->assertSame($staff->name, $event['extendedProps']['assistedBy']);
+    }
+
+    public function test_availability_confirmation_without_equipment_uses_correct_message(): void
+    {
+        $request = $this->makeRequest([
+            'supply_office_review_status' => 'pending',
+            'venue_status' => 'approved',
+            'equipment_status' => 'approved',
+            'equipment' => [],
+            'equipment_quantities' => [],
+        ]);
+        $staff = User::factory()->create(['role' => 'supply_office']);
+
+        $this->actingAs($staff)
+            ->post(route('supply-office.requests.availability-review'), [
+                'id' => $request->id,
+                'decision' => 'available',
+            ])
+            ->assertRedirect(route('supply-office.index'))
+            ->assertSessionHas(
+                'success',
+                'Supply Office availability confirmed. No equipment approval is needed; the request will proceed to final approval after any remaining requirements are complete.'
+            );
+    }
+
+    public function test_legacy_supply_confirmation_history_displays_actual_line_breaks(): void
+    {
+        $staff = User::factory()->create(['role' => 'supply_office']);
+        $request = $this->makeRequest(['supply_office_review_status' => 'confirmed']);
+        $request->addHistory(
+            'availability_confirmed',
+            'Availability confirmed by ' . $staff->name . ', Supply Office Staff\\nDate: November 2, 2026',
+            $staff->id
+        );
+
+        $this->actingAs($staff)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertSee('Availability confirmed by ' . $staff->name . ", Supply Office Staff\nDate: November 2, 2026")
+            ->assertDontSee('Supply Office Staff\\nDate: November 2, 2026', false);
+    }
+
+    public function test_supply_office_dashboard_does_not_expose_final_approval_queue(): void
+    {
+        $staff = User::factory()->create(['role' => 'supply_office']);
+
+        $this->actingAs($staff)
+            ->get(route('supply-office.index'))
+            ->assertOk()
+            ->assertDontSee(route('supply-office.requests.final-approval'), false)
+            ->assertSee('Availability review')
+            ->assertSee('Final approval is handled separately by the system administrator.');
+    }
+
+    public function test_supply_office_availability_button_uses_confirmation_loading_label(): void
+    {
+        $request = $this->makeRequest([
+            'supply_office_review_status' => 'pending',
+            'venue_status' => 'approved',
+        ]);
+        $staff = User::factory()->create(['role' => 'supply_office']);
+
+        $this->actingAs($staff)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertSee('data-swal-loading-text="Confirming availability..."', false)
+            ->assertDontSee(route('request.supply.final-approval', $request), false);
     }
 
     public function test_initial_availability_actions_wait_for_calendar_validation(): void
@@ -218,16 +292,21 @@ class SupplyOfficeWorkflowTest extends TestCase
             ->get(route('supply-office.index'))
             ->assertOk()
             ->assertSee('data-availability-check-url="' . route('calendar.request-availability-check', $request) . '"', false)
+            ->assertSee('data-venue-calendar-description="Review this request against current bookings and tentative requests before confirming availability."', false)
             ->assertSee('data-availability-group="' . $group . '"', false)
             ->assertSee('data-availability-actions="' . $group . '" class="hidden flex flex-wrap gap-2"', false)
-            ->assertSee('data-availability-confirm="' . $group . '"', false);
+            ->assertSee('data-availability-confirm="' . $group . '"', false)
+            ->assertSee('data-swal-title="Confirm venue and equipment availability?"', false)
+            ->assertDontSee('Mark Unavailable', false)
+            ->assertDontSee('Conflict / reschedule note', false)
+            ->assertSee('Availability Review Required', false);
 
         $this->actingAs($staff)
             ->postJson(route('calendar.request-availability-check', $request), ['venue' => 'Gymnasium'])
             ->assertOk()
             ->assertJsonPath('available', true);
 
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
         $this->actingAs($admin)
             ->postJson(route('calendar.request-availability-check', $request), ['venue' => 'Gymnasium'])
             ->assertOk()
@@ -346,7 +425,7 @@ class SupplyOfficeWorkflowTest extends TestCase
             'venue_status' => 'approved',
             'equipment_status' => 'approved',
         ]);
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
 
         $this->actingAs($admin)
             ->from(route('supply-office.index'))
@@ -360,9 +439,84 @@ class SupplyOfficeWorkflowTest extends TestCase
         $this->assertSame('pending', $request->fresh()->status);
     }
 
+    public function test_custodian_request_details_include_schedule_and_requestor_type_fields_only(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+        Venue::create([
+            'name' => 'Gymnasium',
+            'custodian_id' => $custodian->id,
+            'is_active' => true,
+        ]);
+
+        $student = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'student',
+            'name' => 'Student Requestor',
+            'contact_number' => '09170000000',
+        ]);
+        $studentRequest = $this->makeRequest([
+            'requested_by_id' => $student->id,
+            'request_context' => 'student_organization',
+            'organization_name' => 'Student Council',
+            'expected_participants' => 80,
+            'venue_status' => 'pending',
+        ]);
+
+        $this->actingAs($custodian)
+            ->getJson('/api-test/facility-requests/' . $studentRequest->id)
+            ->assertOk()
+            ->assertJsonPath('venue.0', 'Gymnasium')
+            ->assertJsonPath('expected_participants', '80')
+            ->assertJsonPath('requestor.name', 'Student Requestor')
+            ->assertJsonPath('requestor.type', 'student')
+            ->assertJsonPath('requestor.organization', 'Student Council')
+            ->assertJsonMissingPath('requestor.position')
+            ->assertJsonMissingPath('requestor.email')
+            ->assertJsonMissingPath('requestor.contact_number');
+
+        $faculty = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'faculty',
+            'name' => 'Faculty Requestor',
+            'position' => 'Instructor',
+        ]);
+        $facultyRequest = $this->makeRequest([
+            'requested_by_id' => $faculty->id,
+            'request_context' => 'personal',
+            'venue_status' => 'pending',
+        ]);
+
+        $this->getJson('/api-test/facility-requests/' . $facultyRequest->id)
+            ->assertOk()
+            ->assertJsonPath('requestor.type', 'faculty')
+            ->assertJsonPath('requestor.department', 'IT Department')
+            ->assertJsonPath('requestor.position', 'Instructor')
+            ->assertJsonMissingPath('requestor.organization');
+
+        $outsider = User::factory()->create([
+            'role' => 'requestor',
+            'requestor_type' => 'outsider',
+            'organization_type' => 'Private Company',
+        ]);
+        $outsiderRequest = $this->makeRequest([
+            'requested_by_id' => $outsider->id,
+            'request_context' => 'outside_organization',
+            'organization_name' => 'Community Sports Club',
+            'venue_status' => 'pending',
+        ]);
+
+        $this->getJson('/api-test/facility-requests/' . $outsiderRequest->id)
+            ->assertOk()
+            ->assertJsonPath('requestor.type', 'outsider')
+            ->assertJsonPath('requestor.organization', 'Community Sports Club')
+            ->assertJsonPath('requestor.organization_type', 'Private Company')
+            ->assertJsonMissingPath('requestor.department');
+    }
+
     public function test_venue_custodian_can_review_calendar_and_propose_a_reschedule(): void
     {
         $custodian = User::factory()->create(['role' => 'custodian-venue']);
+        $supplyOffice = User::factory()->create(['role' => 'supply_office']);
         Venue::create([
             'name' => 'Gymnasium',
             'custodian_id' => $custodian->id,
@@ -372,6 +526,11 @@ class SupplyOfficeWorkflowTest extends TestCase
             'venue_status' => 'pending',
             'supply_office_review_status' => 'pending',
         ]);
+        Venue::create([
+            'name' => 'Covered Court',
+            'custodian_id' => $custodian->id,
+            'is_active' => true,
+        ]);
 
         $this->actingAs($custodian)
             ->get(route('request.show', $request))
@@ -379,15 +538,26 @@ class SupplyOfficeWorkflowTest extends TestCase
             ->assertSee('Check venue calendar')
             ->assertSee('calendar/embed?venue=Gymnasium', false)
             ->assertSee('id="staff-venue-calendar-modal"', false)
+            ->assertSee('data-venue-calendar-description="Review bookings and tentative requests for your assigned venue; use the request workflow to confirm availability."', false)
             ->assertSee('<dialog', false)
             ->assertDontSee('Open full calendar in a new tab')
-            ->assertSee('Confirm Venue Availability')
+            ->assertSee('Confirm venue is available')
             ->assertSee('data-availability-confirm="custodian-venue-' . $request->id . '"', false)
             ->assertSee('class="hidden"', false)
             ->assertSee('data-availability-check-url="' . route('calendar.request-availability-check', $request) . '"', false)
-            ->assertSee('data-swal-title="Confirm venue availability?"', false)
-            ->assertSee('Propose Reschedule')
-            ->assertSee('The system will recheck availability before sending the proposal.');
+            ->assertSee('data-swal-title="Confirm the venue is available?"', false)
+            ->assertSee('Suggest a new schedule')
+            ->assertSee('sm:flex-1 inline-flex items-center justify-center rounded-2xl border border-amber-300', false)
+            ->assertSee('We checked all requested venue schedules. We’ll check again before you confirm.')
+            ->assertDontSee('Explain why this venue is unavailable')
+            ->assertDontSee('Mark Venue Unavailable')
+            ->assertDontSee('request.custodian.reject', false)
+            ->assertSee('data-availability-actions="custodian-venue-' . $request->id . '"', false)
+            ->assertSee('Change any date, time, or venue field to suggest an alternative.')
+            ->assertSee('id="venue-reschedule-feedback"', false)
+            ->assertSee('title: \'Proposal sent\'', false)
+            ->assertSee('The requestor and affected custodians will be notified.')
+            ->assertSee('Covered Court');
 
         $this->actingAs($custodian)
             ->postJson(route('calendar.request-availability-check', $request), ['venue' => 'Gymnasium'])
@@ -407,21 +577,63 @@ class SupplyOfficeWorkflowTest extends TestCase
                 'revision_reason' => 'Requested schedule conflicts with another booking.',
             ])
             ->assertRedirect(route('request.show', $request))
-            ->assertSessionHasNoErrors();
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', 'Schedule change proposal sent to the requestor and affected custodians.');
 
         $revision = $request->revisionHistories()->where('status', 'pending')->firstOrFail();
         $this->assertSame($custodian->id, $revision->revised_by_id);
-        $this->assertSame('accepted', $revision->responses[(string) $custodian->id]);
+        $this->assertSame('pending', $revision->responses[(string) $custodian->id]);
         $this->assertSame('pending', $revision->responses[(string) $request->requested_by_id]);
+        $this->assertCount(2, $revision->affected_user_ids);
         $this->assertSame('pending', $request->fresh()->venue_status);
+
+        $this->actingAs($custodian)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertSee('Proposed by ' . $custodian->name . ' (Venue Custodian).')
+            ->assertSee('The current request schedule remains unchanged until required responses are received.')
+            ->assertSee('Reason from Venue Custodian')
+            ->assertSee('Your response needed')
+            ->assertDontSee('The Supply Office proposed a reservation change.')
+            ->assertDontSee('The approved booking remains unchanged');
 
         $this->actingAs($custodian)
             ->post(route('request.custodian.verify', $request))
             ->assertSessionHasErrors();
         $this->assertSame('pending', $request->fresh()->venue_status);
 
+        $revision->update([
+            'responses' => [
+                (string) $request->requested_by_id => 'pending',
+                (string) $custodian->id => 'accepted',
+            ],
+        ]);
         $requester = User::findOrFail($request->requested_by_id);
         $this->actingAs($requester)
+            ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
+            ->assertRedirect(route('request.show', $request))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', 'Your acceptance was recorded. The reservation remains unchanged while affected custodians review the proposed schedule.');
+
+        $request->refresh();
+        $revision->refresh();
+        $this->assertNotSame($newDate, $request->start_date->toDateString());
+        $this->assertSame('pending', $revision->status);
+        $this->assertSame('accepted', $revision->responses[(string) $requester->id]);
+        $this->assertSame('pending', $revision->responses[(string) $custodian->id]);
+        $this->actingAs($requester)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertSee('Waiting for 1 required response:')
+            ->assertSee($custodian->name);
+
+        $this->actingAs($custodian)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertSee('Review the proposed venue schedule')
+            ->assertSee('Check proposed schedule');
+
+        $this->actingAs($custodian)
             ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
             ->assertRedirect(route('request.show', $request))
             ->assertSessionHasNoErrors();
@@ -429,8 +641,66 @@ class SupplyOfficeWorkflowTest extends TestCase
         $request->refresh();
         $this->assertSame($newDate, $request->start_date->toDateString());
         $this->assertSame('pending', $request->status);
-        $this->assertSame('pending', $request->venue_status);
+        $this->assertSame('approved', $request->venue_status);
         $this->assertSame('pending', $request->supply_office_review_status);
+        Notification::assertSentTo(
+            [$supplyOffice],
+            \App\Notifications\ReservationRevised::class,
+            fn ($notification): bool => str_contains(
+                $notification->toDatabase($supplyOffice)['message'],
+                'The request is not approved yet; Supply Office review'
+            )
+        );
+    }
+
+    public function test_venue_custodian_can_send_a_proposal_when_one_schedule_field_changes_even_if_it_conflicts(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+        $venue = Venue::create([
+            'name' => 'Gymnasium',
+            'custodian_id' => $custodian->id,
+            'is_active' => true,
+        ]);
+        $startDate = now()->addDays(5)->toDateString();
+        $request = $this->makeRequest([
+            'start_date' => $startDate,
+            'end_date' => $startDate,
+            'start_time' => '09:00',
+            'end_time' => '11:00',
+            'venue' => [$venue->name],
+            'venue_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+        ]);
+        $this->makeRequest([
+            'start_date' => $startDate,
+            'end_date' => $startDate,
+            'start_time' => '09:30',
+            'end_time' => '11:30',
+            'venue' => [$venue->name],
+            'venue_status' => 'pending',
+        ]);
+
+        $this->actingAs($custodian)
+            ->from(route('request.show', $request))
+            ->post(route('custodian.requests.revise'), [
+                'facility_request_id' => $request->id,
+                'start_date' => $startDate,
+                'end_date' => $startDate,
+                'start_time' => '10:00',
+                'end_time' => '11:00',
+                'venue' => [$venue->name],
+                'revision_reason' => 'The start time needs to be adjusted.',
+            ])
+            ->assertRedirect(route('request.show', $request))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', 'Schedule change proposal sent to the requestor and affected custodians.');
+
+        $revision = $request->revisionHistories()->where('status', 'pending')->firstOrFail();
+        $this->assertSame('09:00', $revision->old_start_time);
+        $this->assertSame('10:00', $revision->new_start_time);
+        $this->assertTrue($revision->conflict_detected);
+        $this->assertFalse($revision->override_conflict);
+        $this->assertSame('09:00', $request->fresh()->start_time);
     }
 
     public function test_urgent_availability_requires_document_confirmation_only_for_available_decision(): void
@@ -533,7 +803,11 @@ class SupplyOfficeWorkflowTest extends TestCase
     public function test_supply_office_rejection_records_audit_and_notification_without_approval_fields(): void
     {
         $request = $this->makeRequest();
-        $admin = User::factory()->create(['role' => 'admin', 'name' => 'Rejecting Approver']);
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'username' => 'asala@gmail.com',
+            'name' => 'Rejecting Approver',
+        ]);
         $requester = User::findOrFail($request->requested_by_id);
 
         $this->actingAs($admin)->post(route('supply-office.update'), [
@@ -584,7 +858,7 @@ class SupplyOfficeWorkflowTest extends TestCase
             $this->makeRequest(['supply_office_review_status' => 'pending']);
         }
 
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
 
         $this->actingAs($admin)
             ->get(route('supply-office.index'))
@@ -659,7 +933,7 @@ class SupplyOfficeWorkflowTest extends TestCase
     public function test_repeated_supply_office_approval_does_not_duplicate_audit_or_notification(): void
     {
         $request = $this->makeRequest();
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
         $requester = User::findOrFail($request->requested_by_id);
         $payload = ['id' => $request->id, 'action' => 'approve'];
 

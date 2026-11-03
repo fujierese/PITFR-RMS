@@ -2,17 +2,17 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\DatabaseMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use App\Notifications\Concerns\UsesNotificationPreferences;
 
 class EquipmentReturned extends Notification
 {
     use Queueable;
-    use UsesNotificationPreferences;
+    use UsesWorkflowNotificationChannels;
 
     protected $equipment;
     protected $custodian;
@@ -31,7 +31,7 @@ class EquipmentReturned extends Notification
 
     public function via(object $notifiable): array
     {
-        return $this->channelsWithPreference($notifiable, 'request_updates', ['database', 'mail']);
+        return $this->workflowChannels($notifiable);
     }
 
     public function toDatabase(object $notifiable): array

@@ -111,7 +111,11 @@ const initializeRequestForm = function () {
     const filePreview = document.getElementById('file-preview');
     const fileName = document.getElementById('file-name');
     const draftStatus = document.getElementById('draft-status');
-    const draftStorageKeys = ['pitfr-request-draft', 'pitfr-request-draft-session', 'pitfr-request-draft-cache'];
+    const draftOwnerId = /^\d+$/.test(form.dataset.draftOwnerId || '') ? form.dataset.draftOwnerId : '';
+    const draftStorageKey = draftOwnerId ? `pitfr-request-draft-user-${draftOwnerId}` : '';
+    const draftDatabaseName = draftOwnerId ? `pitfr-request-drafts-user-${draftOwnerId}` : '';
+    const draftMaxAgeMs = 30 * 24 * 60 * 60 * 1000;
+    const legacyDraftStorageKeys = ['pitfr-request-draft', 'pitfr-request-draft-session', 'pitfr-request-draft-cache'];
     let draftDatabasePromise;
     let draftSaveQueue = Promise.resolve();
     const urgentCheckbox = document.getElementById('urgent-processing-checkbox') || document.getElementById('is-emergency-checkbox');
@@ -476,20 +480,70 @@ const initializeRequestForm = function () {
         capacityWarningBanner.innerHTML = '';
     };
 
-    const clearDraftStorage = function () {
+    const clearLegacyDraftStorage = function () {
         try {
-            const draft = JSON.parse(localStorage.getItem('pitfr-request-draft') || '{}');
-            (draft.files || []).forEach(function (name) {
-                deleteDraftFile(name).catch(function (error) {
-                    console.warn('Draft attachment cleanup failed', error);
-                });
+            legacyDraftStorageKeys.forEach(function (key) {
+                localStorage.removeItem(key);
+                sessionStorage.removeItem(key);
             });
         } catch (error) {
-            console.warn('Draft attachment cleanup could not read saved draft', error);
+            console.error('Legacy request draft cleanup failed', error);
         }
-        draftStorageKeys.forEach(function (key) {
-            localStorage.removeItem(key);
-            sessionStorage.removeItem(key);
+
+        if (!window.indexedDB) {
+            return;
+        }
+
+        const request = window.indexedDB.deleteDatabase('pitfr-request-drafts');
+        request.onerror = function () {
+            console.error('Legacy request attachment cleanup failed', request.error);
+        };
+        request.onblocked = function () {
+            console.warn('Legacy request attachment cleanup is waiting for another open browser tab.');
+        };
+    };
+
+    const clearDraftStorage = function (keepAutosaveDisabled = false) {
+        if (!draftStorageKey || !draftDatabaseName) {
+            return Promise.reject(new Error('Cannot clear a request draft without its account owner.'));
+        }
+
+        form.dataset.requestDraftClearing = '1';
+        try {
+            localStorage.removeItem(draftStorageKey);
+            sessionStorage.removeItem(draftStorageKey);
+        } catch (error) {
+            delete form.dataset.requestDraftClearing;
+            return Promise.reject(new Error('Unable to remove the saved request draft.', { cause: error }));
+        }
+
+        return draftSaveQueue.catch(function () {}).then(function () {
+            localStorage.removeItem(draftStorageKey);
+            sessionStorage.removeItem(draftStorageKey);
+            if (!window.indexedDB) {
+                return;
+            }
+            return openDraftDatabase().then(function (database) {
+                return new Promise(function (resolve, reject) {
+                    const transaction = database.transaction('files', 'readwrite');
+                    transaction.objectStore('files').clear();
+                    transaction.oncomplete = resolve;
+                    transaction.onerror = function () {
+                        reject(transaction.error || new Error('Unable to remove saved request attachments.'));
+                    };
+                    transaction.onabort = function () {
+                        reject(transaction.error || new Error('Saved request attachment removal was interrupted.'));
+                    };
+                });
+            });
+        }).then(function (result) {
+            if (!keepAutosaveDisabled) {
+                delete form.dataset.requestDraftClearing;
+            }
+            return result;
+        }).catch(function (error) {
+            delete form.dataset.requestDraftClearing;
+            throw error;
         });
     };
 
@@ -566,12 +620,15 @@ const initializeRequestForm = function () {
     };
 
     const openDraftDatabase = function () {
+        if (!draftDatabaseName) {
+            return Promise.reject(new Error('Cannot access request draft storage without its account owner.'));
+        }
         if (!window.indexedDB) {
             return Promise.reject(new Error('This browser does not support persistent request attachments.'));
         }
         if (!draftDatabasePromise) {
             draftDatabasePromise = new Promise(function (resolve, reject) {
-                const request = window.indexedDB.open('pitfr-request-drafts', 1);
+                const request = window.indexedDB.open(draftDatabaseName, 1);
                 request.onupgradeneeded = function () {
                     if (!request.result.objectStoreNames.contains('files')) {
                         request.result.createObjectStore('files', { keyPath: 'name' });
@@ -666,6 +723,14 @@ const initializeRequestForm = function () {
     };
 
     const saveDraft = function () {
+        if (form.dataset.requestDraftClearing === '1') {
+            return Promise.resolve(false);
+        }
+
+        if (!draftOwnerId || !draftStorageKey) {
+            return Promise.resolve(false);
+        }
+
         const persistDraft = async function () {
             const formData = new FormData(form);
             const draft = {};
@@ -694,8 +759,15 @@ const initializeRequestForm = function () {
                 .find(radio => radio.checked)?.value || '';
 
             try {
-                localStorage.setItem('pitfr-request-draft', JSON.stringify(draft));
-                sessionStorage.setItem('pitfr-request-draft', JSON.stringify(draft));
+                const record = JSON.stringify({
+                    format: 'pitfr-request-draft',
+                    version: 1,
+                    ownerId: draftOwnerId,
+                    updatedAt: Date.now(),
+                    draft: draft
+                });
+                localStorage.setItem(draftStorageKey, record);
+                sessionStorage.setItem(draftStorageKey, record);
                 if (draftStatus) {
                     const label = draftStatus.querySelector('[data-draft-status-label]');
                     if (label) {
@@ -725,7 +797,9 @@ const initializeRequestForm = function () {
     const restoreDraft = async function () {
         try {
             clearTransientUiState();
-            const cached = localStorage.getItem('pitfr-request-draft') || sessionStorage.getItem('pitfr-request-draft');
+            const cached = draftOwnerId && draftStorageKey
+                ? localStorage.getItem(draftStorageKey) || sessionStorage.getItem(draftStorageKey)
+                : null;
             if (!cached) {
                 updateProposalRequirement();
                 toggleEmergencyJustification();
@@ -738,7 +812,27 @@ const initializeRequestForm = function () {
                 return;
             }
 
-            const draft = JSON.parse(cached);
+            const record = JSON.parse(cached);
+            const age = Date.now() - Number(record.updatedAt);
+            if (
+                record.format !== 'pitfr-request-draft'
+                || record.version !== 1
+                || String(record.ownerId) !== draftOwnerId
+                || !Number.isFinite(Number(record.updatedAt))
+                || age < 0
+                || age > draftMaxAgeMs
+                || !record.draft
+                || typeof record.draft !== 'object'
+                || Array.isArray(record.draft)
+            ) {
+                await clearDraftStorage();
+                if (draftStatus) {
+                    draftStatus.textContent = 'Saved draft expired or could not be verified';
+                }
+                return;
+            }
+
+            const draft = record.draft;
             for (const [key, value] of Object.entries(draft)) {
                 if (key === 'equipment') {
                     equipmentCheckboxes.forEach(checkbox => {
@@ -816,7 +910,10 @@ const initializeRequestForm = function () {
             conflictCheckTimeout = setTimeout(checkConflicts, 250);
 
             if (draftStatus) {
-                draftStatus.textContent = 'Draft restored';
+                const label = draftStatus.querySelector('[data-draft-status-label]');
+                if (label) {
+                    label.textContent = 'Draft restored (kept for up to 30 days)';
+                }
             }
         } catch (error) {
             console.error('Draft restore failed', error);
@@ -1960,7 +2057,33 @@ const initializeRequestForm = function () {
     createValidationListeners();
     initializeFileInputs();
     attachSelectionListeners();
+    if (draftOwnerId) {
+        clearLegacyDraftStorage();
+    }
     restoreDraft();
+    form.querySelector('[data-discard-request-draft]')?.addEventListener('click', async function (event) {
+        const button = event.currentTarget;
+        if (!window.confirm('Discard the saved request draft for this account? This cannot be undone.')) {
+            return;
+        }
+
+        button.disabled = true;
+        try {
+            await clearDraftStorage(true);
+            window.requestFormDraftNavigation = true;
+            window.location.reload();
+        } catch (error) {
+            console.error('Request draft discard failed', error);
+            delete form.dataset.requestDraftClearing;
+            button.disabled = false;
+            if (draftStatus) {
+                const label = draftStatus.querySelector('[data-draft-status-label]');
+                if (label) {
+                    label.textContent = 'Could not discard saved draft';
+                }
+            }
+        }
+    });
     form.querySelectorAll('[data-preserve-request-draft]').forEach(function (link) {
         link.addEventListener('click', function (event) {
             event.preventDefault();
@@ -1975,6 +2098,16 @@ const initializeRequestForm = function () {
                 window.location.assign(link.href);
             });
         });
+    });
+    form.addEventListener('confirmed-submit', function (event) {
+        if (typeof event.detail?.waitUntil !== 'function') {
+            return;
+        }
+
+        event.detail.waitUntil(clearDraftStorage(true).catch(function (error) {
+            console.error('Request draft cleanup before submission failed', error);
+            throw error;
+        }));
     });
     updateOtherVenueVisibility();
     updateSelectedItemsSummary();
@@ -2130,13 +2263,12 @@ const initializeRequestForm = function () {
             return false;
         }
 
-        if (clickedButton) {
+        if (clickedButton && !form.hasAttribute('data-swal-confirm')) {
             clickedButton.setAttribute('data-loading', '1');
             const loadingLabel = clickedButton.textContent?.toLowerCase().includes('save') ? 'Saving...' : 'Submitting...';
             setSubmitButtonLoading(clickedButton, loadingLabel);
         }
 
-        clearDraftStorage();
         return true;
     });
 };

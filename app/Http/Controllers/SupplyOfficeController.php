@@ -160,6 +160,22 @@ class SupplyOfficeController extends Controller
                     $availability->lockResourcesForFacilityRequests($facilityRequest);
                     $conflict = $availability->checkFacilityRequestForReview($facilityRequest);
                     if ($conflict) {
+                        if ($facilityRequest->is_emergency) {
+                            $approvedConflicts = $availability->getApprovedVenueConflicts($facilityRequest);
+                            $conflictIds = $approvedConflicts->pluck('control_number')->filter()->implode(', ');
+                            $facilityRequest->addHistory(
+                                'urgent_priority_transfer_pending',
+                                'Urgent CHED/OP priority transfer requires schedule transfer before confirmation.'
+                                    . ($conflictIds !== '' ? ' Affected approved reservation(s): ' . $conflictIds . '.' : '')
+                                    . ' Existing reservations remain active until Supply Office confirms a proposal and affected custodians respond.',
+                                $user->getKey()
+                            );
+                            throw \Illuminate\Validation\ValidationException::withMessages([
+                                'decision' => 'Priority conflict detected. '
+                                    . ($conflictIds !== '' ? 'Move or reschedule approved reservation(s): ' . $conflictIds . '. ' : '')
+                                    . 'Confirm an alternative schedule through the transfer proposal workflow before confirming this urgent request.'
+                            ]);
+                        }
                         throw \Illuminate\Validation\ValidationException::withMessages(['decision' => $conflict]);
                     }
 
@@ -187,10 +203,13 @@ class SupplyOfficeController extends Controller
                     $facilityRequest->supply_office_reviewed_by_id = $user->getKey();
                     $facilityRequest->supply_office_reviewed_at = now();
                     $facilityRequest->save();
+                    $confirmedAt = now()->format('F j, Y \a\t g:i A');
                     $facilityRequest->addHistory(
                         'availability_confirmed',
-                        'Availability confirmed by ' . $user->name . ' from the Supply Office.' .
-                            ($facilityRequest->is_emergency ? ' Urgent supporting document validated.' : ''),
+                        'Availability confirmed by ' . $user->name . ', Supply Office Staff' . "\n"
+                            . $confirmedAt . "\n"
+                            . 'Validation: No approved booking or active scheduling conflict found'
+                            . ($facilityRequest->is_emergency ? "\nUrgent supporting document validated." : ''),
                         $user->getKey()
                     );
 
@@ -230,7 +249,13 @@ class SupplyOfficeController extends Controller
             foreach (User::whereIn('id', $custodianIds)->get() as $custodian) {
                 $custodian->notify(new \App\Notifications\NewFacilityRequestNotification($facilityRequest));
             }
-            $message = 'Supply Office availability confirmed. The request has been forwarded to the equipment custodians for approval.';
+            if ($custodianIds !== []) {
+                $message = 'Supply Office availability confirmed. The request has been forwarded to the equipment custodians for approval.';
+            } elseif ($facilityRequest->getEquipmentItems() !== []) {
+                $message = 'Supply Office availability confirmed. No equipment custodian is assigned yet; assign one before final approval.';
+            } else {
+                $message = 'Supply Office availability confirmed. No equipment approval is needed; the request will proceed to final approval after any remaining requirements are complete.';
+            }
         } else {
             $facilityRequest->requester?->notify(new RequestStatusChanged(
                 $facilityRequest,
@@ -398,7 +423,7 @@ class SupplyOfficeController extends Controller
 
     public function finalApprovalRequests(Request $request)
     {
-        $this->ensureAdminAccess();
+        abort_unless(Auth::user()?->isFinalApprover(), 403);
 
         $query = $this->buildRequestListQuery($request)
             ->where('status', 'pending')
@@ -725,15 +750,19 @@ class SupplyOfficeController extends Controller
             $validated['revision_reason'] = 'Memorandum-priority transfer required by '
                 . $validated['memorandum_office'] . ': ' . $validated['revision_reason'];
         }
-        $custodianUserIds = Venue::query()->whereIn('name', array_unique(array_merge($oldState['venue'], $newState['venue'])))->pluck('custodian_id')
-            ->merge(Equipment::query()->whereIn('name', array_unique(array_merge($oldState['equipment'], $newState['equipment'])))->pluck('custodian_id'))
-            ->filter()
-            ->map(fn ($id): int => (int) $id)
-            ->unique()
-            ->values();
         $affectedUserIds = collect([(int) $facilityRequest->requested_by_id])
-            ->merge(Venue::query()->whereIn('name', array_unique(array_merge($oldState['venue'], $newState['venue'])))->pluck('custodian_id'))
-            ->merge(Equipment::query()->whereIn('name', array_unique(array_merge($oldState['equipment'], $newState['equipment'])))->pluck('custodian_id'))
+            ->merge(Venue::query()->whereIn(
+                'name',
+                $facilityRequest->status === 'approved'
+                    ? array_unique(array_merge($oldState['venue'], $newState['venue']))
+                    : array_unique($newState['venue'])
+            )->pluck('custodian_id'))
+            ->when(
+                $facilityRequest->status === 'approved',
+                fn ($userIds) => $userIds->merge(
+                    Equipment::query()->whereIn('name', array_unique(array_merge($oldState['equipment'], $newState['equipment'])))->pluck('custodian_id')
+                )
+            )
             ->filter()
             ->map(fn ($id): int => (int) $id)
             ->unique()
@@ -747,10 +776,6 @@ class SupplyOfficeController extends Controller
                 ? 'not_required'
                 : 'pending';
         }
-        if ($isVenueCustodian) {
-            $responses[(string) $user->id] = 'accepted';
-        }
-
         // Check availability for new schedule
         $availabilityService = app(\App\Services\AvailabilityService::class);
         $conflictDetected = false;
@@ -766,12 +791,12 @@ class SupplyOfficeController extends Controller
 
         $venueConflict = false;
         foreach ($validated['venue'] as $venueName) {
-            if (! $availabilityService->checkVenueAvailability(
+            if ($availabilityService->checkVenueTimeRangeForReview(
                 $venueName,
                 $range['start'],
                 $range['end'],
                 $facilityRequest->id
-            )['available']) {
+            ) !== null) {
                 $venueConflict = true;
                 break;
             }
@@ -794,8 +819,9 @@ class SupplyOfficeController extends Controller
             if ($equipmentConflict) $parts[] = 'Equipment availability issue';
             $conflictDetails = implode('; ', $parts);
 
-            // If not overriding, reject the revision
-            if (!($validated['override_conflict'] ?? false)) {
+            // Pending requests are still proposals; the venue custodian rechecks availability
+            // after the requestor responds. Approved reservations require an explicit override.
+            if ($facilityRequest->status === 'approved' && !($validated['override_conflict'] ?? false)) {
                 return $this->revisionFailure(
                     $request,
                     "Scheduling conflict detected: $conflictDetails. Provide an override reason to proceed.",
@@ -852,7 +878,11 @@ class SupplyOfficeController extends Controller
             });
 
             $notification = new \App\Notifications\ReservationRescheduleProposed($revision);
-            Notification::send(User::query()->whereIn('id', $affectedUserIds)->get(), $notification);
+            $notificationRecipientIds = collect($affectedUserIds)
+                ->push((int) $user->id)
+                ->unique()
+                ->values();
+            Notification::send(User::query()->whereIn('id', $notificationRecipientIds)->get(), $notification);
             $revision->markRequestorNotified();
             $revision->markCustodianNotified();
 
@@ -866,7 +896,7 @@ class SupplyOfficeController extends Controller
                 ? redirect()->route('request.show', $facilityRequest)
                 : redirect()->route('supply-office.index');
 
-            return $successRedirect->with('success', 'Schedule change proposal sent to the requestor and affected custodians for confirmation.');
+            return $successRedirect->with('success', 'Schedule change proposal sent to the requestor and affected custodians.');
         } catch (\RuntimeException $e) {
             if (str_contains($e->getMessage(), 'already waiting')) {
                 if ($request->expectsJson()) {
@@ -1024,6 +1054,8 @@ class SupplyOfficeController extends Controller
 
     public function update(Request $request)
     {
+        abort_unless(Auth::user()?->isFinalApprover(), 403);
+
         $validated = $request->validate([
             'id'       => 'required|integer|exists:facility_requests,id',
             'action'   => 'required|in:approve,reject',
@@ -1132,6 +1164,9 @@ class SupplyOfficeController extends Controller
         $originalStatus = $fr->status;
         
         $this->applyRequestApproval($fr, $validated['action'], $validated['notes'] ?? '', $validated['priority'] ?? null);
+        if ($validated['action'] === 'approve') {
+            $fr->recordApprovalSignature('final', Auth::user());
+        }
 
         $fr->addHistory($validated['action'] === 'approve' ? 'approved' : 'rejected',
             'Administrator ' . Auth::user()->name . ' completed request as ' . ($validated['action'] === 'approve' ? 'approved' : 'rejected') .
@@ -1209,114 +1244,111 @@ class SupplyOfficeController extends Controller
             'override_reason' => ['required', 'string', 'max:1000'],
             'urgent_request_id' => ['required', 'integer', 'exists:facility_requests,id'],
             'conflicting_request_id' => ['required', 'integer', 'exists:facility_requests,id'],
+            'new_start_date' => ['required', 'date'],
+            'new_end_date' => ['required', 'date', 'after_or_equal:new_start_date'],
+            'new_start_time' => ['required', 'date_format:H:i'],
+            'new_end_time' => ['required', 'date_format:H:i'],
         ]);
 
-        $urgentRequest = FacilityRequest::find($validated['urgent_request_id']);
-        $conflictingRequest = FacilityRequest::find($validated['conflicting_request_id']);
-
-        if (!$urgentRequest) {
-            return redirect()->route('supply-office.index')->withErrors(['urgent_request_id' => 'The urgent request could not be found.']);
+        $urgentRequest = FacilityRequest::findOrFail($validated['urgent_request_id']);
+        $conflictingRequest = FacilityRequest::findOrFail($validated['conflicting_request_id']);
+        if (!($urgentRequest->is_emergency || $urgentRequest->priority === 'institutional')) {
+            return back()->withErrors(['urgent_request_id' => 'This request is not eligible for an urgent priority transfer.']);
+        }
+        if ($conflictingRequest->status !== 'approved' || $conflictingRequest->venue_status !== 'approved') {
+            return back()->with('warning', 'The conflicting request is no longer an active approved reservation.');
         }
 
-        if (!$conflictingRequest) {
-            return redirect()->route('supply-office.index')->withErrors(['conflicting_request_id' => 'The conflicting request could not be found.']);
-        }
-
-        if ($urgentRequest->priority !== 'institutional' && !$urgentRequest->is_emergency) {
-            return redirect()->route('supply-office.index')->withErrors(['urgent_request_id' => 'This request is not eligible for priority override.']);
-        }
-
-        if ($urgentRequest->requester?->isOutsider() && $urgentRequest->igp_payment_status !== 'paid') {
-            return redirect()->route('supply-office.index')->withErrors(['urgent_request_id' => 'The IGP must record payment before an outsider reservation can be approved.']);
-        }
-
-        if ($conflictingRequest->status !== 'approved' || $conflictingRequest->venue_status !== 'approved' || $conflictingRequest->equipment_status !== 'approved') {
-            return redirect()->route('supply-office.index')->with('warning', 'The conflicting request is no longer approved, so the override could not be applied.');
-        }
-
-        $overrideReason = trim((string) ($validated['override_reason'] ?? ''));
         $actingUser = Auth::user();
+        $overrideReason = trim($validated['override_reason']);
 
         try {
-            DB::transaction(function () use ($urgentRequest, $conflictingRequest, $overrideReason, $actingUser): void {
-                $timestamp = now()->toDateTimeString();
+            DB::transaction(function () use ($urgentRequest, $conflictingRequest, $validated, $overrideReason, $actingUser): void {
                 app(\App\Services\AvailabilityService::class)
                     ->lockResourcesForFacilityRequests($urgentRequest, $conflictingRequest);
 
-                $lockedUrgentRequest = FacilityRequest::whereKey($urgentRequest->id)
-                    ->lockForUpdate()
-                    ->first();
-                $lockedConflictingRequest = FacilityRequest::whereKey($conflictingRequest->id)
-                    ->lockForUpdate()
-                    ->first();
+                $lockedUrgent = FacilityRequest::whereKey($urgentRequest->id)->lockForUpdate()->firstOrFail();
+                $lockedConflict = FacilityRequest::whereKey($conflictingRequest->id)->lockForUpdate()->firstOrFail();
 
-                if (!$lockedUrgentRequest || !$lockedConflictingRequest) {
-                    throw new \RuntimeException('The selected requests are no longer available.');
+                if (!($lockedUrgent->is_emergency || $lockedUrgent->priority === 'institutional')) {
+                    throw new \RuntimeException('The urgent priority request is no longer eligible.');
+                }
+                if ($lockedConflict->status !== 'approved' || $lockedConflict->venue_status !== 'approved') {
+                    throw new \RuntimeException('The approved reservation changed before the transfer proposal was created.');
+                }
+                if ($lockedConflict->revisionHistories()->where('status', 'pending')->exists()) {
+                    throw new \RuntimeException('A schedule proposal is already pending for this approved reservation.');
                 }
 
-                if ($lockedConflictingRequest->status !== 'approved' || $lockedConflictingRequest->venue_status !== 'approved' || $lockedConflictingRequest->equipment_status !== 'approved') {
-                    throw new \RuntimeException('The conflicting reservation was already updated before the override could be applied.');
-                }
+                $oldState = $lockedConflict->getCurrentState();
+                $newVenues = $oldState['venue'];
+                $office = data_get($lockedUrgent->document_metadata, 'urgent_priority.office', 'CHED/OP/OVP');
+                $reason = "CHED/OP/OVP priority transfer requested by {$office}: {$overrideReason}";
 
-                $lockedConflictingRequest->update([
-                    'status' => 'needs_reschedule',
-                    'venue_status' => 'needs_reschedule',
-                    'equipment_status' => 'needs_reschedule',
-                    'approved_by' => null,
-                    'approved_by_id' => null,
-                    'approved_date' => null,
+                $revision = $lockedConflict->revisionHistories()->create([
+                    'revised_by_id' => $actingUser->id,
+                    'old_start_date' => $oldState['start_date'],
+                    'old_end_date' => $oldState['end_date'],
+                    'old_start_time' => $oldState['start_time'],
+                    'old_end_time' => $oldState['end_time'],
+                    'old_venue' => $oldState['venue'],
+                    'old_equipment' => $oldState['equipment'],
+                    'old_equipment_quantities' => $oldState['equipment_quantities'],
+                    'new_start_date' => $validated['new_start_date'],
+                    'new_end_date' => $validated['new_end_date'],
+                    'new_start_time' => $validated['new_start_time'],
+                    'new_end_time' => $validated['new_end_time'],
+                    'new_venue' => $newVenues,
+                    'new_equipment' => $oldState['equipment'],
+                    'new_equipment_quantities' => $oldState['equipment_quantities'],
+                    'revision_reason' => $reason,
+                    'status' => 'pending',
+                    'conflict_detected' => true,
+                    'conflict_details' => 'Urgent priority transfer created for ' . $lockedUrgent->control_number,
+                    'override_conflict' => true,
+                    'override_reason' => $overrideReason,
+                    'response_deadline_at' => now()->addDay(),
+                    'affected_user_ids' => [(int) $lockedConflict->requested_by_id],
+                    'responses' => [(string) $lockedConflict->requested_by_id => 'not_required'],
+                    'memorandum_priority' => true,
                 ]);
 
-                $lockedConflictingRequest->addHistory(
-                    'needs_reschedule',
-                    'Request moved to Needs Reschedule due to Priority Override. Reason: ' . $overrideReason . ' | Acting user: ' . ($actingUser?->name ?? 'System') . ' | Timestamp: ' . $timestamp,
-                    $actingUser?->id
+                $lockedUrgent->addHistory(
+                    'urgent_priority_transfer_pending',
+                    "Priority transfer proposal {$revision->id} created for approved reservation {$lockedConflict->control_number}. Existing reservations remain active until the proposal is accepted and custodians respond.",
+                    $actingUser->id
                 );
-
-                $this->applyRequestApproval($lockedUrgentRequest, 'approve', $overrideReason, $lockedUrgentRequest->priority ?? null);
-
-                $lockedUrgentRequest->addHistory(
-                    'approved',
-                    'Request approved through Priority Override. Reason: ' . $overrideReason . ' | Acting user: ' . ($actingUser?->name ?? 'System') . ' | Timestamp: ' . $timestamp,
-                    $actingUser?->id
+                $lockedConflict->addHistory(
+                    'priority_transfer_proposed',
+                    "A formal priority-transfer proposal was created for urgent request {$lockedUrgent->control_number}. The approved reservation remains active pending response. Reason: {$reason}",
+                    $actingUser->id
                 );
             });
         } catch (\Throwable $e) {
-            Log::warning('Priority override aborted due to concurrent state change.', [
+            Log::warning('Priority transfer proposal was not created.', [
                 'urgent_request_id' => $urgentRequest->id,
                 'conflicting_request_id' => $conflictingRequest->id,
                 'exception' => $e->getMessage(),
             ]);
-
-            return redirect()->route('supply-office.index')->with('warning', 'The reservation was updated by another approval action before the override could be completed.');
+            return back()->withErrors(['override_reason' => $e->getMessage()]);
         }
 
-        try {
-            $requester = $conflictingRequest->requester;
-            if ($requester) {
-                $urgentPriority = ($urgentRequest->priority ?? 'institutional') ? strtoupper($urgentRequest->priority ?? 'INSTITUTIONAL') : 'URGENT';
-                $priorityLabel = $urgentPriority === 'INSTITUTIONAL' ? 'URGENT' : strtoupper($urgentRequest->priority ?? 'REGULAR');
-                $overrideMessage = "Your reservation ({$conflictingRequest->control_number}) has been overridden due to an {$priorityLabel} institutional reservation.\n\nReason:\n" . trim((string) ($validated['override_reason'] ?? '')) . "\n\nPlease edit and reschedule your reservation.";
-
-                DB::afterCommit(function () use ($requester, $conflictingRequest, $overrideMessage, $actingUser, $validated): void {
-                    $reason = trim((string) ($validated['override_reason'] ?? '')) ?: 'calendar conflict';
-                    $requester->notify(new RequestStatusChanged(
-                        $conflictingRequest,
-                        'needs_reschedule',
-                        $overrideMessage,
-                        null,
-                        null,
-                        [],
-                        $actingUser->name,
-                        $reason
-                    ));
-                });
-            }
-        } catch (\Throwable $e) {
-            Log::error('Priority override notification failed for request ' . $conflictingRequest->id . ': ' . $e->getMessage(), ['exception' => $e]);
+        if ($requester = $conflictingRequest->requester) {
+            DB::afterCommit(function () use ($requester, $conflictingRequest, $urgentRequest, $overrideReason, $actingUser): void {
+                $requester->notify(new RequestStatusChanged(
+                    $conflictingRequest,
+                    'priority_transfer_proposed',
+                    "Urgent request {$urgentRequest->control_number} requires a priority transfer. A proposed alternative schedule is waiting for custodian response. Reason: {$overrideReason}",
+                    null,
+                    null,
+                    [],
+                    $actingUser->name,
+                    $overrideReason
+                ));
+            });
         }
 
-        return redirect()->route('supply-office.index')->with('success', 'Priority override completed successfully.');
+        return redirect()->route('supply-office.index')->with('success', 'Priority transfer proposal created. The approved reservation remains active until the proposal is accepted.');
     }
 
     private function applyRequestApproval(FacilityRequest $fr, string $action, ?string $notes = null, ?string $priority = null): void

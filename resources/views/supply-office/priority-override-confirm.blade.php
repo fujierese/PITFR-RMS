@@ -43,14 +43,35 @@
             <input type="hidden" name="urgent_request_id" value="{{ $urgentRequestId }}">
             <input type="hidden" name="conflicting_request_id" value="{{ $conflictingRequestId }}">
 
-            <div>
-                <label for="override_reason" class="block text-sm font-medium text-slate-700">Override Reason</label>
-                <textarea id="override_reason" name="override_reason" rows="4" required class="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-700"></textarea>
+            <div class="grid gap-4 md:grid-cols-2">
+                <div>
+                    <label for="new_start_date" class="block text-sm font-medium text-slate-700">Proposed Start Date</label>
+                    <input id="new_start_date" type="date" name="new_start_date" value="{{ old('new_start_date', $date) }}" required class="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-700">
+                </div>
+                <div>
+                    <label for="new_end_date" class="block text-sm font-medium text-slate-700">Proposed End Date</label>
+                    <input id="new_end_date" type="date" name="new_end_date" value="{{ old('new_end_date', $date) }}" required class="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-700">
+                </div>
+                <div>
+                    <label for="new_start_time" class="block text-sm font-medium text-slate-700">Proposed Start Time</label>
+                    <input id="new_start_time" type="time" name="new_start_time" value="{{ old('new_start_time', $time) }}" required class="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-700">
+                </div>
+                <div>
+                    <label for="new_end_time" class="block text-sm font-medium text-slate-700">Proposed End Time</label>
+                    <input id="new_end_time" type="time" name="new_end_time" value="{{ old('new_end_time', '12:00') }}" required class="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-700">
+                </div>
             </div>
 
+            <div>
+                <label for="override_reason" class="block text-sm font-medium text-slate-700">Priority Transfer Reason</label>
+                <textarea id="override_reason" name="override_reason" rows="4" required class="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-700">{{ old('override_reason') }}</textarea>
+            </div>
+
+            <p class="rounded-2xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">This creates a formal rescheduling proposal for the approved reservation. Neither reservation is automatically cancelled or replaced.</p>
+
             <div class="flex flex-wrap gap-3">
-                <a href="{{ route('supply-office.index') }}" class="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel Override</a>
-                <button type="submit" class="inline-flex items-center rounded-2xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white">Confirm Override</button>
+                <a href="{{ route('supply-office.index') }}" class="inline-flex items-center rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel Override / Transfer</a>
+                <button type="submit" class="inline-flex items-center rounded-2xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white">Confirm Override / Create Priority Transfer Proposal</button>
             </div>
         </form>
     </div>

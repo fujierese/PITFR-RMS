@@ -868,13 +868,25 @@ class FacilityRequest extends Model
                     ['whole_day', 'whole-day', 'whole day'],
                     true
                 );
+                $startMinutes = $isWholeDay ? 8 * 60 : $this->timeToMinutes($schedule['start_time']);
+                $endMinutes = $isWholeDay ? 17 * 60 : $this->timeToMinutes($schedule['end_time']);
+                $scheduleStartDate = Carbon::parse($schedule['start_date'])->startOfDay();
+                $scheduleEndDate = Carbon::parse($schedule['end_date'])->startOfDay();
+                $numberOfDays = $scheduleEndDate->lt($scheduleStartDate)
+                    ? 0
+                    : (int) $scheduleStartDate->diffInDays($scheduleEndDate) + 1;
+                $dailyDurationMinutes = $startMinutes !== null && $endMinutes !== null
+                    ? $endMinutes - $startMinutes - ($isWholeDay ? 60 : 0)
+                    : 0;
+                $hasValidDailyDuration = $numberOfDays > 0 && $dailyDurationMinutes > 0;
                 $time = $isWholeDay
                     ? '8:00 AM – 5:00 PM'
-                    : $this->formatTimeForDisplay($schedule['start_time'])
+                    : ($hasValidDailyDuration
+                        ? $this->formatTimeForDisplay($schedule['start_time'])
                         . ' – '
-                        . $this->formatTimeForDisplay($schedule['end_time']);
-                $range = $this->getVenueScheduleRange($venueName);
-                $durationMinutes = $range['start']->diffInMinutes($range['end']);
+                        . $this->formatTimeForDisplay($schedule['end_time'])
+                        : 'Schedule needs review');
+                $durationMinutes = $hasValidDailyDuration ? $dailyDurationMinutes * $numberOfDays : 0;
                 $durationHours = intdiv($durationMinutes, 60);
                 $durationRemainder = $durationMinutes % 60;
                 $duration = ($durationHours ? $durationHours . ' hour' . ($durationHours === 1 ? '' : 's') : '')
@@ -887,10 +899,25 @@ class FacilityRequest extends Model
                     'dates' => $dates,
                     'time' => $time,
                     'label' => $dates . ' · ' . $time,
-                    'duration' => $duration ?: 'Not specified',
+                    'duration' => $hasValidDailyDuration ? ($duration ?: 'Not specified') : 'Schedule needs review',
                 ];
             })
             ->all();
+    }
+
+    private function timeToMinutes(?string $time): ?int
+    {
+        if (! is_string($time) || ! preg_match('/^(\d{2}):(\d{2})/', $time, $matches)) {
+            return null;
+        }
+
+        $hours = (int) $matches[1];
+        $minutes = (int) $matches[2];
+        if ($hours > 23 || $minutes > 59) {
+            return null;
+        }
+
+        return ($hours * 60) + $minutes;
     }
 
     public function getVenueSchedule(string $venueName): array
@@ -930,6 +957,134 @@ class FacilityRequest extends Model
             $schedule['end_date'],
             $schedule['end_time'],
         );
+    }
+
+    public function getVenueScheduleRanges(string $venueName): array
+    {
+        $schedule = $this->getVenueSchedule($venueName);
+
+        return self::resolveReservationDurationRanges(
+            $schedule['reservation_duration'],
+            $schedule['start_date'],
+            $schedule['start_time'],
+            $schedule['end_date'],
+            $schedule['end_time'],
+        );
+    }
+
+    public function getScheduleRanges(): array
+    {
+        $duration = strtolower(trim((string) ($this->reservation_duration ?? 'specific_time')));
+        if (in_array($duration, ['whole_day', 'whole-day', 'whole day'], true)) {
+            return self::resolveReservationDurationRanges(
+                $duration,
+                $this->start_date,
+                $this->start_time,
+                $this->end_date ?? $this->start_date,
+                $this->end_time ?? $this->start_time,
+            );
+        }
+
+        return [[
+            'start' => $this->getRequestedStartDateTime(),
+            'end' => $this->getRequestedEndDateTime(),
+        ]];
+    }
+
+    public function overlapsVenueScheduleRange(string $venueName, Carbon $requestedStart, Carbon $requestedEnd): bool
+    {
+        foreach ($this->getVenueScheduleRanges($venueName) as $range) {
+            if ($range['start']->lt($requestedEnd) && $range['end']->gt($requestedStart)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function getCanonicalCalendarSchedule(?string $venueName = null): array
+    {
+        $this->loadMissing('reservationSchedule', 'requestVenues');
+
+        if ($venueName !== null) {
+            $venueSchedule = $this->getVenueSchedule($venueName);
+            $duration = strtolower(trim((string) ($venueSchedule['reservation_duration'] ?? 'specific_time')));
+        } else {
+            $venueSchedule = null;
+            $duration = strtolower(trim((string) ($this->reservation_duration ?? 'specific_time')));
+        }
+
+        $isWholeDay = in_array($duration, ['whole_day', 'whole-day', 'whole day'], true);
+        $reservationSchedule = $this->reservationSchedule;
+
+        $mainDuration = strtolower(trim((string) ($this->reservation_duration ?? '')));
+        $mainIsExplicitTimed = in_array($mainDuration, ['specific_time', 'specific-time', 'specific time', 'timed'], true);
+        $venueIsExplicitTimed = $venueSchedule !== null
+            && in_array(strtolower(trim((string) ($venueSchedule['reservation_duration'] ?? ''))), ['specific_time', 'specific-time', 'specific time', 'timed'], true);
+
+        $venueCount = count($this->getVenueNames());
+        $singleVenueSchedule = $venueName !== null && $venueCount <= 1;
+
+        if ($reservationSchedule && $singleVenueSchedule && ($mainIsExplicitTimed || $venueIsExplicitTimed) && !$isWholeDay) {
+            $timezone = config('app.timezone', 'Asia/Manila');
+            $start = $reservationSchedule->start_datetime instanceof \Carbon\Carbon
+                ? $reservationSchedule->start_datetime->copy()->setTimezone($timezone)
+                : \Carbon\Carbon::parse($reservationSchedule->start_datetime, $timezone);
+            $end = $reservationSchedule->end_datetime instanceof \Carbon\Carbon
+                ? $reservationSchedule->end_datetime->copy()->setTimezone($timezone)
+                : \Carbon\Carbon::parse($reservationSchedule->end_datetime, $timezone);
+
+            if ($start && $end && $end->greaterThanOrEqualTo($start)) {
+                return [
+                    'start' => $start,
+                    'end' => $end,
+                    'all_day' => false,
+                    'schedule_type' => 'specific_time',
+                    'source' => 'reservation_schedule',
+                ];
+            }
+        }
+
+        if ($reservationSchedule && $venueSchedule !== null && $isWholeDay) {
+            $mainDuration = strtolower(trim((string) ($this->reservation_duration ?? '')));
+            $mainIsExplicitTimed = in_array($mainDuration, ['specific_time', 'specific-time', 'specific time', 'timed'], true);
+            if ($mainIsExplicitTimed) {
+                $timezone = config('app.timezone', 'Asia/Manila');
+                return [
+                    'start' => $reservationSchedule->start_datetime->copy()->setTimezone($timezone),
+                    'end' => $reservationSchedule->end_datetime->copy()->setTimezone($timezone),
+                    'all_day' => false,
+                    'schedule_type' => 'specific_time',
+                    'source' => 'reservation_schedule_over_whole_day_fallback',
+                ];
+            }
+        }
+
+        if ($venueSchedule !== null) {
+            $range = self::resolveReservationDuration(
+                $venueSchedule['reservation_duration'],
+                $venueSchedule['start_date'],
+                $venueSchedule['start_time'],
+                $venueSchedule['end_date'],
+                $venueSchedule['end_time'],
+            );
+        } else {
+            $range = self::resolveReservationDuration(
+                $this->reservation_duration ?? 'specific_time',
+                $this->start_date,
+                $this->start_time,
+                $this->end_date ?? $this->start_date,
+                $this->end_time ?? $this->start_time,
+            );
+        }
+
+        return [
+            'start' => $range['start'],
+            'end' => $range['end'],
+            'all_day' => $isWholeDay,
+            'schedule_type' => $isWholeDay ? 'whole_day' : 'specific_time',
+            'source' => 'venue_or_request_fields',
+        ];
     }
 
     public function getEquipmentItems(): array
@@ -1201,6 +1356,25 @@ class FacilityRequest extends Model
         );
     }
 
+    public static function resolveReservationDurationRanges(string $duration, $startDateValue, $startTimeValue = null, $endDateValue = null, $endTimeValue = null): array
+    {
+        $normalizedDuration = strtolower(trim($duration));
+        if (! in_array($normalizedDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
+            return [self::resolveReservationDuration($duration, $startDateValue, $startTimeValue, $endDateValue, $endTimeValue)];
+        }
+
+        $timezone = config('app.timezone', 'Asia/Manila');
+        $firstDate = Carbon::parse($startDateValue ?? now()->toDateString(), $timezone)->startOfDay();
+        $lastDate = Carbon::parse($endDateValue ?? $startDateValue ?? now()->toDateString(), $timezone)->startOfDay();
+        $ranges = [];
+
+        for ($date = $firstDate->copy(); $date->lte($lastDate); $date->addDay()) {
+            $ranges[] = self::normalizeScheduleRange($date->toDateString(), '08:00', $date->toDateString(), '17:00');
+        }
+
+        return $ranges;
+    }
+
     protected static function normalizeScheduleValue($dateValue, $timeValue, ?\Carbon\Carbon $fallback = null): ?\Carbon\Carbon
     {
         if (!$dateValue && !$timeValue) {
@@ -1320,14 +1494,42 @@ class FacilityRequest extends Model
 
     public function overlapsTimeRange(\Carbon\Carbon $requestedStart, \Carbon\Carbon $requestedEnd): bool
     {
-        return $this->getRequestedStartDateTime()->lt($requestedEnd)
-            && $this->getRequestedEndDateTime()->gt($requestedStart);
+        foreach ($this->getScheduleRanges() as $range) {
+            if ($range['start']->lt($requestedEnd) && $range['end']->gt($requestedStart)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function overlapsRequest(FacilityRequest $other): bool
     {
-        return $this->getRequestedStartDateTime()->lt($other->getRequestedEndDateTime())
-            && $other->getRequestedStartDateTime()->lt($this->getRequestedEndDateTime());
+        $sharedVenues = collect($this->getVenueNames())
+            ->filter(fn (string $venueName): bool => collect($other->getVenueNames())
+                ->contains(fn (string $otherVenue): bool => mb_strtolower(trim($otherVenue)) === mb_strtolower(trim($venueName))));
+
+        if ($sharedVenues->isNotEmpty()) {
+            foreach ($sharedVenues as $venueName) {
+                foreach ($this->getVenueScheduleRanges($venueName) as $range) {
+                    if ($other->overlapsVenueScheduleRange($venueName, $range['start'], $range['end'])) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        foreach ($this->getScheduleRanges() as $range) {
+            foreach ($other->getScheduleRanges() as $otherRange) {
+                if ($range['start']->lt($otherRange['end']) && $range['end']->gt($otherRange['start'])) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     // ─── HELPER: find equipment by name (case-insensitive) ───────────────────
@@ -1627,11 +1829,32 @@ class FacilityRequest extends Model
             'equipment_return_missing_remarks' => $missingRemarkText ?? $this->equipment_return_missing_remarks,
         ]);
 
-        $this->addHistory(
-            'equipment_returned',
-            'Equipment return recorded by custodian ID: ' . $custodianId . ($recordedDamaged > 0 ? ' Damaged units: ' . $recordedDamaged : '') . ($recordedMissing > 0 ? ' Missing units: ' . $recordedMissing : ''),
-            $custodianId
-        );
+        $returnSummary = collect($custodianData['equipment'] ?? [])
+            ->filter(fn ($quantity) => (int) $quantity > 0)
+            ->map(fn ($quantity, $itemName) => $itemName . ' × ' . (int) $quantity)
+            ->values()
+            ->all();
+        $damagedSummary = collect($custodianData['damaged'] ?? [])
+            ->filter(fn ($quantity) => (int) $quantity > 0)
+            ->map(fn ($quantity, $itemName) => $itemName . ' × ' . (int) $quantity)
+            ->values()
+            ->all();
+        $missingSummary = collect($custodianData['missing'] ?? [])
+            ->filter(fn ($quantity) => (int) $quantity > 0)
+            ->map(fn ($quantity, $itemName) => $itemName . ' × ' . (int) $quantity)
+            ->values()
+            ->all();
+        $historyDetail = $allReturned ? 'Equipment return completed' : 'Equipment return partially recorded';
+        $historyDetail .= '. Returned: ' . ($returnSummary !== [] ? implode(', ', $returnSummary) : 'none');
+
+        if ($damagedSummary !== []) {
+            $historyDetail .= '. Damaged: ' . implode(', ', $damagedSummary);
+        }
+        if ($missingSummary !== []) {
+            $historyDetail .= '. Missing: ' . implode(', ', $missingSummary);
+        }
+
+        $this->addHistory('equipment_returned', $historyDetail . '.', $custodianId);
     }
 
     private function normalizeReturnQuantities(array $quantities, array $assignedQuantities, string $label): array

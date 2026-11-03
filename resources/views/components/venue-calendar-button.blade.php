@@ -7,16 +7,42 @@
     'label' => 'Check calendar',
     'availabilityCheckUrl' => null,
     'availabilityGroup' => null,
+    'facilityRequest' => null,
+    'useProvidedSchedule' => false,
 ])
 
 @php
+    $calendarUser = auth()->user();
+    $calendarDescription = $calendarUser && $calendarUser->isCustodianVenue()
+        ? 'Review bookings and tentative requests for your assigned venue; use the request workflow to confirm availability.'
+        : ($calendarUser && $calendarUser->isCustodianEquipment()
+            ? 'Review venue bookings for context; confirm assigned equipment in your equipment review queue.'
+            : ($availabilityCheckUrl
+                ? 'Review this request against current bookings and tentative requests before confirming availability.'
+                : ($calendarUser && $calendarUser->isAdmin()
+                    ? 'Review approved bookings and tentative requests to assess conflicts and coordinate availability.'
+                    : 'Review venue bookings and availability before submitting or updating your reservation.')));
+    $canonicalStartTime = $startTime;
+    $canonicalEndTime = $endTime;
+    $canonicalStartDate = $date;
+    $canonicalEndDate = $endDate ?? $date;
+
+    if ($facilityRequest instanceof \App\Models\FacilityRequest && ! $useProvidedSchedule) {
+        $canonical = $facilityRequest->getCanonicalCalendarSchedule($venue);
+        $canonicalStartTime = $canonical['start']?->format('H:i');
+        $canonicalEndTime = $canonical['end']?->format('H:i');
+        $canonicalStartDate = $canonical['start']?->toDateString() ?? $canonicalStartDate;
+        $canonicalEndDate = $canonical['end']?->toDateString() ?? $canonicalEndDate;
+    }
+
     $calendarUrl = route('calendar.embed', array_filter([
         'venue' => $venue,
-        'date' => $date,
-        'start_date' => $date,
-        'end_date' => $endDate,
-        'start_time' => $startTime,
-        'end_time' => $endTime,
+        'date' => $canonicalStartDate,
+        'start_date' => $canonicalStartDate,
+        'end_date' => $canonicalEndDate,
+        'start_time' => $canonicalStartTime,
+        'end_time' => $canonicalEndTime,
+        'request_id' => $facilityRequest?->id,
     ], static fn ($value) => $value !== null && $value !== ''));
 @endphp
 
@@ -26,6 +52,7 @@
         data-venue-calendar-open
         data-venue-calendar-url="{{ $calendarUrl }}"
         data-venue-calendar-title="Availability calendar for {{ $venue }}"
+        data-venue-calendar-description="{{ $calendarDescription }}"
         @if($availabilityCheckUrl)
             data-availability-check-url="{{ $availabilityCheckUrl }}"
             data-availability-group="{{ $availabilityGroup }}"

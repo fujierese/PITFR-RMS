@@ -136,8 +136,8 @@
 
     $workflowSteps = [
         ['label' => 'Submitted', 'key' => 'submitted'],
-        ['label' => 'Venue Availability Confirmation', 'key' => 'venue'],
-        ['label' => 'Supply Office Availability Confirmation', 'key' => 'supply_office'],
+        ['label' => 'Venue Check', 'key' => 'venue'],
+        ['label' => 'Supply Office Check', 'key' => 'supply_office'],
     ];
     if ($hasAdditionalEquipment) {
         $workflowSteps[] = ['label' => 'Equipment Review', 'key' => 'equipment'];
@@ -180,6 +180,22 @@
         $request->status === 'rejected' => 'Rejected at Final Approval',
         $request->status === 'approved' || $request->status === 'completed' => $request->getReservationLifecycleLabel(),
         default => collect($workflowSteps)->firstWhere('key', $currentWorkflowKey)['label'] ?? 'Submitted',
+    };
+    $pendingRevisionRequesterResponse = $pendingRevisionResponses[(string) $request->requested_by_id] ?? 'pending';
+    $pendingRevisionResponderNames = $pendingRevisionUsers->pluck('name')->implode(', ');
+    $workflowNextAction = match (true) {
+        $request->status === 'cancelled' => 'No further workflow action is required.',
+        $request->status === 'rejected' => 'The workflow has ended because this request was rejected.',
+        in_array($request->status, ['approved', 'completed'], true) => 'The approval workflow is complete.',
+        $pendingRevision && ! in_array($pendingRevisionRequesterResponse, ['accepted', 'not_required'], true) => 'The requestor needs to review the proposed schedule.',
+        $pendingRevision && $pendingRevisionResponderNames !== '' => 'Waiting for proposal confirmation from: ' . $pendingRevisionResponderNames . '.',
+        $pendingRevision => 'Proposal responses are complete; the schedule review will continue.',
+        $request->status === 'needs_reschedule' => 'The requestor needs to update the schedule and resubmit for venue review.',
+        $request->venue_status === 'needs_reschedule' || $request->supply_office_review_status === 'unavailable' => 'The requestor needs to coordinate an alternative schedule before review can continue.',
+        $request->venue_status !== 'approved' => 'Waiting for the assigned venue custodian to confirm availability.',
+        ! $supplyOfficeReviewComplete => 'Waiting for Supply Office availability review.',
+        $hasAdditionalEquipment && $request->equipment_status !== 'approved' => 'Waiting for assigned equipment custodian review.',
+        default => 'Waiting for the designated Supply Office approver to make the final decision.',
     };
     $requestDateLabel = $request->date_requested ? \Carbon\Carbon::parse($request->date_requested)->format('M j, Y') : 'N/A';
     $lastUpdatedLabel = $request->updated_at ? \Carbon\Carbon::parse($request->updated_at)->format('M j, Y \a\t g:i A') : null;
@@ -306,22 +322,22 @@
         $request->status === 'pending'
         && $request->venue_status === 'pending'
     ) {
-        $approvalTitle = 'Pending Venue Availability Confirmation';
+        $approvalTitle = 'Venue is checking your schedule';
         $approvalBody = 'The venue custodian is checking whether the selected venue is available for your requested date and time.';
         $approvalTone = 'amber';
         $currentApprover = 'Venue Custodian';
-        $nextStep = 'Venue Availability Check';
+        $nextStep = 'Venue Check';
     } elseif (
         $request->status === 'pending'
         && $request->supply_office_review_status === 'pending'
     ) {
-        $approvalTitle = 'Pending Supply Office Availability Confirmation';
+        $approvalTitle = 'Supply Office is checking your schedule';
         $approvalBody = !empty($additionalEquipmentItems)
             ? 'The venue custodian confirmed the venue. The Supply Office is rechecking the venue and requested equipment before custodian approvals begin.'
             : 'The venue custodian confirmed the venue. The Supply Office is performing the final availability check before final approval.';
         $approvalTone = 'amber';
         $currentApprover = 'Supply Office';
-        $nextStep = 'Supply Office Availability Check';
+        $nextStep = 'Supply Office Check';
     } elseif (
         $request->status === 'pending'
         && $request->supply_office_review_status === 'unavailable'
@@ -370,6 +386,31 @@
             ->unique()
             ->implode(', ')
         : '';
+
+    $adminVenuePending = $request->status === 'pending' && $request->venue_status === 'pending';
+    $adminSupplyPending = $request->status === 'pending'
+        && $request->venue_status === 'approved'
+        && $request->supply_office_review_status === 'pending';
+    $adminEquipmentPending = $request->status === 'pending'
+        && $request->venue_status === 'approved'
+        && $request->supply_office_review_status === 'confirmed'
+        && $hasAdditionalEquipment
+        && $request->equipment_status !== 'approved';
+    $adminFinalReady = $request->status === 'pending'
+        && $request->venue_status === 'approved'
+        && $request->supply_office_review_status === 'confirmed'
+        && $request->equipment_status === 'approved'
+        && !$pendingChangeRequest;
+
+    $venueConfirmationHistory = $request->histories()
+        ->where('action', 'custodian_endorsed')
+        ->where('detail', 'like', 'Venue Availability confirmed by%')
+        ->latest('occurred_at')
+        ->first();
+    $supplyConfirmationHistory = $request->histories()
+        ->where('action', 'availability_confirmed')
+        ->latest('occurred_at')
+        ->first();
 @endphp
 
 @section('content')
@@ -429,6 +470,10 @@
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Workflow progress</p>
                     <p class="mt-1 text-sm font-semibold text-slate-700">Current stage: {{ $workflowStageLabel }}</p>
+                    <p class="mt-1 text-sm text-slate-600"><span class="font-semibold">Next action:</span> {{ $workflowNextAction }}</p>
+                    @if($lastUpdatedLabel)
+                        <p class="mt-1 text-xs text-slate-500">Last updated {{ $lastUpdatedLabel }}</p>
+                    @endif
                 </div>
             </div>
             @if($request->status === 'cancelled')
@@ -453,7 +498,7 @@
             @endif
         </div>
 
-        @if($hasAdditionalEquipment)
+        @if($hasAdditionalEquipment && $request->status === 'approved')
             <section class="mt-5 rounded-[24px] border border-amber-200 bg-amber-50 p-4 sm:p-5" aria-labelledby="equipment-return-progress-title">
                 <h2 id="equipment-return-progress-title" class="text-base font-semibold text-amber-950">Equipment return progress</h2>
                 <p class="mt-1 text-sm text-amber-900">Returned and missing quantities are both recorded as accounted for. Damaged items count as returned but are excluded from available inventory.</p>
@@ -527,18 +572,41 @@
 
     @if($pendingRevision && $currentUser && in_array((int) $currentUser->id, array_map('intval', $pendingRevision->affected_user_ids ?? [$request->requested_by_id]), true))
         @php
-            $revisionResponses = $pendingRevision->responses ?? [];
+            $revisionResponses = $pendingRevisionResponses;
             $currentRevisionResponse = $revisionResponses[(string) $currentUser->id] ?? 'pending';
+            $proposalAuthor = $pendingRevision->revisedBy;
+            $requestorRevisionResponse = $revisionResponses[(string) $request->requested_by_id] ?? 'pending';
+            $requestorHasResponded = in_array($requestorRevisionResponse, ['accepted', 'not_required'], true);
+            $pendingResponseCount = collect($pendingRevision->affected_user_ids ?? [$request->requested_by_id])
+                ->filter(fn ($userId): bool => ($revisionResponses[(string) $userId] ?? 'pending') === 'pending')
+                ->count();
             $currentUserMustRespond = $currentRevisionResponse === 'pending'
                 && ! ($pendingRevision->memorandum_priority
                     && (int) $currentUser->id === (int) $request->requested_by_id
                     && ! $currentUser->isCustodian());
+            $currentUserCanRespond = $currentUserMustRespond
+                && ((int) $currentUser->id === (int) $request->requested_by_id || $requestorHasResponded);
+            $proposedVenuesForCustodian = $currentUser->isCustodianVenue()
+                ? \App\Models\Venue::query()
+                    ->whereIn('name', $pendingRevision->new_venue ?? [])
+                    ->where('custodian_id', $currentUser->id)
+                    ->pluck('name')
+                : collect();
         @endphp
         <section style="margin-bottom: 24px !important;" class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm" aria-labelledby="schedule-proposal-title">
             <div class="flex items-start gap-3">
                 <div class="min-w-0 flex-1">
                     <h2 id="schedule-proposal-title" class="text-lg font-semibold text-amber-950">Schedule change proposed</h2>
-                    <p class="mt-1 text-sm text-amber-900">The Supply Office proposed a reservation change. The approved booking remains unchanged until required responses are received.</p>
+                    <p class="mt-1 text-sm text-amber-900">
+                        @if($proposalAuthor)
+                            Proposed by {{ $proposalAuthor->name }} ({{ $proposalAuthor->role_label }}).
+                        @else
+                            A reservation change was proposed.
+                        @endif
+                        {{ $request->status === 'approved'
+                            ? 'The approved reservation remains unchanged until required responses are received.'
+                            : 'The current request schedule remains unchanged until required responses are received.' }}
+                    </p>
                 </div>
                 <span class="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">{{ $currentUserMustRespond ? 'Your response needed' : 'Notice' }}</span>
             </div>
@@ -556,7 +624,7 @@
                     <dd class="mt-1 text-slate-900">{{ implode(', ', $pendingRevision->new_venue ?? []) }}</dd>
                 </div>
                 <div>
-                    <dt class="font-medium text-slate-500">Reason from Supply Office</dt>
+                    <dt class="font-medium text-slate-500">Reason from {{ $proposalAuthor?->role_label ?? 'the proposer' }}</dt>
                     <dd class="mt-1 text-slate-900">{{ $pendingRevision->revision_reason }}</dd>
                 </div>
                 @if($pendingRevision->response_deadline_at)
@@ -569,7 +637,32 @@
             @if($pendingRevision->memorandum_priority && (int) $currentUser->id === (int) $request->requested_by_id && ! $currentUser->isCustodian())
                 <p class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">This transfer is required by a memorandum. You are being informed of the destination and reason; requestor consent is not required.</p>
             @endif
-            @if($currentUserMustRespond)
+            @if($currentUserMustRespond && !$requestorHasResponded && (int) $currentUser->id !== (int) $request->requested_by_id)
+                <p class="mt-3 text-sm text-slate-600">The requestor must accept the proposed schedule before custodians can review it.</p>
+            @endif
+            @if($requestorHasResponded && $proposedVenuesForCustodian->isNotEmpty() && $currentRevisionResponse === 'pending')
+                <div class="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3">
+                    <p class="text-sm font-semibold text-sky-950">Review the proposed venue schedule</p>
+                    <p class="mt-1 text-sm text-sky-900">Check the proposed date and time in the venue calendar. Availability will be checked again when you confirm.</p>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @foreach($proposedVenuesForCustodian as $venueName)
+                            <x-venue-calendar-button
+                                :venue="$venueName"
+                                :date="$pendingRevision->new_start_date?->toDateString()"
+                                :end-date="$pendingRevision->new_end_date?->toDateString()"
+                                :start-time="$pendingRevision->new_start_time"
+                                :end-time="$pendingRevision->new_end_time"
+                                :facility-request="$request"
+                                :use-provided-schedule="true"
+                                :availability-check-url="route('calendar.request-availability-check', $request)"
+                                :availability-group="'revision-' . $pendingRevision->id . '-' . $currentUser->id"
+                                label="Check proposed schedule"
+                            />
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+            @if($currentUserCanRespond)
             @if($pendingRevision->conflict_detected && $pendingRevision->override_conflict)
                 <p class="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">The proposed schedule has a resource conflict that the Supply Office chose to override. Please consider this before accepting.</p>
             @endif
@@ -586,7 +679,27 @@
                 </form>
             </div>
             @else
-                <p class="mt-3 text-sm text-slate-600">Your response has been recorded or is not required. The approved booking remains unchanged until required custodian confirmations are complete.</p>
+                @if($currentRevisionResponse === 'accepted')
+                    <p class="mt-3 text-sm text-slate-600">
+                        Your confirmation has been recorded.
+                        @if($pendingResponseCount > 0)
+                            Waiting for {{ $pendingResponseCount }} required {{ \Illuminate\Support\Str::plural('response', $pendingResponseCount) }}:
+                            {{ $pendingRevisionUsers->pluck('name')->implode(', ') }}.
+                        @else
+                            All required responses have been received.
+                        @endif
+                    </p>
+                @else
+                    <p class="mt-3 text-sm text-slate-600">
+                        No response is required from you.
+                        @if($pendingResponseCount > 0)
+                            Waiting for {{ $pendingResponseCount }} required {{ \Illuminate\Support\Str::plural('response', $pendingResponseCount) }}:
+                            {{ $pendingRevisionUsers->pluck('name')->implode(', ') }}.
+                        @else
+                            All required responses have been received.
+                        @endif
+                    </p>
+                @endif
             @endif
         </section>
     @endif
@@ -644,7 +757,7 @@
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900">Reschedule Needed</h2>
-                        <p class="text-sm text-slate-600">This request was moved to needs-reschedule status after an override. Update the scheduling details so it can move back through review.</p>
+                        <p class="text-sm text-slate-600">The proposed schedule was not accepted or the venue is unavailable. Choose another venue, date, or time; the request will return to venue review.</p>
                     </div>
                     <a href="{{ route('requestor.edit', $request->id) }}" class="inline-flex items-center gap-2 rounded-2xl bg-amber-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-700">
                         Reschedule Request
@@ -687,7 +800,7 @@
                 @endphp
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3">
                     <div>
-                        <p class="text-sm text-slate-600">Review and validate every assigned venue schedule before taking action. The system will recheck availability when you submit.</p>
+                        <p class="text-sm text-slate-600">Review each assigned venue schedule. Confirm that it is available, or suggest a new schedule if it is not. We’ll check availability again before you confirm.</p>
                         <div class="mt-2 flex flex-wrap gap-2">
                             @foreach($request->getVenueNames() as $venueName)
                                 @if($assignedVenueNames->contains(mb_strtolower(trim($venueName))))
@@ -700,6 +813,7 @@
                                         :end-date="$venueSchedule['end_date'] ?? now()->toDateString()"
                                         :start-time="$venueSchedule['start_time'] ?? null"
                                         :end-time="$venueSchedule['end_time'] ?? null"
+                                        :facility-request="$request"
                                         :availability-check-url="route('calendar.request-availability-check', $request)"
                                         :availability-group="$availabilityGroup"
                                         label="Check venue calendar"
@@ -726,62 +840,70 @@
             @elseif($pendingRevision)
                 <div class="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
                     <h2 class="font-semibold">Schedule proposal awaiting confirmation</h2>
-                    <p class="mt-1">Venue availability actions are paused while the requestor and affected custodians respond to the proposed schedule.</p>
+                    <p class="mt-1">
+                        @if(in_array(($pendingRevisionResponses[(string) $request->requested_by_id] ?? 'pending'), ['accepted', 'not_required'], true))
+                            The requestor has responded. The assigned venue custodian must confirm the proposed schedule before the request can continue.
+                        @else
+                            Venue availability review will begin after the requestor responds to the proposed schedule.
+                        @endif
+                    </p>
                 </div>
             @elseif(!$hasEndorsed && ($canConfirmVenueAvailability || $canApproveAssignedEquipment || $canVenueCustodianReschedule))
                 <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
                     <div class="flex flex-col gap-4">
                         <div class="flex items-center justify-between gap-4">
                             <div>
-                                <h2 class="text-lg font-semibold text-slate-900">{{ $canConfirmVenueAvailability || $canVenueCustodianReschedule ? ($request->venue_status === 'needs_reschedule' ? 'Venue Schedule Coordination' : 'Venue Availability Check') : 'Equipment Custodian Approval' }}</h2>
-                                <p class="text-sm text-slate-500">{{ $canConfirmVenueAvailability || $canVenueCustodianReschedule ? ($request->venue_status === 'needs_reschedule' ? 'The current schedule was marked unavailable. Propose a new date and time for the requestor and affected custodians to confirm.' : 'Check the venue calendar, then confirm availability. This is not an approval; the Supply Office will confirm availability next.') : 'Review your assigned equipment and approve what you can provide, or reject it with a clear reason.' }}</p>
+                                <h2 class="text-lg font-semibold text-slate-900">{{ $canConfirmVenueAvailability || $canVenueCustodianReschedule ? ($request->venue_status === 'needs_reschedule' ? 'Venue Schedule Update' : 'Check Venue Schedule') : 'Equipment Custodian Approval' }}</h2>
+                                <p class="text-sm text-slate-500">{{ $canConfirmVenueAvailability || $canVenueCustodianReschedule ? ($request->venue_status === 'needs_reschedule' ? 'The requested schedule is unavailable. Suggest a new date and time for the requester and affected custodians to review.' : 'Check the venue calendar, then confirm whether the requested schedule is available. The Supply Office will review it next. This does not approve the request.') : 'Review your assigned equipment and approve what you can provide, or reject it with a clear reason.' }}</p>
                             </div>
                             <span class="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">
-                                Action Required
+                                Your Review Is Needed
                             </span>
                         </div>
 
-                        <div class="grid gap-3 sm:grid-cols-2">
+                        <div class="flex flex-col gap-3 sm:flex-row">
                             @if($canConfirmVenueAvailability || $canApproveAssignedEquipment)
-                                <form method="POST" action="{{ route('request.custodian.verify', $request->id) }}" data-availability-actions="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" data-availability-confirm="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" class="{{ $canConfirmVenueAvailability ? 'hidden' : '' }}" data-swal-confirm data-swal-title="{{ $canConfirmVenueAvailability ? 'Confirm venue availability?' : 'Approve assigned equipment?' }}" data-swal-text="{{ $canConfirmVenueAvailability ? 'The request will move to the Supply Office for another availability check. It is not approved yet.' : 'Your equipment decision will be recorded. Final approval still requires Supply Office review.' }}" data-swal-confirm-text="{{ $canConfirmVenueAvailability ? 'Confirm venue availability' : 'Approve equipment' }}" data-swal-confirm-color="#059669">
+                                <form method="POST" action="{{ route('request.custodian.verify', $request->id) }}" data-availability-actions="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" data-availability-confirm="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" class="{{ $canConfirmVenueAvailability ? 'hidden' : '' }}sm:flex-1" data-swal-confirm data-swal-title="{{ $canConfirmVenueAvailability ? 'Confirm the venue is available?' : 'Approve assigned equipment?' }}" data-swal-text="{{ $canConfirmVenueAvailability ? 'The Supply Office will review the request next. It is not approved yet.' : 'Your equipment decision will be recorded. Final approval still requires Supply Office review.' }}" data-swal-confirm-text="{{ $canConfirmVenueAvailability ? 'Confirm availability' : 'Approve equipment' }}" data-swal-confirm-color="#059669">
                                     @csrf
                                     <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-emerald-700">
-                                        {{ $canConfirmVenueAvailability ? 'Confirm Venue Availability' : 'Approve Assigned Equipment' }}
+                                        {{ $canConfirmVenueAvailability ? 'Confirm venue is available' : 'Approve assigned equipment' }}
                                     </button>
                                 </form>
-
-                                <form method="POST" action="{{ route('request.custodian.reject', $request->id) }}" data-availability-actions="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" class="{{ $canConfirmVenueAvailability ? 'hidden' : '' }}" data-swal-confirm data-swal-title="{{ $canConfirmVenueAvailability ? 'Mark this venue unavailable?' : 'Reject this equipment request?' }}" data-swal-text="{{ $canConfirmVenueAvailability ? 'The Supply Office will be asked to coordinate an available schedule with the requestor.' : 'This will reject the equipment request and notify the requestor.' }}" data-swal-confirm-text="{{ $canConfirmVenueAvailability ? 'Mark unavailable' : 'Reject request' }}" data-swal-confirm-color="#dc2626">
+                            @endif
+                            @if($canApproveAssignedEquipment)
+                                <form method="POST" action="{{ route('request.custodian.reject', $request->id) }}" class="sm:flex-1" data-swal-confirm data-swal-title="Reject this equipment request?" data-swal-text="This will reject the equipment request and notify the requestor." data-swal-confirm-text="Reject request" data-swal-confirm-color="#dc2626">
                                     @csrf
-                                    @if($canConfirmVenueAvailability)
-                                        <label class="sr-only" for="venue-unavailable-notes">Reason the venue is unavailable</label>
-                                        <textarea id="venue-unavailable-notes" name="notes" rows="2" required maxlength="1000" placeholder="Explain why this venue is unavailable" class="mb-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm sm:col-span-2"></textarea>
-                                    @endif
                                     <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-red-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-red-700">
-                                        {{ $canConfirmVenueAvailability ? 'Mark Venue Unavailable' : 'Reject' }}
+                                        Reject
                                     </button>
                                 </form>
                             @endif
                             @if($canVenueCustodianReschedule)
-                                <button type="button" id="open-venue-reschedule-form" data-availability-actions="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" class="{{ $canConfirmVenueAvailability ? 'hidden ' : '' }}sm:col-span-2 w-full inline-flex items-center justify-center rounded-2xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100">
-                                    Propose Reschedule
+                                <button type="button" id="open-venue-reschedule-form" data-availability-actions="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" class="{{ $canConfirmVenueAvailability ? 'hidden ' : '' }}w-full sm:flex-1 inline-flex items-center justify-center rounded-2xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100">
+                                    Suggest a new schedule
                                 </button>
                             @endif
                         </div>
 
                         @if($canVenueCustodianReschedule)
-                            <form id="venue-reschedule-form" method="POST" action="{{ route('custodian.requests.revise') }}" class="hidden rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-4" data-swal-confirm data-swal-title="Send this reschedule proposal?" data-swal-text="The requestor and affected custodians must confirm the new schedule. The current request will remain unchanged until everyone responds." data-swal-confirm-text="Send proposal" data-swal-confirm-color="#d97706">
+                            <form id="venue-reschedule-form" method="POST" action="{{ route('custodian.requests.revise') }}" class="hidden rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-4">
                                 @csrf
                                 <input type="hidden" name="facility_request_id" value="{{ $request->id }}">
-                                @foreach($request->getVenueNames() as $venueName)
-                                    <input type="hidden" name="venue[]" value="{{ $venueName }}">
-                                @endforeach
+                                <label class="block text-sm font-medium text-slate-700">Proposed venue(s)
+                                    <select name="venue[]" multiple required class="mt-1 min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
+                                        @foreach($assignedVenueOptions as $venueOption)
+                                            <option value="{{ $venueOption }}" @selected(in_array($venueOption, $request->getVenueNames(), true))>{{ $venueOption }}</option>
+                                        @endforeach
+                                    </select>
+                                    <span class="mt-1 block text-xs text-slate-500">You can only propose venues assigned to you. The responsible custodian will verify the selected schedule.</span>
+                                </label>
                                 @foreach($request->getEquipmentItems() as $equipmentItem)
                                     <input type="hidden" name="equipment[]" value="{{ $equipmentItem }}">
                                     <input type="hidden" name="equipment_quantities[{{ $equipmentItem }}]" value="{{ $request->getEquipmentQuantities()[$equipmentItem] ?? 1 }}">
                                 @endforeach
                                 <div>
                                     <h3 class="font-semibold text-amber-950">Propose another schedule</h3>
-                                    <p class="mt-1 text-sm text-amber-900">Choose a date and time that appears open on the calendar. The system will recheck availability before sending the proposal.</p>
+                                    <p class="mt-1 text-sm text-amber-900">Change any date, time, or venue field to suggest an alternative. The proposal can be sent even if availability still needs review; the venue custodian will check again before confirming it.</p>
                                 </div>
                                 <div class="grid gap-3 sm:grid-cols-2">
                                     <label class="text-sm font-medium text-slate-700">New start date
@@ -804,6 +926,7 @@
                                     <button type="button" id="cancel-venue-reschedule-form" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
                                     <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Send reschedule proposal</button>
                                 </div>
+                                <p id="venue-reschedule-feedback" class="hidden rounded-xl px-3 py-2 text-sm" role="status" aria-live="polite"></p>
                             </form>
                         @endif
 
@@ -875,15 +998,43 @@
             <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
                 <div class="flex flex-col gap-4">
                     <div>
-                        <h2 class="text-lg font-semibold text-slate-900">Administrator Review</h2>
-                        @if($request->status === 'pending')
-                            <p class="text-sm text-slate-500">Review custodial endorsements and complete the final approval or decline the request.</p>
+                        @if($adminVenuePending)
+                            <h2 class="text-lg font-semibold text-slate-900">Venue Schedule Check</h2>
+                            <p class="text-sm text-slate-500">Waiting for the assigned Venue Custodian to confirm availability.</p>
+                        @elseif($adminSupplyPending)
+                            <h2 class="text-lg font-semibold text-slate-900">Supply Office Review</h2>
+                            <p class="text-sm text-slate-500">The venue is confirmed. Supply Office staff must check for schedule conflicts, then confirm or mark it unavailable.</p>
+                        @elseif($adminEquipmentPending)
+                            <h2 class="text-lg font-semibold text-slate-900">Equipment Review</h2>
+                            <p class="text-sm text-slate-500">Waiting for assigned equipment custodians: {{ $pendingCustodianNames ?: 'No pending custodian listed' }}.</p>
+                        @elseif($adminFinalReady && auth()->user()->isFinalApprover())
+                            <h2 class="text-lg font-semibold text-slate-900">Final Approval</h2>
+                            <p class="text-sm text-slate-500">All required venue, Supply Office, and equipment stages are complete.</p>
+                        @elseif($adminFinalReady)
+                            <h2 class="text-lg font-semibold text-slate-900">Awaiting Admin Final Approval</h2>
+                            <p class="text-sm text-slate-500">Supply Office review is complete. The designated Admin account must finalize this request.</p>
                         @elseif($request->status === 'approved')
+                            <h2 class="text-lg font-semibold text-slate-900">Reservation Approved</h2>
                             <p class="text-sm text-emerald-600 font-medium">✓ Request has been approved and finalized.</p>
                         @elseif($request->status === 'rejected')
+                            <h2 class="text-lg font-semibold text-slate-900">Reservation Declined</h2>
                             <p class="text-sm text-red-600 font-medium">✗ This request has been declined.</p>
+                        @else
+                            <h2 class="text-lg font-semibold text-slate-900">Workflow Review</h2>
+                            <p class="text-sm text-slate-500">Actions are unavailable until the current workflow stage is complete.</p>
                         @endif
                     </div>
+
+                    @if($venueConfirmationHistory)
+                        <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                            <p class="whitespace-pre-line text-sm font-semibold text-emerald-900">{{ $venueConfirmationHistory->detail }}</p>
+                        </div>
+                    @endif
+                    @if($supplyConfirmationHistory)
+                        <div class="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+                            <p class="whitespace-pre-line text-sm font-semibold text-cyan-900">{{ str_replace('\\n', "\n", $supplyConfirmationHistory->detail) }}</p>
+                        </div>
+                    @endif
 
                     @if(in_array($request->status, ['pending', 'approved'], true))
                         @if($request->status === 'approved')
@@ -893,26 +1044,63 @@
                             </div>
                         @endif
                         <div class="grid gap-3 sm:grid-cols-2">
-                            @if($request->status === 'pending')
-                            <form method="POST" action="{{ route('request.supply.final-approval', $request->id) }}" class="approval-form">
-                                @csrf
-                                <button type="button" onclick="handleFinalApproval(event)"
-                                        class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-emerald-700">
-                                    Final Approval
-                                </button>
-                            </form>
-
-                            <form method="POST" action="{{ route('request.supply.decline', $request->id) }}" class="decline-form">
-                                @csrf
-                                <button type="button" onclick="handleDecline(event)"
-                                        class="w-full inline-flex items-center justify-center rounded-2xl bg-red-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-red-700">
-                                    Decline
-                                </button>
-                            </form>
+                            @if($adminSupplyPending)
+                                @foreach($venueScheduleSummaries as $schedule)
+                                    <x-venue-calendar-button
+                                        :venue="$schedule['venue']"
+                                        :date="$schedule['start_date'] ?? now()->toDateString()"
+                                        :end-date="$schedule['end_date'] ?? ($schedule['start_date'] ?? now()->toDateString())"
+                                        :start-time="$schedule['start_time'] ?? null"
+                                        :end-time="$schedule['end_time'] ?? null"
+                                        :facility-request="$request"
+                                        :availability-check-url="route('calendar.request-availability-check', $request)"
+                                        :availability-group="'admin-supply-availability-' . $request->id"
+                                        label="Check calendar"
+                                    />
+                                @endforeach
+                                <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" data-swal-confirm data-swal-title="Confirm venue availability?" data-swal-loading-text="Confirming availability..." class="sm:col-span-2">
+                                    @csrf
+                                    <input type="hidden" name="id" value="{{ $request->id }}">
+                                    <input type="hidden" name="decision" value="available">
+                                    @if($request->is_emergency)
+                                        <label class="mb-3 flex items-center gap-2 text-sm font-medium text-amber-800">
+                                            <input type="checkbox" name="urgent_document_validated" value="1" required class="rounded border-amber-400">
+                                            Urgent memo/proposal reviewed
+                                        </label>
+                                    @endif
+                                    <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 text-white px-5 py-3 text-sm font-semibold hover:bg-emerald-700">
+                                        Confirm Availability
+                                    </button>
+                                </form>
+                            @elseif($adminVenuePending)
+                                <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">No Supply Office action is available before the Venue Custodian confirms.</div>
+                            @elseif($adminEquipmentPending)
+                                <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Final approval is disabled until every assigned equipment custodian approves.</div>
+                            @elseif($adminFinalReady && auth()->user()->isFinalApprover())
+                                <form method="POST" action="{{ route('request.supply.final-approval', $request->id) }}" class="approval-form">
+                                    @csrf
+                                    <button type="button" onclick="handleFinalApproval(event)"
+                                            class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-emerald-700">
+                                        Final Approval
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ route('request.supply.decline', $request->id) }}" class="decline-form">
+                                    @csrf
+                                    <button type="button" onclick="handleDecline(event)"
+                                            class="w-full inline-flex items-center justify-center rounded-2xl bg-red-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-red-700">
+                                        Decline
+                                    </button>
+                                </form>
+                            @elseif($adminFinalReady)
+                                <div class="sm:col-span-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800">
+                                    All reviews are complete. Final approval is restricted to the designated approver.
+                                </div>
                             @endif
-                            <button type="button" id="open-reschedule-form" class="sm:col-span-2 lg:col-span-1 w-full inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-100">
-                                {{ $request->status === 'approved' ? 'Propose Approved-Booking Change' : 'Reschedule Reservation' }}
-                            </button>
+                            @if($request->status === 'pending' || $request->status === 'approved')
+                                <button type="button" id="open-reschedule-form" class="sm:col-span-2 lg:col-span-1 w-full inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-100">
+                                    {{ $request->status === 'approved' ? 'Propose Approved-Booking Change' : 'Reschedule Reservation' }}
+                                </button>
+                            @endif
                         </div>
 
                         <form id="reschedule-form" method="POST" action="{{ route('supply-office.requests.revise') }}" data-request-control-number="{{ $request->control_number }}" class="hidden rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-4">
@@ -1035,89 +1223,143 @@
         </div>
     </div>
 
-    <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div class="space-y-4">
-                <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
-                    <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 011.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    Request Summary
-                </div>
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Control Number</p>
-                        <p class="mt-2 text-sm font-semibold text-slate-900">{{ $request->control_number }}</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Requestor</p>
-                        <p class="mt-2 text-sm font-semibold text-slate-900">{{ $request->user?->name ?? $request->requester?->name ?? '—' }}</p>
-                        <p class="mt-1 text-xs text-slate-500">{{ $request->requester?->position ?? 'Position not provided' }}</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Department</p>
-                        <p class="mt-2 text-sm font-semibold text-slate-900">{{ $request->department }}</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Organization</p>
-                        <p class="mt-2 text-sm font-semibold text-slate-900">{{ $request->requester?->office_or_organization ?: '—' }}</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Contact Number</p>
-                        <p class="mt-2 text-sm font-semibold text-slate-900">{{ $request->requester?->contact_number ?: 'Not provided' }}</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Request Priority</p>
-                        <p class="mt-2 text-sm font-semibold text-slate-900">{{ $requestPriorityLabel }}</p>
-                    </div>
-                </div>
+    @php
+        $includedEquipmentCount = array_sum(array_map('count', $venueIncludedEquipment));
+        $additionalEquipmentCount = count($additionalEquipmentItems);
+    @endphp
+    <section aria-labelledby="reservation-details-heading" style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="flex items-center gap-3 border-b border-slate-200 pb-5">
+            <div class="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 011.707.293l5.414 5.414a2 2 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
             </div>
-            <div class="space-y-4 rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Activity Name</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">{{ $request->name_of_activity }}</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Venue</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">{{ implode(', ', $venueNames) ?: '—' }}</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Venue Schedules</p>
-                    <div class="mt-2 space-y-2">
-                        @forelse($venueScheduleSummaries as $schedule)
-                            <p class="text-sm text-slate-700">
-                                <span class="font-semibold text-slate-900">{{ $schedule['venue'] }}</span>
-                                <span class="block text-xs text-slate-500">{{ $schedule['label'] }} · {{ $schedule['duration'] }}</span>
-                            </p>
-                        @empty
-                            <p class="text-sm text-slate-500">Not specified</p>
-                        @endforelse
-                    </div>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Expected Participants</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">{{ $request->expected_participants }}</p>
-                </div>
+            <div>
+                <h2 id="reservation-details-heading" class="text-lg font-semibold text-slate-900">Reservation Details</h2>
+                <p class="mt-1 text-sm text-slate-500">Submitted request information</p>
             </div>
         </div>
-    </div>
 
-    <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
-            <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            Activity Details
-        </div>
-        <div class="mt-5 grid gap-4 sm:grid-cols-2">
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Requested By</p>
-                <p class="mt-2 text-sm font-semibold text-slate-900">{{ $request->requester?->name ?? '—' }}</p>
-                <p class="mt-1 text-xs text-slate-500">{{ $request->requester?->position ?: 'Position not provided' }}</p>
-            </div>
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Purpose</p>
-                        <p class="mt-2 text-sm text-slate-700">{{ $request->purpose ?: $request->notes ?: 'No purpose details provided.' }}</p>
-            </div>
-            <div class="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Special Instructions</p>
-                <div class="mt-2 space-y-2 text-sm text-slate-700">
+        <div class="divide-y divide-slate-200">
+            <section aria-labelledby="requestor-information-heading" class="py-6">
+                <h3 id="requestor-information-heading" class="mb-4 text-sm font-semibold text-slate-800">Requestor Information</h3>
+                <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <dt class="text-xs font-medium text-slate-500">Control Number</dt>
+                        <dd class="mt-1 break-words text-sm font-semibold text-slate-900">{{ $request->control_number }}</dd>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <dt class="text-xs font-medium text-slate-500">Requestor</dt>
+                        <dd class="mt-1 break-words text-sm font-semibold text-slate-900">{{ $request->user?->name ?? $request->requester?->name ?? '-' }}</dd>
+                        <dd class="mt-1 text-xs text-slate-500">{{ $request->requester?->position ?? 'Position not provided' }}</dd>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <dt class="text-xs font-medium text-slate-500">Department</dt>
+                        <dd class="mt-1 break-words text-sm font-semibold text-slate-900">{{ $request->department ?: '-' }}</dd>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <dt class="text-xs font-medium text-slate-500">Organization</dt>
+                        <dd class="mt-1 break-words text-sm font-semibold text-slate-900">{{ $request->requester?->office_or_organization ?: '-' }}</dd>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <dt class="text-xs font-medium text-slate-500">Contact Number</dt>
+                        <dd class="mt-1 break-words text-sm font-semibold text-slate-900">{{ $request->requester?->contact_number ?: 'Not provided' }}</dd>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <dt class="text-xs font-medium text-slate-500">Request Priority</dt>
+                        <dd class="mt-1 break-words text-sm font-semibold text-slate-900">{{ $requestPriorityLabel }}</dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section aria-labelledby="activity-information-heading" class="py-6">
+                <h3 id="activity-information-heading" class="mb-4 text-sm font-semibold text-slate-800">Activity &amp; Schedule</h3>
+                <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:col-span-2 lg:col-span-3">
+                        <dt class="text-xs font-medium text-slate-500">Activity Name</dt>
+                        <dd class="mt-1 break-words text-sm font-semibold text-slate-900">{{ $request->name_of_activity }}</dd>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:col-span-2 lg:col-span-3">
+                        <dt class="text-xs font-medium text-slate-500">Purpose</dt>
+                        <dd class="mt-1 whitespace-pre-line break-words text-sm text-slate-800">{{ $request->purpose ?: $request->notes ?: 'No purpose details provided.' }}</dd>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:col-span-2 lg:col-span-3">
+                        <dt class="text-xs font-medium text-slate-500">Venue &amp; Schedule</dt>
+                        <dd class="mt-2 space-y-3">
+                            @forelse($venueScheduleSummaries as $schedule)
+                                <div class="flex flex-col gap-1 border-b border-slate-200 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between">
+                                    <span class="text-sm font-semibold text-slate-900">{{ $schedule['venue'] }}</span>
+                                    <span class="text-sm text-slate-600">{{ $schedule['label'] }} | {{ $schedule['duration'] }}</span>
+                                </div>
+                            @empty
+                                <span class="text-sm text-slate-500">{{ implode(', ', $venueNames) ?: 'Venue or schedule not specified' }}</span>
+                            @endforelse
+                        </dd>
+                    </div>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <dt class="text-xs font-medium text-slate-500">Expected Participants</dt>
+                        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ $request->expected_participants }}</dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section aria-labelledby="equipment-heading" class="py-6">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <h3 id="equipment-heading" class="text-sm font-semibold text-slate-800">Equipment</h3>
+                    <div class="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
+                        <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 ring-1 ring-emerald-200">{{ $includedEquipmentCount }} included</span>
+                        <span class="rounded-full bg-violet-50 px-2.5 py-1 text-violet-700 ring-1 ring-violet-200">{{ $additionalEquipmentCount }} additional</span>
+                    </div>
+                </div>
+                <div class="space-y-5">
+                    @if(!empty($venueIncludedEquipment))
+                        <div>
+                            <div class="mb-3 flex flex-wrap items-center gap-2">
+                                <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Included with venue</span>
+                                <p class="text-xs text-slate-500">Provided by the selected venue; not a separate request.</p>
+                            </div>
+                            <div class="grid gap-3 md:grid-cols-2">
+                                @foreach($venueIncludedEquipment as $venueName => $venueEquipment)
+                                    <div class="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                                        <p class="mb-3 text-xs font-semibold text-slate-600">{{ $venueName }}</p>
+                                        <div class="flex flex-wrap gap-2">
+                                            @foreach($venueEquipment as $equipmentName)
+                                                <span class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
+                                                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                                    {{ $equipmentName }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                    @if(!empty($additionalEquipmentItems))
+                        <div>
+                            <div class="mb-3 flex flex-wrap items-center gap-2">
+                                <span class="rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-700">Additional requested</span>
+                                <p class="text-xs text-slate-500">Requested beyond what the venue provides.</p>
+                            </div>
+                            <dl class="divide-y divide-violet-100 rounded-xl border border-violet-200 bg-violet-50/60 px-4">
+                                @foreach($additionalEquipmentItems as $e)
+                                    <div class="flex items-center justify-between gap-3 py-3">
+                                        <dt class="text-sm font-medium text-slate-900">{{ $e }}</dt>
+                                        <dd class="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">Qty {{ !empty($equipmentQuantities[$e]) ? $equipmentQuantities[$e] : 1 }}</dd>
+                                    </div>
+                                @endforeach
+                            </dl>
+                        </div>
+                    @elseif(empty($venueIncludedEquipment))
+                        <p class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">No equipment requested.</p>
+                    @else
+                        <p class="text-sm text-slate-500">No additional equipment requested.</p>
+                    @endif
+                </div>
+            </section>
+
+            <section aria-labelledby="special-instructions-heading" class="py-6">
+                <h3 id="special-instructions-heading" class="mb-3 text-sm font-semibold text-slate-800">Special Instructions</h3>
+                <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <div class="space-y-2">
                     @if($request->venue_notes)
                         <p><span class="font-semibold text-slate-900">Venue Notes:</span> {{ $request->venue_notes }}</p>
                     @endif
@@ -1129,126 +1371,38 @@
                     @endif
                     @if($request->is_emergency && $request->emergency_justification)
                         <p><span class="font-semibold text-amber-700">Urgent Processing Reason:</span> {{ $request->emergency_justification }}</p>
+                        @if(data_get($request->document_metadata, 'urgent_priority.office'))
+                            <p><span class="font-semibold text-amber-700">Issuing Priority Office:</span> {{ data_get($request->document_metadata, 'urgent_priority.office') }}</p>
+                        @endif
                     @endif
                     @if(!$request->venue_notes && !$request->equipment_notes && !$request->other_venue && !($request->is_emergency && $request->emergency_justification))
-                        <p>No special instructions provided.</p>
+                        <p class="text-slate-500">No special instructions provided.</p>
                     @endif
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
-                <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 011.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                Equipment
-            </div>
-            @php
-                $includedEquipmentCount = array_sum(array_map('count', $venueIncludedEquipment));
-                $additionalEquipmentCount = count($additionalEquipmentItems);
-            @endphp
-            <div class="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
-                <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 ring-1 ring-emerald-200">{{ $includedEquipmentCount }} included</span>
-                <span class="rounded-full bg-violet-50 px-2.5 py-1 text-violet-700 ring-1 ring-violet-200">{{ $additionalEquipmentCount }} additional</span>
-            </div>
-        </div>
-
-        <div class="mt-5 space-y-6">
-            @if(!empty($venueIncludedEquipment))
-                <div>
-                    <div class="mb-3 flex items-center gap-2">
-                        <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Included with venue</span>
-                        <p class="text-xs text-slate-500">These items are covered by the selected venue and are not a separate request.</p>
-                    </div>
-                    <div class="grid gap-3 md:grid-cols-2">
-                        @foreach($venueIncludedEquipment as $venueName => $venueEquipment)
-                            <div class="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
-                                <p class="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{{ $venueName }}</p>
-                                <div class="flex flex-wrap gap-2">
-                                    @foreach($venueEquipment as $equipmentName)
-                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
-                                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                                            {{ $equipmentName }}
-                                        </span>
-                                    @endforeach
-                                </div>
-                            </div>
-                        @endforeach
                     </div>
                 </div>
-            @endif
+            </section>
 
-            @if(!empty($additionalEquipmentItems))
-                <div>
-                    <div class="mb-3 flex items-center gap-2">
-                        <span class="rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-700">Additional requested</span>
-                        <p class="text-xs text-slate-500">Items requested beyond what is already provided by the venue.</p>
-                    </div>
-                    <div class="grid gap-4 md:grid-cols-2">
-                        @foreach($additionalEquipmentItems as $e)
-                            <div class="rounded-2xl border border-violet-200 bg-violet-50/60 p-4 shadow-sm">
-                                <div class="flex items-center justify-between gap-3">
-                                    <div class="flex items-center gap-2">
-                                        <div class="rounded-full bg-violet-100 p-2 text-violet-700">
-                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1h2a2 2 0 012 2v2h1a2 2 0 012 2v2a2 2 0 01-2 2h-1v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2H9a2 2 0 01-2-2v-2a2 2 0 012-2h1V7a2 2 0 012-2h2z"/></svg>
-                                        </div>
-                                        <p class="text-sm font-semibold text-slate-900">{{ $e }}</p>
-                                    </div>
-                                    <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">Qty {{ !empty($equipmentQuantities[$e]) ? $equipmentQuantities[$e] : 1 }}</span>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-            @elseif(empty($venueIncludedEquipment))
-                <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
-                    No additional equipment requested.
-                </div>
-            @else
-                <p class="text-sm text-slate-500">No additional equipment requested.</p>
-            @endif
-        </div>
-    </div>
-
-    @if(!empty($requestDocuments))
-        <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div class="flex items-start gap-3">
-                    <div class="rounded-2xl bg-blue-100 p-3 text-blue-700">
-                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0013.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                    </div>
-                    <div>
-                        <p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">{{ $isOutsiderRequest ? 'Request Documents' : 'Document Attachment' }}</p>
-                        <div class="mt-3 space-y-3">
+            @if(!empty($requestDocuments))
+                <section aria-labelledby="request-documents-heading" class="py-6 last:pb-0">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="flex items-start gap-3"><div class="rounded-xl bg-blue-100 p-2.5 text-blue-700"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0013.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg></div>
+                            <div><h3 id="request-documents-heading" class="text-sm font-semibold text-slate-800">{{ $isOutsiderRequest ? 'Request Documents' : 'Document Attachment' }}</h3><dl class="mt-3 space-y-3">
+                                @foreach($requestDocuments as $document)<div><dt class="text-xs font-medium text-slate-500">{{ $document['label'] }}</dt><dd class="mt-1 break-all text-sm font-medium text-slate-900">{{ $document['filename'] }}</dd></div>@endforeach
+                            </dl></div>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
                             @foreach($requestDocuments as $document)
-                                <div>
-                                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ $document['label'] }}</p>
-                                    <p class="mt-1 text-sm font-medium text-slate-900 break-all">{{ $document['filename'] }}</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <button type="button" data-proposal-url="{{ route('request.proposal', ['id' => $request->id, 'document' => $document['type']]) }}" data-proposal-pdf="{{ $document['is_pdf'] ? 'true' : 'false' }}" onclick="openProposalPreview(this)" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>Preview {{ $document['label'] }}</button>
+                                    <a href="{{ route('request.proposal.download', ['id' => $request->id, 'document' => $document['type']]) }}" class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A2 2 0 0119 10v9a2 2 0 01-2 2z"/></svg>Download {{ $document['label'] }}</a>
                                 </div>
                             @endforeach
                         </div>
                     </div>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    @foreach($requestDocuments as $document)
-                        <div class="flex flex-wrap gap-2">
-                            <button type="button" data-proposal-url="{{ route('request.proposal', ['id' => $request->id, 'document' => $document['type']]) }}" data-proposal-pdf="{{ $document['is_pdf'] ? 'true' : 'false' }}" onclick="openProposalPreview(this)"
-                                class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                Preview {{ $document['label'] }}
-                            </button>
-                            <a href="{{ route('request.proposal.download', ['id' => $request->id, 'document' => $document['type']]) }}"
-                                class="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700">
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                Download {{ $document['label'] }}
-                            </a>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
+                </section>
+            @endif
         </div>
-    @endif
+    </section>
 
     <div id="proposal-preview-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/75 p-4" role="dialog" aria-modal="true" aria-labelledby="proposal-preview-title">
         <div class="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -1292,17 +1446,71 @@
         </div>
         <div class="mt-5 space-y-4">
             @forelse($request->histories()->orderByDesc('occurred_at')->get() as $history)
-                <div class="flex gap-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white {{ str_contains($history->action, 'approved') || str_contains($history->action, 'custodian_endorsed') ? 'bg-emerald-500' : (str_contains($history->action, 'rejected') ? 'bg-rose-500' : (str_contains($history->action, 'returned') ? 'bg-sky-500' : 'bg-slate-400')) }}">
+                @php
+                    $isEquipmentReturn = $history->action === 'equipment_returned';
+                    $historyDetail = (string) $history->detail;
+                    if ($history->action === 'availability_confirmed') {
+                        $historyDetail = str_replace('\\n', "\n", $historyDetail);
+                    }
+                    $custodianReturnData = $history->user_id
+                        ? (($request->equipment_returned_items ?? [])[(string) $history->user_id] ?? [])
+                        : [];
+                    $isCompletedReturn = $isEquipmentReturn && (
+                        str_contains($historyDetail, 'Equipment return completed')
+                        || (str_contains($historyDetail, 'Equipment return recorded by custodian ID:')
+                            && in_array($request->equipment_returned_status, ['returned', 'fulfilled'], true))
+                    );
+
+                    if ($isEquipmentReturn && str_contains($historyDetail, 'Equipment return recorded by custodian ID:')) {
+                        $legacyReturnParts = collect($custodianReturnData['equipment'] ?? [])
+                            ->filter(fn ($quantity) => (int) $quantity > 0)
+                            ->map(fn ($quantity, $itemName) => $itemName . ' × ' . (int) $quantity)
+                            ->values()
+                            ->all();
+                        $legacyDamagedParts = collect($custodianReturnData['damaged'] ?? [])
+                            ->filter(fn ($quantity) => (int) $quantity > 0)
+                            ->map(fn ($quantity, $itemName) => $itemName . ' × ' . (int) $quantity)
+                            ->values()
+                            ->all();
+                        $legacyMissingParts = collect($custodianReturnData['missing'] ?? [])
+                            ->filter(fn ($quantity) => (int) $quantity > 0)
+                            ->map(fn ($quantity, $itemName) => $itemName . ' × ' . (int) $quantity)
+                            ->values()
+                            ->all();
+
+                        $historyDetail = 'Returned: ' . ($legacyReturnParts !== [] ? implode(', ', $legacyReturnParts) : 'none');
+                        if ($legacyDamagedParts !== []) {
+                            $historyDetail .= '. Damaged: ' . implode(', ', $legacyDamagedParts);
+                        }
+                        if ($legacyMissingParts !== []) {
+                            $historyDetail .= '. Missing: ' . implode(', ', $legacyMissingParts);
+                        }
+                        $historyDetail .= '.';
+                    }
+
+                    $historyCardClass = $isEquipmentReturn
+                        ? ($isCompletedReturn ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-200 bg-amber-50/60')
+                        : 'border-slate-200 bg-slate-50';
+                    $historyIconClass = $isEquipmentReturn
+                        ? ($isCompletedReturn ? 'bg-emerald-500' : 'bg-amber-500')
+                        : (str_contains($history->action, 'approved') || str_contains($history->action, 'custodian_endorsed')
+                            ? 'bg-emerald-500'
+                            : (str_contains($history->action, 'rejected') ? 'bg-rose-500' : 'bg-slate-400'));
+                    $historyDetailClass = $isEquipmentReturn
+                        ? ($isCompletedReturn ? 'text-emerald-800' : 'text-amber-900')
+                        : 'text-slate-600';
+                @endphp
+                <div class="flex gap-4 rounded-[24px] border p-4 {{ $historyCardClass }}">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white {{ $historyIconClass }}">
                         {{ strtoupper(substr($history->action, 0, 1)) }}
                     </div>
                     <div class="flex-1">
                         <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                            <p class="text-sm font-semibold text-slate-800 capitalize">{{ ucfirst(str_replace('_', ' ', $history->action)) }}</p>
+                            <p class="text-sm font-semibold {{ $isEquipmentReturn && $isCompletedReturn ? 'text-emerald-900' : 'text-slate-800' }} capitalize">{{ ucfirst(str_replace('_', ' ', $history->action)) }}</p>
                             <p class="text-xs text-slate-500">{{ \Carbon\Carbon::parse($history->occurred_at)->format('M j, Y g:i A') }}</p>
                         </div>
-                        @if($history->detail)
-                            <p class="mt-1 text-sm text-slate-600">{{ $history->detail }}</p>
+                        @if($historyDetail !== '')
+                            <p class="mt-1 whitespace-pre-line text-sm {{ $historyDetailClass }}">{{ $historyDetail }}</p>
                         @endif
                         @if($history->user)
                             <p class="mt-1 text-xs font-medium text-slate-500">Recorded by {{ $history->user->name }}</p>
@@ -1364,6 +1572,7 @@
     const venueRescheduleForm = document.getElementById('venue-reschedule-form');
     const openVenueRescheduleButton = document.getElementById('open-venue-reschedule-form');
     const cancelVenueRescheduleButton = document.getElementById('cancel-venue-reschedule-form');
+    const venueRescheduleFeedback = document.getElementById('venue-reschedule-feedback');
 
     openRescheduleButton?.addEventListener('click', () => {
         rescheduleForm?.classList.remove('hidden');
@@ -1387,6 +1596,70 @@
         venueRescheduleForm?.reset();
         venueRescheduleForm?.classList.add('hidden');
         openVenueRescheduleButton?.classList.remove('hidden');
+        venueRescheduleFeedback?.classList.add('hidden');
+    });
+
+    venueRescheduleForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (venueRescheduleForm.dataset.submitting === '1') {
+            return;
+        }
+
+        const submitButton = venueRescheduleForm.querySelector('button[type="submit"]');
+        const confirmation = await Swal.fire({
+            title: 'Send this new schedule?',
+            text: 'The requestor and affected custodians will be notified. The current schedule stays in place until the proposal is confirmed.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Send proposal',
+            cancelButtonText: 'Review details',
+            confirmButtonColor: '#d97706',
+            cancelButtonColor: '#64748b',
+        });
+        if (!confirmation.isConfirmed) {
+            return;
+        }
+
+        venueRescheduleForm.dataset.submitting = '1';
+        submitButton.disabled = true;
+        submitButton.textContent = 'Sending...';
+        venueRescheduleFeedback.className = 'hidden rounded-xl px-3 py-2 text-sm';
+
+        try {
+            const response = await fetch(venueRescheduleForm.action, {
+                method: 'POST',
+                body: new FormData(venueRescheduleForm),
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    Accept: 'application/json',
+                },
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const validationMessage = Object.values(payload.errors || {}).flat()[0];
+                throw new Error(validationMessage || payload.message || 'Unable to send the schedule proposal. Please review the details and try again.');
+            }
+
+            const successMessage = payload.message || 'The schedule proposal has been sent to the requestor and affected custodians.';
+            await Swal.fire({
+                title: 'Proposal sent',
+                text: successMessage,
+                icon: 'success',
+                confirmButtonText: 'View updated request',
+                confirmButtonColor: '#059669',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+            });
+            window.location.reload();
+        } catch (error) {
+            venueRescheduleFeedback.textContent = error instanceof Error ? error.message : 'Unable to send the schedule proposal. Please try again.';
+            venueRescheduleFeedback.className = 'rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800';
+            submitButton.disabled = false;
+            submitButton.textContent = 'Send reschedule proposal';
+            venueRescheduleForm.dataset.submitting = '0';
+            venueRescheduleFeedback.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     });
 
     rescheduleForm?.addEventListener('submit', async (event) => {
@@ -1440,8 +1713,6 @@
             }
 
             const successMessage = payload.message || 'The schedule proposal has been sent to the requestor and affected custodians.';
-            rescheduleFeedback.textContent = successMessage;
-            rescheduleFeedback.className = 'rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800';
             submitButton.textContent = 'Proposal sent';
             await Swal.fire({
                 title: 'Proposal sent',

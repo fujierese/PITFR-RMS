@@ -71,6 +71,33 @@ class CancellationWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_supply_office_dashboard_explains_pending_cancellations_and_hides_empty_queue(): void
+    {
+        Notification::fake();
+        $reservation = $this->approvedReservation(now()->addDays(2)->toDateString());
+        $requester = $reservation->requester;
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->get(route('supply-office.index'))
+            ->assertOk()
+            ->assertDontSee('Cancellation Requests Awaiting Review');
+
+        $this->actingAs($requester)
+            ->post(route('request.cancel', $reservation), ['reason' => 'Event postponed.'])
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->get(route('supply-office.index'))
+            ->assertOk()
+            ->assertSee('Cancellation Requests Awaiting Review')
+            ->assertSee('The requestor asked to cancel an approved reservation.')
+            ->assertSee('Confirm cancellation')
+            ->assertSee('Decline — keep reservation')
+            ->assertSee('data-swal-title="Cancel this approved reservation?"', false)
+            ->assertDontSee('Approved Reservation Cancellations');
+    }
+
     public function test_same_day_cancellation_is_rejected_for_web_requests(): void
     {
         $reservation = $this->approvedReservation(now()->toDateString());

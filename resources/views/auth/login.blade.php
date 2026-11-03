@@ -16,14 +16,68 @@
             animation: login-panel-reveal 700ms ease-out both;
         }
 
-        @media (min-width: 1024px) and (max-height: 760px) {
+        .login-brand-image {
+            width: min(90%, 653px);
+            aspect-ratio: 1.42;
+        }
+
+        .login-brand-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+        }
+
+        @media (min-width: 1024px) and (max-height: 820px) {
             .login-brand-image {
-                height: 300px !important;
+                width: min(90%, 653px, max(280px, calc((100svh - 340px) * 1.42)));
             }
 
             .login-brand-copy {
-                margin-top: 1.5rem !important;
+                margin-top: 1rem !important;
                 margin-bottom: 0 !important;
+                padding-bottom: 0 !important;
+            }
+
+            .login-brand-panel {
+                padding-top: 1rem !important;
+                padding-bottom: 1rem !important;
+            }
+        }
+
+        @media (min-width: 1024px) and (max-height: 760px) {
+            .login-brand-copy h1 {
+                font-size: 2rem !important;
+            }
+
+            .login-form-panel {
+                padding-top: 1.5rem !important;
+                padding-bottom: 1.5rem !important;
+            }
+        }
+
+        @media (max-height: 700px) {
+            .login-form-panel {
+                padding-top: 1rem !important;
+                padding-bottom: 1rem !important;
+            }
+
+            .login-form-brand {
+                margin-bottom: 1rem !important;
+            }
+
+            .login-form-heading,
+            .login-form-links {
+                margin-bottom: 1rem !important;
+                margin-top: 1rem !important;
+            }
+
+            .login-form-panel #loginForm > :not([hidden]) ~ :not([hidden]) {
+                margin-top: 1rem;
+            }
+
+            .login-form-footer {
+                margin-top: 1.25rem !important;
             }
         }
 
@@ -40,12 +94,12 @@
 
 <body class="min-h-screen overflow-x-hidden overflow-y-auto bg-slate-100 text-slate-900">
 
-    <div class="relative min-h-screen w-full lg:grid lg:min-h-screen lg:grid-cols-[1.12fr_0.88fr]">
+    <div class="relative min-h-screen w-full xl:grid xl:min-h-screen xl:grid-cols-[1.12fr_0.88fr]">
 
         <!-- =========================
              LEFT SIDE — IMAGES / BRAND
         ========================== -->
-        <section class="login-panel-reveal relative hidden min-h-screen bg-white lg:flex lg:min-h-screen lg:min-h-0 lg:flex-col lg:justify-center lg:pt-10 lg:pb-3 lg:pl-5 lg:pr-8 xl:pl-8 xl:pr-12">
+        <section class="login-panel-reveal login-brand-panel relative hidden min-h-screen bg-white xl:flex xl:min-h-screen xl:min-h-0 xl:flex-col xl:justify-center xl:pt-10 xl:pb-3 xl:pl-5 xl:pr-8 xl:pl-8 xl:pr-12">
 
             <div class="relative z-10 ml-0 w-full max-w-[860px] pt-2">
 
@@ -70,11 +124,11 @@
                 </div>
 
                 <div class="mt-4 flex justify-center">
-                    <div class="login-brand-image relative mx-auto w-full max-w-[90%] ml-8 overflow-hidden rounded-[22px] border border-slate-200 bg-slate-100 shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
+                    <div class="login-brand-image relative mx-auto w-full max-w-[90%] overflow-hidden rounded-[22px] border border-slate-200 bg-slate-100 shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
                         <img
                             src="{{ asset('images/loginpage2.jpg') }}"
                             alt="PIT Facility Request Portal"
-                            class="block h-[320px] w-full object-cover sm:h-[380px] lg:h-[460px]"
+                            class="block w-full object-cover"
                         >
                     </div>
                 </div>
@@ -99,12 +153,12 @@
              RIGHT SIDE — LOGIN
         ========================== -->
 
-        <section class="login-panel-reveal flex min-h-screen h-auto items-start justify-center overflow-visible bg-slate-100 px-6 py-8 sm:px-10 sm:py-10 lg:items-center lg:overflow-y-auto lg:px-16 xl:px-24" style="animation-delay: 80ms;">
+        <section class="login-panel-reveal login-form-panel flex min-h-screen h-auto items-start justify-center overflow-visible bg-slate-100 px-6 py-8 sm:px-10 sm:py-10 xl:items-center xl:overflow-y-auto xl:px-16 2xl:px-24" style="animation-delay: 80ms;">
 
             <div class="w-full max-w-[460px]">
 
                 <!-- Mobile Logo -->
-                <div class="mb-10 flex items-center gap-3 lg:hidden">
+                <div class="login-form-brand mb-10 flex items-center gap-3 xl:hidden">
 
                     <div class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600">
                         <img
@@ -128,7 +182,7 @@
 
 
                 <!-- Login Heading -->
-                <div class="mb-8 max-w-full">
+                <div class="login-form-heading mb-8 max-w-full">
                     <p class="break-words text-xs font-semibold uppercase tracking-[0.25em] text-emerald-600 sm:text-[11px]">
                         Log in to PITFR-RMS
                     </p>
@@ -307,7 +361,7 @@
 
 
                 <!-- Register -->
-                <div class="mt-7 space-y-3 text-center text-sm text-slate-500">
+                <div class="login-form-links mt-7 space-y-3 text-center text-sm text-slate-500">
 
                     <div>
                         Don't have an account?
@@ -342,7 +396,7 @@
 
 
                 <!-- Footer -->
-                <p class="mt-12 text-center text-[10px] uppercase tracking-[0.3em] text-slate-400">
+                <p class="login-form-footer mt-12 text-center text-[10px] uppercase tracking-[0.3em] text-slate-400">
                     © {{ date('Y') }} Palompon Institute of Technology
                 </p>
 
@@ -355,4 +409,3 @@
 
 </body>
 </html>
-```

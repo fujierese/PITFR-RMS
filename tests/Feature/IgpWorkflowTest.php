@@ -140,7 +140,7 @@ class IgpWorkflowTest extends TestCase
 
     public function test_final_supply_office_approval_requires_igp_payment_for_outsider_requests(): void
     {
-        $admin = User::factory()->create(['role' => 'admin']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
         $reservation = $this->makeOutsiderReservation();
 
         $this->actingAs($admin)

@@ -22,7 +22,7 @@ class ReservationReminderNotification extends Notification
 
     public function via($notifiable): array
     {
-        return $this->channelsWithPreference($notifiable, 'request_updates', ['mail', 'database']);
+        return $this->channelsWithPreference($notifiable, 'reservation_reminders', ['mail', 'database']);
     }
 
     public function toMail($notifiable): MailMessage

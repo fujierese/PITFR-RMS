@@ -26,7 +26,7 @@ class SupplyOfficeStatusViewsTest extends TestCase
         // Create test users
         $this->admin = User::factory()->create([
             'role' => 'admin',
-            'username' => 'admin_test',
+            'username' => 'asala@gmail.com',
             'password' => bcrypt('password'),
         ]);
 

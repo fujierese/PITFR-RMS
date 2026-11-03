@@ -24,7 +24,7 @@
     $showHowToRequest = $dashboardData['showHowToRequest'] ?? ($showHowToRequest ?? ($role === 'guest'));
     $showViewOnlyCalendar = $dashboardData['showViewOnlyCalendar'] ?? ($showViewOnlyCalendar ?? ($role === 'guest'));
     $showAvailabilityPanel = $dashboardData['showAvailabilityPanel'] ?? ($showAvailabilityPanel ?? true);
-    $dateSelectionMode = $dateSelectionMode ?? false;
+    $dateSelectionMode = (bool) ($dateSelectionMode ?? false) && $user?->isRequestee();
     $stats = $dashboardData['stats'] ?? [
         'upcoming' => 0,
         'pending' => 0,
@@ -373,14 +373,27 @@
                     <p class="mt-1 text-sm text-slate-600">
                         @if($dateSelectionMode)
                             Select a start date, then an end date. The end date is inclusive; choose the same date twice for a one-day reservation.
+                        @elseif($user && $user->isCustodianVenue())
+                            Review bookings and tentative requests for your assigned venue. Use the request workflow to confirm availability or report a conflict.
+                        @elseif($user && $user->isCustodianEquipment())
+                            Review venue schedules for context. Confirm equipment availability in your assigned equipment review queue.
+                        @elseif($user && $user->isAdmin())
+                            Review approved bookings and tentative requests to assess schedule conflicts and coordinate availability.
+                        @elseif($user && $user->isRequestee())
+                            Review venue bookings and tentative requests before submitting your reservation request.
                         @else
-                            Tap a date to inspect request details and availability.
+                            Review approved bookings and pending requests as availability context before contacting the Supply Office.
                         @endif
                     </p>
                     <p id="requested-calendar-highlight" class="mt-2 hidden rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-900" aria-live="polite"></p>
                 </div>
                 @unless($dateSelectionMode)
-                    <div class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
+                    <div class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500" aria-label="Calendar legend">
+                        <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Approved booking</span>
+                        <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>Pending review</span>
+                        <span class="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>Rejected / conflict</span>
+                        <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-sm border border-dashed border-slate-500 bg-slate-100"></span>Maintenance / closure</span>
+                        <span class="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-900"><span class="h-2.5 w-2.5 rounded-sm border border-cyan-600 bg-cyan-100"></span>Requested schedule</span>
                         <span class="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>CHIC</span>
                         <span class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-blue-600"></span>Balay Alumni</span>
                         <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full" style="background-color: #92400e;"></span>Gym</span>
@@ -421,15 +434,16 @@
                 <div class="text-center py-10 text-slate-600">Loading request details…</div>
             </div>
             <div id="requestDetailsModalFooter" class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50">
-                <button type="button" class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition" onclick="closeRequestDetailsModal();">Cancel</button>
-                <button type="button" id="rejectButton" class="px-4 py-2 text-sm font-semibold text-white bg-red-600 border border-red-600 rounded-lg hover:bg-red-700 transition" onclick="rejectRequest(this.dataset.requestId);" style="display: none;">Reject</button>
-                <button type="button" id="approveButton" class="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 border border-emerald-600 rounded-lg hover:bg-emerald-700 transition" onclick="approveRequest(this.dataset.requestId);" style="display: none;">Approve</button>
+                <button type="button" class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition" onclick="closeRequestDetailsModal();">Close</button>
+                <button type="button" id="rejectButton" class="hidden" onclick="rejectRequest(this.dataset.requestId);">Reject</button>
+                <button type="button" id="approveButton" class="hidden" onclick="approveRequest(this.dataset.requestId);">Approve</button>
             </div>
         </div>
     </div>
 
     <script>
         const loginRoute = document.querySelector('meta[name="login-route"]')?.getAttribute('content') || '/login';
+        const facilityRequestApiBase = '/api-test/facility-requests';
 
         async function openRequestDetails(requestId) {
             const modal = document.getElementById('requestDetailsModal');
@@ -445,7 +459,8 @@
 
             try {
                 // Use the browser session (cookies) with CSRF token instead of a token from localStorage.
-                const response = await fetch(`/api/facility-requests/${requestId}`, {
+                const response = await fetch(`${facilityRequestApiBase}/${requestId}`, {
+                    redirect: 'error',
                     headers: {
                         'Accept': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
@@ -459,8 +474,9 @@
 
                 if (!response.ok) {
                     if (response.status === 401 || response.status === 403) {
-                        window.location.href = loginRoute;
-                        return;
+                        throw new Error(response.status === 401
+                            ? 'Your session has expired. Please log in again and reopen request details.'
+                            : 'You are not authorized to view this request.');
                     }
                     let message = `Failed to load request details (${response.status}).`;
                     if (contentType.includes('application/json')) {
@@ -484,14 +500,16 @@
                 subtitle.textContent = request.status ? `Status: ${request.status}` : 'Status unavailable';
                 body.innerHTML = renderRequestDetails(request);
 
-                // Show action buttons for administrators
+                // Calendar cards are read-only context. Workflow decisions stay in the sidebar workflow queue.
                 const approveBtn = document.getElementById('approveButton');
                 const rejectBtn = document.getElementById('rejectButton');
                 if (approveBtn && rejectBtn) {
                     approveBtn.dataset.requestId = requestId;
                     rejectBtn.dataset.requestId = requestId;
-                    approveBtn.style.display = 'inline-block';
-                    rejectBtn.style.display = 'inline-block';
+                    approveBtn.classList.add('hidden');
+                    rejectBtn.classList.add('hidden');
+                    approveBtn.style.display = 'none';
+                    rejectBtn.style.display = 'none';
                 }
             } catch (error) {
                 const errDiv = document.createElement('div');
@@ -526,7 +544,7 @@
 
             try {
                 // Use session cookie auth; include CSRF token. Do not rely on localStorage tokens.
-                const response = await fetch(`/api/facility-requests/${requestId}/approve`, {
+                const response = await fetch(`${facilityRequestApiBase}/${requestId}/approve`, {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',
@@ -593,7 +611,7 @@
             const reason = result.value;
             try {
                 // Use session cookie auth; include CSRF token. Do not rely on localStorage tokens.
-                const response = await fetch(`/api/facility-requests/${requestId}/reject`, {
+                const response = await fetch(`${facilityRequestApiBase}/${requestId}/reject`, {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',
@@ -641,17 +659,112 @@
                 return element.innerHTML;
             };
             const equipmentList = request.equipment ? request.equipment.map(item => `<li class="mb-2"><span class="font-semibold text-slate-800">${escapeHtml(item.name)}</span> &times; ${escapeHtml(item.quantity)}</li>`).join('') : '<li class="text-slate-500">No equipment items attached.</li>';
-            const venue = escapeHtml(request.venue ? request.venue.name : 'N/A');
-            const date = escapeHtml(request.start_date || 'N/A');
+            const venue = escapeHtml(Array.isArray(request.venue)
+                ? (request.venue.join(', ') || 'N/A')
+                : (request.venue?.name || request.venue || 'N/A'));
+            const formatRequestDate = (value) => {
+                const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+                return match ? `${match[2]}/${match[3]}/${match[1]}` : (value || 'N/A');
+            };
+            const date = escapeHtml(formatRequestDate(request.start_date));
+            const endDate = escapeHtml(formatRequestDate(request.end_date || request.start_date));
+            const dateRange = date === endDate ? date : `${date} – ${endDate}`;
             const startTime = escapeHtml(request.start_time || 'N/A');
             const endTime = escapeHtml(request.end_time || 'N/A');
             const activity = escapeHtml(request.name_of_activity || 'N/A');
-            const requester = escapeHtml(request.user ? `${request.user.name} (${request.user.email})` : 'N/A');
-            const department = escapeHtml(request.department || 'N/A');
             const participants = escapeHtml(request.expected_participants || 'N/A');
             const priority = escapeHtml(request.priority || 'regular');
             const status = escapeHtml(request.status || 'N/A');
             const controlNumber = escapeHtml(request.control_number || 'N/A');
+            const requestorDetails = request.requestor || {};
+            const requestorType = String(requestorDetails.type || request.user?.requestor_type || '').toLowerCase();
+            const requestContext = String(request.request_context || requestorDetails.context || '').toLowerCase();
+            const requestorName = requestorDetails.name || request.user?.name || 'N/A';
+            const requestorFields = [
+                ['Requestor', requestorName],
+                ['Requestor type', ({
+                    student: requestContext === 'student_organization' ? 'Student organization' : 'Student',
+                    student_organization: 'Student organization',
+                    faculty: 'Faculty',
+                    staff: 'Staff',
+                    outsider: 'Outside organization'
+                })[requestorType] || 'N/A']
+            ];
+            if (requestorType === 'student' || requestorType === 'faculty' || requestorType === 'staff') {
+                requestorFields.push(['Department', requestorDetails.department || request.department || 'N/A']);
+            }
+            if ((requestorType === 'student' && requestContext === 'student_organization')
+                || requestorType === 'student_organization'
+                || requestorType === 'outsider') {
+                requestorFields.push(['Organization', requestorDetails.organization || request.organization_name || 'N/A']);
+            }
+            if (requestorType === 'faculty' || requestorType === 'staff') {
+                requestorFields.push(['Position', requestorDetails.position || 'N/A']);
+            }
+            if (requestorType === 'outsider' && requestorDetails.organization_type) {
+                requestorFields.push(['Organization type', requestorDetails.organization_type]);
+            }
+            const requestorDetailsHtml = requestorFields.map(([label, value]) => `
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">${escapeHtml(label)}</label>
+                    <input type="text" value="${escapeHtml(value)}" readonly class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-700">
+                </div>
+            `).join('');
+
+            const supplyOfficeReview = String(request.supply_office_review_status || '').toLowerCase() === 'pending'
+                && String(request.venue_status || '').toLowerCase() === 'approved';
+            if (supplyOfficeReview) {
+                const venueNames = Array.isArray(request.venue)
+                    ? request.venue.map(name => escapeHtml(name)).join(', ') || 'N/A'
+                    : escapeHtml(request.venue?.name || request.venue || 'N/A');
+                const startDateValue = request.start_date || '';
+                const endDateValue = request.end_date || startDateValue;
+                const formatDate = (value) => {
+                    if (!value) return 'N/A';
+                    const dateMatch = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                    if (!dateMatch) return String(value);
+                    const [, year, month, day] = dateMatch;
+                    const date = new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0);
+                    if (Number.isNaN(date.getTime())) return 'N/A';
+                    return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Manila' }).format(date);
+                };
+                const formatTime = (value) => {
+                    if (!value) return 'N/A';
+                    const text = String(value).trim().toUpperCase();
+                    const twelveHourMatch = text.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/);
+                    if (twelveHourMatch) {
+                        let hours = Number(twelveHourMatch[1]);
+                        const minutes = Number(twelveHourMatch[2]);
+                        const period = twelveHourMatch[3];
+                        if (hours < 1 || hours > 12 || minutes > 59) return 'N/A';
+                        if (period === 'PM' && hours !== 12) hours += 12;
+                        if (period === 'AM' && hours === 12) hours = 0;
+                        return (hours % 12 || 12) + ':' + String(minutes).padStart(2, '0') + ' ' + period;
+                    }
+                    const twentyFourHourMatch = text.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+                    if (!twentyFourHourMatch) return text || 'N/A';
+                    let hours = Number(twentyFourHourMatch[1]);
+                    const minutes = Number(twentyFourHourMatch[2]);
+                    if (hours > 23 || minutes > 59) return 'N/A';
+                    const period = hours >= 12 ? 'PM' : 'AM';
+                    hours = hours % 12 || 12;
+                    return hours + ':' + String(minutes).padStart(2, '0') + ' ' + period;
+                };
+
+                return `
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-5">
+                        <div class="mb-4">
+                            <p class="text-sm font-semibold text-amber-800">Supply Office Availability Review</p>
+                            <p class="mt-1 text-xs text-amber-700">Schedule details only. Confirm availability in the Supply Office workflow.</p>
+                        </div>
+                        <dl class="grid gap-4 sm:grid-cols-2">
+                            <div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Venue</dt><dd class="mt-1 text-sm font-bold text-slate-900">${venueNames}</dd></div>
+                            <div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Date</dt><dd class="mt-1 text-sm font-bold text-slate-900">${escapeHtml(formatDate(startDateValue))}${endDateValue && endDateValue !== startDateValue ? ` – ${escapeHtml(formatDate(endDateValue))}` : ''}</dd></div>
+                            <div class="sm:col-span-2"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">Time</dt><dd class="mt-1 text-sm font-bold text-slate-900">${escapeHtml(formatTime(request.start_time))} – ${escapeHtml(formatTime(request.end_time))}</dd></div>
+                        </dl>
+                    </div>
+                `;
+            }
 
             return `
                 <form class="space-y-6">
@@ -661,17 +774,14 @@
                                 <label class="block text-sm font-semibold text-slate-700 mb-2">Activity Name</label>
                                 <input type="text" value="${activity}" readonly class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-700">
                             </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-slate-700 mb-2">Department</label>
-                                <input type="text" value="${department}" readonly class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-700">
-                            </div>
+                            ${requestorDetailsHtml}
                             <div>
                                 <label class="block text-sm font-semibold text-slate-700 mb-2">Expected Participants</label>
                                 <input type="number" value="${participants}" readonly class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-700">
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold text-slate-700 mb-2">Requesting Date</label>
-                                <input type="date" value="${date}" readonly class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-700">
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Requested Date(s)</label>
+                                <input type="text" value="${dateRange}" readonly class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-700">
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-slate-700 mb-2">Start Time</label>
@@ -694,10 +804,6 @@
                             <div>
                                 <label class="block text-sm font-semibold text-slate-700 mb-2">Status</label>
                                 <input type="text" value="${status.charAt(0).toUpperCase() + status.slice(1)}" readonly class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-700">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-slate-700 mb-2">Requestor</label>
-                                <input type="text" value="${requester}" readonly class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-700">
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-slate-700 mb-2">Control Number</label>
@@ -1209,10 +1315,9 @@
     padding: 0 !important;
     font-size: 0.85rem !important;
     line-height: 1.2 !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 6px;
-    flex: 0 0 auto;
+    display: block !important;
+    gap: 0;
+    flex: none !important;
     /* Allow FullCalendar's native positioning to work correctly */
     /* position: NOT static - let FullCalendar use absolute positioning */
     /* height: NOT auto - let FullCalendar calculate based on duration */
@@ -1220,19 +1325,41 @@
     box-shadow: none !important;
 }
 
+.fc-timegrid .fc-event {
+    display: block !important;
+    align-items: initial !important;
+    gap: 0 !important;
+    flex: none !important;
+}
+
 .fc-timegrid-event {
-    /* Enable FullCalendar's calculated positioning for time grid events */
     position: absolute !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
 }
 
 .fc-timegrid .fc-event-main {
-    /* Allow height to be calculated by FullCalendar */
     height: 100%;
+}
+
+/* One hour must always occupy one consistent vertical unit. */
+.fc .fc-timegrid-slot {
+    height: 60px !important;
+}
+
+.fc-timegrid .fc-timegrid-slot-label,
+.fc-timegrid .fc-timegrid-col,
+.fc-timegrid .fc-timegrid-lane {
+    position: relative;
 }
 
 .fc-event:hover {
     transform: translateX(1px);
     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12) !important;
+}
+
+.fc-timegrid .fc-event:hover {
+    transform: none;
 }
 
 /* Event Block Content */
@@ -1479,20 +1606,85 @@
     background-color: #6ee7b7 !important;
 }
 
-.fc .requested-reservation-date {
+.fc .fc-daygrid-day.calendar-range-between .fc-daygrid-day-frame,
+.fc .fc-daygrid-day.calendar-range-between .fc-daygrid-day-number {
+    background-color: #d1fae5 !important;
+}
+
+.fc .fc-daygrid-day.calendar-range-start .fc-daygrid-day-frame,
+.fc .fc-daygrid-day.calendar-range-start .fc-daygrid-day-number,
+.fc .fc-daygrid-day.calendar-range-end .fc-daygrid-day-frame,
+.fc .fc-daygrid-day.calendar-range-end .fc-daygrid-day-number {
+    background-color: #6ee7b7 !important;
+}
+
+.fc .fc-daygrid-day.requested-reservation-date .fc-daygrid-day-frame {
     background-color: #cffafe !important;
+}
+
+.fc .fc-daygrid-day.requested-reservation-date .fc-daygrid-day-number {
+    background-color: #cffafe !important;
+}
+
+.fc .fc-daygrid-day.requested-reservation-date-start .fc-daygrid-day-frame,
+.fc .fc-daygrid-day.requested-reservation-date-end .fc-daygrid-day-frame {
+    background-color: #a5f3fc !important;
     box-shadow: inset 0 0 0 2px rgba(8, 145, 178, 0.55) !important;
 }
 
-.fc .requested-reservation-date-start,
-.fc .requested-reservation-date-end {
+.fc .fc-daygrid-day.requested-reservation-date-start .fc-daygrid-day-number,
+.fc .fc-daygrid-day.requested-reservation-date-end .fc-daygrid-day-number {
     background-color: #a5f3fc !important;
-    box-shadow: inset 0 0 0 2px #0891b2 !important;
 }
 
 .fc .requested-reservation-window {
     background-color: #22d3ee !important;
-    opacity: 0.28 !important;
+    border: 2px solid #0891b2 !important;
+    border-radius: 10px !important;
+    opacity: 0.32 !important;
+}
+.fc-timegrid .requested-reservation-window {
+    margin-left: 4px;
+    margin-right: 4px;
+    box-shadow: 0 0 0 1px rgba(8, 145, 178, 0.18);
+}
+
+.fc .requested-schedule-card {
+    z-index: 2;
+    border: 1px solid #0891b2 !important;
+    border-radius: 0.5rem !important;
+    background: #ecfeff !important;
+    color: #164e63 !important;
+    box-shadow: 0 1px 3px rgba(8, 145, 178, 0.2) !important;
+}
+
+.fc .requested-schedule-card .fc-event-main,
+.fc .requested-schedule-card .fc-event-main-frame {
+    color: #164e63 !important;
+}
+
+.fc .requested-schedule-card .fc-event-compact {
+    min-height: 100%;
+}
+
+.fc .requested-schedule-card .fc-event-label,
+.fc .requested-schedule-card .fc-event-meta-line {
+    color: #164e63 !important;
+}
+
+.fc .requested-reservation-match {
+    border: 2px solid #0891b2 !important;
+    border-radius: 0.5rem !important;
+    background: #ecfeff !important;
+    color: #164e63 !important;
+    box-shadow: 0 0 0 2px rgba(8, 145, 178, 0.2), 0 2px 6px rgba(8, 145, 178, 0.2) !important;
+}
+
+.fc .requested-reservation-match .fc-event-main,
+.fc .requested-reservation-match .fc-event-main-frame,
+.fc .requested-reservation-match .fc-event-label,
+.fc .requested-reservation-match .fc-event-meta-line {
+    color: #164e63 !important;
 }
 
 </style>
@@ -1512,16 +1704,27 @@ document.addEventListener('DOMContentLoaded', function() {
     var currentRole = '{{ $role }}';
     var isPublicCalendar = @json(!auth()->check());
     var calendarParams = new URLSearchParams(window.location.search);
-    var isDateSelectionMode = calendarParams.get('select') === '1';
+    var isDateSelectionMode = @json($dateSelectionMode);
     var requestedStartDate = calendarParams.get('start_date') || '';
     var requestedEndDate = calendarParams.get('end_date') || requestedStartDate;
     var requestedStartTime = calendarParams.get('start_time') || '';
     var requestedEndTime = calendarParams.get('end_time') || '';
+    var requestedRequestId = calendarParams.get('request_id') || '';
+    function requestedTimeToMinutes(value) {
+        var parts = String(value || '').split(':').map(Number);
+        if (parts.length < 2 || parts[0] > 23 || parts[1] > 59) return null;
+        return (parts[0] * 60) + parts[1];
+    }
     var hasRequestedDateRange = /^\d{4}-\d{2}-\d{2}$/.test(requestedStartDate)
         && /^\d{4}-\d{2}-\d{2}$/.test(requestedEndDate)
         && requestedEndDate >= requestedStartDate;
-    var hasRequestedTimeRange = /^\d{2}:\d{2}(?::\d{2})?$/.test(requestedStartTime)
+    var hasRequestedTimeValues = /^\d{2}:\d{2}(?::\d{2})?$/.test(requestedStartTime)
         && /^\d{2}:\d{2}(?::\d{2})?$/.test(requestedEndTime);
+    var hasValidRequestedDailyTimeRange = hasRequestedTimeValues
+        && requestedTimeToMinutes(requestedStartTime) !== null
+        && requestedTimeToMinutes(requestedEndTime) !== null
+        && requestedTimeToMinutes(requestedEndTime) > requestedTimeToMinutes(requestedStartTime);
+    var hasRequestedTimeRange = hasValidRequestedDailyTimeRange;
     var requestedScheduleHighlightSent = false;
     var selectionStartDate = null;
     var selectionEndDate = null;
@@ -1540,10 +1743,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     function formatRequestedTime(timeValue) {
-        var parts = timeValue.split(':');
-        var date = new Date();
-        date.setHours(Number(parts[0]), Number(parts[1]), Number(parts[2] || 0), 0);
-        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        var parts = String(timeValue || '00:00').split(':');
+        var hours = Number(parts[0] || 0);
+        var minutes = Number(parts[1] || 0);
+        var meridiem = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        return hours + ':' + String(minutes).padStart(2, '0') + ' ' + meridiem;
     }
     if (hasRequestedDateRange) {
         var requestedScheduleNotice = document.getElementById('requested-calendar-highlight');
@@ -1555,7 +1760,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var timeLabel = hasRequestedTimeRange
                 ? ' · ' + formatRequestedTime(requestedStartTime) + '–' + formatRequestedTime(requestedEndTime)
                 : '';
-            requestedScheduleNotice.textContent = 'Requested schedule highlighted in cyan: ' + dateLabel + timeLabel;
+            requestedScheduleNotice.textContent = 'Requested schedule: ' + dateLabel + timeLabel;
             requestedScheduleNotice.classList.remove('hidden');
         }
     }
@@ -1698,10 +1903,18 @@ document.addEventListener('DOMContentLoaded', function() {
             return days === 0 ? 'timeGridDay' : (days <= 6 ? 'timeGridWeek' : getInitialCalendarView());
         }
 
-        var localToday = new Date();
-        localToday = new Date(localToday.getTime() - localToday.getTimezoneOffset() * 60000)
-            .toISOString()
-            .slice(0, 10);
+        // Derive today's date in Philippine Time, never in the browser's timezone.
+        var philippineTodayParts = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Manila',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).formatToParts(new Date());
+        var philippineTodayPart = function(type) {
+            var part = philippineTodayParts.find(function(item) { return item.type === type; });
+            return part ? part.value : '';
+        };
+        var localToday = philippineTodayPart('year') + '-' + philippineTodayPart('month') + '-' + philippineTodayPart('day');
 
         // Track current view for use in event callbacks
         var currentViewType = getInitialCalendarView();
@@ -1767,10 +1980,12 @@ document.addEventListener('DOMContentLoaded', function() {
             })(),
             nextDayThreshold: '00:00:00',
             displayEventEnd: true,
+            // Let FullCalendar calculate slot height from the visible grid.
             contentHeight: 'auto',
             timeZone: 'Asia/Manila',
             locale: 'en',
             eventDisplay: 'block',
+            slotEventOverlap: false,
             dayMaxEvents: false, // Show all events, don't limit
             dayMaxEventRows: false, // Don't cap rows for daygrid
             headerToolbar: isDateSelectionMode ? {
@@ -1792,7 +2007,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 hour: 'numeric',
                 minute: '2-digit'
             },
-            slotLabelInterval: '01:00',
+            slotDuration: '01:00:00',
+            slotLabelInterval: '01:00:00',
+            snapDuration: '00:30:00',
             // Visible time range only. This must not alter the actual reservation start/end time.
             slotMinTime: '08:00',
             slotMaxTime: '24:00',
@@ -1821,7 +2038,9 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             eventsSet: function(events) {
                 if (requestedScheduleHighlightSent || !hasRequestedDateRange || !hasRequestedTimeRange) return;
-                if (!events.some(function(event) { return event.id === 'requested-reservation-window'; })) return;
+                if (!events.some(function(event) {
+                    return String(event.id).startsWith('requested-reservation-window');
+                })) return;
 
                 requestedScheduleHighlightSent = true;
                 if (window.parent !== window) {
@@ -1835,6 +2054,7 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             dayCellClassNames: function(info) {
                 var classes = [];
+                var isTimeGridView = currentViewType === 'timeGridWeek' || currentViewType === 'timeGridDay';
                 if (info.date.getDay() === 0 || info.date.getDay() === 6) {
                     classes.push('fc-day-weekend');
                 }
@@ -1846,7 +2066,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         classes.push('calendar-range-between');
                     }
                 }
-                if (hasRequestedDateRange) {
+                if (hasRequestedDateRange && !isTimeGridView) {
                     var requestedDate = calendarDateKey(info.date);
                     if (requestedDate >= requestedStartDate && requestedDate <= requestedEndDate) {
                         classes.push('requested-reservation-date');
@@ -1909,6 +2129,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Store all events globally for dayCell rendering
                         window.allEventsData = data;
+                        var hasMatchingRequestedReservation = !!requestedRequestId && data.some(function(event) {
+                            var eventProps = event.extendedProps || {};
+                            if (String(eventProps.facilityRequestId || '') !== requestedRequestId) return false;
+
+                            var eventStart = String(event.start_datetime || event.start || '').replace(' ', 'T');
+                            var eventEnd = String(event.end_datetime || event.end || '').replace(' ', 'T');
+                            return eventStart.slice(0, 10) === requestedStartDate
+                                && eventEnd.slice(0, 10) === requestedEndDate
+                                && eventStart.slice(11, 16) === requestedStartTime.slice(0, 5)
+                                && eventEnd.slice(11, 16) === requestedEndTime.slice(0, 5);
+                        });
 
                         // Helper function to create tooltip content
                         function createTooltipContent(event, status) {
@@ -1958,6 +2189,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (venueText) {
                                 tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Venue:</strong> ' + venueText + '</div>';
                             }
+                            if (event.extendedProps && event.extendedProps.equipment && event.extendedProps.equipment.length) {
+                                tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Equipment:</strong> ' + __esc(event.extendedProps.equipment.join(', ')) + '</div>';
+                            }
+                            if (event.extendedProps && event.extendedProps.controlNumber) {
+                                tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Control No.:</strong> ' + __esc(event.extendedProps.controlNumber) + '</div>';
+                            }
+                            if (statusText && ['Rejected', 'Needs Reschedule', 'Conflict'].includes(statusText)) {
+                                tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Conflict:</strong> Review availability restrictions before choosing an alternative schedule.</div>';
+                            }
 
                             if (!isPublicCalendar && event.extendedProps && event.extendedProps.requestor) {
                                 tooltipContent += '<div class="calendar-event-tooltip__row"><strong>Requestor:</strong> ' + __esc(event.extendedProps.requestor) + '</div>';
@@ -1983,9 +2223,17 @@ document.addEventListener('DOMContentLoaded', function() {
                             var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
                             var classNames = ['status-event', 'status-' + String(status || 'neutral').toLowerCase().replace(/\s+/g, '-')];
                             if (awaitingVenueConfirmation) classNames.push('awaiting-venue-confirmation-event');
+                            if (
+                                hasMatchingRequestedReservation
+                                && String(event.extendedProps && event.extendedProps.facilityRequestId || '') === requestedRequestId
+                            ) {
+                                classNames.push('requested-reservation-match');
+                            }
 
                             return {
-                                id: event.id,
+                                id: isSegment
+                                    ? String(event.id) + '-segment-' + String(startDatetime).substring(0, 10)
+                                    : event.id,
                                 title: displayTitle,
                                 start: startDatetime,
                                 end: endDatetime,
@@ -2005,6 +2253,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                         : 0,
                                     statusClass: String(status || 'neutral').toLowerCase(),
                                     displayStatus: event.extendedProps && event.extendedProps.displayStatus || status,
+                                    canonicalStart: String(event.start_datetime || startDatetime || '').replace(' ', 'T'),
+                                    canonicalEnd: String(event.end_datetime || endDatetime || '').replace(' ', 'T'),
                                     isSegment: !!isSegment
                                 })
                             };
@@ -2029,9 +2279,57 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         // Helper: get next day at 00:00 (for month view spanning)
                         function getNextDayStart(dateStr) {
-                            var date = new Date(dateStr);
-                            date.setDate(date.getDate() + 1);
+                            var date = new Date(dateStr + 'T12:00:00Z');
+                            date.setUTCDate(date.getUTCDate() + 1);
                             return date.toISOString().substring(0, 10) + 'T00:00:00';
+                        }
+
+                        function addCalendarDate(dateStr) {
+                            var parts = dateStr.split('-').map(Number);
+                            var date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+                            date.setUTCDate(date.getUTCDate() + 1);
+                            return date.toISOString().substring(0, 10);
+                        }
+
+                        // Split multi-date timed reservations into one exact daily card.
+                        // A Nov. 9–Nov. 13, 8:00 AM–12:00 PM request must render as
+                        // 8:00 AM–12:00 PM on each of the five dates, not as one continuous
+                        // span from 8:00 AM on Nov. 9 to 12:00 PM on Nov. 13.
+                        function segmentTimedEventByDay(event, startDatetime, endDatetime) {
+                            const isWholeDaySchedule = event.allDay
+                                && event.extendedProps
+                                && event.extendedProps.scheduleType === 'whole_day';
+                            if (event.allDay && !isWholeDaySchedule) {
+                                return [createFcEvent(event, startDatetime, endDatetime, false)];
+                            }
+
+                            const startDate = String(startDatetime).substring(0, 10);
+                            const endDate = String(endDatetime).substring(0, 10);
+                            const startTime = String(startDatetime).substring(11, 19);
+                            const endTime = String(endDatetime).substring(11, 19);
+                            const dailyEvent = Object.assign({}, event, { allDay: false });
+
+                            if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+                                return [createFcEvent(dailyEvent, startDatetime, endDatetime, false)];
+                            }
+
+                            if (startDate === endDate) {
+                                return [createFcEvent(dailyEvent, startDatetime, endDatetime, false)];
+                            }
+
+                            const segments = [];
+                            let segmentDate = startDate;
+                            while (segmentDate <= endDate) {
+                                segments.push(createFcEvent(
+                                    dailyEvent,
+                                    segmentDate + 'T' + startTime,
+                                    segmentDate + 'T' + endTime,
+                                    true
+                                ));
+                                segmentDate = addCalendarDate(segmentDate);
+                            }
+
+                            return segments;
                         }
 
                         // Transform events based on view type
@@ -2044,59 +2342,80 @@ document.addEventListener('DOMContentLoaded', function() {
                             var startDatetime = event.start || '';
                             var endDatetime = event.end || '';
 
-                            // For Month View: create separate events for each day so clicking any day shows the event
+                            // Month view must also use exact per-day wall-clock ranges.
                             if (isMonthView) {
-                                if (isMultiDay(startDatetime, endDatetime)) {
-                                    // Create per-day events for multi-day reservations in Month View
-                                    var currentDate = startDatetime.substring(0, 10);
-                                    var endDate = endDatetime.substring(0, 10);
-                                    var startTime = startDatetime.substring(11, 19);
-                                    var endTime = endDatetime.substring(11, 19);
-
-                                    // First day: from actual start time to end of day
-                                    var firstDayEnd = getEndOfDay(currentDate);
-                                    mapped.push(createFcEvent(event, startDatetime, firstDayEnd, true));
-
-                                    // Middle days: full day
-                                    currentDate = new Date(currentDate);
-                                    currentDate.setDate(currentDate.getDate() + 1);
-                                    while (currentDate.toISOString().substring(0, 10) < endDate) {
-                                        var dateStr = currentDate.toISOString().substring(0, 10);
-                                        mapped.push(createFcEvent(
-                                            event,
-                                            getStartOfDay(dateStr),
-                                            getEndOfDay(dateStr),
-                                            true
-                                        ));
-                                        currentDate.setDate(currentDate.getDate() + 1);
-                                    }
-
-                                    // Last day: from start of day to actual end time
-                                    mapped.push(createFcEvent(event, getStartOfDay(endDate), endDatetime, true));
-                                } else {
-                                    // Single day: keep as-is
-                                    mapped.push(createFcEvent(event, startDatetime, endDatetime, false));
-                                }
+                                const canonicalStart = String(event.start_datetime || startDatetime).replace(' ', 'T');
+                                const canonicalEnd = String(event.end_datetime || endDatetime).replace(' ', 'T');
+                                const monthEvent = Object.assign({}, event, { allDay: !!event.allDay });
+                                segmentTimedEventByDay(monthEvent, canonicalStart, canonicalEnd).forEach(function(segment) {
+                                    mapped.push(segment);
+                                });
                                 return;
                             }
 
                             // Use the canonical reservation range for timed grid views so
                             // FullCalendar positions the event across its actual dates and times.
                             if (isTimeGridView) {
-                                mapped.push(createFcEvent(event, startDatetime, endDatetime, false));
+                                // Use canonical timestamps, not a month-view all-day end or a
+                                // display-formatted value. This is the source of truth for geometry.
+                                const canonicalStart = String(event.start_datetime || startDatetime).replace(' ', 'T');
+                                const canonicalEnd = String(event.end_datetime || endDatetime).replace(' ', 'T');
+                                const timedEvent = Object.assign({}, event, { allDay: !!event.allDay });
+                                segmentTimedEventByDay(timedEvent, canonicalStart, canonicalEnd).forEach(function(segment) {
+                                    mapped.push(segment);
+                                });
                             }
                         });
 
                         if (hasRequestedDateRange && hasRequestedTimeRange) {
-                            mapped.push({
-                                id: 'requested-reservation-window',
-                                start: requestedStartDate + 'T' + (requestedStartTime.length === 5 ? requestedStartTime + ':00' : requestedStartTime),
-                                end: requestedEndDate + 'T' + (requestedEndTime.length === 5 ? requestedEndTime + ':00' : requestedEndTime),
-                                display: 'background',
-                                allDay: false,
-                                editable: false,
-                                classNames: ['requested-reservation-window']
-                            });
+                            const highlightStartTime = requestedStartTime.length === 5 ? requestedStartTime + ':00' : requestedStartTime;
+                            const highlightEndTime = requestedEndTime.length === 5 ? requestedEndTime + ':00' : requestedEndTime;
+                            const endTimeParts = highlightEndTime.split(':').map(Number);
+                            const highlightVisualEndTime = endTimeParts[1] === 0 && endTimeParts[2] === 0 && endTimeParts[0] < 23
+                                ? String(endTimeParts[0]).padStart(2, '0') + ':59:59'
+                                : highlightEndTime;
+                            let highlightDate = requestedStartDate;
+                            while (highlightDate <= requestedEndDate) {
+                                const requestedVenue = calendarParams.get('venue') || '';
+                                const requestedEventEnd = highlightDate + 'T' + highlightEndTime;
+                                const requestedVisualEnd = highlightDate + 'T' + highlightVisualEndTime;
+                                mapped.push({
+                                    id: 'requested-reservation-window-' + highlightDate,
+                                    start: highlightDate + 'T' + highlightStartTime,
+                                    end: requestedVisualEnd,
+                                    display: 'background',
+                                    allDay: false,
+                                    editable: false,
+                                    classNames: ['requested-reservation-window'],
+                                    extendedProps: {
+                                        canonicalStart: highlightDate + 'T' + highlightStartTime,
+                                        canonicalEnd: highlightDate + 'T' + highlightEndTime
+                                    }
+                                });
+                                if (!hasMatchingRequestedReservation) {
+                                    mapped.push({
+                                        id: 'requested-schedule-card-' + highlightDate,
+                                        title: 'Requested schedule',
+                                        start: highlightDate + 'T' + highlightStartTime,
+                                        end: requestedVisualEnd,
+                                        allDay: false,
+                                        editable: false,
+                                        startEditable: false,
+                                        durationEditable: false,
+                                        backgroundColor: '#ecfeff',
+                                        borderColor: '#0891b2',
+                                        textColor: '#164e63',
+                                        classNames: ['requested-schedule-card'],
+                                        extendedProps: {
+                                            isRequestedSchedule: true,
+                                            canonicalStart: highlightDate + 'T' + highlightStartTime,
+                                            canonicalEnd: requestedEventEnd,
+                                            venue: requestedVenue
+                                        }
+                                    });
+                                }
+                                highlightDate = addCalendarDate(highlightDate);
+                            }
                         }
 
                         console.log('✅ Rendered', mapped.length, 'segments for', viewType);
@@ -2143,8 +2462,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 var metaItems = [];
                 if (info.event.start && info.event.end) {
-                    var startStr = typeof info.event.start === 'string' ? info.event.start : info.event.start.toISOString();
-                    var endStr = typeof info.event.end === 'string' ? info.event.end : info.event.end.toISOString();
+                    var startStr = eventProps.canonicalStart || (typeof info.event.start === 'string' ? info.event.start : calendarDateKey(info.event.start) + 'T' + String(info.event.start.getHours()).padStart(2, '0') + ':' + String(info.event.start.getMinutes()).padStart(2, '0') + ':00');
+                    var endStr = eventProps.canonicalEnd || (typeof info.event.end === 'string' ? info.event.end : calendarDateKey(info.event.end) + 'T' + String(info.event.end.getHours()).padStart(2, '0') + ':' + String(info.event.end.getMinutes()).padStart(2, '0') + ':00');
                     metaItems.push('<span class="fc-event-meta-item">' + __esc(formatTimeTo12Hour(startStr) + '–' + formatTimeTo12Hour(endStr)) + '</span>');
                 }
 
@@ -2169,19 +2488,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
 
-                let requestUrl = info.event.extendedProps && info.event.extendedProps.requestUrl;
-                if (requestUrl) {
-                    window.location.href = requestUrl;
+                info.jsEvent.preventDefault();
+                if (info.event.display === 'background'
+                    || info.event.classNames.includes('requested-reservation-window')
+                    || info.event.classNames.includes('requested-schedule-card')) {
                     return;
                 }
-
                 let requestId = info.event.extendedProps.facilityRequestId || info.event.id;
-                if (requestId) {
-                    window.location.href = '{{ url("/request") }}/' + requestId;
+                if (requestId && !String(requestId).startsWith('requested-') && typeof openRequestDetails === 'function') {
+                    openRequestDetails(requestId);
                 }
             },
             dayCellDidMount: function(info) {
-                var dayDate = info.date.toISOString().slice(0, 10);
+                var dayDate = calendarDateKey(info.date);
                 var eventsOnDay = (window.allEventsData || []).filter(function(event) {
                     var startDatetime = event.start_datetime || event.start || '';
                     if (startDatetime.indexOf(' ') !== -1) {
@@ -2257,7 +2576,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     info.el.classList.remove('max-capacity-reached');
                 }
 
-                if (info.date.toDateString() === new Date().toDateString()) {
+                if (calendarDateKey(info.date) === localToday) {
                     info.el.classList.add('fc-today');
                     info.el.style.backgroundColor = '#f0fdf4';
                 }
@@ -2293,7 +2612,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 var eventsOnDate = calendar.getEvents().filter(function(event) {
                     var eventStart = event.start;
                     var clickedDate = info.dateStr;
-                    var eventDate = eventStart ? eventStart.toISOString().split('T')[0] : null;
+                    var eventDate = eventStart ? (typeof eventStart === 'string' ? eventStart.substring(0, 10) : calendarDateKey(eventStart)) : null;
                     return eventDate === clickedDate;
                 });
 
@@ -2306,8 +2625,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!document.getElementById('calendar-loading')) {
                         var loadingDiv = document.createElement('div');
                         loadingDiv.id = 'calendar-loading';
-                        loadingDiv.className = 'absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10 rounded-lg';
-                        loadingDiv.innerHTML = '<div class="text-emerald-600 flex items-center gap-2"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-600"></div>Loading calendar events...</div>';
+                        loadingDiv.className = 'absolute inset-0 z-10 rounded-lg bg-white/95 p-4';
+                        loadingDiv.setAttribute('role', 'status');
+                        loadingDiv.setAttribute('aria-label', 'Loading calendar events');
+                        loadingDiv.innerHTML = '<div class="grid gap-3" aria-hidden="true"><div class="h-12 animate-pulse rounded-xl bg-slate-200"></div><div class="grid grid-cols-7 gap-2"><div class="h-20 animate-pulse rounded-lg bg-slate-100"></div><div class="h-20 animate-pulse rounded-lg bg-slate-100"></div><div class="h-20 animate-pulse rounded-lg bg-slate-100"></div><div class="h-20 animate-pulse rounded-lg bg-slate-100"></div><div class="h-20 animate-pulse rounded-lg bg-slate-100"></div><div class="h-20 animate-pulse rounded-lg bg-slate-100"></div><div class="h-20 animate-pulse rounded-lg bg-slate-100"></div></div><p class="text-center text-sm font-semibold text-slate-600">Loading calendar events...</p></div>';
                         calendarEl.style.position = 'relative';
                         calendarEl.appendChild(loadingDiv);
                     }

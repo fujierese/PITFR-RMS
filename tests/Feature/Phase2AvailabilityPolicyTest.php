@@ -44,6 +44,124 @@ class Phase2AvailabilityPolicyTest extends TestCase
         $this->assertTrue($result['available']);
     }
 
+    public function test_same_day_whole_day_booking_can_be_followed_by_a_booking_starting_at_five_pm(): void
+    {
+        foreach (['approved', 'pending'] as $existingStatus) {
+            [$requestor, $venue] = $this->resourceSetup('Evening Adjacent Venue ' . $existingStatus);
+            $this->request(
+                $requestor,
+                $venue,
+                $existingStatus,
+                '08:00',
+                '17:00',
+                startDate: '2026-11-02',
+                endDate: '2026-11-02',
+                reservationDuration: 'whole_day',
+            );
+            $eveningRequest = $this->request(
+                $requestor,
+                $venue,
+                'pending',
+                '17:00',
+                '23:59',
+                startDate: '2026-11-02',
+                endDate: '2026-11-02',
+            );
+
+            $this->assertNull(
+                app(AvailabilityService::class)->checkVenueScheduleForReview($eveningRequest, $venue->name),
+                "A booking starting at 5:00 PM must not conflict with an 8:00 AM–5:00 PM booking ({$existingStatus})."
+            );
+        }
+    }
+
+    public function test_multiday_whole_day_request_does_not_conflict_with_later_pending_reservation(): void
+    {
+        [$requestor, $venue] = $this->resourceSetup('Multiday Whole Day Venue');
+        $this->request($requestor, $venue, 'pending', '17:00', '23:59');
+        $wholeDayRequest = $this->request(
+            $requestor,
+            $venue,
+            'pending',
+            '08:00',
+            '17:00',
+            startDate: '2026-08-28',
+            endDate: '2026-08-29',
+            reservationDuration: 'whole_day',
+        );
+
+        $conflict = app(AvailabilityService::class)->checkVenueScheduleForReview($wholeDayRequest, $venue->name);
+
+        $this->assertNull($conflict);
+    }
+
+    public function test_multiday_whole_day_request_still_conflicts_with_overlapping_pending_reservation(): void
+    {
+        [$requestor, $venue] = $this->resourceSetup('Overlapping Whole Day Venue');
+        $this->request($requestor, $venue, 'pending', '16:00', '18:00');
+        $wholeDayRequest = $this->request(
+            $requestor,
+            $venue,
+            'pending',
+            '08:00',
+            '17:00',
+            startDate: '2026-08-28',
+            endDate: '2026-08-29',
+            reservationDuration: 'whole_day',
+        );
+
+        $conflict = app(AvailabilityService::class)->checkVenueScheduleForReview($wholeDayRequest, $venue->name);
+
+        $this->assertSame(
+            'Another request for this venue and time is still awaiting review. Resolve that request before confirming availability.',
+            $conflict,
+        );
+    }
+
+    public function test_multiday_whole_day_request_does_not_conflict_with_later_approved_reservation(): void
+    {
+        [$requestor, $venue] = $this->resourceSetup('Approved Adjacent Whole Day Venue');
+        $lateReservation = $this->request($requestor, $venue, 'approved', '17:00', '23:59');
+        $wholeDayRequest = $this->request(
+            $requestor,
+            $venue,
+            'pending',
+            '08:00',
+            '17:00',
+            startDate: '2026-08-28',
+            endDate: '2026-08-29',
+            reservationDuration: 'whole_day',
+        );
+
+        $conflict = app(AvailabilityService::class)->checkFacilityRequest($wholeDayRequest);
+
+        $this->assertNull($conflict);
+        $this->assertFalse($wholeDayRequest->overlapsRequest($lateReservation));
+        $this->assertCount(0, app(AvailabilityService::class)->getApprovedVenueConflicts($wholeDayRequest));
+    }
+
+    public function test_multiday_whole_day_equipment_availability_ignores_later_reservation(): void
+    {
+        [$requestor, $venue, $equipment] = $this->resourceSetup('Whole Day Equipment Venue', true);
+        $this->request($requestor, $venue, 'approved', '17:00', '23:59', $equipment, 3);
+        $wholeDayRequest = $this->request(
+            $requestor,
+            $venue,
+            'pending',
+            '08:00',
+            '17:00',
+            $equipment,
+            3,
+            '2026-08-28',
+            '2026-08-29',
+            'whole_day',
+        );
+
+        $conflict = app(AvailabilityService::class)->checkFacilityRequest($wholeDayRequest);
+
+        $this->assertNull($conflict);
+    }
+
     public function test_venue_check_can_exclude_the_request_being_revised(): void
     {
         [$requestor, $venue] = $this->resourceSetup('Self Exclusion Venue');
@@ -212,20 +330,25 @@ class Phase2AvailabilityPolicyTest extends TestCase
         string $startTime,
         string $endTime,
         ?Equipment $equipment = null,
-        int $quantity = 0
+        int $quantity = 0,
+        string $startDate = '2026-08-28',
+        ?string $endDate = null,
+        string $reservationDuration = 'specific_time',
     ): FacilityRequest {
         $equipmentItems = $equipment ? [$equipment->name] : [];
+        $endDate ??= $startDate;
 
         return FacilityRequest::create([
             'control_number' => 'FER-' . uniqid(),
-            'date_requested' => '2026-08-28',
+            'date_requested' => $startDate,
             'department' => 'Test Department',
             'name_of_activity' => 'Test Activity',
             'expected_participants' => 20,
-            'start_date' => '2026-08-28',
-            'end_date' => '2026-08-28',
+            'start_date' => $startDate,
+            'end_date' => $endDate,
             'start_time' => $startTime,
             'end_time' => $endTime,
+            'reservation_duration' => $reservationDuration,
             'venue' => [$venue->name],
             'equipment' => $equipmentItems,
             'equipment_quantities' => $equipment ? [$equipment->name => $quantity] : [],

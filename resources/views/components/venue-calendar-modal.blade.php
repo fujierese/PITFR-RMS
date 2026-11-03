@@ -1,14 +1,32 @@
+<style>
+    @media (max-width: 640px) {
+        #staff-venue-calendar-modal {
+            width: 100vw !important;
+            height: 100dvh !important;
+            max-height: 100dvh !important;
+            border-radius: 0 !important;
+        }
+        #staff-venue-calendar-modal header {
+            align-items: flex-start;
+        }
+    }
+    #staff-venue-calendar-modal button:focus-visible,
+    #staff-venue-calendar-modal iframe:focus-visible {
+        outline: 3px solid #38bdf8;
+        outline-offset: 2px;
+    }
+</style>
 <dialog
     id="staff-venue-calendar-modal"
     aria-labelledby="staff-venue-calendar-modal-title"
-    style="width: min(96vw, 1100px); height: min(92vh, 900px); max-width: none; max-height: 92vh; margin: auto; padding: 0; border: 0;"
+    style="width: min(96vw, 1100px); height: min(92dvh, 900px); max-width: none; max-height: 92dvh; margin: auto; padding: 0; border: 0;"
     class="overflow-hidden rounded-2xl bg-white shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm"
 >
     <div class="flex h-full min-h-0 flex-col">
         <header class="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5">
             <div class="min-w-0">
                 <h2 id="staff-venue-calendar-modal-title" class="truncate text-base font-semibold text-slate-900">Venue availability calendar</h2>
-                <p class="mt-0.5 text-xs text-slate-500">Your requested schedule is highlighted. Review approved bookings and tentative requests before confirming availability.</p>
+                <p id="staff-venue-calendar-description" class="mt-0.5 text-xs text-slate-500">Review venue bookings and availability before submitting or updating your reservation.</p>
             </div>
             <button type="button" data-venue-calendar-close aria-label="Close venue calendar" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
                 &times;
@@ -23,7 +41,8 @@
         const modal = document.getElementById('staff-venue-calendar-modal');
         const frame = document.getElementById('staff-venue-calendar-modal-frame');
         const title = document.getElementById('staff-venue-calendar-modal-title');
-        if (!modal || !frame || !title) return;
+        const description = document.getElementById('staff-venue-calendar-description');
+        if (!modal || !frame || !title || !description) return;
 
         let lastFocusedElement = null;
         let pendingFrameLoadHandler = null;
@@ -57,8 +76,8 @@
                 element.textContent = !complete
                     ? 'Check the calendar for each requested venue to validate its schedule.'
                     : (hasConflict
-                        ? 'A conflict was found in the requested schedules or resources. Review the calendar and record the reason before marking the request unavailable.'
-                        : 'All requested venue schedules were checked. The server will recheck availability when you submit.');
+                        ? 'Something conflicts with the requested date or time. Review the calendar and suggest a different schedule.'
+                        : 'We checked all requested venue schedules. We’ll check again before you confirm.');
                 element.classList.remove('hidden', 'text-amber-800', 'text-emerald-800');
                 if (complete) element.classList.add(hasConflict ? 'text-amber-800' : 'text-emerald-800');
             });
@@ -89,6 +108,8 @@
             }
 
             const token = document.querySelector('meta[name="csrf-token"]')?.content;
+            const controller = new AbortController();
+            const timeoutId = window.setTimeout(() => controller.abort(), 15000);
             try {
                 const response = await fetch(trigger.dataset.availabilityCheckUrl, {
                     method: 'POST',
@@ -98,10 +119,17 @@
                         'X-CSRF-TOKEN': token || '',
                     },
                     body: JSON.stringify({ venue: trigger.dataset.availabilityVenue }),
+                    signal: controller.signal,
                 });
-                const result = await response.json();
+
+                const contentType = response.headers.get('content-type') || '';
+                const result = contentType.includes('application/json')
+                    ? await response.json()
+                    : { message: 'The schedule could not be checked because the server returned an unexpected response.' };
                 if (!response.ok) {
-                    throw new Error(result.message || 'The schedule could not be validated. Please try again.');
+                    throw new Error(result.message || (response.status === 503
+                        ? 'The server is temporarily unavailable. Please try again.'
+                        : 'The schedule could not be validated. Please try again.'));
                 }
 
                 updateVenueStatus(
@@ -110,12 +138,26 @@
                     result.message
                 );
             } catch (error) {
-                updateVenueStatus(trigger, 'error', error.message || 'The schedule could not be validated. Please try again.');
+                const message = error.name === 'AbortError'
+                    ? 'The availability check timed out. Please try again.'
+                    : (error.message || 'The schedule could not be validated. Please try again.');
+                updateVenueStatus(trigger, 'error', message);
                 if (summary) {
                     summary.textContent = 'Validation failed. Actions remain hidden until the schedule check succeeds.';
                     summary.classList.remove('text-sky-800');
                     summary.classList.add('text-amber-800');
+                    if (!summary.querySelector('[data-retry-availability]')) {
+                        const retryButton = document.createElement('button');
+                        retryButton.type = 'button';
+                        retryButton.dataset.retryAvailability = 'true';
+                        retryButton.textContent = 'Retry check';
+                        retryButton.className = 'ml-2 inline-flex rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-50';
+                        retryButton.addEventListener('click', () => validateAvailability(trigger));
+                        summary.appendChild(retryButton);
+                    }
                 }
+            } finally {
+                window.clearTimeout(timeoutId);
             }
         };
 
@@ -154,6 +196,7 @@
             if (trigger) {
                 lastFocusedElement = trigger;
                 title.textContent = trigger.dataset.venueCalendarTitle || 'Venue availability calendar';
+                description.textContent = trigger.dataset.venueCalendarDescription || 'Review venue bookings and availability before submitting or updating your reservation.';
                 frame.title = title.textContent;
                 if (pendingFrameLoadHandler) {
                     frame.removeEventListener('load', pendingFrameLoadHandler);

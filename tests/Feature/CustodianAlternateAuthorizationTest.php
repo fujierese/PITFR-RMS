@@ -64,9 +64,20 @@ class CustodianAlternateAuthorizationTest extends TestCase
         FacilityRequest::factory()->create([
             'requested_by_id' => $requester->id,
             'venue' => ['Dashboard Test Venue'],
+            'name_of_activity' => 'Venue check waiting',
             'start_date' => now()->addDays(2)->toDateString(),
             'start_time' => '09:00',
             'venue_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+        ]);
+        FacilityRequest::factory()->approved()->create([
+            'requested_by_id' => $requester->id,
+            'venue' => ['Dashboard Test Venue'],
+            'name_of_activity' => 'Approved future booking',
+            'start_date' => now()->addDays(3)->toDateString(),
+            'end_date' => now()->addDays(3)->toDateString(),
+            'start_time' => '10:00',
+            'end_time' => '12:00',
         ]);
 
         $dashboardResponse = $this->actingAs($custodian)->get(route('custodian.index'));
@@ -83,11 +94,13 @@ class CustodianAlternateAuthorizationTest extends TestCase
             ->assertDontSee('name="search"', false)
             ->assertSee('data-calendar-today-link', false)
             ->assertSee('href="' . $todayCalendarUrl . '"', false)
-            ->assertSee('Request progress')
-            ->assertSee('Awaiting venue &amp; equipment review', false)
-            ->assertSee('Venue review')
-            ->assertSee('Equipment review')
-            ->assertSee('Requests for Your Resources')
+            ->assertSee('Venue Availability Review Required')
+            ->assertSee('1 waiting')
+            ->assertSee('Venue check waiting')
+            ->assertSee('Availability check required')
+            ->assertDontSee('Awaiting venue &amp; equipment review', false)
+            ->assertSee('Upcoming &amp; Active Reservations', false)
+            ->assertSee('Approved future booking')
             ->assertDontSee('Upcoming Requests');
 
         $allRequestsResponse = $this->get(route('custodian.index', ['filter' => 'all']));
@@ -96,6 +109,133 @@ class CustodianAlternateAuthorizationTest extends TestCase
             ->assertViewIs('custodian.index')
             ->assertSee('All Requests')
             ->assertSee('Search requests');
+    }
+
+    public function test_equipment_dashboard_only_queues_reviews_after_supply_office_confirmation(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-equipment']);
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        Equipment::create([
+            'name' => 'Dashboard Projector',
+            'custodian_id' => $custodian->id,
+            'quantity' => 5,
+            'quantity_available' => 5,
+        ]);
+
+        FacilityRequest::factory()->create([
+            'requested_by_id' => $requester->id,
+            'equipment' => ['Dashboard Projector'],
+            'equipment_quantities' => ['Dashboard Projector' => 1],
+            'name_of_activity' => 'Still waiting for Supply Office',
+            'supply_office_review_status' => 'pending',
+        ]);
+        FacilityRequest::factory()->create([
+            'requested_by_id' => $requester->id,
+            'equipment' => ['Dashboard Projector'],
+            'equipment_quantities' => ['Dashboard Projector' => 2],
+            'name_of_activity' => 'Ready for equipment review',
+            'supply_office_review_status' => 'confirmed',
+        ]);
+
+        $response = $this->actingAs($custodian)->get(route('custodian.index'));
+
+        $response->assertOk()
+            ->assertViewIs('custodian.dashboard')
+            ->assertSee('Equipment Review Required')
+            ->assertSee('1 waiting')
+            ->assertSee('Ready for equipment review')
+            ->assertSee('Dashboard Projector')
+            ->assertSee('× 2', false)
+            ->assertDontSee('Still waiting for Supply Office');
+    }
+
+    public function test_custodian_dashboard_groups_equipment_by_venue_and_orders_schedules_by_start_time(): void
+    {
+        $custodian = User::factory()->create(['role' => 'custodian-venue']);
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $chic = Venue::create([
+            'name' => 'Conference Hall',
+            'custodian_id' => $custodian->id,
+        ]);
+        $court = Venue::create([
+            'name' => 'Covered Court',
+            'custodian_id' => $custodian->id,
+        ]);
+        $request = FacilityRequest::factory()->create([
+            'requested_by_id' => $requester->id,
+            'venue' => [$chic->name, $court->name],
+            'equipment' => ['Wireless Microphone', 'Sound System'],
+            'start_date' => '2026-11-23',
+            'end_date' => '2026-11-23',
+            'start_time' => '08:00',
+            'end_time' => '17:00',
+            'reservation_duration' => 'specific_time',
+            'status' => 'pending',
+            'venue_status' => 'pending',
+            'supply_office_review_status' => 'pending',
+        ]);
+        $request->requestVenues()->forceDelete();
+        $chicSchedule = $request->requestVenues()->create([
+            'venue_id' => $chic->id,
+            'name' => $chic->name,
+            'start_date' => '2026-11-23',
+            'end_date' => '2026-11-23',
+            'start_time' => '12:00',
+            'end_time' => '17:00',
+            'reservation_duration' => 'specific_time',
+        ]);
+        $courtSchedule = $request->requestVenues()->create([
+            'venue_id' => $court->id,
+            'name' => $court->name,
+            'start_date' => '2026-11-23',
+            'end_date' => '2026-11-23',
+            'start_time' => '08:00',
+            'end_time' => '12:00',
+            'reservation_duration' => 'specific_time',
+        ]);
+        $request->requestEquipment()->forceDelete();
+        $request->requestEquipment()->create([
+            'request_venue_id' => $chicSchedule->id,
+            'name' => 'Wireless Microphone',
+            'quantity' => 2,
+        ]);
+        $request->requestEquipment()->create([
+            'request_venue_id' => $chicSchedule->id,
+            'name' => 'Sound System',
+            'quantity' => 1,
+        ]);
+        $request->requestEquipment()->create([
+            'request_venue_id' => $courtSchedule->id,
+            'name' => 'Wireless Microphone',
+            'quantity' => 1,
+        ]);
+
+        $response = $this->actingAs($custodian)->get(route('custodian.index'));
+
+        $response->assertOk()
+            ->assertViewIs('custodian.dashboard')
+            ->assertSee('Venue schedules')
+            ->assertSee('Equipment requested')
+            ->assertSee('Wireless Microphone')
+            ->assertSee('× 2', false)
+            ->assertSee('× 1', false)
+            ->assertSee('Your venue');
+
+        $html = $response->getContent();
+        $scheduleSectionPosition = strpos($html, 'Venue schedules');
+        $courtPosition = strpos($html, 'Covered Court', $scheduleSectionPosition);
+        $chicPosition = strpos($html, 'Conference Hall', $scheduleSectionPosition);
+        $this->assertNotFalse($courtPosition);
+        $this->assertNotFalse($chicPosition);
+        $this->assertLessThan($chicPosition, $courtPosition);
+
+        $listResponse = $this->get(route('custodian.index', ['filter' => 'all']));
+        $listResponse->assertOk()
+            ->assertViewIs('custodian.index')
+            ->assertSee('Venue schedules and requested equipment')
+            ->assertSee('Equipment requested')
+            ->assertSee('Wireless Microphone')
+            ->assertSee('× 2', false);
     }
 
     public function test_equipment_included_with_a_venue_still_requires_equipment_custodian_review(): void

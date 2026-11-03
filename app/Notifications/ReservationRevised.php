@@ -3,16 +3,13 @@
 namespace App\Notifications;
 
 use App\Models\FacilityRequest;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use App\Notifications\Concerns\UsesNotificationPreferences;
 
-class ReservationRevised extends Notification implements ShouldQueue
+class ReservationRevised extends Notification
 {
-    use Queueable;
-    use UsesNotificationPreferences;
+    use UsesWorkflowNotificationChannels;
 
     protected FacilityRequest $facilityRequest;
     protected array $oldState;
@@ -45,7 +42,7 @@ class ReservationRevised extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return $this->channelsWithPreference($notifiable, 'request_updates', ['mail', 'database']);
+        return $this->workflowChannels($notifiable);
     }
 
     public function toDatabase(object $notifiable): array
@@ -68,9 +65,13 @@ class ReservationRevised extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $title = $this->isRequestor($notifiable)
-            ? 'Your accepted schedule change is now active.'
-            : 'A reservation schedule change has been accepted.';
+        $title = $this->requiresFurtherReview()
+            ? ($this->isRequestor($notifiable)
+                ? 'Your schedule change was accepted, but Supply Office review is still required.'
+                : 'A schedule change was accepted, but Supply Office review is still required.')
+            : ($this->isRequestor($notifiable)
+                ? 'Your accepted schedule change is now active.'
+                : 'A reservation schedule change has been accepted.');
 
         return (new MailMessage)
             ->subject('Reservation schedule updated: ' . $this->facilityRequest->control_number)
@@ -85,6 +86,12 @@ class ReservationRevised extends Notification implements ShouldQueue
      */
     private function getTitle(object $notifiable): string
     {
+        if ($this->requiresFurtherReview()) {
+            return $this->isRequestor($notifiable)
+                ? 'Schedule change accepted; review still required.'
+                : 'Schedule change awaiting Supply Office review.';
+        }
+
         if ($this->isRequestor($notifiable)) {
             return 'Your reservation has been revised.';
         }
@@ -100,6 +107,10 @@ class ReservationRevised extends Notification implements ShouldQueue
         $changes = $this->describeChanges();
         $baseMessage = "Request {$this->facilityRequest->control_number} has been revised. Previous schedule: {$this->formatOldSchedule()}. New schedule: {$this->formatNewSchedule()}. {$changes}";
 
+        if ($this->requiresFurtherReview()) {
+            $baseMessage .= ' The request is not approved yet; Supply Office review and any remaining custodian approvals are still required.';
+        }
+
         if ($this->conflictDetected && $this->conflictOverridden) {
             $baseMessage .= " ⚠️ Scheduling conflict was overridden: {$this->conflictDetails}";
         }
@@ -109,6 +120,12 @@ class ReservationRevised extends Notification implements ShouldQueue
         }
 
         return $baseMessage;
+    }
+
+    private function requiresFurtherReview(): bool
+    {
+        return $this->facilityRequest->status === 'pending'
+            && $this->facilityRequest->supply_office_review_status === 'pending';
     }
 
     /**

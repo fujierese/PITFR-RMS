@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'final_approver_username' => env('PITFR_FINAL_APPROVER_USERNAME', 'asala@gmail.com'),
     'contact' => [
         'office' => 'Supply Office (Near PIT School Clinic)',
         'email' => 'pitsupplyoffice@gmail.com',

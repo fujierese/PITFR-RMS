@@ -87,9 +87,7 @@
                 <tr>
                     <th class="px-4 py-3 font-medium">Control Number</th>
                     <th class="px-4 py-3 font-medium">Activity</th>
-                    <th class="px-4 py-3 font-medium">Venue</th>
-                    <th class="px-4 py-3 font-medium">Equipment</th>
-                    <th class="px-4 py-3 font-medium">Venue Schedules</th>
+                    <th class="px-4 py-3 font-medium" colspan="3">Venue schedules and requested equipment</th>
                     <th class="px-4 py-3 font-medium">Status</th>
                     <th class="px-4 py-3 font-medium">Actions</th>
                 </tr>
@@ -106,12 +104,13 @@
                             <p class="font-medium">{{ $req->name_of_activity ?? '—' }}</p>
                             <p class="mt-1 text-xs text-slate-500">{{ $req->requester?->name ?? $req->requested_by }}@if($req->department) <span aria-hidden="true">·</span> {{ $req->department }}@endif</p>
                         </td>
-                        <td class="px-4 py-4">{{ implode(', ', $req->getVenueNames()) ?: '—' }}</td>
-                        <td class="px-4 py-4">{{ implode(', ', $req->getVenueEquipmentLabels() ?: $req->getEquipmentItems()) ?: '—' }}</td>
-                        <td class="px-4 py-4 whitespace-nowrap">
-                            @foreach($req->getVenueScheduleSummaries() as $schedule)
-                                <p class="mb-2 last:mb-0"><span class="font-medium">{{ $schedule['venue'] }}</span><span class="mt-1 block text-xs text-slate-500">{{ $schedule['label'] }}</span></p>
-                            @endforeach
+                        <td class="px-4 py-4" colspan="3">
+                            @include('custodian.partials.request-resources', [
+                                'requestItem' => $req,
+                                'custodianType' => $custodianType,
+                                'assignedVenueNames' => $assignedVenueNames,
+                                'assignedEquipmentNames' => $assignedEquipmentNames,
+                            ])
                         </td>
                         <td class="px-4 py-4">
                             <x-request-status-badge :request="$req" />
@@ -130,7 +129,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="px-4 py-12 text-center text-sm text-slate-500">No {{ $filter }} requests found.</td></tr>
+                    <tr><td colspan="5" class="px-4 py-12 text-center text-sm text-slate-500">No {{ $filter }} requests found.</td></tr>
                 @endforelse
             </tbody>
         </table>

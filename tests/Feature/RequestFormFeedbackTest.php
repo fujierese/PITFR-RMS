@@ -64,6 +64,13 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringContainsString('id="venue-calendar-modal-frame"', $html);
         $this->assertStringContainsString('data-close-venue-calendar', $html);
         $this->assertStringContainsString('data-apply-venue-calendar-dates', $html);
+        $this->assertStringContainsString('Use these reservation dates?', $html);
+        $this->assertStringContainsString('Keep selecting', $html);
+        $this->assertStringContainsString('role="alertdialog"', $html);
+        $this->assertStringContainsString('data-cancel-calendar-date-confirmation', $html);
+        $this->assertStringContainsString('data-confirm-calendar-dates', $html);
+        $this->assertStringContainsString('pendingCalendarRange = { ...selectedCalendarRange }', $html);
+        $this->assertStringNotContainsString('target: venueCalendarModal', $html);
         $this->assertStringContainsString('height:min(92vh,900px)', $html);
         $this->assertStringContainsString('event.data.startDate', $html);
         $this->assertStringContainsString('event.data.endDate', $html);
@@ -121,6 +128,10 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertSame(1, preg_match('/name="venue_schedules\[Balay Alumni\]\[end_time\]"\s+required/', $html));
         $this->assertSame(2, preg_match_all('/name="venue_schedules\[Balay Alumni\]\[reservation_duration\]" value="(?:specific_time|whole_day)"(?![^>]*disabled)/', $html));
         $this->assertStringContainsString('Provided with this venue (not a separate equipment request): Sound System, Aircon, Chairs', $html);
+        $this->assertStringContainsString('data-draft-owner-id="' . $requestor->id . '"', $html);
+        $this->assertStringContainsString('data-discard-request-draft', $html);
+        $this->assertStringContainsString('Saved on this browser for up to 30 days.', $html);
+        $this->assertStringContainsString("new CustomEvent('confirmed-submit'", $html);
         $this->assertStringNotContainsString('name="venue_equipment[Balay Alumni][]" value="Sound System"', $html);
         $this->assertStringNotContainsString('name="venue_equipment[Balay Alumni][]" value="Aircon"', $html);
         $this->assertSame(1, preg_match('/data-venue-equipment-group[^>]*data-venue-name="Balay Alumni"/', $html));
