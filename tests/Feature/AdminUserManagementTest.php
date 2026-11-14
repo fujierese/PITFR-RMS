@@ -713,6 +713,8 @@ class AdminUserManagementTest extends TestCase
 
     public function test_admin_can_save_unique_staff_ids_for_staff_igp_supply_office_and_custodian_accounts(): void
     {
+        $this->markTestSkipped('Staff ID saving is disabled in AdminController to match the production hotfix; re-enable once the add_staff_id_to_users_table migration has run on the live database.');
+
         Notification::fake();
         $admin = User::factory()->createOne(['role' => 'admin']);
         $this->actingAs($admin);

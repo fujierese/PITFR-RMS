@@ -261,7 +261,6 @@ class AdminController extends Controller
             'grade_level' => ['nullable', Rule::in(['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'])],
             'school_id_number' => ['required_if:account_type,student', 'nullable', 'string', 'regex:/^\d{2}-\d{4}-\d{3}$/'],
             'faculty_id' => ['required_if:account_type,faculty', 'nullable', 'string', 'max:50', 'unique:users,faculty_id'],
-            'staff_id' => ['nullable', 'string', 'max:50', 'unique:users,staff_id'],
             'faculty_adviser' => ['nullable', 'in:yes,no'],
             'position' => ['nullable', 'string', 'max:100'],
             'student_organization_id' => $isCreatingStudentOrganization
@@ -429,9 +428,6 @@ class AdminController extends Controller
                 'requestor_type' => $accountMapping['requestor_type'],
                 'school_id_number' => $isStudent ? $validated['school_id_number'] : null,
                 'faculty_id' => $validated['account_type'] === 'faculty' ? $validated['faculty_id'] : null,
-                'staff_id' => in_array($validated['account_type'], ['staff', 'supply_office', 'igp', 'custodian_venue', 'custodian_equipment'], true)
-                    ? ($validated['staff_id'] ?? null)
-                    : null,
                 'position' => match ($validated['account_type']) {
                     'custodian_venue' => 'Venue Custodian',
                     'custodian_equipment' => 'Equipment Custodian',
@@ -536,7 +532,6 @@ class AdminController extends Controller
             'department_id' => ['nullable', 'exists:departments,id'],
             'school_id_number' => ['nullable', 'string', 'max:255'],
             'faculty_id' => ['nullable', 'string', 'max:50', 'unique:users,faculty_id,' . $user->id],
-            'staff_id' => ['nullable', 'string', 'max:50', 'unique:users,staff_id,' . $user->id],
             'faculty_adviser' => ['nullable', 'in:yes,no'],
             'position' => ['nullable', 'string', 'max:100'],
             'password' => ['nullable', 'string', 'min:12', 'confirmed'],
@@ -604,9 +599,6 @@ class AdminController extends Controller
         $previouslyCustodian = $user->isCustodian();
         $newlyCustodian = in_array($newRole, ['custodian', 'custodian-venue', 'custodian-equipment'], true)
             || collect($newAdditionalRoles)->contains(fn (string $role): bool => str_starts_with($role, 'custodian'));
-        $isStaffIdAccount = $newRequestorType === 'staff'
-            || in_array($newRole, ['supply_office', 'igp', 'custodian', 'custodian-venue', 'custodian-equipment'], true)
-            || $newlyCustodian;
 
         if ($previouslyCustodian && ! $newlyCustodian) {
             $venueAssignments = $user->venues()->where('is_active', true)->pluck('name')->filter()->all();
@@ -629,7 +621,7 @@ class AdminController extends Controller
         ];
 
         $passwordChanged = ! empty($validated['password']);
-        DB::transaction(function () use ($user, $nameToStore, $validated, $newRole, $newAdditionalRoles, $newRequestorType, $newIsActive, $department, $passwordChanged, $facultyAdviser, $selectedOrganizationId, $currentUser, $oldValues, $isStaffIdAccount): void {
+        DB::transaction(function () use ($user, $nameToStore, $validated, $newRole, $newAdditionalRoles, $newRequestorType, $newIsActive, $department, $passwordChanged, $facultyAdviser, $selectedOrganizationId, $currentUser, $oldValues): void {
             $user->fill([
                 'name' => $nameToStore,
                 'surname' => trim((string) ($validated['surname'] ?? '')) ?: null,
@@ -648,7 +640,6 @@ class AdminController extends Controller
                     ? 'Supply Office'
                     : (in_array($newRequestorType, ['student', 'faculty'], true) ? ($department?->name ?? $validated['department'] ?? null) : null),
                 'faculty_id' => $newRequestorType === 'faculty' ? ($validated['faculty_id'] ?? null) : null,
-                'staff_id' => $isStaffIdAccount ? ($validated['staff_id'] ?? null) : null,
                 'position' => $validated['position'] ?? null,
                 'office_or_organization' => $newRole === 'supply_office'
                     ? 'Supply Office'
