@@ -13,6 +13,7 @@
 # script (it is sourced if present):
 #   PHP_BIN=/opt/cpanel/ea-php82/root/usr/bin/php   # if `php` is not 8.2+
 #   PUBLIC_PATH=/home/USER/public_html              # if the web root is NOT this app's public/
+#   RUN_MIGRATIONS=0                                # skip `migrate --force` (default: 1)
 #
 # With PUBLIC_PATH set, every deploy copies public/ into that folder
 # (build/ is replaced; other folders are merged so extra files survive).
@@ -84,8 +85,13 @@ echo "==> Refreshing package manifest"
 rm -f bootstrap/cache/packages.php bootstrap/cache/services.php
 "$PHP" artisan package:discover
 
-echo "==> Running migrations"
-"$PHP" artisan migrate --force
+if [ "${RUN_MIGRATIONS:-1}" = "0" ]; then
+    echo "==> Skipping migrations (RUN_MIGRATIONS=0 in .deploy.env). Pending:"
+    "$PHP" artisan migrate:status | grep -i pending || echo "    (none)"
+else
+    echo "==> Running migrations"
+    "$PHP" artisan migrate --force
+fi
 
 echo "==> Rebuilding caches"
 "$PHP" artisan optimize:clear

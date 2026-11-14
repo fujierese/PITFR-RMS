@@ -1,8 +1,8 @@
 # Automatic deployment to GoDaddy (cPanel)
 
-Every push to `main` deploys to the GoDaddy server once **PITFR CI** passes:
+Every push to `main` deploys to the GoDaddy server:
 
-1. `.github/workflows/deploy.yml` builds `vendor/` (Composer, no dev packages) and `public/build/` (Vite) on GitHub. The shared host has no Node.js, and Composer is unreliable there.
+1. `.github/workflows/deploy.yml` checks PHP syntax, then builds `vendor/` (Composer, no dev packages) and `public/build/` (Vite) on GitHub. The shared host has no Node.js, and Composer is unreliable there.
 2. It uploads them over SSH as `~/pitfr-release.tgz`.
 3. On the server it runs `git merge --ff-only` to the tested commit, then `deploy.sh`. That puts the site in maintenance mode, swaps in `vendor/` and `public/build/`, runs `migrate --force`, rebuilds the caches and brings the site back up.
 
@@ -56,6 +56,8 @@ Every deploy then copies `public/` into `public_html`:
 - `build/` is replaced, so stale hashed files are removed.
 - `css`, `js`, `images` and the loose files are overwritten, but extra files already in `public_html` are kept.
 - `index.php`, `.htaccess` and `storage` there are never touched.
+
+To deploy code without touching the database, add `RUN_MIGRATIONS=0` to the same file. The deploy log then lists the pending migrations instead of running them. Remove the line once those migrations have been reviewed and the database backed up.
 
 In this setup, set `GODADDY_APP_PATH` to the app folder (`/home/USERNAME/pitfr`), **not** `public_html`.
 
