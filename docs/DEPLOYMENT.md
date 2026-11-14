@@ -45,6 +45,20 @@ php -v
 
 If it is older than 8.2, find the 8.2 binary (usually `/opt/cpanel/ea-php82/root/usr/bin/php`) and set it as `GODADDY_PHP_BIN` below.
 
+### 3b. If the web root is not the app's `public/` folder
+On our server the app lives in `~/pitfr` and visitors are served from `~/public_html`. A customized `public_html/index.php` loads `../pitfr/vendor` and `../pitfr/bootstrap`. In this setup, tell `deploy.sh` where the web root is by creating an untracked `~/pitfr/.deploy.env`:
+
+```bash
+echo 'PUBLIC_PATH=/home/USERNAME/public_html' > ~/pitfr/.deploy.env
+```
+
+Every deploy then copies `public/` into `public_html`:
+- `build/` is replaced, so stale hashed files are removed.
+- `css`, `js`, `images` and the loose files are overwritten, but extra files already in `public_html` are kept.
+- `index.php`, `.htaccess` and `storage` there are never touched.
+
+In this setup, set `GODADDY_APP_PATH` to the app folder (`/home/USERNAME/pitfr`), **not** `public_html`.
+
 ### 4. Add the GitHub secrets
 Repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
 
