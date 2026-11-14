@@ -1,0 +1,106 @@
+name: Deploy to GoDaddy
+
+# Deploys main to the GoDaddy cPanel server after "PITFR CI" passes.
+# Can also be started by hand from the Actions tab.
+# Setup steps: docs/DEPLOYMENT.md
+on:
+  workflow_run:
+    workflows: [PITFR CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    env:
+      SSH_HOST: ${{ secrets.GODADDY_SSH_HOST }}
+      SSH_USER: ${{ secrets.GODADDY_SSH_USER }}
+      SSH_PORT: ${{ secrets.GODADDY_SSH_PORT || '22' }}
+      APP_PATH: ${{ secrets.GODADDY_APP_PATH }}
+      PHP_BIN: ${{ secrets.GODADDY_PHP_BIN || 'php' }}
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+    steps:
+      - name: Check deploy secrets
+        id: config
+        env:
+          HAS_KEY: ${{ secrets.GODADDY_SSH_KEY != '' }}
+        run: |
+          if [ -z "$SSH_HOST" ] || [ -z "$SSH_USER" ] || [ -z "$APP_PATH" ] || [ "$HAS_KEY" != "true" ]; then
+            echo "::warning::Deploy skipped: GODADDY_SSH_HOST, GODADDY_SSH_USER, GODADDY_SSH_KEY and GODADDY_APP_PATH secrets are required (see docs/DEPLOYMENT.md)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout tested commit
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+
+      - name: Setup PHP
+        if: steps.config.outputs.ready == 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring
+          coverage: none
+
+      - name: Setup Node
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Build release archive (vendor + public/build)
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          composer install --no-dev --no-interaction --prefer-dist --no-progress --optimize-autoloader --no-scripts
+          npm ci
+          npm run build
+          tar -czf pitfr-release.tgz vendor public/build
+          ls -lh pitfr-release.tgz
+
+      - name: Configure SSH
+        if: steps.config.outputs.ready == 'true'
+        env:
+          SSH_KEY: ${{ secrets.GODADDY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.GODADDY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          if [ -n "$KNOWN_HOSTS" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" > ~/.ssh/known_hosts
+          fi
+          cat > ~/.ssh/config <<EOF
+          Host godaddy
+            HostName $SSH_HOST
+            User $SSH_USER
+            Port $SSH_PORT
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            ServerAliveInterval 30
+          EOF
+
+      - name: Upload release archive
+        if: steps.config.outputs.ready == 'true'
+        run: ssh godaddy 'cat > ~/pitfr-release.tgz' < pitfr-release.tgz
+
+      - name: Pull code and run deploy.sh on the server
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          ssh godaddy "set -e
+            cd '$APP_PATH'
+            git fetch --quiet origin main
+            git merge --ff-only '$DEPLOY_SHA'
+            PHP_BIN='$PHP_BIN' bash deploy.sh ~/pitfr-release.tgz"
