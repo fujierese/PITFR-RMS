@@ -82,8 +82,23 @@ jobs:
           KNOWN_HOSTS: ${{ secrets.GODADDY_KNOWN_HOSTS }}
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null || { echo "::error::GODADDY_SSH_KEY is not a valid private key. Re-paste the whole key, including the BEGIN/END lines."; exit 1; }
+          # Tolerate common paste damage: CRLF, indentation, text around the
+          # key, or the whole key collapsed onto one line.
+          key=$(printf '%s\n' "$SSH_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sed -n '/-----BEGIN/,/-----END/p')
+          if [ -n "$key" ] && [ "$(printf '%s\n' "$key" | wc -l)" -lt 3 ]; then
+            body=$(printf '%s' "$key" | sed -E 's/-----(BEGIN|END) OPENSSH PRIVATE KEY-----//g' | tr -d ' \t\n')
+            key=$(printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\n%s\n-----END OPENSSH PRIVATE KEY-----' "$(printf '%s' "$body" | fold -w 70)")
+          fi
+          printf '%s\n' "$key" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null; then
+            # Safe diagnostics only: never print the key itself.
+            echo "Secret length: ${#SSH_KEY} chars, $(printf '%s\n' "$SSH_KEY" | wc -l) lines"
+            printf '%s\n' "$SSH_KEY" | grep -q 'BEGIN OPENSSH PRIVATE KEY' && echo "BEGIN line: found" || echo "BEGIN line: MISSING"
+            printf '%s\n' "$SSH_KEY" | grep -q 'END OPENSSH PRIVATE KEY' && echo "END line: found" || echo "END line: MISSING"
+            printf '%s\n' "$SSH_KEY" | grep -q '^ssh-ed25519 ' && echo "This looks like the PUBLIC key; the secret needs the PRIVATE key."
+            echo "::error::GODADDY_SSH_KEY is not a valid private key. Re-paste the whole key, including the BEGIN/END lines."
+            exit 1
+          fi
           if [ -n "$KNOWN_HOSTS" ]; then
             printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           else
