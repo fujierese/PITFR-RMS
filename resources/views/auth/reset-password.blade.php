@@ -10,6 +10,7 @@
             <input type="password" name="password" id="reset_password" required placeholder="New password" class="pitfr-password-input w-full rounded-2xl border border-slate-300 px-4 py-3">
             <button type="button" data-password-toggle-target="#reset_password" aria-label="Show password" class="password-toggle pitfr-password-toggle"></button>
         </div>
+        <p class="text-xs text-slate-500">Use at least 12 characters with upper-case and lower-case letters, a number and a symbol.</p>
         <div class="pitfr-password-wrapper">
             <input type="password" name="password_confirmation" id="reset_password_confirmation" required placeholder="Confirm new password" class="pitfr-password-input w-full rounded-2xl border border-slate-300 px-4 py-3">
             <button type="button" data-password-toggle-target="#reset_password_confirmation" aria-label="Show password" class="password-toggle pitfr-password-toggle"></button>

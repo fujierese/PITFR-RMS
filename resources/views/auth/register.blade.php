@@ -54,7 +54,8 @@
                     New Outsider users can create an account here. Students, staff, and faculty accounts are created by the Admin.
                 </div>
 
-                    <form method="POST" action="{{ route('register.post') }}" class="space-y-5">
+                    <p class="mb-4 text-xs text-slate-500">Fields marked <span class="text-red-500">*</span> are required.</p>
+                <form method="POST" action="{{ route('register.post') }}" class="space-y-5">
                         @csrf
                         <input type="hidden" name="requestor_type" value="outsider">
 
@@ -64,35 +65,35 @@
 
                         <div class="grid gap-4 sm:grid-cols-3">
                             <div>
-                                <label for="first_name" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">First name</label>
+                                <label for="first_name" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">First name <span class="text-red-500" aria-hidden="true">*</span></label>
                                 <input id="first_name" type="text" name="first_name" value="{{ old('first_name', $googleProfile['first_name'] ?? '') }}" required autocomplete="given-name" placeholder="First name" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                             </div>
                             <div>
-                                <label for="middle_name" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Middle name</label>
+                                <label for="middle_name" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Middle name <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
                                 <input id="middle_name" type="text" name="middle_name" value="{{ old('middle_name') }}" autocomplete="additional-name" placeholder="Optional" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                             </div>
                             <div>
-                                <label for="surname" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Surname</label>
+                                <label for="surname" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Surname <span class="text-red-500" aria-hidden="true">*</span></label>
                                 <input id="surname" type="text" name="surname" value="{{ old('surname', $googleProfile['last_name'] ?? '') }}" required autocomplete="family-name" placeholder="Surname" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                             </div>
                         </div>
 
                         <div class="grid gap-4 sm:grid-cols-2">
                             <div>
-                                <label for="username" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Email address</label>
+                                <label for="username" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Email address <span class="text-red-500" aria-hidden="true">*</span></label>
                                 <input id="username" type="email" name="username" value="{{ old('username', $googleProfile['email'] ?? '') }}" required @disabled($googleProfile) autocomplete="email" placeholder="you@example.com" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                                 @if($googleProfile)<input type="hidden" name="username" value="{{ $googleProfile['email'] }}">@endif
                             </div>
                             <div>
-                                <label for="contact_number" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Contact number</label>
+                                <label for="contact_number" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Contact number <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
                                 <input id="contact_number" type="text" name="contact_number" value="{{ old('contact_number') }}" autocomplete="tel" placeholder="09171234567" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                             </div>
                         </div>
 
                         <div>
-                            <label for="office_or_organization" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Organization name / affiliation</label>
-                            <input id="office_or_organization" type="text" name="office_or_organization" value="{{ old('office_or_organization') }}" required placeholder="Your organization, office, company, or Individual / Personal" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
-                            <p class="mt-2 text-xs text-slate-400">Enter your own organization, office, company, or Individual / Personal.</p>
+                            <label for="office_or_organization" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Organization name / affiliation <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
+                            <input id="office_or_organization" type="text" name="office_or_organization" value="{{ old('office_or_organization') }}" maxlength="191" placeholder="Your organization, office or company" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                            <p class="mt-2 text-xs text-slate-400">Leave blank if you are requesting as an individual.</p>
                         </div>
 
                         <div class="grid gap-4 sm:grid-cols-2">
@@ -101,21 +102,27 @@
                                 <input id="organization_acronym" type="text" name="organization_acronym" value="{{ old('organization_acronym') }}" maxlength="50" placeholder="Example: ABC" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                             </div>
                             <div>
-                                <label for="organization_type" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Organization type</label>
-                                <input id="organization_type" type="text" name="organization_type" value="{{ old('organization_type') }}" required maxlength="100" placeholder="Example: Company, NGO, School" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                                <label for="organization_type" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Organization type <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
+                                <input id="organization_type" type="text" name="organization_type" value="{{ old('organization_type') }}" maxlength="100" placeholder="Example: Company, NGO, School" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                             </div>
                         </div>
 
                         <div class="grid gap-4 sm:grid-cols-2">
                             <div>
-                                <label for="register_password" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Password</label>
+                                <label for="register_password" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Password <span class="text-red-500" aria-hidden="true">*</span></label>
                                 <div class="pitfr-password-wrapper">
-                                    <input id="register_password" type="password" name="password" @required(!$googleProfile) autocomplete="new-password" placeholder="At least 6 characters" class="pitfr-password-input w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                                    <input id="register_password" type="password" name="password" @required(!$googleProfile) autocomplete="new-password" placeholder="At least 12 characters" aria-describedby="password_strength password_rules" class="pitfr-password-input w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                                     <button type="button" data-password-toggle-target="#register_password" aria-label="Show password" class="password-toggle pitfr-password-toggle"></button>
                                 </div>
+                                <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+                                    <div id="password_strength_bar" class="h-full w-0 rounded-full transition-all"></div>
+                                </div>
+                                <p id="password_strength" class="mt-1 text-xs text-slate-500" aria-live="polite"></p>
+                                <p id="password_rules" class="mt-1 text-xs text-slate-400">Use at least 12 characters with upper-case and lower-case letters, a number and a symbol.</p>
+                                @error('password')<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
                             </div>
                             <div>
-                                <label for="register_password_confirmation" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Confirm password</label>
+                                <label for="register_password_confirmation" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Confirm password <span class="text-red-500" aria-hidden="true">*</span></label>
                                 <div class="pitfr-password-wrapper">
                                     <input id="register_password_confirmation" type="password" name="password_confirmation" @required(!$googleProfile) autocomplete="new-password" placeholder="Re-enter password" class="pitfr-password-input w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                                     <button type="button" data-password-toggle-target="#register_password_confirmation" aria-label="Show password" class="password-toggle pitfr-password-toggle"></button>
@@ -132,5 +139,28 @@
             </div>
         </section>
     </div>
+    <script>
+        (() => {
+            const input = document.getElementById('register_password');
+            const bar = document.getElementById('password_strength_bar');
+            const label = document.getElementById('password_strength');
+            if (!input || !bar || !label) return;
+            const levels = [
+                { text: '', width: '0%', color: '' },
+                { text: 'Strength: weak', width: '33%', color: 'bg-red-500' },
+                { text: 'Strength: moderate', width: '66%', color: 'bg-amber-500' },
+                { text: 'Strength: strong', width: '100%', color: 'bg-emerald-600' },
+            ];
+            input.addEventListener('input', () => {
+                const v = input.value;
+                const checks = [v.length >= 12, /[a-z]/.test(v) && /[A-Z]/.test(v), /\d/.test(v), /[^A-Za-z0-9]/.test(v)];
+                const passed = checks.filter(Boolean).length;
+                const level = v === '' ? 0 : (passed === 4 ? 3 : (passed >= 2 ? 2 : 1));
+                bar.className = 'h-full rounded-full transition-all ' + levels[level].color;
+                bar.style.width = levels[level].width;
+                label.textContent = levels[level].text;
+            });
+        })();
+    </script>
 </body>
 </html>

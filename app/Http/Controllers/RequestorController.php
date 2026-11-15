@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
  
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use App\Models\Equipment;
 use App\Models\FacilityRequest;
 use App\Models\RevisionHistory;
@@ -746,7 +747,7 @@ class RequestorController extends Controller
     {
         $request->validate([
             'current_password' => ['required'],
-            'password' => ['required', 'string', 'min:12', 'confirmed'],
+            'password' => ['required', 'string', PasswordRule::defaults(), 'confirmed'],
         ]);
 
         $user = $this->currentUser();
@@ -1489,12 +1490,14 @@ class RequestorController extends Controller
         }
 
         if ($user->isStudent()) {
-            $trustedStudentOrganization = $user->studentOrganizations()
-                ->where('student_organizations.id', $validated['student_organization_id'] ?? null)
-                ->first();
+            $submittedOrganizationId = $validated['student_organization_id'] ?? null;
+            $trustedStudentOrganization = $submittedOrganizationId
+                ? $user->studentOrganizations()->where('student_organizations.id', $submittedOrganizationId)->first()
+                : $user->studentOrganizations()->first();
 
-            if (! $trustedStudentOrganization) {
-                $trustedStudentOrganization = $user->studentOrganizations()->first();
+            // A submitted organization must be one of the student's own active memberships.
+            if ($submittedOrganizationId && ! $trustedStudentOrganization) {
+                return back()->withErrors(['student_organization_id' => 'You may request only for an active organization membership.'])->withInput();
             }
 
             if ($validated['request_context'] === 'student_organization' && ! $trustedStudentOrganization) {
@@ -1547,20 +1550,14 @@ class RequestorController extends Controller
                 $validated['department'] = $selectedDepartment->name;
             }
         } elseif (in_array($user->requestor_type, ['outsider'], true)) {
-            $trustedOrganization = trim((string) ($user->office_or_organization ?? ''));
-            if ($trustedOrganization === '') {
-                return back()->withErrors(['organization_name' => 'Please update your profile organization/office before submitting this request.'])->withInput();
-            }
+            // Outsiders who registered as individuals have no organization on file.
+            $trustedOrganization = trim((string) ($user->office_or_organization ?? '')) ?: 'Individual / Personal';
             $validated['department'] = $trustedOrganization;
             $validated['organization_name'] = $trustedOrganization;
         }
 
-        if ($user->requestor_type === 'student') {
-            $trustedStudentOrganization = $user->studentOrganizations()->first();
-            $validated['organization_name'] = $trustedStudentOrganization?->name ?? trim((string) ($validated['organization_name'] ?? $validated['department'] ?? ''));
-            if ($trustedStudentOrganization) {
-                $validated['student_organization_id'] = $trustedStudentOrganization->id;
-            }
+        if ($user->requestor_type === 'student' && empty($validated['student_organization_id'])) {
+            $validated['organization_name'] = trim((string) ($validated['organization_name'] ?? $validated['department'] ?? ''));
         }
 
         $capacityWarning = null;

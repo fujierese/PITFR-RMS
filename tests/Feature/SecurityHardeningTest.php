@@ -367,8 +367,8 @@ class SecurityHardeningTest extends TestCase
         $this->actingAs($user)
             ->post(route('requestor.settings.password'), [
                 'current_password' => 'old-password-123',
-                'password' => 'new-password-123',
-                'password_confirmation' => 'new-password-123',
+                'password' => 'New-password-123',
+                'password_confirmation' => 'New-password-123',
             ])
             ->assertRedirect(route('requestor.settings'));
 

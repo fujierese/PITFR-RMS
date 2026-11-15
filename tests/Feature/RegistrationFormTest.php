@@ -64,8 +64,59 @@ class RegistrationFormTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Organization name / affiliation')
-            ->assertSee('Your organization, office, company, or Individual / Personal')
+            ->assertSee('Leave blank if you are requesting as an individual.')
             ->assertDontSee('College of Technology and Engineering');
+    }
+
+    public function test_registration_form_marks_required_fields_and_shows_password_strength(): void
+    {
+        $html = $this->get(route('register'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('Fields marked', $html);
+        foreach (['First name', 'Surname', 'Email address', 'Password', 'Confirm password'] as $label) {
+            $this->assertMatchesRegularExpression('/>'.preg_quote($label, '/').' <span class="text-red-500" aria-hidden="true">\*<\/span>/', $html, "$label should be marked required");
+        }
+        $this->assertStringContainsString('placeholder="At least 12 characters"', $html);
+        $this->assertStringNotContainsString('At least 6 characters', $html);
+        $this->assertStringContainsString('id="password_strength"', $html);
+        $this->assertDoesNotMatchRegularExpression('/name="organization_type"[^>]*required/', $html);
+        $this->assertDoesNotMatchRegularExpression('/name="office_or_organization"[^>]*required/', $html);
+    }
+
+    public function test_individual_can_register_without_organization_name_or_type(): void
+    {
+        $email = 'individual'.uniqid().'@test.com';
+
+        $this->post(route('register.post'), [
+            'first_name' => 'Ina',
+            'surname' => 'Individual',
+            'username' => $email,
+            'password' => 'Password12345!',
+            'password_confirmation' => 'Password12345!',
+        ])->assertSessionHasNoErrors()->assertRedirect(route('register.verify'));
+
+        $this->assertDatabaseHas('users', [
+            'username' => $email,
+            'requestor_type' => 'outsider',
+            'office_or_organization' => null,
+            'organization_type' => null,
+        ]);
+    }
+
+    public function test_registration_rejects_passwords_without_mixed_characters(): void
+    {
+        foreach (['alllowercase123!', 'ALLUPPERCASE123!', 'NoNumbersHere!!', 'NoSymbols12345'] as $weak) {
+            $email = 'weak'.uniqid().'@test.com';
+            $this->post(route('register.post'), [
+                'first_name' => 'Weak',
+                'surname' => 'Password',
+                'username' => $email,
+                'password' => $weak,
+                'password_confirmation' => $weak,
+            ])->assertSessionHasErrors('password');
+
+            $this->assertDatabaseMissing('users', ['username' => $email]);
+        }
     }
 
     /**
@@ -79,8 +130,8 @@ class RegistrationFormTest extends TestCase
             'middle_name' => 'Michael',
             'surname' => 'Doe',
             'username' => $username,
-            'password' => 'password12345',
-            'password_confirmation' => 'password12345',
+            'password' => 'Password12345!',
+            'password_confirmation' => 'Password12345!',
             'requestor_type' => 'student',
             'college_id' => 1,
             'department_id' => 1,
@@ -112,8 +163,8 @@ class RegistrationFormTest extends TestCase
             'middle_name' => '',
             'surname' => 'Doe',
             'username' => $email,
-            'password' => 'password12345',
-            'password_confirmation' => 'password12345',
+            'password' => 'Password12345!',
+            'password_confirmation' => 'Password12345!',
             'requestor_type' => 'student',
             'college_id' => 1,
             'department_id' => 1,
@@ -138,8 +189,8 @@ class RegistrationFormTest extends TestCase
             'middle_name' => '',
             'surname' => 'External',
             'username' => $email,
-            'password' => 'password12345',
-            'password_confirmation' => 'password12345',
+            'password' => 'Password12345!',
+            'password_confirmation' => 'Password12345!',
             'office_or_organization' => 'External Company',
             'organization_type' => 'External Company',
             'contact_number' => '09171234567',
@@ -165,8 +216,8 @@ class RegistrationFormTest extends TestCase
             'middle_name' => '',
             'surname' => 'Doe',
             'username' => $email,
-            'password' => 'password12345',
-            'password_confirmation' => 'password12345',
+            'password' => 'Password12345!',
+            'password_confirmation' => 'Password12345!',
             'requestor_type' => 'student',
             'school_id_number' => '23-0098-635',
             'contact_number' => '09171234567',
@@ -187,8 +238,8 @@ class RegistrationFormTest extends TestCase
             'middle_name' => '',
             'surname' => 'Member',
             'username' => $username,
-            'password' => 'password12345',
-            'password_confirmation' => 'password12345',
+            'password' => 'Password12345!',
+            'password_confirmation' => 'Password12345!',
             'requestor_type' => 'faculty',
             'college_id' => 1,
             'department_id' => 1,
@@ -228,8 +279,8 @@ class RegistrationFormTest extends TestCase
             'first_name' => 'Faculty',
             'surname' => 'Member',
             'username' => $email,
-            'password' => 'password12345',
-            'password_confirmation' => 'password12345',
+            'password' => 'Password12345!',
+            'password_confirmation' => 'Password12345!',
             'requestor_type' => 'faculty',
             'college_id' => 1,
             'department_id' => 1,
@@ -329,7 +380,7 @@ class RegistrationFormTest extends TestCase
         $this->assertTrue($user->is_active);
         $this->assertNull($user->email_verified_at);
         $this->assertNull($user->google_id);
-        $this->assertTrue(Hash::check('password12345', $user->password));
+        $this->assertTrue(Hash::check('Password12345!', $user->password));
         $this->assertDatabaseHas('audit_logs', [
             'actor_id' => null,
             'target_user_id' => $user->id,
@@ -576,13 +627,13 @@ class RegistrationFormTest extends TestCase
         $this->post(route('password.update'), [
             'token' => $token,
             'email' => $user->username,
-            'password' => 'new-password',
-            'password_confirmation' => 'new-password',
+            'password' => 'New-password-1',
+            'password_confirmation' => 'New-password-1',
         ])->assertRedirect(route('login'));
 
         $user->refresh();
-        $this->assertTrue(Hash::check('new-password', $user->password));
-        $this->assertNotSame('new-password', $user->password);
+        $this->assertTrue(Hash::check('New-password-1', $user->password));
+        $this->assertNotSame('New-password-1', $user->password);
         $this->assertFalse(Hash::check('OriginalPassword123!', $user->password));
         $this->assertNotSame('old-remember-token', $user->remember_token);
         $this->assertDatabaseMissing('personal_access_tokens', ['id' => $apiToken->accessToken->id]);
@@ -593,7 +644,7 @@ class RegistrationFormTest extends TestCase
         ]);
         $audit = AuditLog::where('target_user_id', $user->id)->where('action', 'password_recovered')->firstOrFail();
         $auditContents = json_encode($audit->getAttributes());
-        $this->assertStringNotContainsString('new-password', $auditContents);
+        $this->assertStringNotContainsString('New-password-1', $auditContents);
         $this->assertStringNotContainsString($token, $auditContents);
         $this->assertStringNotContainsString($user->password, $auditContents);
         Notification::assertSentTo($user, PasswordChangedNotification::class);
@@ -605,7 +656,7 @@ class RegistrationFormTest extends TestCase
 
         $this->post(route('login'), [
             'email' => $user->username,
-            'password' => 'new-password',
+            'password' => 'New-password-1',
         ])->assertRedirect(route('requestor.index'));
         $this->assertAuthenticatedAs($user);
     }
@@ -1011,8 +1062,8 @@ class RegistrationFormTest extends TestCase
             'office_or_organization' => 'Test Organization',
             'organization_type' => 'External Organization',
             'username' => 'otp' . uniqid() . '@test.com',
-            'password' => 'password12345',
-            'password_confirmation' => 'password12345',
+            'password' => 'Password12345!',
+            'password_confirmation' => 'Password12345!',
             'requestor_type' => 'outsider',
         ];
     }
@@ -1026,8 +1077,8 @@ class RegistrationFormTest extends TestCase
             'office_or_organization' => 'External Company',
             'organization_type' => 'Company',
             'username' => 'public-registration-' . uniqid() . '@test.com',
-            'password' => 'password12345',
-            'password_confirmation' => 'password12345',
+            'password' => 'Password12345!',
+            'password_confirmation' => 'Password12345!',
         ], $overrides);
     }
 }

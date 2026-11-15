@@ -162,6 +162,37 @@ class RequestDocumentUploadTest extends TestCase
         ]);
     }
 
+    public function test_individual_outsider_without_organization_can_submit(): void
+    {
+        $this->externalUser->update(['office_or_organization' => null]);
+        $this->actingAs($this->externalUser);
+
+        $this->get(route('requestor.index', ['tab' => 'create']))
+            ->assertOk()
+            ->assertSee('value="Individual / Personal"', false);
+
+        $response = $this->post(route('requestor.store'), [
+            'organization_name' => 'Individual / Personal',
+            'name_of_activity' => 'Family Reunion',
+            'expected_participants' => 30,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '14:00',
+            'end_time' => '16:00',
+            'venue' => 'Gymnasium',
+            'equipment' => ['Tables'],
+            'equipment_quantities' => ['Tables' => 5],
+            'e_signature_file' => UploadedFile::fake()->create('signature.jpg', 100),
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $response->assertRedirect(route('requestor.index', ['tab' => 'requests']));
+        $this->assertDatabaseHas('facility_requests', [
+            'requested_by_id' => $this->externalUser->id,
+            'organization_name' => 'Individual / Personal',
+        ]);
+    }
+
     public function test_outsider_cannot_request_urgent_processing_and_form_explains_the_rule(): void
     {
         $this->actingAs($this->externalUser)
@@ -611,6 +642,51 @@ class RequestDocumentUploadTest extends TestCase
         $this->assertSame('PIT Student Council', $request->organization_name);
         $this->assertNotNull($request->activity_proposal_file);
         $this->assertNull($request->igp_receipt_file);
+    }
+
+    public function test_student_in_two_organizations_can_submit_for_the_second_one(): void
+    {
+        $first = \App\Models\StudentOrganization::create(['name' => 'Alpha Society', 'is_active' => true]);
+        $second = \App\Models\StudentOrganization::create(['name' => 'Beta Club', 'is_active' => true]);
+        $outside = \App\Models\StudentOrganization::create(['name' => 'Gamma Guild', 'is_active' => true]);
+        foreach ([$first, $second] as $organization) {
+            $this->studentUser->studentOrganizations()->attach($organization->id, ['is_active' => true, 'can_submit_requests' => true]);
+        }
+        $this->actingAs($this->studentUser);
+
+        $this->get(route('requestor.index', ['tab' => 'create']))
+            ->assertOk()
+            ->assertSee('<select id="student_organization_id"', false)
+            ->assertSee('Beta Club');
+
+        $payload = [
+            'request_context' => 'student_organization',
+            'department' => 'Computer Science',
+            'name_of_activity' => 'Club Assembly',
+            'expected_participants' => 30,
+            'start_date' => now()->addDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'start_time' => '14:00',
+            'end_time' => '16:00',
+            'venue' => 'Gymnasium',
+            'equipment' => ['Tables'],
+            'equipment_quantities' => ['Tables' => 5],
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'e_signature_file' => UploadedFile::fake()->create('signature.jpg', 100),
+        ];
+
+        // An organization the student does not belong to is rejected, not silently swapped.
+        $this->post(route('requestor.store'), $payload + ['student_organization_id' => $outside->id])
+            ->assertSessionHasErrors('student_organization_id');
+        $this->assertDatabaseMissing('facility_requests', ['requested_by_id' => $this->studentUser->id]);
+
+        $this->post(route('requestor.store'), $payload + ['student_organization_id' => $second->id])
+            ->assertSessionHasNoErrors();
+
+        $request = FacilityRequest::where('requested_by_id', $this->studentUser->id)->first();
+        $this->assertNotNull($request);
+        $this->assertSame($second->id, (int) $request->student_organization_id);
+        $this->assertSame('Beta Club', $request->organization_name);
     }
 
     public function test_faculty_requires_activity_proposal(): void

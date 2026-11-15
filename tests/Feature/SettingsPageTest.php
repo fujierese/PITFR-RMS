@@ -213,12 +213,12 @@ class SettingsPageTest extends TestCase
         $this->actingAs($requestor)
             ->post(route('requestor.settings.password'), [
                 'current_password' => 'password',
-                'password' => 'a-stronger-password-123',
-                'password_confirmation' => 'a-stronger-password-123',
+                'password' => 'A-stronger-password-123',
+                'password_confirmation' => 'A-stronger-password-123',
             ])
             ->assertRedirect(route('requestor.settings'));
 
-        $this->assertTrue(Hash::check('a-stronger-password-123', $requestor->fresh()->password));
+        $this->assertTrue(Hash::check('A-stronger-password-123', $requestor->fresh()->password));
         Notification::assertSentTo($requestor, PasswordChangedNotification::class);
     }
 
@@ -236,12 +236,12 @@ class SettingsPageTest extends TestCase
         $this->actingAs($requestor)
             ->post(route('requestor.settings.password'), [
                 'current_password' => 'password',
-                'password' => 'a-stronger-password-123',
-                'password_confirmation' => 'a-stronger-password-123',
+                'password' => 'A-stronger-password-123',
+                'password_confirmation' => 'A-stronger-password-123',
             ])
             ->assertRedirect(route('requestor.settings'));
 
-        $this->assertTrue(Hash::check('a-stronger-password-123', $requestor->fresh()->password));
+        $this->assertTrue(Hash::check('A-stronger-password-123', $requestor->fresh()->password));
         Notification::assertNotSentTo($requestor, PasswordChangedNotification::class);
     }
 

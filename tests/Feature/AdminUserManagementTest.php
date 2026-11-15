@@ -217,14 +217,14 @@ class AdminUserManagementTest extends TestCase
     {
         $admin = User::create([
             'username' => 'admin-test-' . uniqid(),
-            'password' => Hash::make('password12345'),
+            'password' => Hash::make('Password12345!'),
             'name' => 'Admin User',
             'role' => 'admin',
         ]);
 
         $user = User::create([
             'username' => 'requestor-test-' . uniqid(),
-            'password' => Hash::make('password12345'),
+            'password' => Hash::make('Password12345!'),
             'name' => 'Original User',
             'role' => 'requestor',
             'requestor_type' => 'student',
@@ -244,8 +244,8 @@ class AdminUserManagementTest extends TestCase
             'school_id_number' => '20240001',
             'office_or_organization' => '',
             'contact_number' => '09123456789',
-            'password' => 'new-password12345',
-            'password_confirmation' => 'new-password12345',
+            'password' => 'New-password12345',
+            'password_confirmation' => 'New-password12345',
         ]);
 
         $updateResponse->assertRedirect(route('admin.users'));
@@ -256,7 +256,7 @@ class AdminUserManagementTest extends TestCase
             'requestor_type' => null,
             'school_id_number' => null,
         ]);
-        $this->assertTrue(Hash::check('new-password12345', $user->fresh()->password));
+        $this->assertTrue(Hash::check('New-password12345', $user->fresh()->password));
 
         $deleteResponse = $this->delete(route('admin.users.destroy', $user), [
             '_token' => 'test-token',
@@ -493,8 +493,8 @@ class AdminUserManagementTest extends TestCase
                 'surname' => 'Adviser',
                 'first_name' => 'Faculty',
                 'username' => 'faculty-adviser-' . uniqid() . '@test.com',
-                'password' => 'password12345',
-                'password_confirmation' => 'password12345',
+                'password' => 'Password12345!',
+                'password_confirmation' => 'Password12345!',
                 'college_id' => 1,
                 'department_id' => 1,
                 'faculty_id' => 'FAC-' . uniqid(),
@@ -516,8 +516,8 @@ class AdminUserManagementTest extends TestCase
                 'surname' => 'Adviser',
                 'first_name' => 'Faculty',
                 'username' => 'faculty-adviser-2-' . uniqid() . '@test.com',
-                'password' => 'password12345',
-                'password_confirmation' => 'password12345',
+                'password' => 'Password12345!',
+                'password_confirmation' => 'Password12345!',
                 'college_id' => 1,
                 'department_id' => 1,
                 'faculty_id' => 'FAC-' . uniqid(),
@@ -546,8 +546,8 @@ class AdminUserManagementTest extends TestCase
                 'middle_name' => 'Santos',
                 'suffix' => 'Jr.',
                 'username' => $username,
-                'password' => 'password12345',
-                'password_confirmation' => 'password12345',
+                'password' => 'Password12345!',
+                'password_confirmation' => 'Password12345!',
                 'college_id' => 1,
                 'department_id' => 1,
                 'academic_program_id' => $programId,
@@ -826,8 +826,8 @@ class AdminUserManagementTest extends TestCase
                 'surname' => 'Officer',
                 'first_name' => 'Student',
                 'username' => 'student-officer-' . uniqid() . '@test.com',
-                'password' => 'password12345',
-                'password_confirmation' => 'password12345',
+                'password' => 'Password12345!',
+                'password_confirmation' => 'Password12345!',
                 'college_id' => 1,
                 'department_id' => 1,
                 'academic_program_id' => $programId,
@@ -994,8 +994,8 @@ class AdminUserManagementTest extends TestCase
                     'account_type' => 'faculty',
                     'name' => 'Unauthorized User',
                     'username' => uniqid() . '@test.com',
-                    'password' => 'password12345',
-                    'password_confirmation' => 'password12345',
+                    'password' => 'Password12345!',
+                    'password_confirmation' => 'Password12345!',
                 ])->assertForbidden();
         }
     }
@@ -1010,8 +1010,8 @@ class AdminUserManagementTest extends TestCase
                 'account_type' => 'faculty',
                 'name' => 'Duplicate Email',
                 'username' => 'existing@example.com',
-                'password' => 'password12345',
-                'password_confirmation' => 'password12345',
+                'password' => 'Password12345!',
+                'password_confirmation' => 'Password12345!',
             ])->assertSessionHasErrors('username');
     }
 
@@ -1066,8 +1066,8 @@ class AdminUserManagementTest extends TestCase
                 'username' => 'faculty-no-id-' . uniqid() . '@test.com',
                 'college_id' => 1,
                 'department_id' => 1,
-                'password' => 'password12345',
-                'password_confirmation' => 'password12345',
+                'password' => 'Password12345!',
+                'password_confirmation' => 'Password12345!',
             ])->assertSessionHasErrors('faculty_id');
     }
 

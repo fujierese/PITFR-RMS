@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use App\Http\Controllers\Concerns\ManagesAccountSettings;
 use App\Models\FacilityRequest;
 use App\Models\User;
@@ -63,7 +64,7 @@ class IgpController extends Controller
     {
         $validated = $request->validate([
             'current_password' => ['required'],
-            'password' => ['required', 'string', 'min:12', 'confirmed'],
+            'password' => ['required', 'string', PasswordRule::defaults(), 'confirmed'],
         ]);
         $user = $request->user();
 

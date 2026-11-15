@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use App\Models\AuditLog;
 use App\Models\FacilityRequest;
 use App\Models\User;
@@ -534,7 +535,7 @@ class AdminController extends Controller
             'faculty_id' => ['nullable', 'string', 'max:50', 'unique:users,faculty_id,' . $user->id],
             'faculty_adviser' => ['nullable', 'in:yes,no'],
             'position' => ['nullable', 'string', 'max:100'],
-            'password' => ['nullable', 'string', 'min:12', 'confirmed'],
+            'password' => ['nullable', 'string', PasswordRule::defaults(), 'confirmed'],
             'student_organization_id' => ['nullable', 'integer', 'exists:student_organizations,id'],
             'office_or_organization' => ['nullable', 'string', 'max:255'],
             'contact_number' => ['nullable', 'string', 'max:255'],
@@ -804,7 +805,7 @@ class AdminController extends Controller
     {
         $request->validate([
             'current_password' => ['required'],
-            'password' => ['required', 'string', 'min:12', 'confirmed'],
+            'password' => ['required', 'string', PasswordRule::defaults(), 'confirmed'],
         ]);
 
         $user = Auth::user();

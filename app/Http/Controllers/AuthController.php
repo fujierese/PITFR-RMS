@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use App\Http\Requests\LoginRequest;
 use App\Mail\RegistrationOtp;
 use App\Models\AuditLog;
@@ -221,7 +222,7 @@ class AuthController extends Controller
         $data = $request->validate([
             'token' => ['required'],
             'email' => ['required', 'email'],
-            'password' => ['required', 'string', 'min:12', 'confirmed'],
+            'password' => ['required', 'string', PasswordRule::defaults(), 'confirmed'],
         ]);
         $inactiveAccount = false;
         $changedUserId = null;
@@ -295,10 +296,10 @@ class AuthController extends Controller
             'middle_name' => ['nullable', 'string', 'max:100'],
             'surname' => ['required', 'string', 'max:100'],
             'username' => ['required', 'email', 'max:50', 'unique:users,username'],
-            'password' => [$isGoogleRegistration ? 'nullable' : 'required', 'string', 'min:12', 'confirmed'],
-            'office_or_organization' => ['required', 'string', 'max:191'],
+            'password' => [$isGoogleRegistration ? 'nullable' : 'required', 'string', PasswordRule::defaults(), 'confirmed'],
+            'office_or_organization' => ['nullable', 'string', 'max:191'],
             'organization_acronym' => ['nullable', 'string', 'max:50'],
-            'organization_type' => ['required', 'string', 'max:100'],
+            'organization_type' => ['nullable', 'string', 'max:100'],
             'contact_number' => ['nullable', 'string', 'max:50'],
         ], [
             'username.unique' => 'Unable to complete registration with the provided details.',
@@ -347,7 +348,7 @@ class AuthController extends Controller
                 'school_id_number' => $data['school_id_number'] ?? null,
                 'office_or_organization' => $org,
                 'organization_acronym' => $data['organization_acronym'] ?? null,
-                'organization_type' => $data['organization_type'],
+                'organization_type' => $data['organization_type'] ?? null,
                 'contact_number' => $data['contact_number'] ?? null,
                 'department' => $departmentName,
                 'college_id' => $data['college_id'] ?? null,

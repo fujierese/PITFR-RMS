@@ -225,7 +225,7 @@
                                         </div>
                                         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                             <label for="edit-user-password-{{ $user->id }}" class="block text-sm font-medium text-slate-700">New password <span class="font-normal text-slate-400">(optional)</span>
-                                                <input id="edit-user-password-{{ $user->id }}" type="password" name="password" autocomplete="new-password" class="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="At least 12 characters">
+                                                <input id="edit-user-password-{{ $user->id }}" type="password" name="password" autocomplete="new-password" class="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="12+ chars, mixed case, number, symbol">
                                             </label>
                                             <label for="edit-user-password-confirmation-{{ $user->id }}" class="block text-sm font-medium text-slate-700">Confirm new password
                                                 <input id="edit-user-password-confirmation-{{ $user->id }}" type="password" name="password_confirmation" autocomplete="new-password" class="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" placeholder="Re-enter new password">

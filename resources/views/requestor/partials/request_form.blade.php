@@ -39,7 +39,8 @@
     $otherPosition = old('requested_by_position_other', $selectedPosition === 'Other' ? $savedPosition : '');
     $profileCollege = $colleges->firstWhere('id', $profileCollegeId);
     $profileDepartment = $departments->firstWhere('id', $profileDepartmentId);
-    $activeStudentOrganization = $currentUser && $currentUser->isStudent() ? $currentUser->studentOrganizations()->first() : null;
+    $studentOrganizationOptions = $currentUser && $currentUser->isStudent() ? $currentUser->studentOrganizations()->orderBy('student_organizations.name')->get() : collect();
+    $activeStudentOrganization = $studentOrganizationOptions->firstWhere('id', (int) old('student_organization_id')) ?? $studentOrganizationOptions->first();
     $trustedOrganizationDisplay = $activeStudentOrganization?->name ?? $currentUser?->office_or_organization ?? 'Organization not provided';
 @endphp
 <style>
@@ -180,7 +181,7 @@
                         @if ($isExternal)
                             <div class="space-y-3">
                                 <label for="organization_name" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Organization Name <span class="required-asterisk">*</span></label>
-                                <input id="organization_name" type="text" name="organization_name" value="{{ old('organization_name', $currentUser?->office_or_organization) }}" readonly required class="w-full rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('organization_name') border-red-300 bg-red-50 @enderror">
+                                <input id="organization_name" type="text" name="organization_name" value="{{ old('organization_name', trim((string) $currentUser?->office_or_organization) ?: 'Individual / Personal') }}" readonly required class="w-full rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('organization_name') border-red-300 bg-red-50 @enderror">
                                 <p class="text-xs text-slate-500">This is your registered organization. If it is missing or incorrect, update your account details before submitting.</p>
                                 @error('organization_name')
                                     <p class="text-xs font-medium text-red-600">{{ $message }}</p>
@@ -189,9 +190,22 @@
                         @elseif ($isStudent)
                             <div class="space-y-3">
                                 <p class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Student Organization</p>
-                                <div class="rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-600" aria-readonly="true">{{ $trustedOrganizationDisplay }}</div>
+                                @if ($studentOrganizationOptions->count() > 1)
+                                    <label for="student_organization_id" class="sr-only">Student Organization</label>
+                                    <select id="student_organization_id" name="student_organization_id" class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">
+                                        @foreach ($studentOrganizationOptions as $organizationOption)
+                                            <option value="{{ $organizationOption->id }}" @selected($activeStudentOrganization?->id === $organizationOption->id)>{{ $organizationOption->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <p class="text-xs text-slate-500">You are an active member of several organizations. Choose the one this request is for.</p>
+                                @else
+                                    <div class="rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-600" aria-readonly="true">{{ $trustedOrganizationDisplay }}</div>
+                                    <input type="hidden" name="student_organization_id" value="{{ old('student_organization_id', $activeStudentOrganization?->id) }}">
+                                @endif
+                                @error('student_organization_id')
+                                    <p class="text-xs font-medium text-red-600">{{ $message }}</p>
+                                @enderror
                                 <input type="hidden" name="organization_name" value="{{ old('organization_name', $trustedOrganizationDisplay) }}">
-                                <input type="hidden" name="student_organization_id" value="{{ old('student_organization_id', $activeStudentOrganization?->id) }}">
                                 <input type="hidden" name="college_id" value="{{ $profileCollegeId }}">
                                 <input type="hidden" name="department_id" value="{{ $profileDepartmentId }}">
                                 @error('department_id')

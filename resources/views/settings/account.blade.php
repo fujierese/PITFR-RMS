@@ -277,7 +277,7 @@
                         <input type="password" name="password" id="account_new_password" autocomplete="new-password" required aria-invalid="{{ $errors->has('password') ? 'true' : 'false' }}" @if($errors->has('password')) aria-describedby="account_new_password_error" @endif class="pitfr-password-input w-full rounded-2xl border border-slate-200 px-3 py-2 @error('password') border-red-400 bg-red-50 @enderror">
                         <button type="button" data-password-toggle-target="#account_new_password" aria-label="Show password" class="password-toggle pitfr-password-toggle"></button>
                         </div>
-                        <p class="mt-1 text-xs text-slate-500">Use at least 12 characters.</p>
+                        <p class="mt-1 text-xs text-slate-500">Use at least 12 characters with upper-case and lower-case letters, a number and a symbol.</p>
                         @error('password')<p id="account_new_password_error" class="mt-1 text-sm text-red-700" role="alert">{{ $message }}</p>@enderror
                     </div>
                     <div>
