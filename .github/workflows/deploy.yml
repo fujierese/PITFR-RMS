@@ -85,8 +85,12 @@ jobs:
           # Tolerate common paste damage: CRLF, indentation, text around the
           # key, or the whole key collapsed onto one line.
           key=$(printf '%s\n' "$SSH_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sed -n '/-----BEGIN/,/-----END/p')
-          if [ -n "$key" ] && [ "$(printf '%s\n' "$key" | wc -l)" -lt 3 ]; then
-            body=$(printf '%s' "$key" | sed -E 's/-----(BEGIN|END) OPENSSH PRIVATE KEY-----//g' | tr -d ' \t\n')
+          if [ -z "$key" ] && printf '%s' "$SSH_KEY" | tr -d ' \t\r\n' | grep -qE '^b3BlbnNzaC1rZXktdjE[A-Za-z0-9+/=]+$'; then
+            # Only the base64 body was pasted (no BEGIN/END lines): wrap it.
+            key="$SSH_KEY"
+          fi
+          if [ -n "$key" ] && { [ "$(printf '%s\n' "$key" | wc -l)" -lt 3 ] || ! printf '%s' "$key" | grep -q -- '-----BEGIN'; }; then
+            body=$(printf '%s' "$key" | sed -E 's/-----(BEGIN|END) OPENSSH PRIVATE KEY-----//g' | tr -d ' \t\r\n')
             key=$(printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\n%s\n-----END OPENSSH PRIVATE KEY-----' "$(printf '%s' "$body" | fold -w 70)")
           fi
           printf '%s\n' "$key" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
