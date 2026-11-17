@@ -350,7 +350,30 @@ class RequestorController extends Controller
                 'equipment_quantities' => $newState['equipment_quantities'],
                 'reservation_duration' => 'specific_time',
             ];
-            if ($lockedRequest->status !== 'approved') {
+            $wasApproved = $lockedRequest->status === 'approved';
+            if ($wasApproved) {
+                // APR-05: the old approval does not cover the new details. The changed
+                // reservation goes back to the Supply Office for final approval; custodians
+                // who accepted the new details count as re-endorsing them. History keeps
+                // the old approved version (request_version, APR-03).
+                $meta = $lockedRequest->approval_signature_meta ?? [];
+                unset($meta['final'], $meta['venue'], $meta['equipment']);
+                $updates += [
+                    'status' => 'pending',
+                    'venue_status' => $confirmedVenueCustodianId !== null ? 'approved' : 'pending',
+                    'equipment_custodian_statuses' => [],
+                    'approved_by' => null,
+                    'approved_by_id' => null,
+                    'approved_date' => null,
+                    'final_approval_signature' => null,
+                    'final_approval_signature_file' => null,
+                    'venue_approval_signature' => null,
+                    'venue_approval_signature_file' => null,
+                    'equipment_approval_signature' => null,
+                    'equipment_approval_signature_file' => null,
+                    'approval_signature_meta' => $meta,
+                ];
+            } else {
                 $updates += [
                     'status' => 'pending',
                     'venue_status' => $confirmedVenueCustodianId !== null ? 'approved' : 'pending',
@@ -380,6 +403,19 @@ class RequestorController extends Controller
                     );
                 }
             }
+            if ($wasApproved) {
+                $equipmentStatuses = [];
+                foreach ($lockedRequest->getAssignedEquipmentCustodianIds() as $custodianId) {
+                    if (($lockedRevision->responses[(string) $custodianId] ?? 'pending') === 'accepted') {
+                        $equipmentStatuses[(string) $custodianId] = 'approved';
+                        if ($equipmentApprover = User::query()->find($custodianId)) {
+                            $lockedRequest->recordApprovalSignature('equipment', $equipmentApprover);
+                        }
+                    }
+                }
+                $lockedRequest->equipment_custodian_statuses = $equipmentStatuses;
+                $lockedRequest->recomputeEquipmentStatus();
+            }
             $lockedRevision->update([
                 'status' => 'accepted',
                 'responded_at' => now(),
@@ -389,6 +425,12 @@ class RequestorController extends Controller
                 "Requestor accepted the proposed schedule change. {$lockedRevision->getSummary()}",
                 $user->id
             );
+            if ($wasApproved) {
+                $lockedRequest->addHistory(
+                    'reapproval_required',
+                    'The approved reservation was changed. The previous approval does not cover the new details; Supply Office final approval is required again.',
+                );
+            }
             return true;
         });
         if (!$accepted) {
@@ -427,10 +469,7 @@ class RequestorController extends Controller
                 ->merge([(int) $facilityRequest->requested_by_id])
                 ->merge($custodianIds)
                 ->unique();
-        if (
-            $facilityRequest->status === 'pending'
-            && $facilityRequest->supply_office_review_status === 'pending'
-        ) {
+        if ($facilityRequest->status === 'pending') {
             $notificationRecipientIds = $notificationRecipientIds->merge(
                 User::query()->whereIn('role', ['admin', 'supply_office'])->pluck('id')
             )->unique();
@@ -439,10 +478,13 @@ class RequestorController extends Controller
         Notification::send($notificationRecipients, $notification);
         $revision->markRequestorNotified();
 
-        $successMessage = $facilityRequest->status === 'pending'
-            && $facilityRequest->supply_office_review_status === 'pending'
-                ? 'You accepted the proposal. The schedule is updated, but the request still needs Supply Office review and any remaining custodian approvals.'
-                : 'You accepted the proposal. The reservation schedule has been updated and the custodians have been notified.';
+        $successMessage = match (true) {
+            $facilityRequest->status === 'pending' && $facilityRequest->supply_office_review_status === 'pending'
+                => 'You accepted the proposal. The schedule is updated, but the request still needs Supply Office review and any remaining custodian approvals.',
+            $facilityRequest->status === 'pending'
+                => 'You accepted the proposal. The schedule is updated and goes back to the Supply Office for final approval of the new details.',
+            default => 'You accepted the proposal. The reservation schedule has been updated and the custodians have been notified.',
+        };
 
         return redirect()->route('request.show', $facilityRequest)
             ->with('success', $successMessage);

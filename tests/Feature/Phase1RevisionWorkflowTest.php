@@ -933,4 +933,55 @@ class Phase1RevisionWorkflowTest extends TestCase
 
         $this->assertNotSame($oldStartDatetime->toDateTimeString(), $newSchedule->start_datetime->toDateTimeString());
     }
+
+    public function test_changed_approved_request_needs_supply_office_final_approval_again(): void
+    {
+        // APR-05: the old final approval must not count as approval of the new details.
+        $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $admin = User::factory()->create(['role' => 'admin', 'username' => config('pitfr.final_approver_username')]);
+        $request = $this->createApprovedRequest($requester);
+        $request->update(['supply_office_review_status' => 'approved']);
+        $request->recordApprovalSignature('final', $admin);
+        $request->addHistory('final_approved', 'Final approval granted', $admin->id);
+
+        $this->actingAs($admin)->post(route('supply-office.requests.revise'), [
+            'facility_request_id' => $request->id,
+            'start_date' => now()->addDays(2)->toDateString(),
+            'end_date' => now()->addDays(2)->toDateString(),
+            'start_time' => '10:00',
+            'end_time' => '13:00',
+            'venue' => ['Test Venue'],
+            'equipment' => ['Test Equipment'],
+            'equipment_quantities' => ['Test Equipment' => 2],
+            'revision_reason' => 'Venue maintenance.',
+        ]);
+        $this->acceptPendingRevision($request, $requester);
+        $request->refresh();
+
+        // The venue and equipment custodians accepted the new details, so their stages
+        // are re-endorsed; only the Supply Office final approval is outstanding.
+        $this->assertSame('pending', $request->status);
+        $this->assertSame('approved', $request->venue_status);
+        $this->assertSame('approved', $request->equipment_status);
+        $this->assertSame('approved', $request->supply_office_review_status);
+        $this->assertNull($request->approved_by_id);
+        $this->assertNull($request->approved_date);
+        $this->assertSame([], $request->getStageApprovalSnapshots('final'));
+        $this->assertDatabaseHas('request_histories', [
+            'facility_request_id' => $request->id,
+            'action' => 'reapproval_required',
+        ]);
+
+        // The old approved version stays in the history with its own version number.
+        $finalEntry = $request->histories()->where('action', 'final_approved')->firstOrFail();
+        $appliedEntry = $request->histories()->where('action', 'revision_applied')->firstOrFail();
+        $this->assertGreaterThan($finalEntry->request_version, $appliedEntry->request_version);
+
+        // Final approval of the new details works again.
+        $this->actingAs($admin)
+            ->post(route('request.supply.final-approval', $request))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+        $this->assertSame('approved', $request->fresh()->status);
+    }
 }
