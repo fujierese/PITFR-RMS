@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\BackfillFacilityRequestRelations;
+use App\Console\Commands\ProcessPendingReviewDeadlines;
 use App\Console\Commands\SendReservationReminderNotifications;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -15,3 +16,4 @@ Artisan::command('facility-requests:backfill-relations', function () {
 })->purpose('Backfill request venue and equipment data into relational tables');
 
 Schedule::command(SendReservationReminderNotifications::class)->everyMinute();
+Schedule::command(ProcessPendingReviewDeadlines::class)->hourly()->withoutOverlapping();

@@ -43,6 +43,9 @@ class RequestStatusChanged extends Notification
             'final_approved' => 'Final approved',
             'request_cancelled' => 'Request cancelled',
             'equipment_returned' => 'Equipment returned',
+            'review_reminder' => 'Review reminder',
+            'review_escalation' => 'Review overdue',
+            'request_expired' => 'Request expired',
         ];
 
         return $statusMap[$status] ?? ucfirst(str_replace('_', ' ', $status));
