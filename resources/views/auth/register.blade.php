@@ -218,6 +218,19 @@
                             </div>
                         </div>
 
+                        @if($privacyConsentEnabled ?? false)
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                                <label class="flex items-start gap-3">
+                                    <input type="checkbox" name="privacy_accepted" value="1" required @checked(old('privacy_accepted')) class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600">
+                                    <span>
+                                        I have read the <a href="{{ route('privacy.policy') }}" target="_blank" rel="noopener" class="font-semibold text-emerald-700 underline">Privacy Notice</a> and agree that PIT may process my personal information for facility reservations, as described there and under the
+                                        <a href="{{ route('privacy.data-act') }}" target="_blank" rel="noopener" class="font-semibold text-emerald-700 underline">Data Privacy Act of 2012 (RA 10173)</a>. <span class="text-red-500" aria-hidden="true">*</span>
+                                    </span>
+                                </label>
+                                @error('privacy_accepted')<p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
+                            </div>
+                        @endif
+
                         <div class="flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
                             <p class="text-sm text-slate-500">Already have an account? <a href="{{ route('login') }}" class="font-semibold text-emerald-600 hover:text-emerald-700">Sign in</a></p>
                             <button type="submit" class="w-full rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-700 sm:w-auto">Create account</button>

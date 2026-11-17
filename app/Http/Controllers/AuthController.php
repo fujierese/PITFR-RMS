@@ -83,6 +83,7 @@ class AuthController extends Controller
             'googleProfile' => $request->session()->get('google_registration_profile'),
             'googleType' => $request->session()->get('google_registration_type', 'student'),
             'verificationEnabled' => User::verificationEnabled(),
+            'privacyConsentEnabled' => \Illuminate\Support\Facades\Schema::hasColumn('users', 'privacy_accepted_at'),
             // D7: suggestions only; the category is a separate, verified field.
             'organizationSuggestions' => collect(AdminController::STAFF_DEPARTMENTS)
                 ->merge(\App\Models\Department::query()->orderBy('name')->pluck('name'))
@@ -321,6 +322,14 @@ class AuthController extends Controller
             'office_or_organization.required_if' => 'Organization name is required for this account type.',
         ]);
 
+        // D6 / REG-06: the Privacy Notice must be accepted; the time is recorded.
+        $privacyConsentEnabled = \Illuminate\Support\Facades\Schema::hasColumn('users', 'privacy_accepted_at');
+        if ($privacyConsentEnabled && ! $request->boolean('privacy_accepted')) {
+            return back()
+                ->withErrors(['privacy_accepted' => 'Please confirm that you have read the Privacy Notice.'])
+                ->withInput($request->except(['password', 'password_confirmation', 'verification_id']));
+        }
+
         // D4: the claimed category only applies once verified; anything unknown is an Outsider.
         $claimedType = in_array($data['requestor_type'] ?? null, User::CLAIMABLE_REQUESTOR_TYPES, true)
             ? $data['requestor_type']
@@ -369,7 +378,7 @@ class AuthController extends Controller
             $storedIdFile = $upload->storeAs('verification-ids', Str::uuid() . '.' . strtolower($upload->getClientOriginalExtension()), 'local');
         }
 
-        $user = DB::transaction(function () use ($data, $fullName, $org, $departmentName, $googleProfile, $isGoogleRegistration, $verificationEnabled, $claimedType, $usesInstitutionalEmail, $storedIdFile): User {
+        $user = DB::transaction(function () use ($data, $fullName, $org, $departmentName, $googleProfile, $isGoogleRegistration, $verificationEnabled, $claimedType, $usesInstitutionalEmail, $storedIdFile, $privacyConsentEnabled): User {
             $user = User::create([
                 'username' => strtolower(trim($data['username'])),
                 'password' => Hash::make($data['password'] ?? bin2hex(random_bytes(24))),
@@ -388,6 +397,10 @@ class AuthController extends Controller
                 'google_id' => $isGoogleRegistration ? ($googleProfile['google_id'] ?? null) : null,
                 'email_verified_at' => $isGoogleRegistration ? now() : null,
             ]);
+
+            if ($privacyConsentEnabled) {
+                $user->forceFill(['privacy_accepted_at' => now()])->save();
+            }
 
             if ($verificationEnabled) {
                 // Outsider rules apply until the claimed category is verified.

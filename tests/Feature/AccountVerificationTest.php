@@ -31,6 +31,7 @@ class AccountVerificationTest extends TestCase
     private function registration(array $overrides = []): array
     {
         return array_merge([
+            'privacy_accepted' => '1',
             'first_name' => 'Ana',
             'surname' => 'Reyes',
             'username' => 'ana@example.com',
@@ -224,5 +225,28 @@ class AccountVerificationTest extends TestCase
         $user = User::where('username', 'ana@example.com')->firstOrFail();
         $this->assertSame('outsider', $user->requestor_type);
         $this->assertSame('outsider', $user->claimed_requestor_type);
+    }
+
+    public function test_privacy_notice_must_be_accepted_and_the_time_is_recorded(): void
+    {
+        // D6 / REG-06.
+        $this->get(route('register'))->assertOk()->assertSee('privacy_accepted', false)->assertSee('RA 10173');
+
+        $this->post(route('register.post'), $this->registration(['privacy_accepted' => null]))
+            ->assertSessionHasErrors('privacy_accepted');
+        $this->assertDatabaseMissing('users', ['username' => 'ana@example.com']);
+
+        $this->post(route('register.post'), $this->registration());
+        $this->assertNotNull(User::where('username', 'ana@example.com')->value('privacy_accepted_at'));
+    }
+
+    public function test_dashboards_show_the_privacy_card(): void
+    {
+        $user = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+
+        $this->actingAs($user)->get(route('requestor.index'))
+            ->assertOk()
+            ->assertSee('Data Privacy (RA 10173)')
+            ->assertSee('Read the Privacy Notice');
     }
 }

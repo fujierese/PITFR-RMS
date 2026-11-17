@@ -288,7 +288,7 @@ class AuthFlowTest extends TestCase
         $this->assertSame('new-outsider@example.com', session('google_registration_profile.email'));
         $this->assertGuest();
 
-        $this->post(route('register.post'), [
+        $this->post(route('register.post'), ['privacy_accepted' => '1', 
             'first_name' => 'New',
             'surname' => 'Outsider',
             'username' => 'forged@example.com',

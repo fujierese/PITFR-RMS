@@ -32,7 +32,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
         foreach (['student', 'faculty', 'student_organization'] as $type) {
             $username = $type . '-' . uniqid() . '@test.com';
 
-            $this->post(route('register.post'), [
+            $this->post(route('register.post'), ['privacy_accepted' => '1', 
                 'first_name' => 'Forged',
                 'surname' => 'Account',
                 'username' => $username,

@@ -594,5 +594,11 @@
                 @endif
             @endforeach
         </div>
+        {{-- D6 / PRV-01: privacy information on every dashboard. --}}
+        <div class="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 text-xs text-slate-700">
+            <p class="font-semibold text-emerald-900">Data Privacy (RA 10173)</p>
+            <p class="mt-1">PIT handles your personal information under the Data Privacy Act of 2012.</p>
+            <button type="button" data-open-info-modal="privacy" aria-haspopup="dialog" aria-controls="faq-modal" class="mt-2 font-semibold text-emerald-800 underline underline-offset-2">Read the Privacy Notice</button>
+        </div>
     </nav>
 </div>

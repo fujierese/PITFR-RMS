@@ -94,7 +94,7 @@ class RegistrationFormTest extends TestCase
     {
         $email = 'individual'.uniqid().'@test.com';
 
-        $this->post(route('register.post'), [
+        $this->post(route('register.post'), ['privacy_accepted' => '1', 
             'first_name' => 'Ina',
             'surname' => 'Individual',
             'username' => $email,
@@ -114,7 +114,7 @@ class RegistrationFormTest extends TestCase
     {
         foreach (['alllowercase123!', 'ALLUPPERCASE123!', 'NoNumbersHere!!', 'NoSymbols12345'] as $weak) {
             $email = 'weak'.uniqid().'@test.com';
-            $this->post(route('register.post'), [
+            $this->post(route('register.post'), ['privacy_accepted' => '1', 
                 'first_name' => 'Weak',
                 'surname' => 'Password',
                 'username' => $email,
@@ -132,7 +132,7 @@ class RegistrationFormTest extends TestCase
     public function test_public_registration_ignores_submitted_student_classification(): void
     {
         $username = 'johndoe' . uniqid() . '@test.com';
-        $response = $this->post(route('register.post'), [
+        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 
             'first_name' => 'John',
             'middle_name' => 'Michael',
             'surname' => 'Doe',
@@ -165,7 +165,7 @@ class RegistrationFormTest extends TestCase
     public function test_public_student_registration_does_not_use_student_specific_fields_for_classification(): void
     {
         $email = 'johndoe' . uniqid() . '@test.com';
-        $response = $this->post(route('register.post'), [
+        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 
             'first_name' => 'John',
             'middle_name' => '',
             'surname' => 'Doe',
@@ -191,7 +191,7 @@ class RegistrationFormTest extends TestCase
     public function test_external_user_can_register_without_student_id(): void
     {
         $email = 'janeext' . uniqid() . '@test.com';
-        $response = $this->post(route('register.post'), [
+        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 
             'first_name' => 'Jane',
             'middle_name' => '',
             'surname' => 'External',
@@ -218,7 +218,7 @@ class RegistrationFormTest extends TestCase
     public function test_public_registration_ignores_submitted_student_fields_and_creates_outsider(): void
     {
         $email = 'johndoe' . uniqid() . '@test.com';
-        $response = $this->post(route('register.post'), [
+        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 
             'first_name' => 'John',
             'middle_name' => '',
             'surname' => 'Doe',
@@ -240,7 +240,7 @@ class RegistrationFormTest extends TestCase
     {
         $username = 'faculty' . uniqid() . '@test.com';
         $facultyId = 'FAC-' . uniqid();
-        $response = $this->post(route('register.post'), [
+        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 
             'first_name' => 'Faculty',
             'middle_name' => '',
             'surname' => 'Member',
@@ -282,7 +282,7 @@ class RegistrationFormTest extends TestCase
     public function test_public_registration_ignores_student_and_faculty_fields(): void
     {
         $email = 'faculty' . uniqid() . '@test.com';
-        $this->post(route('register.post'), [
+        $this->post(route('register.post'), ['privacy_accepted' => '1', 
             'first_name' => 'Faculty',
             'surname' => 'Member',
             'username' => $email,
@@ -1064,6 +1064,7 @@ class RegistrationFormTest extends TestCase
     private function studentData(): array
     {
         return [
+            'privacy_accepted' => '1',
             'first_name' => 'Test',
             'surname' => 'Outsider',
             'office_or_organization' => 'Test Organization',
@@ -1078,6 +1079,7 @@ class RegistrationFormTest extends TestCase
     private function registrationData(array $overrides = []): array
     {
         return array_merge([
+            'privacy_accepted' => '1',
             'first_name' => 'Public',
             'middle_name' => '',
             'surname' => 'Outsider',
