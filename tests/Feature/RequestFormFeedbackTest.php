@@ -42,7 +42,8 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringContainsString('Choose Venue & Schedule', $html);
         $this->assertStringContainsString('Calendar availability is not a confirmation.', $html);
         $this->assertStringContainsString('Draft autosave', $html);
-        $this->assertStringContainsString('Official Request Form', $html);
+        // FRM-01: the official header appears on the printed form only.
+        $this->assertStringNotContainsString('Official Request Form', $html);
         $this->assertStringContainsString('Submission checklist', $html);
         $this->assertStringContainsString('Venue and equipment details ready for Supply Office availability review', $html);
         $this->assertStringContainsString('data-venue-availability-url', $html);
