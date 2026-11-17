@@ -728,23 +728,27 @@ class RequestActionController extends Controller
             return;
         }
 
-        try {
-            $requester->notify(new RequestStatusChanged(
-                $facilityRequest,
-                $status,
-                $notes ?? '',
-                null,
-                $venueCustodian,
-                $equipmentCustodians,
-                $supplyOffice,
-            ));
-        } catch (\Throwable $e) {
-            Log::warning('Request status notification failed after workflow update.', [
-                'facility_request_id' => $facilityRequest->id,
-                'status' => $status,
-                'exception' => $e->getMessage(),
-            ]);
-        }
+        // Send only once the workflow change is committed: a rolled-back action
+        // must not notify anyone, and a slow mail server must not hold row locks.
+        DB::afterCommit(function () use ($requester, $facilityRequest, $status, $notes, $venueCustodian, $equipmentCustodians, $supplyOffice): void {
+            try {
+                $requester->notify(new RequestStatusChanged(
+                    $facilityRequest,
+                    $status,
+                    $notes ?? '',
+                    null,
+                    $venueCustodian,
+                    $equipmentCustodians,
+                    $supplyOffice,
+                ));
+            } catch (\Throwable $e) {
+                Log::warning('Request status notification failed after workflow update.', [
+                    'facility_request_id' => $facilityRequest->id,
+                    'status' => $status,
+                    'exception' => $e->getMessage(),
+                ]);
+            }
+        });
     }
 
     private function venueActorLabel(FacilityRequest $facilityRequest, User $user): string

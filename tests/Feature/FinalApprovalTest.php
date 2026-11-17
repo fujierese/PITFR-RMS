@@ -85,6 +85,22 @@ class FinalApprovalTest extends TestCase
         $this->assertSame('approved', $request->refresh()->status);
     }
 
+    public function test_status_notification_is_sent_only_after_the_workflow_change_commits(): void
+    {
+        $request = $this->createRequest();
+        $requester = User::findOrFail($request->requested_by_id);
+        $controller = app(\App\Http\Controllers\RequestActionController::class);
+        $notify = new \ReflectionMethod($controller, 'notifyRequestorForStatusChange');
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        $notify->invoke($controller, $request, 'approved');
+        \Illuminate\Support\Facades\DB::rollBack();
+        Notification::assertNotSentTo($requester, RequestStatusChanged::class);
+
+        \Illuminate\Support\Facades\DB::transaction(fn () => $notify->invoke($controller, $request, 'approved'));
+        Notification::assertSentToTimes($requester, RequestStatusChanged::class, 1);
+    }
+
     public function test_eligible_request_is_final_approved_by_system_admin_once(): void
     {
         $request = $this->createRequest();
