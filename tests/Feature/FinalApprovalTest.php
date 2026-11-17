@@ -57,6 +57,34 @@ class FinalApprovalTest extends TestCase
         ]);
     }
 
+    public function test_unpaid_outsider_request_cannot_be_final_approved_from_request_details(): void
+    {
+        $outsider = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'outsider']);
+        $request = $this->createRequest([
+            'requested_by_id' => $outsider->id,
+            'supply_office_review_status' => 'confirmed',
+            'igp_payment_status' => 'awaiting_payment',
+        ]);
+        $approver = $this->finalApprover();
+
+        $this->actingAs($approver)
+            ->get(route('request.show', $request->id))
+            ->assertOk()
+            ->assertSee('until the IGP records the official receipt');
+
+        $this->actingAs($approver)
+            ->post(route('request.supply.final-approval', $request))
+            ->assertSessionHasErrors();
+        $this->assertSame('pending', $request->refresh()->status);
+        Notification::assertNothingSent();
+
+        $request->update(['igp_payment_status' => 'paid']);
+        $this->actingAs($approver)
+            ->post(route('request.supply.final-approval', $request))
+            ->assertSessionHasNoErrors();
+        $this->assertSame('approved', $request->refresh()->status);
+    }
+
     public function test_eligible_request_is_final_approved_by_system_admin_once(): void
     {
         $request = $this->createRequest();

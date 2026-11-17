@@ -40,3 +40,38 @@ Status: **Confirmed** (problem exists as described) · **Partly** (some of it is
 | REG-06 | **Waiting on D6.** Needs the final privacy wording, and a database column to record when the user accepted it. |
 | REG-08 | **Waiting on D7.** |
 | NEW-04 | **Moved to 4.2** (part of removing signature uploads, APR-01). |
+
+## 4.2 Approval workflow and digital approval
+
+**D8, the real order of stages (from the code):**
+1. Requestor submits.
+2. Venue Custodian confirms venue availability (`venue_status`).
+3. Supply Office initial availability review (`supply_office_review_status`); for urgent requests it also validates the supporting document.
+4. In parallel: Equipment Custodian(s) endorse their items (`equipment_status`), skipped when no equipment; and for Outsiders the IGP records payment (`igp_payment_status`).
+5. Supply Office final approval.
+
+| ID | Status | Evidence | What is left |
+|---|---|---|---|
+| APR-01 | Confirmed | Five `/settings/signature` routes (`web.php:89,105,138,176,203`); submission requires the requestor's signature (`RequestorController.php:1485`); every approval snapshots the approver's signature image (`FacilityRequest::recordApprovalSignature`). | Remove uploads and the requirement; keep legacy files (APR-16). |
+| APR-02 | Partly | Approvals already record the account (`approved_by_id`, history `user_id`, custodian checks through policies), but each approval is also bound to a signature image and the PDF prints images. | Make the account record the approval; drop the image binding. |
+| APR-03 | Partly | `request_histories` records action, user and time for each step. No role-at-the-time, no document version, no protection against edits (plain Eloquent model). | Add role and version columns, block update/delete on the model. Needs a migration. |
+| APR-04 | Partly | Server-side checks, row locks and transactions exist on every approval path. But notifications (`RequestStatusChanged`, not queued) are sent **inside** the transaction, before commit; a mail failure or slow mail server delays or can affect the approval. | Send notifications after commit. |
+| APR-05 | Partly | Accepted proposals on a **pending** request reset all approvals (`RequestorController.php:353-368`). On an **approved** request the new schedule is applied and the old final approval is kept; custodians respond to the proposal, but the Supply Office does not re-approve. | Decide whether approved changes need Supply Office re-approval; version the record. |
+| APR-06 | Not code | Legal statement and thesis limitation. | Waiting on D1. |
+| APR-07 | Not code | Waiting on D1. | |
+| APR-08 | Partly | A custodian who endorsed a request is already blocked from giving its final approval (`hasCustodianApprovalBy`, both final-approval paths). | Rule itself waits on D5; audit entries don't store the active role. |
+| APR-09 | Confirmed | Stages documented above (D8 answered). Guide, progress bar and PDF still need to use them. | Belongs with DSH-01. |
+| APR-10 | Partly | The policy checks the custodian's **current** assignment at the moment of action, and stale equipment endorsements from reassigned custodians stop counting. A venue endorsement given before reassignment stays valid. | Re-check venue endorsement on reassignment. |
+| APR-11 | Done (mostly) | Every approval path locks the row and re-checks status inside the transaction; duplicates return "already recorded" or 409. | Add a MySQL race test (tests run on SQLite). |
+| APR-12 | Confirmed | `recomputeEquipmentStatus()` treats an item with **no custodian as approved**, and one rejected item plus one approved item leaves the request "pending" with no clear next step. | Fix both. |
+| APR-13 | Partly | Repeat clicks are handled by state checks, not idempotency keys. | Low risk with current checks. |
+| APR-14 | Confirmed | No reminders, escalation or expiry for pending requests. | |
+| APR-15 | Confirmed | No QR verification. Optional. | |
+| APR-16 | Confirmed | Part of APR-01. | |
+| APR-17 | Partly | Many workflow tests exist, but 34 tests already fail on `main` (approvals, inventory, notifications, reports). | Fix or update those tests while working on 4.2. |
+
+### Found during the 4.2 audit
+
+| ID | Severity | Problem |
+|---|---|---|
+| NEW-05 | **Critical** | The **Final Approval** button on the request details page (`requestor/show.blade.php:1080` → `RequestActionController::supplyFinalApproval`) never checks Outsider payment. The other path (`SupplyOfficeController`, line 1098) does. An unpaid Outsider request can be fully approved from the details page. It also doesn't refuse while a schedule proposal is pending. |

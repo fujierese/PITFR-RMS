@@ -401,6 +401,9 @@
         && $request->supply_office_review_status === 'confirmed'
         && $request->equipment_status === 'approved'
         && !$pendingChangeRequest;
+    $adminAwaitingPayment = $adminFinalReady
+        && $request->requester?->isOutsider()
+        && $request->igp_payment_status !== 'paid';
 
     $venueConfirmationHistory = $request->histories()
         ->where('action', 'custodian_endorsed')
@@ -1076,6 +1079,8 @@
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">No Supply Office action is available before the Venue Custodian confirms.</div>
                             @elseif($adminEquipmentPending)
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Final approval is disabled until every assigned equipment custodian approves.</div>
+                            @elseif($adminAwaitingPayment)
+                                <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Final approval is disabled until the IGP records the official receipt for this Outsider reservation.</div>
                             @elseif($adminFinalReady && auth()->user()->isFinalApprover())
                                 <form method="POST" action="{{ route('request.supply.final-approval', $request->id) }}" class="approval-form">
                                     @csrf

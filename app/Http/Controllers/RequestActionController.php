@@ -562,6 +562,22 @@ class RequestActionController extends Controller
                 return redirect()->back()->withErrors('Initial Supply Office availability review must be confirmed before final approval.');
             }
 
+            if ($facilityRequest->requester?->isOutsider() && $facilityRequest->igp_payment_status !== 'paid') {
+                DB::rollBack();
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => 'The IGP must record the official receipt before final approval.'], 409);
+                }
+                return redirect()->back()->withErrors('The IGP must record the official receipt after availability confirmation and before final approval.');
+            }
+
+            if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
+                DB::rollBack();
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => 'A schedule proposal is awaiting responses.'], 409);
+                }
+                return redirect()->back()->withErrors('A schedule proposal is awaiting responses. Final approval is paused until it is answered.');
+            }
+
             if ($facilityRequest->hasCustodianApprovalBy($user)) {
                 DB::rollBack();
                 if ($request->expectsJson()) {
