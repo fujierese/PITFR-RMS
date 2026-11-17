@@ -12,6 +12,15 @@ class Venue extends Model
         'is_active' => 'boolean',
     ];
 
+    protected static function booted(): void
+    {
+        static::updated(function (self $venue): void {
+            if ($venue->wasChanged('custodian_id')) {
+                FacilityRequest::reopenVenueEndorsementsAfterReassignment($venue, $venue->getOriginal('name'));
+            }
+        });
+    }
+
     public function custodian()
     {
         return $this->belongsTo(User::class, 'custodian_id');

@@ -239,6 +239,61 @@ class FacilityRequest extends Model
         return $this->histories()->create($attributes);
     }
 
+    /**
+     * APR-10: when a venue gets a new custodian, an endorsement given by someone who
+     * is no longer responsible stops counting on requests still awaiting final approval.
+     * Requests that already have final approval keep it.
+     */
+    public static function reopenVenueEndorsementsAfterReassignment(Venue $venue, ?string $previousName = null): void
+    {
+        $names = array_filter(array_map('mb_strtolower', [(string) $venue->name, (string) $previousName]));
+        $newCustodianId = $venue->custodian_id ? (int) $venue->custodian_id : null;
+
+        static::query()->where('status', 'pending')->where('venue_status', 'approved')->get()
+            ->filter(fn (self $request): bool => array_intersect($names, array_map('mb_strtolower', $request->getVenueNames())) !== [])
+            ->each(function (self $request) use ($venue, $newCustodianId): void {
+                $endorsers = array_map(fn (array $s): int => (int) ($s['approver_id'] ?? 0), $request->getStageApprovalSnapshots('venue'));
+                if ($newCustodianId !== null && in_array($newCustodianId, $endorsers, true)) {
+                    return; // The new custodian already endorsed it.
+                }
+
+                $meta = $request->approval_signature_meta ?? [];
+                unset($meta['venue']);
+                $request->forceFill([
+                    'venue_status' => 'pending',
+                    'venue_approval_signature' => null,
+                    'venue_approval_signature_file' => null,
+                    'approval_signature_meta' => $meta,
+                ])->save();
+                $request->addHistory(
+                    'venue_endorsement_reopened',
+                    "The custodian of {$venue->name} changed. The earlier venue confirmation no longer counts; the new custodian must confirm it.",
+                );
+            });
+    }
+
+    /**
+     * APR-10: when equipment custodians change, re-check the equipment stage of
+     * requests still awaiting final approval; endorsements from custodians who are
+     * no longer authorized stop counting.
+     */
+    public static function reopenEquipmentEndorsementsAfterReassignment(Equipment $equipment, ?string $previousName = null): void
+    {
+        $names = array_filter(array_map('mb_strtolower', [(string) $equipment->name, (string) $previousName]));
+
+        static::query()->where('status', 'pending')->where('equipment_status', 'approved')->get()
+            ->filter(fn (self $request): bool => array_intersect($names, array_map('mb_strtolower', $request->getEquipmentItems())) !== [])
+            ->each(function (self $request) use ($equipment): void {
+                $request->recomputeEquipmentStatus();
+                if ($request->equipment_status !== 'approved') {
+                    $request->addHistory(
+                        'equipment_endorsement_reopened',
+                        "The custodian of {$equipment->name} changed. The new custodian must endorse this item.",
+                    );
+                }
+            });
+    }
+
     private static ?bool $historyAuditColumns = null;
 
     private static function historyHasAuditColumns(): bool

@@ -15,6 +15,15 @@ class Equipment extends Model
         'is_active' => 'boolean',
     ];
 
+    protected static function booted(): void
+    {
+        static::updated(function (self $equipment): void {
+            if ($equipment->wasChanged('custodian_id') || $equipment->wasChanged('authorized_custodian_ids')) {
+                FacilityRequest::reopenEquipmentEndorsementsAfterReassignment($equipment, $equipment->getOriginal('name'));
+            }
+        });
+    }
+
     public function custodian()
     {
         return $this->belongsTo(User::class, 'custodian_id');
