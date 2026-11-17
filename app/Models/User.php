@@ -232,7 +232,64 @@ class User extends Authenticatable implements CanResetPassword
             'notification_preferences' => 'array',
             'additional_roles' => 'array',
             'is_active' => 'boolean',
+            'verified_at' => 'datetime',
+            'verification_submitted_at' => 'datetime',
         ];
+    }
+
+    /** Decision D4: accepted IDs for account verification. */
+    public const VERIFICATION_ID_TYPES = [
+        'pit_id' => 'PIT ID (student, faculty or staff)',
+        'philsys' => 'National ID (PhilSys)',
+        'drivers_license' => "Driver's license",
+        'passport' => 'Passport',
+        'umid' => 'UMID',
+        'prc' => 'PRC ID',
+        'postal' => 'Postal ID',
+        'voters' => "Voter's ID",
+        'other_government' => 'Other government-issued ID',
+    ];
+
+    /** Categories a requestor can claim at registration. */
+    public const CLAIMABLE_REQUESTOR_TYPES = ['student', 'faculty', 'staff', 'outsider'];
+
+    private static ?bool $verificationColumns = null;
+
+    /** False until the D4 migration has run, so a code-only deploy keeps working. */
+    public static function verificationEnabled(): bool
+    {
+        return self::$verificationColumns ??= \Illuminate\Support\Facades\Schema::hasColumn('users', 'verification_status');
+    }
+
+    public static function isInstitutionalEmail(string $email): bool
+    {
+        $domain = strtolower((string) substr(strrchr($email, '@') ?: '', 1));
+        $allowed = array_filter(array_map(
+            fn ($d) => strtolower(trim($d)),
+            explode(',', (string) config('pitfr.institutional_email_domains', ''))
+        ));
+
+        return $domain !== '' && in_array($domain, $allowed, true);
+    }
+
+    public function isVerified(): bool
+    {
+        return ($this->verification_status ?? 'verified') === 'verified';
+    }
+
+    public function verificationStatusLabel(): string
+    {
+        return match ($this->verification_status ?? 'verified') {
+            'verified' => 'Verified',
+            'pending' => 'Pending review',
+            'rejected' => 'Rejected — please upload again',
+            default => 'Unverified',
+        };
+    }
+
+    public function verificationIdTypeLabel(): ?string
+    {
+        return self::VERIFICATION_ID_TYPES[$this->verification_id_type] ?? null;
     }
 
     // Override default auth field

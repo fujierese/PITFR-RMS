@@ -1,6 +1,8 @@
 @php
     $settingsRoute = $settingsRoute ?? 'requestor.settings';
     $showSignature = $showSignature ?? false;
+    // D4: requestors see their verification status and can upload an ID.
+    $showVerification = $user->role === 'requestor' && \App\Models\User::verificationEnabled();
     $showOrganization = $showOrganization ?? false;
     $isAdmin = $isAdmin ?? false;
     $preferences = $user->notification_preferences ?? ['request_updates' => true, 'security_alerts' => true];
@@ -41,6 +43,9 @@
         <div class="flex min-w-max gap-2">
             <a href="#profile" class="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">Profile</a>
             <a href="#notifications" class="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">Notifications</a>
+            @if($showVerification)
+                <a href="#verification" class="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">Verification</a>
+            @endif
             @if($showSignature)
                 <a href="#signature" class="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">E-signature</a>
             @endif
@@ -187,6 +192,70 @@
                     </div>
                 </form>
             </section>
+
+            @if($showVerification)
+                @php
+                    $vStatus = $user->verification_status ?? 'verified';
+                    $vClasses = match ($vStatus) {
+                        'verified' => 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+                        'pending' => 'bg-amber-50 text-amber-800 ring-amber-200',
+                        'rejected' => 'bg-red-50 text-red-800 ring-red-200',
+                        default => 'bg-slate-100 text-slate-700 ring-slate-200',
+                    };
+                @endphp
+                <section id="verification" class="scroll-mt-24 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+                    <div class="mb-5 border-b border-slate-100 pb-4">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Identity</p>
+                        <h2 class="mt-1 text-xl font-bold text-slate-950">Account verification</h2>
+                        <p class="mt-1 text-sm text-slate-600">Your requests follow the rules for your verified category. Until you are verified, Outsider rules apply.</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3 text-sm">
+                        <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 {{ $vClasses }}">{{ $user->verificationStatusLabel() }}</span>
+                        <span class="text-slate-600">Category: <strong>{{ ucfirst($user->requestor_type ?? 'outsider') }}</strong></span>
+                        @if($vStatus !== 'verified' && $user->claimed_requestor_type && $user->claimed_requestor_type !== $user->requestor_type)
+                            <span class="text-slate-500">(requested: {{ ucfirst($user->claimed_requestor_type) }})</span>
+                        @endif
+                    </div>
+
+                    @if($vStatus === 'rejected' && $user->verification_note)
+                        <p class="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">Reason: {{ $user->verification_note }}</p>
+                    @elseif($vStatus === 'pending')
+                        <p class="mt-3 text-sm text-slate-600">Your {{ $user->verificationIdTypeLabel() ?? 'ID' }} is waiting for Supply Office review.</p>
+                    @endif
+
+                    @if(in_array($vStatus, ['unverified', 'rejected'], true))
+                        <form method="POST" action="{{ route('requestor.settings.verification') }}" enctype="multipart/form-data" class="mt-5 grid max-w-2xl gap-4 sm:grid-cols-2">
+                            @csrf
+                            <div>
+                                <label for="v_requestor_type" class="mb-1 block text-sm font-semibold text-slate-700">I am a</label>
+                                <select id="v_requestor_type" name="requestor_type" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+                                    @foreach(\App\Models\User::CLAIMABLE_REQUESTOR_TYPES as $type)
+                                        <option value="{{ $type }}" @selected(($user->claimed_requestor_type ?? 'outsider') === $type)>{{ $type === 'outsider' ? 'Outsider / Guest' : ucfirst($type) }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label for="v_id_type" class="mb-1 block text-sm font-semibold text-slate-700">ID type</label>
+                                <select id="v_id_type" name="verification_id_type" required class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+                                    <option value="">Choose an ID</option>
+                                    @foreach(\App\Models\User::VERIFICATION_ID_TYPES as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label for="v_id_file" class="mb-1 block text-sm font-semibold text-slate-700">ID photo or scan</label>
+                                <input id="v_id_file" type="file" name="verification_id" required accept=".jpg,.jpeg,.png,.pdf" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                                <p class="mt-1 text-xs text-slate-500">JPG, PNG or PDF, up to 5 MB. You may cover your ID number. The image is deleted after review.</p>
+                            </div>
+                            <div class="sm:col-span-2">
+                                <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Send for review</button>
+                            </div>
+                        </form>
+                    @endif
+                </section>
+            @endif
 
             <section id="notifications" class="scroll-mt-24 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
                 <div class="mb-5 border-b border-slate-100 pb-4">

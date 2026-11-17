@@ -165,6 +165,18 @@
                         'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m-1 0V3m0 2h-2"/></svg>',
                     ];
                 }
+            // D4: Supply Office reviews uploaded IDs.
+            if (\App\Models\User::verificationEnabled()) {
+                $pendingVerifications = \App\Models\User::query()->where('verification_status', 'pending')->count();
+                $navigation[] = [
+                    'key' => 'verifications',
+                    'label' => 'Account Verification',
+                    'route' => route('supply-office.verifications'),
+                    'route_name' => 'supply-office.verifications',
+                    'badge' => $pendingVerifications > 0 ? $pendingVerifications : null,
+                    'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.830 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"/></svg>',
+                ];
+            }
             $navigation[] = [
                 'section' => 'Reports',
                 'type' => 'section-header',
@@ -487,6 +499,8 @@
         $activeKey = 'final-approved-activities';
     } elseif ($currentRoute === 'supply-office.users') {
         $activeKey = 'users';
+    } elseif ($currentRoute === 'supply-office.verifications') {
+        $activeKey = 'verifications';
     } elseif ($currentRoute === 'supply-office.audit-logs') {
         $activeKey = 'audit-logs';
     } elseif ($currentRoute === 'supply-office.usage-reports') {
@@ -573,6 +587,8 @@
                         <span>{{ $item['label'] }}</span>
                         @if($item['key'] === 'notifications' && $notificationCount > 0)
                             <span class="ml-auto rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">{{ $notificationCount }}</span>
+                        @elseif($item['key'] === 'verifications' && !empty($item['badge']))
+                            <span class="ml-auto rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white">{{ $item['badge'] }}</span>
                         @endif
                     </a>
                 @endif

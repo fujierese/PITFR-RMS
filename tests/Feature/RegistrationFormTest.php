@@ -30,12 +30,16 @@ class RegistrationFormTest extends TestCase
         Mail::fake();
     }
 
-    public function test_registration_page_is_for_outsiders_only(): void
+    public function test_registration_page_is_open_to_all_requestors_with_verification(): void
     {
+        // D4 / REG-01: students, faculty, staff and Outsiders can register; the category
+        // only applies after verification.
         $response = $this->get(route('register'));
 
         $response->assertOk()
-            ->assertSee('Outsider registration')
+            ->assertSee('Requestor registration')
+            ->assertSee('I am registering as')
+            ->assertSee('Identity verification')
             ->assertDontSee('data-type="student"')
             ->assertDontSee('data-type="faculty"')
             ->assertDontSee('data-type="student_organization"');

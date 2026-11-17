@@ -49,15 +49,17 @@
                     <div class="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{{ $errors->first() }}</div>
                 @endif
 
-                <p class="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Outsider registration</p>
+                <p class="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Requestor registration</p>
                 <div class="mb-6 border-l-4 border-emerald-500 bg-emerald-50 p-4 text-sm text-emerald-800">
-                    New Outsider users can create an account here. Students, staff, and faculty accounts are created by the Admin.
+                    Students, faculty, staff and guests (Outsiders) can create an account here. Custodian and Supply Office accounts are created by the Supply Office.
                 </div>
 
                     <p class="mb-4 text-xs text-slate-500">Fields marked <span class="text-red-500">*</span> are required.</p>
-                <form method="POST" action="{{ route('register.post') }}" class="space-y-5">
+                <form method="POST" action="{{ route('register.post') }}" enctype="multipart/form-data" class="space-y-5">
                         @csrf
-                        <input type="hidden" name="requestor_type" value="outsider">
+                        @if(! ($verificationEnabled ?? false))
+                            <input type="hidden" name="requestor_type" value="outsider">
+                        @endif
 
                         @if($googleProfile)
                             <p class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">Google account connected: {{ $googleProfile['email'] }}.</p>
@@ -89,6 +91,87 @@
                                 <input id="contact_number" type="text" name="contact_number" value="{{ old('contact_number') }}" autocomplete="tel" placeholder="09171234567" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                             </div>
                         </div>
+
+                        @if($verificationEnabled ?? false)
+                            @php
+                                $selectedType = old('requestor_type', 'outsider');
+                                $typeOptions = [
+                                    'student' => ['Student', 'Enrolled PIT student'],
+                                    'faculty' => ['Faculty', 'PIT teaching personnel'],
+                                    'staff' => ['Staff', 'PIT non-teaching personnel'],
+                                    'outsider' => ['Outsider / Guest', 'Not affiliated with PIT'],
+                                ];
+                            @endphp
+                            <fieldset>
+                                <legend class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">I am registering as <span class="text-red-500" aria-hidden="true">*</span></legend>
+                                <div class="grid gap-2 sm:grid-cols-4">
+                                    @foreach($typeOptions as $value => $option)
+                                        <label class="flex cursor-pointer flex-col rounded-xl border border-slate-300 p-3 text-sm transition has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50 has-[:checked]:ring-2 has-[:checked]:ring-emerald-100">
+                                            <span class="flex items-center gap-2 font-semibold text-slate-800">
+                                                <input type="radio" name="requestor_type" value="{{ $value }}" @checked($selectedType === $value) class="accent-emerald-600" data-requestor-type>
+                                                {{ $option[0] }}
+                                            </span>
+                                            <span class="mt-1 text-xs text-slate-500">{{ $option[1] }}</span>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </fieldset>
+
+                            <div id="verification_section" class="rounded-2xl border border-slate-200 bg-slate-50 p-4" data-institutional-domains="{{ implode(',', $institutionalDomains ?? []) }}">
+                                <p class="text-sm font-semibold text-slate-800">Identity verification</p>
+                                <p id="verification_auto" class="mt-2 hidden rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+                                    Your PIT email address will verify your account automatically after you enter the code we send. No ID upload is needed.
+                                </p>
+                                <div id="verification_upload">
+                                    <p id="verification_hint_member" class="mt-1 hidden text-xs text-slate-600">
+                                        Upload your PIT ID, or register with your PIT email address{{ !empty($institutionalDomains) ? ' (@' . implode(', @', $institutionalDomains) . ')' : '' }} to be verified automatically. Until the Supply Office confirms your ID, Outsider rules apply to your requests.
+                                    </p>
+                                    <p id="verification_hint_outsider" class="mt-1 text-xs text-slate-600">
+                                        Upload any valid government ID. The Supply Office checks it before your requests can receive final approval.
+                                    </p>
+                                    <div class="mt-3 grid gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <label for="verification_id_type" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">ID type</label>
+                                            <select id="verification_id_type" name="verification_id_type" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                                                <option value="">Choose an ID</option>
+                                                @foreach($idTypes as $value => $label)
+                                                    <option value="{{ $value }}" @selected(old('verification_id_type') === $value)>{{ $label }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label for="verification_id" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">ID photo or scan</label>
+                                            <input id="verification_id" type="file" name="verification_id" accept=".jpg,.jpeg,.png,.pdf" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-3 file:py-1.5 file:text-emerald-700">
+                                        </div>
+                                    </div>
+                                    <p class="mt-2 text-xs text-slate-500">You can also upload it later in Account Settings, but your requests cannot receive final approval until your ID is reviewed. JPG, PNG or PDF, up to 5 MB. Front side only. You may cover your ID number; we only need your name and photo. The image is deleted once the Supply Office reviews it.</p>
+                                </div>
+                            </div>
+                            <script>
+                                (function () {
+                                    var section = document.getElementById('verification_section');
+                                    if (!section) return;
+                                    var domains = (section.dataset.institutionalDomains || '').split(',').map(function (d) { return d.trim().toLowerCase(); }).filter(Boolean);
+                                    var email = document.getElementById('username');
+                                    var radios = document.querySelectorAll('[data-requestor-type]');
+                                    function update() {
+                                        var checked = document.querySelector('[data-requestor-type]:checked');
+                                        var type = checked ? checked.value : 'outsider';
+                                        var domain = ((email && email.value) || '').toLowerCase().split('@')[1] || '';
+                                        var auto = type !== 'outsider' && domains.indexOf(domain) !== -1;
+                                        document.getElementById('verification_auto').classList.toggle('hidden', !auto);
+                                        document.getElementById('verification_upload').classList.toggle('hidden', auto);
+                                        document.getElementById('verification_hint_member').classList.toggle('hidden', type === 'outsider');
+                                        document.getElementById('verification_hint_outsider').classList.toggle('hidden', type !== 'outsider');
+                                        var idType = document.getElementById('verification_id_type');
+                                        if (type !== 'outsider' && !idType.value) idType.value = 'pit_id';
+                                    }
+                                    radios.forEach(function (r) { r.addEventListener('change', update); });
+                                    if (email) email.addEventListener('input', update);
+                                    update();
+                                })();
+                            </script>
+                        @endif
 
                         <div>
                             <label for="office_or_organization" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Organization name / affiliation <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>

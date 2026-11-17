@@ -109,6 +109,7 @@ Route::middleware(['auth', 'role:requestor'])->prefix('requestor')->group(functi
     Route::post('/settings/password', [RequestorController::class, 'updatePassword'])->name('requestor.settings.password');
     Route::post('/settings/notifications', [RequestorController::class, 'updateNotificationPreferences'])->name('requestor.settings.notifications');
     Route::post('/settings/signature', [RequestorController::class, 'updateSignature'])->name('requestor.settings.signature');
+    Route::post('/settings/verification', [\App\Http\Controllers\AccountVerificationController::class, 'submit'])->name('requestor.settings.verification');
     Route::get('/equipment/availability', [RequestorController::class, 'equipmentAvailability'])->name('equipment.availability');
 });
 
@@ -125,6 +126,10 @@ Route::middleware(['auth', 'role:admin,supply_office'])->prefix('supply-office')
     Route::put('/equipment/{equipment}', [SupplyOfficeController::class, 'updateEquipment'])->name('supply-office.equipment.update');
     Route::delete('/equipment/{equipment}', [SupplyOfficeController::class, 'destroyEquipment'])->name('supply-office.equipment.destroy');
     Route::get('/requests/pending', [SupplyOfficeController::class, 'pendingRequests'])->name('supply-office.requests.pending');
+    // D4: account verification review.
+    Route::get('/verifications', [\App\Http\Controllers\AccountVerificationController::class, 'index'])->name('supply-office.verifications');
+    Route::get('/verifications/{user}/id', [\App\Http\Controllers\AccountVerificationController::class, 'file'])->name('supply-office.verifications.file');
+    Route::post('/verifications/{user}', [\App\Http\Controllers\AccountVerificationController::class, 'decide'])->name('supply-office.verifications.decide');
     Route::post('/requests/availability-review', [SupplyOfficeController::class, 'reviewAvailability'])->name('supply-office.requests.availability-review');
     Route::post('/requests/{facilityRequest}/cancellation-review', [SupplyOfficeController::class, 'reviewCancellation'])->name('supply-office.requests.cancellation-review');
     Route::get('/requests/final-approval', [SupplyOfficeController::class, 'finalApprovalRequests'])->name('supply-office.requests.final-approval');

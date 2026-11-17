@@ -2,6 +2,8 @@
 
 return [
     'final_approver_username' => env('PITFR_FINAL_APPROVER_USERNAME', 'asala@gmail.com'),
+    // D4: email domains that verify a student, faculty or staff account automatically.
+    'institutional_email_domains' => env('PITFR_INSTITUTIONAL_EMAIL_DOMAINS', 'pit.edu.ph'),
     // APR-14: review service levels for pending requests (hours a stage may wait).
     'review_sla' => [
         'reminder_after_hours' => (int) env('PITFR_REVIEW_REMINDER_HOURS', 48),

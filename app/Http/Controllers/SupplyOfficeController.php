@@ -1102,6 +1102,11 @@ class SupplyOfficeController extends Controller
                 DB::rollBack();
                 return back()->withErrors(['action' => 'The IGP must record the official receipt after availability confirmation and before final approval.']);
             }
+            if ($validated['action'] === 'approve' && $fr->requester && ! $fr->requester->isVerified()) {
+                // D4: the requester's ID must be reviewed before final approval.
+                DB::rollBack();
+                return back()->withErrors(['action' => "The requester's ID has not been verified yet. Review it under Account Verification before final approval."]);
+            }
             if ($validated['action'] === 'approve' && $fr->hasCustodianApprovalBy(Auth::user())) {
                 DB::rollBack();
                 return back()->withErrors(['action' => 'A custodian cannot also provide final Supply Office approval for the same request. A second Supply Office staff member must review and document any staffing exception.']);

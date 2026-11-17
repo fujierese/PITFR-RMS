@@ -404,6 +404,9 @@
     $adminAwaitingPayment = $adminFinalReady
         && $request->requester?->isOutsider()
         && $request->igp_payment_status !== 'paid';
+    $adminAwaitingVerification = $adminFinalReady
+        && $request->requester
+        && ! $request->requester->isVerified();
 
     $venueConfirmationHistory = $request->histories()
         ->where('action', 'custodian_endorsed')
@@ -1086,6 +1089,11 @@
                                 </div>
                             @elseif($adminAwaitingPayment)
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Final approval is disabled until the IGP records the official receipt for this Outsider reservation.</div>
+                            @elseif($adminAwaitingVerification)
+                                <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                                    Final approval is disabled until the requester's ID is verified.
+                                    <a href="{{ route('supply-office.verifications') }}" class="font-semibold underline">Open Account Verification</a>
+                                </div>
                             @elseif($adminFinalReady && auth()->user()->isFinalApprover())
                                 <form method="POST" action="{{ route('request.supply.final-approval', $request->id) }}" class="approval-form">
                                     @csrf

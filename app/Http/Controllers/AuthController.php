@@ -82,6 +82,9 @@ class AuthController extends Controller
             'colleges' => College::with('departments')->orderBy('name')->get(),
             'googleProfile' => $request->session()->get('google_registration_profile'),
             'googleType' => $request->session()->get('google_registration_type', 'student'),
+            'verificationEnabled' => User::verificationEnabled(),
+            'idTypes' => User::VERIFICATION_ID_TYPES,
+            'institutionalDomains' => array_values(array_filter(array_map('trim', explode(',', (string) config('pitfr.institutional_email_domains', ''))))),
         ]);
     }
 
@@ -301,6 +304,10 @@ class AuthController extends Controller
             'organization_acronym' => ['nullable', 'string', 'max:50'],
             'organization_type' => ['nullable', 'string', 'max:100'],
             'contact_number' => ['nullable', 'string', 'max:50'],
+            // D4: claimed category and proof of identity.
+            'requestor_type' => ['nullable', 'string', 'max:30'],
+            'verification_id_type' => ['nullable', 'in:' . implode(',', array_keys(User::VERIFICATION_ID_TYPES))],
+            'verification_id' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
         ], [
             'username.unique' => 'Unable to complete registration with the provided details.',
             'school_id_number.regex' => 'Student ID must be in format: 23-0098-635 (2 digits - 4 digits - 3 digits)',
@@ -308,6 +315,19 @@ class AuthController extends Controller
             'department_id.required_if' => 'Department is required for student registration',
             'office_or_organization.required_if' => 'Organization name is required for this account type.',
         ]);
+
+        // D4: the claimed category only applies once verified; anything unknown is an Outsider.
+        $claimedType = in_array($data['requestor_type'] ?? null, User::CLAIMABLE_REQUESTOR_TYPES, true)
+            ? $data['requestor_type']
+            : 'outsider';
+        $verificationEnabled = User::verificationEnabled();
+        $usesInstitutionalEmail = $claimedType !== 'outsider' && User::isInstitutionalEmail((string) $data['username']);
+        // The ID can also be uploaded later from Account Settings; it is required before final approval.
+        if ($verificationEnabled && $request->hasFile('verification_id') && empty($data['verification_id_type'])) {
+            return back()
+                ->withErrors(['verification_id_type' => 'Choose the type of ID you are uploading.'])
+                ->withInput($request->except(['password', 'password_confirmation', 'verification_id']));
+        }
 
         $fullName = User::formatFullName(
             $data['surname'],
@@ -337,7 +357,14 @@ class AuthController extends Controller
         // Get department name for storage
         $departmentName = $department ? $department->name : null;
 
-        $user = DB::transaction(function () use ($data, $fullName, $org, $departmentName, $googleProfile, $isGoogleRegistration): User {
+        $storedIdFile = null;
+        if ($verificationEnabled && ! $usesInstitutionalEmail && $request->hasFile('verification_id')) {
+            // Private disk only; deleted once the Supply Office reviews it.
+            $upload = $request->file('verification_id');
+            $storedIdFile = $upload->storeAs('verification-ids', Str::uuid() . '.' . strtolower($upload->getClientOriginalExtension()), 'local');
+        }
+
+        $user = DB::transaction(function () use ($data, $fullName, $org, $departmentName, $googleProfile, $isGoogleRegistration, $verificationEnabled, $claimedType, $usesInstitutionalEmail, $storedIdFile): User {
             $user = User::create([
                 'username' => strtolower(trim($data['username'])),
                 'password' => Hash::make($data['password'] ?? bin2hex(random_bytes(24))),
@@ -357,7 +384,22 @@ class AuthController extends Controller
                 'email_verified_at' => $isGoogleRegistration ? now() : null,
             ]);
 
-            $this->recordUserAudit(null, $user, 'user_created', 'Created a new outsider account.', [], [
+            if ($verificationEnabled) {
+                // Outsider rules apply until the claimed category is verified.
+                $instantlyVerified = $usesInstitutionalEmail && $isGoogleRegistration;
+                $user->forceFill([
+                    'requestor_type' => $instantlyVerified ? $claimedType : 'outsider',
+                    'claimed_requestor_type' => $claimedType,
+                    'verification_status' => $instantlyVerified ? 'verified' : ($storedIdFile ? 'pending' : 'unverified'),
+                    'verification_method' => $usesInstitutionalEmail ? 'institutional_email' : 'id_upload',
+                    'verification_id_type' => $usesInstitutionalEmail ? null : ($data['verification_id_type'] ?? null),
+                    'verification_id_file' => $storedIdFile,
+                    'verification_submitted_at' => $storedIdFile ? now() : null,
+                    'verified_at' => $instantlyVerified ? now() : null,
+                ])->save();
+            }
+
+            $this->recordUserAudit(null, $user, 'user_created', 'Self-registered requestor account (claimed: ' . $claimedType . ').', [], [
                 'name' => $user->name,
                 'username' => $user->username,
                 'role' => $user->role,
@@ -412,6 +454,22 @@ class AuthController extends Controller
             'otp_expires_at' => null,
             'otp_attempts' => 0,
         ])->save();
+
+        // D4: confirming a PIT email address verifies the claimed category.
+        if (User::verificationEnabled()
+            && $user->verification_method === 'institutional_email'
+            && $user->verification_status !== 'verified'
+            && in_array($user->claimed_requestor_type, ['student', 'faculty', 'staff'], true)
+            && User::isInstitutionalEmail((string) $user->username)) {
+            $user->forceFill([
+                'requestor_type' => $user->claimed_requestor_type,
+                'verification_status' => 'verified',
+                'verified_at' => now(),
+            ])->save();
+            $this->recordUserAudit(null, $user, 'user_verified', 'Verified through institutional email.', [], [
+                'requestor_type' => $user->requestor_type,
+            ]);
+        }
         $request->session()->forget('registration_user_id');
         Auth::login($user);
 

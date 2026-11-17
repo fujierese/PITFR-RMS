@@ -570,6 +570,15 @@ class RequestActionController extends Controller
                 return redirect()->back()->withErrors('The IGP must record the official receipt after availability confirmation and before final approval.');
             }
 
+            if ($facilityRequest->requester && ! $facilityRequest->requester->isVerified()) {
+                // D4: the requester's ID must be reviewed before final approval.
+                DB::rollBack();
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => "The requester's ID has not been verified yet."], 409);
+                }
+                return redirect()->back()->withErrors("The requester's ID has not been verified yet. Review it under Account Verification before final approval.");
+            }
+
             if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
                 DB::rollBack();
                 if ($request->expectsJson()) {
