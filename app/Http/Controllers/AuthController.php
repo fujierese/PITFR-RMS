@@ -83,6 +83,11 @@ class AuthController extends Controller
             'googleProfile' => $request->session()->get('google_registration_profile'),
             'googleType' => $request->session()->get('google_registration_type', 'student'),
             'verificationEnabled' => User::verificationEnabled(),
+            // D7: suggestions only; the category is a separate, verified field.
+            'organizationSuggestions' => collect(AdminController::STAFF_DEPARTMENTS)
+                ->merge(\App\Models\Department::query()->orderBy('name')->pluck('name'))
+                ->merge(\App\Models\StudentOrganization::query()->where('is_active', true)->orderBy('name')->pluck('name'))
+                ->filter()->unique()->values(),
             'idTypes' => User::VERIFICATION_ID_TYPES,
             'institutionalDomains' => array_values(array_filter(array_map('trim', explode(',', (string) config('pitfr.institutional_email_domains', ''))))),
         ]);

@@ -27,7 +27,7 @@ class AdminController extends Controller
 {
     use ManagesAccountSettings;
 
-    private const STAFF_DEPARTMENTS = [
+    public const STAFF_DEPARTMENTS = [
         'Office of the President',
         'Office of the Vice President for Academic Affairs',
         'Office of the Vice President for Research, Innovation, and Extension Services',

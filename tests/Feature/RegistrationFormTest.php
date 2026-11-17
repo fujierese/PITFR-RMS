@@ -40,6 +40,9 @@ class RegistrationFormTest extends TestCase
             ->assertSee('Requestor registration')
             ->assertSee('I am registering as')
             ->assertSee('Identity verification')
+            // D7: office/organization is a separate display field with suggestions.
+            ->assertSee('organization_suggestions', false)
+            ->assertSee('Office of the President')
             ->assertDontSee('data-type="student"')
             ->assertDontSee('data-type="faculty"')
             ->assertDontSee('data-type="student_organization"');
@@ -67,7 +70,7 @@ class RegistrationFormTest extends TestCase
         $response = $this->get(route('register'));
 
         $response->assertOk()
-            ->assertSee('Organization name / affiliation')
+            ->assertSee('Office, department or organization')
             ->assertSee('Leave blank if you are requesting as an individual.')
             ->assertDontSee('College of Technology and Engineering');
     }

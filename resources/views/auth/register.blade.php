@@ -174,9 +174,14 @@
                         @endif
 
                         <div>
-                            <label for="office_or_organization" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Organization name / affiliation <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
-                            <input id="office_or_organization" type="text" name="office_or_organization" value="{{ old('office_or_organization') }}" maxlength="191" placeholder="Your organization, office or company" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
-                            <p class="mt-2 text-xs text-slate-400">Leave blank if you are requesting as an individual.</p>
+                            <label for="office_or_organization" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Office, department or organization <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
+                            <input id="office_or_organization" type="text" name="office_or_organization" value="{{ old('office_or_organization') }}" maxlength="191" list="organization_suggestions" autocomplete="organization" placeholder="Start typing, or enter your company or group" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                            <datalist id="organization_suggestions">
+                                @foreach(($organizationSuggestions ?? []) as $suggestion)
+                                    <option value="{{ $suggestion }}"></option>
+                                @endforeach
+                            </datalist>
+                            <p class="mt-2 text-xs text-slate-400">Shown on your request form. It does not change which rules apply to you; that comes from the category you register as. Leave blank if you are requesting as an individual.</p>
                         </div>
 
                         <div class="grid gap-4 sm:grid-cols-2">
