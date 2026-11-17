@@ -1647,6 +1647,21 @@ class FacilityRequest extends Model
     }
 
     // ─── RECOMPUTE GLOBAL EQUIPMENT STATUS BASED ON ALL CUSTODIANS ───────────
+    /**
+     * Requested equipment that has no assigned custodian (venue-included items excluded).
+     * These block final approval until the Supply Office assigns a custodian.
+     *
+     * @return list<string>
+     */
+    public function getEquipmentItemsWithoutCustodian(): array
+    {
+        return array_values(array_filter(
+            $this->getEquipmentItems(),
+            fn (string $itemName): bool => $this->getAuthorizedCustodianIdsForEquipment($itemName) === []
+                && ! $this->isVenueIncludedEquipment($itemName)
+        ));
+    }
+
     public function recomputeEquipmentStatus(): void
     {
         $itemNames = $this->getEquipmentItems();
@@ -1663,7 +1678,10 @@ class FacilityRequest extends Model
         foreach ($itemNames as $itemName) {
             $authorizedIds = $this->getAuthorizedCustodianIdsForEquipment($itemName);
             if (empty($authorizedIds)) {
-                $itemResults[] = 'approved';
+                // Equipment that comes with the venue is covered by the venue confirmation.
+                // Any other item with no custodian stays incomplete until one is assigned
+                // and responds; it is never approved automatically.
+                $itemResults[] = $this->isVenueIncludedEquipment($itemName) ? 'approved' : 'pending';
                 continue;
             }
 

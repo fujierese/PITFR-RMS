@@ -1078,7 +1078,12 @@
                             @elseif($adminVenuePending)
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">No Supply Office action is available before the Venue Custodian confirms.</div>
                             @elseif($adminEquipmentPending)
-                                <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Final approval is disabled until every assigned equipment custodian approves.</div>
+                                <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                                    Final approval is disabled until every assigned equipment custodian approves.
+                                    @if ($request->getEquipmentItemsWithoutCustodian() !== [])
+                                        <span class="mt-1 block">No custodian is assigned to: {{ implode(', ', $request->getEquipmentItemsWithoutCustodian()) }}. Assign one in Equipment management so it can be reviewed.</span>
+                                    @endif
+                                </div>
                             @elseif($adminAwaitingPayment)
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Final approval is disabled until the IGP records the official receipt for this Outsider reservation.</div>
                             @elseif($adminFinalReady && auth()->user()->isFinalApprover())

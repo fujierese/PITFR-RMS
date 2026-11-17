@@ -75,3 +75,10 @@ Status: **Confirmed** (problem exists as described) · **Partly** (some of it is
 | ID | Severity | Problem |
 |---|---|---|
 | NEW-05 | **Critical** | The **Final Approval** button on the request details page (`requestor/show.blade.php:1080` → `RequestActionController::supplyFinalApproval`) never checks Outsider payment. The other path (`SupplyOfficeController`, line 1098) does. An unpaid Outsider request can be fully approved from the details page. It also doesn't refuse while a schedule proposal is pending. |
+
+### 4.2 fixes (branch `fix/approval-module`)
+
+| ID | Result |
+|---|---|
+| NEW-05 | **Fixed.** Final approval from the request details page now requires the IGP payment for Outsiders and refuses while a schedule proposal is pending; the page says why approval is disabled. Test: `test_unpaid_outsider_request_cannot_be_final_approved_from_request_details`. |
+| APR-12 | **Fixed.** Requested equipment with no assigned custodian is no longer counted as approved; it keeps the equipment stage open, and the Supply Office sees "No custodian is assigned to: …" on the request. Equipment that comes with the venue is still covered by the venue confirmation. The "mixed" case is already defined in the code: any equipment rejection rejects the whole request (`custodianReject`). Test: `EquipmentCustodianCoverageTest`. |
