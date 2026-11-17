@@ -184,8 +184,9 @@ class InventoryConsistencyTest extends TestCase
                 ->assertSee('Returned: Return Workflow Projector × 2')
                 ->assertDontSee('custodian ID:');
 
-            $history->detail = 'Equipment return recorded by custodian ID: ' . $custodian->id;
-            $history->save();
+            // Simulate a legacy row written before this wording changed (history is append-only in the app).
+            \Illuminate\Support\Facades\DB::table('request_histories')->where('id', $history->id)
+                ->update(['detail' => 'Equipment return recorded by custodian ID: ' . $custodian->id]);
             $this->get(route('request.show', $request))
                 ->assertOk()
                 ->assertSee('Returned: Return Workflow Projector × 2')

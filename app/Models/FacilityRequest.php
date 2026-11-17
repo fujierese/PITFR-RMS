@@ -210,13 +210,102 @@ class FacilityRequest extends Model
 
     public function addHistory(string $action, ?string $detail = null, ?int $userId = null)
     {
-        return $this->histories()->create([
+        $attributes = [
             'facility_request_id' => $this->getKey(),
             'action'              => $action,
             'detail'              => $detail,
             'user_id'             => $userId,
             'occurred_at'         => now(),
-        ]);
+        ];
+
+        // APR-03: record the role acted in and the request version the action applied to.
+        // Skipped until the migration has run, so a code-only deploy keeps working.
+        if (self::historyHasAuditColumns()) {
+            $fingerprint = $this->contentFingerprint();
+            $previous = $this->histories()
+                ->whereNotNull('request_fingerprint')
+                ->orderByDesc('id')
+                ->first(['request_fingerprint', 'request_version']);
+
+            $attributes['actor_role'] = self::resolveActorRole($action, $userId ? User::find($userId) : null);
+            $attributes['request_fingerprint'] = $fingerprint;
+            $attributes['request_version'] = $previous === null
+                ? 1
+                : ($previous->request_fingerprint === $fingerprint
+                    ? (int) $previous->request_version
+                    : (int) $previous->request_version + 1);
+        }
+
+        return $this->histories()->create($attributes);
+    }
+
+    private static ?bool $historyAuditColumns = null;
+
+    private static function historyHasAuditColumns(): bool
+    {
+        return self::$historyAuditColumns ??= \Illuminate\Support\Facades\Schema::hasColumn('request_histories', 'request_fingerprint');
+    }
+
+    /**
+     * SHA-256 of the parts of the request an approval applies to: activity, schedule,
+     * venues and equipment. A change to any of them starts a new request version.
+     */
+    public function contentFingerprint(): string
+    {
+        $content = [
+            'activity'     => (string) $this->name_of_activity,
+            'purpose'      => (string) $this->purpose,
+            'participants' => (string) $this->expected_participants,
+            'start_date'   => $this->start_date?->format('Y-m-d') ?? '',
+            'end_date'     => $this->end_date?->format('Y-m-d') ?? '',
+            'start_time'   => substr((string) $this->start_time, 0, 5),
+            'end_time'     => substr((string) $this->end_time, 0, 5),
+            'venue'        => array_values((array) ($this->venue ?? [])),
+            'other_venue'  => (string) $this->other_venue,
+            'equipment'    => array_values((array) ($this->equipment ?? [])),
+            'quantities'   => (array) ($this->equipment_quantities ?? []),
+        ];
+        ksort($content['quantities']);
+
+        return hash('sha256', json_encode($content));
+    }
+
+    /**
+     * The role the user acted in for this action. Users can hold several roles,
+     * so the stage of the action decides which one applies.
+     */
+    public static function resolveActorRole(string $action, ?User $user): string
+    {
+        if (! $user) {
+            return 'system';
+        }
+
+        $roles = array_values(array_unique(array_filter(array_merge([$user->role], (array) ($user->additional_roles ?? [])))));
+
+        $wanted = match (true) {
+            str_starts_with($action, 'igp_') => 'igp',
+            str_starts_with($action, 'venue_'),
+            str_starts_with($action, 'equipment_'),
+            $action === 'custodian_endorsed' => 'custodian',
+            str_starts_with($action, 'final_'),
+            str_starts_with($action, 'availability_'),
+            str_starts_with($action, 'urgent_'),
+            str_starts_with($action, 'priority_'),
+            in_array($action, ['approved', 'rejected', 'revision_requested', 'needs_revision'], true) => 'supply_office',
+            in_array($action, ['submitted', 'requestor_edited', 'cancellation_requested', 'change_requested',
+                'needs_reschedule', 'revision_response_received', 'revision_declined', 'request_cancelled'], true) => 'requestor',
+            default => null,
+        };
+
+        if ($wanted !== null) {
+            foreach ($roles as $role) {
+                if ($role === $wanted || ($wanted === 'custodian' && str_starts_with($role, 'custodian'))) {
+                    return $role;
+                }
+            }
+        }
+
+        return (string) ($user->role ?: 'system');
     }
 
     public function recordApprovalSignature(string $approvalType, User $approver): void

@@ -97,6 +97,9 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ $log->user ? $log->user->name : 'System' }}
+                                    @if($log instanceof \App\Models\RequestHistory && $log->actorRoleLabel())
+                                        <span class="block text-xs text-gray-500">as {{ $log->actorRoleLabel() }}</span>
+                                    @endif
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
@@ -116,6 +119,9 @@
                                         <a href="{{ route('request.show', $log->facilityRequest->id) }}" class="text-blue-600 hover:text-blue-800">
                                             {{ $log->facilityRequest->control_number }}
                                         </a>
+                                        @if($log->request_version)
+                                            <span class="block text-xs text-gray-500">Version {{ $log->request_version }}</span>
+                                        @endif
                                     @elseif($log->targetUser)
                                         <span class="text-gray-700">{{ $log->targetUser->name }}</span>
                                     @else
