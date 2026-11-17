@@ -2014,55 +2014,11 @@ class RequestorController extends Controller
         $request = FacilityRequest::findOrFail($id);
         $this->authorize('print', $request);
 
-        // Digital Approval Records (issue FRM-02, decision D3): role, scope, action,
-        // date and time and an approval reference. No signature images and no names.
-        $stageDefaults = [
-            'venue' => ['role' => 'Venue Custodian', 'action' => 'Endorsed'],
-            'equipment' => ['role' => 'Equipment Custodian', 'action' => 'Endorsed'],
-            'final' => ['role' => 'Supply Office', 'action' => 'Approved'],
-        ];
-        $approvalRecords = [];
-        foreach ($stageDefaults as $stage => $defaults) {
-            $snapshots = $request->getStageApprovalSnapshots($stage);
-            $stageApproved = match ($stage) {
-                'venue' => $request->venue_status === 'approved',
-                'equipment' => $request->equipment_status === 'approved',
-                default => $request->status === 'approved',
-            };
-            if ($snapshots === [] && $stageApproved) {
-                // Older approvals recorded before approval snapshots existed.
-                $approvalDate = $request->getStageApprovalDate($stage);
-                $snapshots = [[
-                    'request_id' => $request->id,
-                    'type' => $stage,
-                    'time' => $approvalDate?->toISOString(),
-                ]];
-            }
-
-            $approvalRecords[$stage] = array_map(function (array $snapshot) use ($request, $stage, $defaults): array {
-                $scope = match ($stage) {
-                    'venue' => implode(', ', $request->getVenueNames()),
-                    'equipment' => ! empty($snapshot['approver_id'])
-                        ? implode(', ', array_keys($request->getAssignedEquipmentForCustodian((int) $snapshot['approver_id'])))
-                        : '',
-                    default => 'Supply Office',
-                };
-
-                return [
-                    'role' => $defaults['role'],
-                    'scope' => $scope,
-                    'action' => $defaults['action'],
-                    'date' => ! empty($snapshot['time'])
-                        ? Carbon::parse($snapshot['time'])->timezone(config('app.timezone'))->format('M j, Y g:i A')
-                        : null,
-                    'reference' => FacilityRequest::approvalReference($snapshot),
-                ];
-            }, $snapshots);
-        }
-
         return view('request.print', [
             'request' => $request,
-            'approvalRecords' => $approvalRecords,
+            'approvalRecords' => $request->digitalApprovalRecords(),
+            'verificationUrl' => $request->verificationUrl(),
+            'verificationQrSvg' => $request->verificationQrSvg(60),
         ]);
     }
 

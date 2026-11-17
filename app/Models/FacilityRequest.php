@@ -413,6 +413,84 @@ class FacilityRequest extends Model
     }
 
     /**
+     * Digital Approval Records (issue FRM-02, decision D3): role, scope, action,
+     * date and time and an approval reference. No signature images and no names.
+     *
+     * @return array<string, list<array{role: string, scope: string, action: string, date: ?string, reference: string}>>
+     */
+    public function digitalApprovalRecords(): array
+    {
+        $stageDefaults = [
+            'venue' => ['role' => 'Venue Custodian', 'action' => 'Endorsed'],
+            'equipment' => ['role' => 'Equipment Custodian', 'action' => 'Endorsed'],
+            'final' => ['role' => 'Supply Office', 'action' => 'Approved'],
+        ];
+        $approvalRecords = [];
+        foreach ($stageDefaults as $stage => $defaults) {
+            $snapshots = $this->getStageApprovalSnapshots($stage);
+            $stageApproved = match ($stage) {
+                'venue' => $this->venue_status === 'approved',
+                'equipment' => $this->equipment_status === 'approved',
+                default => $this->status === 'approved',
+            };
+            if ($snapshots === [] && $stageApproved) {
+                // Older approvals recorded before approval snapshots existed.
+                $approvalDate = $this->getStageApprovalDate($stage);
+                $snapshots = [[
+                    'request_id' => $this->id,
+                    'type' => $stage,
+                    'time' => $approvalDate?->toISOString(),
+                ]];
+            }
+    
+            $approvalRecords[$stage] = array_map(function (array $snapshot) use ($stage, $defaults): array {
+                $scope = match ($stage) {
+                    'venue' => implode(', ', $this->getVenueNames()),
+                    'equipment' => ! empty($snapshot['approver_id'])
+                        ? implode(', ', array_keys($this->getAssignedEquipmentForCustodian((int) $snapshot['approver_id'])))
+                        : '',
+                    default => 'Supply Office',
+                };
+    
+                return [
+                    'role' => $defaults['role'],
+                    'scope' => $scope,
+                    'action' => $defaults['action'],
+                    'date' => ! empty($snapshot['time'])
+                        ? \Carbon\Carbon::parse($snapshot['time'])->timezone(config('app.timezone'))->format('M j, Y g:i A')
+                        : null,
+                    'reference' => self::approvalReference($snapshot),
+                ];
+            }, $snapshots);
+        }
+
+        return $approvalRecords;
+    }
+
+    /** Secret code that makes a request's public verification link unguessable (APR-15). */
+    public function verificationCode(): string
+    {
+        return substr(hash_hmac('sha256', 'verify|' . $this->getKey() . '|' . $this->control_number, (string) config('app.key')), 0, 20);
+    }
+
+    public function verificationUrl(): string
+    {
+        return route('request.verify', ['facilityRequest' => $this->getKey(), 'code' => $this->verificationCode()]);
+    }
+
+    public function verificationQrSvg(int $size = 96): string
+    {
+        $renderer = new \BaconQrCode\Renderer\ImageRenderer(
+            new \BaconQrCode\Renderer\RendererStyle\RendererStyle($size, 2),
+            new \BaconQrCode\Renderer\Image\SvgImageBackEnd(),
+        );
+        $svg = (new \BaconQrCode\Writer($renderer))->writeString($this->verificationUrl());
+
+        // Drop the XML declaration so the SVG can be inlined in HTML.
+        return trim(preg_replace('/^<\?xml[^>]*\?>/', '', $svg));
+    }
+
+    /**
      * Short, stable reference for one recorded approval, printed on the form so a
      * printed copy can be matched to the system record.
      */

@@ -1301,8 +1301,16 @@
                             </div>
                         </div>
 
-                        <div class="signature-serial" style="margin-top: 0.4rem;">
-                            Digital Approval Records: endorsements and approvals above are recorded in PITFR-RMS under each approver's authenticated account. They are not handwritten signatures. Verify a reference with the Supply Office.
+                        <div class="signature-serial verification-row" style="margin-top: 0.4rem; display: flex; align-items: center; gap: 0.5rem;">
+                            @if (! empty($verificationQrSvg))
+                                <div class="verification-qr" style="width: 60px; height: 60px; flex: 0 0 60px; line-height: 0;" aria-label="Verification QR code">
+                                    {!! $verificationQrSvg !!}
+                                </div>
+                            @endif
+                            <div>
+                                Digital Approval Records: endorsements and approvals above are recorded in PITFR-RMS under each approver's authenticated account. They are not handwritten signatures.
+                                Scan the QR code to check this form against the system record, or verify a reference with the Supply Office.
+                            </div>
                         </div>
 
                         <div class="footer-bar">

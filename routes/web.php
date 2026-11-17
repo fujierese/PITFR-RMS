@@ -30,6 +30,12 @@ Route::middleware('auth')->prefix('api-test')->group(function () {
 });
 
 // Public routes
+
+// APR-15: anyone holding a printed form can scan its QR code to confirm it matches the system record.
+Route::get('/verify/{facilityRequest}/{code}', \App\Http\Controllers\RequestVerificationController::class)
+    ->whereNumber('facilityRequest')
+    ->middleware('throttle:30,1')
+    ->name('request.verify');
 Route::get('/', function() {
     if (Auth::check()) {
         $user = Auth::user();
