@@ -1352,6 +1352,11 @@ class RequestorController extends Controller
             'venue_schedules.*.start_time' => 'nullable|date_format:H:i',
             'venue_schedules.*.end_time' => 'nullable|date_format:H:i',
             'venue_schedules.*.reservation_duration' => ['nullable', 'in:specific_time,whole_day'],
+            // D2: participants per venue and capacity exception reasons.
+            'venue_participants'    => ['nullable', 'array'],
+            'venue_participants.*'  => ['nullable', 'integer', 'min:1'],
+            'capacity_exceptions'   => ['nullable', 'array'],
+            'capacity_exceptions.*' => ['nullable', 'string', 'max:500'],
             'venue'                 => ['required', 'array', 'min:1'],
             'venue.*'               => ['required', 'string', Rule::in(array_merge(self::VENUE_OPTIONS, $activeVenueNames))],
             'venue_equipment' => ['nullable', 'array'],
@@ -1683,7 +1688,42 @@ class RequestorController extends Controller
         // Availability is validated below per venue schedule and equipment assignment.
 
         // Venue conflicts are checked by AvailabilityService using each venue's schedule.
-        if (!empty($venue)) {
+        $venueParticipants = [];
+        $capacityExceptions = [];
+        if (!empty($venue) && FacilityRequest::capacityRulesEnabled()) {
+            // D2: each venue is a separate booking with its own participant count. A venue
+            // smaller than that count needs a capacity exception the Supply Office approves.
+            $participants = (int) $validated['expected_participants'];
+            $capacityErrors = [];
+            foreach (array_values($venue) as $venueName) {
+                $count = (int) ($request->input("venue_participants.{$venueName}") ?: $participants);
+                if ($count > $participants) {
+                    $capacityErrors["venue_participants.{$venueName}"] = "{$venueName}: participants at this venue cannot be more than the {$participants} expected in total.";
+                    continue;
+                }
+                $venueParticipants[$venueName] = $count;
+
+                $capacity = \App\Models\Venue::where('name', $venueName)->value('capacity');
+                if ($capacity !== null && $count > (int) $capacity) {
+                    $reason = trim((string) $request->input("capacity_exceptions.{$venueName}", ''));
+                    if ($reason === '') {
+                        $capacityErrors["venue_participants.{$venueName}"] = "{$venueName} holds {$capacity} people, fewer than the {$count} you entered. Lower the participants at this venue, choose another venue, or request a capacity exception with a reason.";
+                        continue;
+                    }
+                    $capacityExceptions[$venueName] = $reason;
+                }
+            }
+            if ($capacityErrors !== []) {
+                return back()->withErrors($capacityErrors)->withInput();
+            }
+            if ($capacityExceptions !== []) {
+                $capacityWarning = 'Capacity exception requested for ' . implode('; ', array_map(
+                    fn ($name, $reason) => "{$name} ({$venueParticipants[$name]} participants): {$reason}",
+                    array_keys($capacityExceptions),
+                    $capacityExceptions,
+                )) . '. The Supply Office must approve it.';
+            }
+        } elseif (!empty($venue)) {
             // ✅ CHECK VENUE CAPACITY
             $participants = (int) $validated['expected_participants'];
             $selectedVenues = array_values($venue);
@@ -1828,6 +1868,13 @@ class RequestorController extends Controller
             'e_signature_file'         => $eSignatureFileName,
             'document_metadata'        => $documentMetadata,
         ];
+        if (FacilityRequest::capacityRulesEnabled()) {
+            $requestAttributes += [
+                'venue_participants'        => $venueParticipants ?: null,
+                'capacity_exceptions'       => $capacityExceptions ?: null,
+                'capacity_exception_status' => $capacityExceptions !== [] ? 'pending' : null,
+            ];
+        }
 
         $knownEquipmentNames = Equipment::query()
             ->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(name)'), array_map('strtolower', array_keys($quantities)))

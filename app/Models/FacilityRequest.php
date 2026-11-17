@@ -33,6 +33,8 @@ class FacilityRequest extends Model
         'activity_proposal_file', 'igp_receipt_file', 'e_signature_file', 'document_metadata',
         'venue_approval_signature_file', 'equipment_approval_signature_file', 'final_approval_signature_file',
         'final_approval_signature',
+        'venue_participants', 'capacity_exceptions', 'capacity_exception_status',
+        'capacity_exception_reviewed_by_id', 'capacity_exception_reviewed_at',
     ];
 
     protected static function booted(): void
@@ -52,6 +54,9 @@ class FacilityRequest extends Model
         'venue'                        => 'array',
         'equipment'                    => 'array',
         'equipment_quantities'         => 'array',
+        'venue_participants'           => 'array',
+        'capacity_exceptions'          => 'array',
+        'capacity_exception_reviewed_at' => 'datetime',
         'approved_date'                => 'datetime',
         'supply_office_reviewed_at'    => 'datetime',
         'cancellation_requested_at'    => 'datetime',
@@ -292,6 +297,28 @@ class FacilityRequest extends Model
                     );
                 }
             });
+    }
+
+    private static ?bool $capacityRuleColumns = null;
+
+    /** D2 capacity rules are active once their migration has run. */
+    public static function capacityRulesEnabled(): bool
+    {
+        return self::$capacityRuleColumns ??= \Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'capacity_exception_status');
+    }
+
+    /** True while a capacity exception is waiting for the Supply Office. */
+    public function hasPendingCapacityException(): bool
+    {
+        return ($this->capacity_exception_status ?? null) === 'pending' && ! empty($this->capacity_exceptions);
+    }
+
+    /** Participants booked for one venue; falls back to the request total. */
+    public function participantsForVenue(string $venueName): int
+    {
+        $perVenue = (array) ($this->venue_participants ?? []);
+
+        return (int) ($perVenue[$venueName] ?? $this->expected_participants ?? 0);
     }
 
     private static ?bool $historyAuditColumns = null;

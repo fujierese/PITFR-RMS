@@ -271,7 +271,7 @@ class PerVenueSchedulingTest extends TestCase
         ]);
     }
 
-    public function test_submission_warns_when_participants_exceed_any_selected_venue_capacity(): void
+    public function test_over_capacity_venue_is_blocked_unless_an_exception_is_requested(): void
     {
         $requestor = User::factory()->create([
             'role' => 'requestor',
@@ -281,42 +281,35 @@ class PerVenueSchedulingTest extends TestCase
         Venue::where('name', 'Test Hall')->update(['capacity' => 50]);
 
         $date = now()->addDays(5)->toDateString();
-        $response = $this->actingAs($requestor)->post(route('requestor.store'), [
+        $payload = [
             'department' => 'Test Department',
             'request_context' => 'personal',
             'name_of_activity' => 'Over Capacity Booking',
-            'purpose' => 'Capacity warning test',
+            'purpose' => 'Capacity rule test',
             'expected_participants' => 60,
             'venue' => ['Test Hall', 'Test Court'],
             'venue_schedules' => [
-                'Test Hall' => [
-                    'start_date' => $date,
-                    'end_date' => $date,
-                    'start_time' => '08:00',
-                    'end_time' => '10:00',
-                    'reservation_duration' => 'specific_time',
-                ],
-                'Test Court' => [
-                    'start_date' => $date,
-                    'end_date' => $date,
-                    'start_time' => '08:00',
-                    'end_time' => '10:00',
-                    'reservation_duration' => 'specific_time',
-                ],
+                'Test Hall' => ['start_date' => $date, 'end_date' => $date, 'start_time' => '08:00', 'end_time' => '10:00', 'reservation_duration' => 'specific_time'],
+                'Test Court' => ['start_date' => $date, 'end_date' => $date, 'start_time' => '08:00', 'end_time' => '10:00', 'reservation_duration' => 'specific_time'],
             ],
-            'e_signature_file' => UploadedFile::fake()->create('signature.png', 100, 'image/png'),
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
-        ]);
+        ];
 
-        $response->assertSessionHas('warning', function (string $warning): bool {
-            return str_contains($warning, '60 participants')
-                && str_contains($warning, 'Test Hall (maximum 50)')
-                && ! str_contains($warning, 'Test Court');
-        });
+        // D2: a venue smaller than its participant count is blocked.
+        $this->actingAs($requestor)->post(route('requestor.store'), $payload)
+            ->assertSessionHasErrors('venue_participants.Test Hall');
+        $this->assertDatabaseMissing('facility_requests', ['name_of_activity' => 'Over Capacity Booking']);
+
+        // With a reason it goes through as a capacity exception for the Supply Office.
+        $payload['capacity_exceptions'] = ['Test Hall' => 'Seated in two shifts.'];
+        $payload['activity_proposal_file'] = UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf');
+        $this->actingAs($requestor)->post(route('requestor.store'), $payload)
+            ->assertSessionHas('warning', fn (string $warning): bool => str_contains($warning, 'Capacity exception requested for Test Hall')
+                && ! str_contains($warning, 'Test Court'));
         $this->assertDatabaseHas('facility_requests', [
             'requested_by_id' => $requestor->id,
             'name_of_activity' => 'Over Capacity Booking',
-            'expected_participants' => 60,
+            'capacity_exception_status' => 'pending',
         ]);
     }
 

@@ -1074,6 +1074,21 @@
                                             Urgent memo/proposal reviewed
                                         </label>
                                     @endif
+                                    @if($request->hasPendingCapacityException())
+                                        <div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                            <p class="font-semibold">Capacity exception requested</p>
+                                            <ul class="mt-1 list-disc pl-5">
+                                                @foreach((array) $request->capacity_exceptions as $exceptionVenue => $exceptionReason)
+                                                    <li>{{ $exceptionVenue }}: {{ $request->participantsForVenue($exceptionVenue) }} participants (capacity {{ \App\Models\Venue::where('name', $exceptionVenue)->value('capacity') ?? '—' }}). Reason: {{ $exceptionReason }}</li>
+                                                @endforeach
+                                            </ul>
+                                            <label class="mt-2 flex items-center gap-2 font-medium">
+                                                <input type="checkbox" name="capacity_exception_approved" value="1" required class="rounded border-amber-400">
+                                                Approve the capacity exception
+                                            </label>
+                                            <p class="mt-1 text-xs">To refuse it, mark the request unavailable so the requestor chooses another venue.</p>
+                                        </div>
+                                    @endif
                                     <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 text-white px-5 py-3 text-sm font-semibold hover:bg-emerald-700">
                                         Confirm Availability
                                     </button>

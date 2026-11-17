@@ -195,6 +195,22 @@ class SupplyOfficeController extends Controller
                         $facilityRequest->urgent_document_status = 'validated';
                     }
 
+                    // D2: a venue below its participant count needs an explicit, recorded approval.
+                    $approvedCapacityException = false;
+                    if ($facilityRequest->hasPendingCapacityException()) {
+                        $request->validate(
+                            ['capacity_exception_approved' => ['required', 'accepted']],
+                            [
+                                'capacity_exception_approved.required' => 'Approve the capacity exception, or mark the request unavailable so the requestor chooses another venue.',
+                                'capacity_exception_approved.accepted' => 'Approve the capacity exception, or mark the request unavailable so the requestor chooses another venue.',
+                            ]
+                        );
+                        $facilityRequest->capacity_exception_status = 'approved';
+                        $facilityRequest->capacity_exception_reviewed_by_id = $user->getKey();
+                        $facilityRequest->capacity_exception_reviewed_at = now();
+                        $approvedCapacityException = true;
+                    }
+
                     $facilityRequest->supply_office_review_status = 'confirmed';
                     if ($facilityRequest->requester?->isOutsider()) {
                         $facilityRequest->igp_payment_status = 'awaiting_payment';
@@ -209,7 +225,8 @@ class SupplyOfficeController extends Controller
                         'Availability confirmed by ' . $user->name . ', Supply Office Staff' . "\n"
                             . $confirmedAt . "\n"
                             . 'Validation: No approved booking or active scheduling conflict found'
-                            . ($facilityRequest->is_emergency ? "\nUrgent supporting document validated." : ''),
+                            . ($facilityRequest->is_emergency ? "\nUrgent supporting document validated." : '')
+                            . ($approvedCapacityException ? "\nCapacity exception approved for: " . implode(', ', array_keys((array) $facilityRequest->capacity_exceptions)) . '.' : ''),
                         $user->getKey()
                     );
 
@@ -217,6 +234,11 @@ class SupplyOfficeController extends Controller
                 }
 
                 $notes = trim((string) $validated['notes']);
+                if ($facilityRequest->hasPendingCapacityException()) {
+                    $facilityRequest->capacity_exception_status = 'rejected';
+                    $facilityRequest->capacity_exception_reviewed_by_id = $user->getKey();
+                    $facilityRequest->capacity_exception_reviewed_at = now();
+                }
                 $facilityRequest->supply_office_review_status = 'unavailable';
                 $facilityRequest->supply_office_review_notes = $notes;
                 $facilityRequest->supply_office_reviewed_by_id = $user->getKey();

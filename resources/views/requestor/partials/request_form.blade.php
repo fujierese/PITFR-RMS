@@ -275,6 +275,7 @@
                             @endif
                     <div class="mt-4 space-y-3">
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            @php $capacityRulesEnabled = \App\Models\FacilityRequest::capacityRulesEnabled(); @endphp
                             @foreach($venueOptions as $v)
                                 @php
                                     $venueCapacity = $venueCapacityMap[$v] ?? null;
@@ -286,7 +287,7 @@
                                         'select' => 1,
                                     ]));
                                 @endphp
-                                <div class="venue-option rounded-2xl border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 {{ $isVenueSelected ? 'border-emerald-500 bg-emerald-50 shadow-sm' : '' }}" data-venue-option data-venue-name="{{ $v }}">
+                                <div class="venue-option rounded-2xl border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 {{ $isVenueSelected ? 'border-emerald-500 bg-emerald-50 shadow-sm' : '' }}" data-venue-option data-venue-name="{{ $v }}" data-venue-capacity="{{ $venueCapacity ?? '' }}">
                                     <label class="flex cursor-pointer items-start gap-3">
                                         <input type="checkbox" name="venue[]" value="{{ $v }}"
                                                {{ $isVenueSelected ? 'checked' : '' }}
@@ -295,6 +296,23 @@
                                         <span class="shrink-0 text-xs text-slate-500">{{ $venueCapacity !== null ? $venueCapacity . ' people' : 'Capacity not set' }}</span>
                                         <span class="venue-checkmark {{ $isVenueSelected ? '' : 'hidden' }} text-emerald-600">✓</span>
                                     </label>
+                                    @if ($capacityRulesEnabled)
+                                        {{-- D2: each venue is its own booking with its own participant count. --}}
+                                        <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                                            <label for="venue_participants_{{ $loop->index }}">Participants at this venue</label>
+                                            <input id="venue_participants_{{ $loop->index }}" type="number" min="1" inputmode="numeric" name="venue_participants[{{ $v }}]" value="{{ old('venue_participants', [])[$v] ?? '' }}" data-venue-participants class="w-24 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800">
+                                        </div>
+                                        <p class="mt-2 hidden rounded-lg bg-slate-100 px-2 py-1.5 text-xs font-medium text-slate-600" data-capacity-block></p>
+                                        <div class="mt-2 hidden" data-capacity-exception>
+                                            <button type="button" class="text-xs font-semibold text-amber-700 underline" data-capacity-exception-toggle>Need this venue anyway? Request a capacity exception</button>
+                                            <div class="mt-2 hidden" data-capacity-exception-fields>
+                                                <label for="capacity_exception_{{ $loop->index }}" class="text-xs font-semibold text-slate-600">Reason for the exception</label>
+                                                <textarea id="capacity_exception_{{ $loop->index }}" name="capacity_exceptions[{{ $v }}]" rows="2" maxlength="500" data-capacity-exception-reason class="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm text-slate-800" placeholder="e.g. Only part of the group is inside at one time">{{ old('capacity_exceptions', [])[$v] ?? '' }}</textarea>
+                                                <p class="mt-1 text-xs text-amber-700">The Supply Office must approve this exception.</p>
+                                            </div>
+                                        </div>
+                                        @error('venue_participants.' . $v)<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
+                                    @endif
                                     <div class="venue-schedule mt-4 {{ $isVenueSelected ? '' : 'hidden' }}" data-venue-schedule data-venue-name="{{ $v }}">
                                         <div class="mb-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3">
                                             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Reservation Schedule</p>
@@ -859,6 +877,10 @@
             const venueDetails = exceededVenues
                 .map(({ name, capacity }) => `${name} (maximum ${capacity})`)
                 .join(', ');
+            if (form.querySelector('[data-venue-participants]')) {
+                capacityWarningBanner.classList.add('hidden');
+                return; // D2 rules handle capacity per venue.
+            }
             capacityWarningBanner.textContent = `The expected ${participants} participants exceed the capacity of: ${venueDetails}. You may still submit the request, but the Supply Office will need to review it.`;
             capacityWarningBanner.classList.remove('hidden');
         };
@@ -874,6 +896,74 @@
         document.addEventListener('DOMContentLoaded', initializeVenueCapacityWarning, { once: true });
     } else {
         initializeVenueCapacityWarning();
+    }
+
+    // D2: a venue whose capacity is below its participant count cannot be selected
+    // unless the requestor asks for a capacity exception with a reason.
+    const initializeVenueCapacityRules = () => {
+        const form = document.getElementById('request-form');
+        const totalInput = form?.querySelector('[name="expected_participants"]');
+        if (!form || !totalInput || !form.querySelector('[data-venue-participants]')) return;
+
+        const cards = [...form.querySelectorAll('[data-venue-option]')];
+        const update = () => {
+            const total = Number(totalInput.value);
+            cards.forEach((card) => {
+                const checkbox = card.querySelector('input[name="venue[]"]');
+                const participantsInput = card.querySelector('[data-venue-participants]');
+                const block = card.querySelector('[data-capacity-block]');
+                const exception = card.querySelector('[data-capacity-exception]');
+                const reason = card.querySelector('[data-capacity-exception-reason]');
+                if (!checkbox || !participantsInput) return;
+
+                if (!participantsInput.dataset.userEdited) {
+                    participantsInput.value = Number.isInteger(total) && total > 0 ? total : '';
+                }
+                participantsInput.max = Number.isInteger(total) && total > 0 ? total : '';
+
+                const capacity = Number(card.dataset.venueCapacity);
+                const count = Number(participantsInput.value || total);
+                const overCapacity = Number.isFinite(capacity) && capacity > 0 && Number.isInteger(count) && count > capacity;
+                const hasReason = (reason?.value || '').trim() !== '';
+
+                card.classList.toggle('opacity-60', overCapacity && !hasReason);
+                block?.classList.toggle('hidden', !overCapacity);
+                exception?.classList.toggle('hidden', !overCapacity);
+                if (block && overCapacity) {
+                    block.textContent = `Capacity ${capacity} — below the ${count} participants at this venue. Lower the number if your group is split across venues, or choose another venue.`;
+                }
+                const blocked = overCapacity && !hasReason;
+                checkbox.disabled = blocked;
+                if (blocked && checkbox.checked) {
+                    checkbox.checked = false;
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+        };
+
+        totalInput.addEventListener('input', update);
+        cards.forEach((card) => {
+            const participantsInput = card.querySelector('[data-venue-participants]');
+            participantsInput?.addEventListener('input', () => {
+                participantsInput.dataset.userEdited = '1';
+                update();
+            });
+            if (participantsInput?.value) participantsInput.dataset.userEdited = '1';
+            card.querySelector('[data-capacity-exception-toggle]')?.addEventListener('click', () => {
+                card.querySelector('[data-capacity-exception-fields]')?.classList.remove('hidden');
+                card.querySelector('[data-capacity-exception-reason]')?.focus();
+            });
+            const reason = card.querySelector('[data-capacity-exception-reason]');
+            if (reason?.value.trim()) card.querySelector('[data-capacity-exception-fields]')?.classList.remove('hidden');
+            reason?.addEventListener('input', update);
+        });
+        update();
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeVenueCapacityRules, { once: true });
+    } else {
+        initializeVenueCapacityRules();
     }
 
     document.addEventListener('DOMContentLoaded', function () {
