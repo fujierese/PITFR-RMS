@@ -219,7 +219,7 @@ class Phase7AdminSearchPrintingTest extends TestCase
     }
 
     /** @test */
-    public function print_form_displays_e_signature_when_present(): void
+    public function print_form_shows_a_blank_line_for_the_handwritten_requestor_signature(): void
     {
         Storage::disk('local')->put(
             'documents/e_signature/test_signature_001.png',
@@ -235,14 +235,15 @@ class Phase7AdminSearchPrintingTest extends TestCase
         $response = $this->get(route('request.print', $this->approvedRequest->id));
 
         $response->assertStatus(200);
-        $response->assertSee('data:image/png;base64,', false);
+        // Legacy signature images are never printed; the requestor signs by hand (decision D1).
+        $response->assertDontSee('data:image/png;base64,', false);
         $response->assertDontSee(route('request.signature', ['id' => $this->approvedRequest->id]), false);
         $response->assertDontSee('/storage/documents/e_signature/', false);
         $response->assertDontSee('Electronic Signature', false);
-        $response->assertDontSee('Signature over printed name', false);
+        $response->assertSee('Signature over printed name', false);
         $response->assertSee('text-align: center', false);
         $response->assertSee(asset('images/TUVNORD-Logo.png'), false);
-        $response->assertSee('Signature ID: ES-' . $this->approvedRequest->id . '-20260814092635', false);
+        $response->assertDontSee('Signature ID:', false);
     }
 
     public function test_print_layout_combines_schedule_and_resource_rows_and_removes_header_status(): void
@@ -287,12 +288,12 @@ class Phase7AdminSearchPrintingTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('request.print', $this->approvedRequest->id))
             ->assertOk()
-            ->assertSee('data:image/png;base64,', false)
+            ->assertDontSee('data:image/png;base64,', false)
             ->assertDontSee('/approval-signature/', false)
             ->assertSee('Approved By (Supply Office)')
-            ->assertSee('Venue custodian e-signature')
-            ->assertSee('Equipment custodian e-signature')
-            ->assertSee('Supply Office e-signature');
+            ->assertSee('Digital Approval Records')
+            ->assertSee('by Venue Custodian')
+            ->assertSee('by Supply Office');
     }
 
     public function test_print_form_includes_each_equipment_custodian_signature(): void
@@ -322,9 +323,11 @@ class Phase7AdminSearchPrintingTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('request.print', $this->approvedRequest->id))
             ->assertOk()
-            ->assertSee('Equipment Custodian One')
-            ->assertSee('Equipment Custodian Two')
-            ->assertSee('data:image/png;base64,', false);
+            ->assertDontSee('Equipment Custodian One')
+            ->assertDontSee('Equipment Custodian Two')
+            ->assertSee('Oct 20, 2026 9:00 AM')
+            ->assertSee('Oct 20, 2026 10:00 AM')
+            ->assertDontSee('data:image/png;base64,', false);
     }
 
     /** @test */

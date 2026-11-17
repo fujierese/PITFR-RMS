@@ -29,8 +29,6 @@
     $isStudent = $effectiveRequestorType === 'student';
     $isFaculty = $effectiveRequestorType === 'faculty' || ($currentUser?->role ?? null) === 'faculty';
     $isExternal = in_array($effectiveRequestorType, ['outsider'], true);
-    $hasSavedSignature = (bool) ($currentUser?->e_signature_file
-        && \Illuminate\Support\Facades\Storage::disk('local')->exists('documents/e_signature/users/' . $currentUser->e_signature_file));
     $selectedCollegeId = old('college_id', $profileCollegeId ?? null);
     $selectedDepartmentId = old('department_id', $profileDepartmentId ?? null);
     $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
@@ -61,7 +59,7 @@
     }
 </style>
 
-<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="Submit this request?" data-swal-text="Please confirm that the request details are complete and correct." data-swal-icon="question" data-swal-confirm-text="Yes, submit request" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-venue-availability-url="{{ route('requestor.venue.availability') }}" data-draft-owner-id="{{ $currentUser?->id ?? '' }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-can-request-urgent="{{ $isExternal ? '0' : '1' }}" data-urgent-timezone="{{ config('app.timezone') }}" data-has-saved-signature="{{ $hasSavedSignature ? '1' : '0' }}" data-venue-capacities="{{ json_encode($venueCapacityMap ?? []) }}" data-venue-default-equipment="{{ json_encode($venueDefaultEquipmentMap ?? []) }}">
+<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="Submit this request?" data-swal-text="Please confirm that the request details are complete and correct." data-swal-icon="question" data-swal-confirm-text="Yes, submit request" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-venue-availability-url="{{ route('requestor.venue.availability') }}" data-draft-owner-id="{{ $currentUser?->id ?? '' }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-can-request-urgent="{{ $isExternal ? '0' : '1' }}" data-urgent-timezone="{{ config('app.timezone') }}" data-venue-capacities="{{ json_encode($venueCapacityMap ?? []) }}" data-venue-default-equipment="{{ json_encode($venueDefaultEquipmentMap ?? []) }}">
     @csrf
 
 <div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]">
@@ -743,40 +741,9 @@
                             </div>
                         @endif
 
-                        {{-- E-Signature (Required for all) --}}
-                        <div class="rounded-[24px] border border-emerald-200 bg-emerald-50 p-4">
-                            <div class="mb-4 border-b border-emerald-200 pb-3">
-                                <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">Section V. E-Signature</p>
-                                <p class="mt-2 text-sm font-semibold text-emerald-800">Saved E-Signature Status <span class="required-asterisk">*</span></p>
-                                <p class="mt-1 text-xs text-emerald-700">Your e-signature is taken from your Account Settings and will appear on the official request form for administrative records.</p>
-                            </div>
-
-                            <div class="rounded-2xl border border-emerald-200 bg-white p-4">
-                                @if($hasSavedSignature)
-                                    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                        <div class="flex items-center gap-3">
-                                            <img src="{{ route('user.signature', ['user' => $currentUser->id]) }}" alt="Saved e-signature" class="h-14 max-w-[220px] rounded-lg border border-slate-200 bg-white object-contain p-2 shadow-sm">
-                                            <div>
-                                                <p class="text-sm font-semibold text-emerald-800">Using your saved signature</p>
-                                                <p class="text-xs text-emerald-700">This will be applied automatically to the request form and printout.</p>
-                                            </div>
-                                        </div>
-                                        <a href="{{ route('requestor.settings') }}" data-preserve-request-draft class="inline-flex items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
-                                            Update in Account Settings
-                                        </a>
-                                    </div>
-                                @else
-                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                        <div>
-                                            <p class="text-sm font-semibold text-amber-700">No saved signature found</p>
-                                            <p class="text-xs text-slate-600">Please upload your signature in Account Settings before submitting or printing this request.</p>
-                                        </div>
-                                        <a href="{{ route('requestor.settings') }}" data-preserve-request-draft class="inline-flex items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100">
-                                            Go to Account Settings
-                                        </a>
-                                    </div>
-                                @endif
-                            </div>
+                        <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section V. Signature</p>
+                            <p class="mt-2 text-sm text-slate-600">No signature upload is needed. Sign the printed request form by hand. Custodian and Supply Office approvals are recorded in the system under their accounts.</p>
                         </div>
                     </div>
                 </section>
@@ -804,12 +771,6 @@
                             <input id="checklist-document-upload" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
                             <button type="button" data-checklist-target="checklist-document-upload" class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
                                 <span id="checklist-document-label">Supporting documents uploaded</span>
-                            </button>
-                        </div>
-                        <div class="flex items-start gap-3">
-                            <input id="checklist-e-signature" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
-                            <button type="button" data-checklist-target="checklist-e-signature" class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
-                                Saved e-signature available
                             </button>
                         </div>
                     </div>
@@ -1003,8 +964,7 @@
         // File input change handlers for preview
         const fileInputs = [
             { id: 'activity_proposal_file', previewId: 'activity-proposal-preview', nameId: 'activity-proposal-name' },
-            { id: 'igp_receipt_file', previewId: 'igp-receipt-preview', nameId: 'igp-receipt-name' },
-            { id: 'e_signature_file', previewId: 'e-signature-preview', nameId: 'e-signature-name' }
+            { id: 'igp_receipt_file', previewId: 'igp-receipt-preview', nameId: 'igp-receipt-name' }
         ];
 
         const showInlineFileValidation = (input, message) => {
@@ -1637,7 +1597,6 @@
         const checklistRequiredFields = document.getElementById('checklist-required-fields');
         const checklistVenueAvailability = document.getElementById('checklist-venue-availability');
         const checklistDocumentUpload = document.getElementById('checklist-document-upload');
-        const checklistESignature = document.getElementById('checklist-e-signature');
 
         const isChecklistFieldComplete = (field) => {
             if (!field) return true;
@@ -1707,14 +1666,6 @@
                 return null;
             }
 
-            if (checklistId === 'checklist-e-signature') {
-                const eSignatureInput = form.querySelector('[name="e_signature_file"]');
-                if (eSignatureInput && !(eSignatureInput.files?.length || form.dataset.hasSavedSignature === '1')) {
-                    return eSignatureInput;
-                }
-                return null;
-            }
-
             return null;
         };
 
@@ -1771,7 +1722,6 @@
             const activityProposalFile = form.querySelector('[name="activity_proposal_file"]')?.files?.length > 0;
             const proposalFile = form.querySelector('[name="proposal_file"]')?.files?.length > 0;
             const igpReceiptFile = form.querySelector('[name="igp_receipt_file"]')?.files?.length > 0;
-            const eSignatureFile = form.querySelector('[name="e_signature_file"]')?.files?.length > 0 || form.dataset.hasSavedSignature === '1';
             const hasSupportingDocument = isStudent && requestContext === 'student_organization'
                 ? (activityProposalFile || proposalFile)
                 : (isStudent || requestorType === 'faculty') && !requestContext
@@ -1794,9 +1744,6 @@
                 checklistDocumentUpload.checked = hasSupportingDocument;
             }
 
-            if (checklistESignature) {
-                checklistESignature.checked = eSignatureFile;
-            }
         };
 
         const venueSelectionState = () => {

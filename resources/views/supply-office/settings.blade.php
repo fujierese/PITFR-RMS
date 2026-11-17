@@ -3,7 +3,7 @@
 @section('content')
     @include('settings.account', [
         'settingsRoute' => request()->routeIs('admin.*') ? 'admin.settings' : 'supply-office.settings',
-        'showSignature' => true,
+        'showSignature' => false, // Signature upload hidden (APR-01); set to true to bring it back.
         'showOrganization' => false,
         'isAdmin' => true,
     ])

@@ -101,10 +101,9 @@ class RequestFormFeedbackTest extends TestCase
             'requestorType' => 'outsider',
         ])->render();
 
-        $this->assertStringContainsString('data-has-saved-signature="1"', $html);
         $this->assertStringContainsString('name="requested_by_position" value="External Partner"', $html);
-        $this->assertStringContainsString('alt="Saved e-signature"', $html);
-        $this->assertStringContainsString('Saved e-signature available', $html);
+        $this->assertStringContainsString('No signature upload is needed', $html);
+        $this->assertStringNotContainsString('Saved e-signature available', $html);
         $this->assertMatchesRegularExpression('/<div class="venue-schedule mt-4 hidden" data-venue-schedule data-venue-name="Gymnasium">/', $html);
         $this->assertStringContainsString('data-venue-equipment-group data-venue-name="Gymnasium"', $html);
         $this->assertStringContainsString('Equipment by Venue', $html);
@@ -256,7 +255,7 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringContainsString('data-checklist-target="checklist-required-fields"', $html);
         $this->assertStringContainsString('data-checklist-target="checklist-venue-availability"', $html);
         $this->assertStringContainsString('data-checklist-target="checklist-document-upload"', $html);
-        $this->assertStringContainsString('data-checklist-target="checklist-e-signature"', $html);
+        $this->assertStringNotContainsString('data-checklist-target="checklist-e-signature"', $html);
     }
 
     public function test_external_request_form_uses_consistent_igp_receipt_upload_ui(): void

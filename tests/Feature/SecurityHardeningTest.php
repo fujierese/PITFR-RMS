@@ -211,7 +211,7 @@ class SecurityHardeningTest extends TestCase
 
         $this->get(route('request.print', $request))
             ->assertOk()
-            ->assertSee('data:image/png;base64,', false)
+            ->assertDontSee('data:image/png;base64,', false)
             ->assertDontSee(route('request.signature', ['id' => $request->id]));
     }
 

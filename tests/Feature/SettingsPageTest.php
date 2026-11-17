@@ -30,7 +30,7 @@ class SettingsPageTest extends TestCase
         $response->assertSee('Update Password');
         $response->assertSee('Notifications');
         $response->assertSee('Office / Organization');
-        $response->assertSee('E-signature Management');
+        $response->assertDontSee('E-signature Management');
         $response->assertDontSee('Account Security');
     }
 
@@ -79,6 +79,7 @@ class SettingsPageTest extends TestCase
 
     public function test_signature_validation_is_shown_next_to_the_upload_field(): void
     {
+        $this->markTestSkipped('The e-signature upload section is hidden (issue APR-01). Re-enable with showSignature in the settings views.');
         $admin = User::factory()->create(['role' => 'admin']);
 
         $response = $this->followingRedirects()->actingAs($admin)
@@ -106,19 +107,19 @@ class SettingsPageTest extends TestCase
         $response->assertOk();
         $response->assertSee('Registered College');
         $response->assertSee('Registered Department');
-        $response->assertSee('E-signature Management');
+        $response->assertDontSee('E-signature Management');
         $response->assertSee('Notifications');
         $response->assertSee('Account settings sections');
         $response->assertSee('background-color: #0f172a; background-image: linear-gradient(135deg', false);
         $response->assertSee('href="#profile"', false);
         $response->assertSee('href="#notifications"', false);
-        $response->assertSee('href="#signature"', false);
+        $response->assertDontSee('href="#signature"', false);
         $response->assertSee('href="#security"', false);
         $response->assertSee('id="settings_contact_number"', false);
         $response->assertSee('for="settings_contact_number"', false);
         $response->assertSee('style="background-color: #047857; color: #ffffff;"', false);
         $response->assertSee('Save Preferences');
-        $response->assertSee('href="https://signaturely.com/online-signature/draw/" target="_blank" rel="noopener noreferrer"', false);
+        $response->assertDontSee('href="https://signaturely.com/online-signature/draw/" target="_blank" rel="noopener noreferrer"', false);
     }
 
     public function test_requestor_cannot_change_department_through_profile_settings(): void
@@ -152,7 +153,7 @@ class SettingsPageTest extends TestCase
         $response = $this->actingAs($custodian)->get(route('custodian.settings'));
 
         $response->assertOk();
-        $response->assertSee('E-signature Management');
+        $response->assertDontSee('E-signature Management');
         $response->assertSee('Account Security');
         $response->assertDontSee('Registered College');
     }
@@ -252,7 +253,7 @@ class SettingsPageTest extends TestCase
         $response = $this->actingAs($custodian)->get(route('custodian.settings'));
 
         $response->assertOk();
-        $response->assertSee('E-signature Management');
+        $response->assertDontSee('E-signature Management');
         $response->assertDontSee('Registered Department');
     }
 
@@ -265,6 +266,6 @@ class SettingsPageTest extends TestCase
         $response->assertOk();
         $response->assertDontSee('Administrative account security');
         $response->assertSee('Notifications');
-        $response->assertSee('E-signature Management');
+        $response->assertDontSee('E-signature Management');
     }
 }

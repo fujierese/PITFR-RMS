@@ -1272,7 +1272,6 @@ class RequestorController extends Controller
         $hasDepartmentDirectory = College::query()->exists() && Department::query()->exists();
         $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
 
-        $hasSavedSignature = (bool) ($user->e_signature_file && Storage::disk('local')->exists('documents/e_signature/users/' . $user->e_signature_file));
         $activeVenueNames = Venue::query()->where('is_active', true)->pluck('name')->all();
 
         $profileCollegeId = $user->college_id ?? null;
@@ -1326,9 +1325,6 @@ class RequestorController extends Controller
             'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
             'emergency_office' => ['required_if:is_emergency,1', 'nullable', Rule::in(['CHED', 'OP', 'OVP'])],
             'is_emergency'          => 'nullable|boolean',
-            'e_signature_file'      => $hasSavedSignature
-                ? 'nullable|file|mimes:jpeg,jpg,png|max:10240'
-                : 'required|file|mimes:jpeg,jpg,png|max:10240',
         ];
 
         if (in_array($user->requestor_type, ['student', 'faculty'], true)) {
@@ -1482,11 +1478,6 @@ class RequestorController extends Controller
                     ->withErrors(['is_emergency' => 'Urgent reservations must start at the current time or later.'])
                     ->withInput();
             }
-        }
-
-        $hasSavedSignature = (bool) ($user->e_signature_file && Storage::disk('local')->exists('documents/e_signature/users/' . $user->e_signature_file));
-        if (! $request->hasFile('e_signature_file') && ! $hasSavedSignature) {
-            return back()->withErrors(['e_signature_file' => 'The e signature file field is required.'])->withInput();
         }
 
         if ($user->isStudent()) {
@@ -1751,36 +1742,8 @@ class RequestorController extends Controller
             }
         }
 
-        // Handle e-signature upload or private snapshot from the saved account signature.
-        if ($request->hasFile('e_signature_file')) {
-            $file = $request->file('e_signature_file');
-            $result = $documentUploadService->uploadDocument($file, 'e_signature', $controlNumber);
-            if ($result['success']) {
-                $eSignatureFileName = $result['filename'];
-                $documentMetadata['e_signature'] = [
-                    'uploaded_at' => now()->toDateTimeString(),
-                    'original_name' => $file->getClientOriginalName(),
-                    'source' => 'request_upload',
-                ];
-            } else {
-                return back()->withErrors(['e_signature_file' => $result['error']])->withInput();
-            }
-        } elseif ($user->e_signature_file) {
-            $savedSignaturePath = 'documents/e_signature/users/' . $user->e_signature_file;
-            if (Storage::disk('local')->exists($savedSignaturePath)) {
-                $sourcePath = Storage::disk('local')->path($savedSignaturePath);
-                $extension = strtolower(pathinfo($user->e_signature_file, PATHINFO_EXTENSION) ?: 'png');
-                $snapshotFilename = $controlNumber . '_request_signature_' . now()->format('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
-                Storage::disk('local')->makeDirectory('documents/e_signature');
-                Storage::disk('local')->put('documents/e_signature/' . $snapshotFilename, file_get_contents($sourcePath));
-                $eSignatureFileName = $snapshotFilename;
-                $documentMetadata['e_signature'] = [
-                    'uploaded_at' => now()->toDateTimeString(),
-                    'original_name' => $user->e_signature_file,
-                    'source' => 'saved_account_signature',
-                ];
-            }
-        }
+        // No signature image is collected: the requestor signs the printed form by hand,
+        // and approvals are recorded against each approver's account (issue APR-01, decision D1).
 
         // ✅ DO NOT call $eq->reserve() here — reservation happens on approval
 
@@ -2009,71 +1972,56 @@ class RequestorController extends Controller
         $request = FacilityRequest::findOrFail($id);
         $this->authorize('print', $request);
 
-        $signatureTimestamp = data_get($request->document_metadata, 'e_signature.uploaded_at');
-        $signatureTime = $signatureTimestamp
-            ? Carbon::parse($signatureTimestamp)
-            : $request->created_at;
-        $signatureSerial = $request->e_signature_file && $signatureTime
-            ? sprintf('ES-%d-%s', $request->id, $signatureTime->format('YmdHis'))
-            : null;
-
-        $approvalSignatures = [];
-        foreach ([
-            'venue' => 'venue_approval_signature_file',
-            'equipment' => 'equipment_approval_signature_file',
-            'final' => 'final_approval_signature_file',
-        ] as $stage => $signatureField) {
+        // Digital Approval Records (issue FRM-02, decision D3): role, scope, action,
+        // date and time and an approval reference. No signature images and no names.
+        $stageDefaults = [
+            'venue' => ['role' => 'Venue Custodian', 'action' => 'Endorsed'],
+            'equipment' => ['role' => 'Equipment Custodian', 'action' => 'Endorsed'],
+            'final' => ['role' => 'Supply Office', 'action' => 'Approved'],
+        ];
+        $approvalRecords = [];
+        foreach ($stageDefaults as $stage => $defaults) {
             $snapshots = $request->getStageApprovalSnapshots($stage);
-            if ($snapshots === []) {
+            $stageApproved = match ($stage) {
+                'venue' => $request->venue_status === 'approved',
+                'equipment' => $request->equipment_status === 'approved',
+                default => $request->status === 'approved',
+            };
+            if ($snapshots === [] && $stageApproved) {
+                // Older approvals recorded before approval snapshots existed.
+                $approvalDate = $request->getStageApprovalDate($stage);
                 $snapshots = [[
-                    'approver_name' => $request->getStageApproverName($stage),
-                    'approver_position' => $request->getStageApproverPosition($stage),
-                    'signature_file' => $request->{$signatureField},
-                    'time' => $request->getStageApprovalDate($stage)?->toISOString(),
+                    'request_id' => $request->id,
+                    'type' => $stage,
+                    'time' => $approvalDate?->toISOString(),
                 ]];
             }
 
-            $approvalSignatures[$stage] = array_map(function (array $snapshot) use ($request, $signatureField): array {
-                $filename = $snapshot['signature_file'] ?? $request->{$signatureField};
+            $approvalRecords[$stage] = array_map(function (array $snapshot) use ($request, $stage, $defaults): array {
+                $scope = match ($stage) {
+                    'venue' => implode(', ', $request->getVenueNames()),
+                    'equipment' => ! empty($snapshot['approver_id'])
+                        ? implode(', ', array_keys($request->getAssignedEquipmentForCustodian((int) $snapshot['approver_id'])))
+                        : '',
+                    default => 'Supply Office',
+                };
 
                 return [
-                    'name' => $snapshot['approver_name'] ?? 'Approver',
-                    'position' => $snapshot['approver_position'] ?? null,
-                    'date' => ! empty($snapshot['time']) ? Carbon::parse($snapshot['time'])->format('M j, Y') : null,
-                    'image' => $this->signatureDataUri($filename, 'documents/e_signature/approvals'),
+                    'role' => $defaults['role'],
+                    'scope' => $scope,
+                    'action' => $defaults['action'],
+                    'date' => ! empty($snapshot['time'])
+                        ? Carbon::parse($snapshot['time'])->timezone(config('app.timezone'))->format('M j, Y g:i A')
+                        : null,
+                    'reference' => FacilityRequest::approvalReference($snapshot),
                 ];
             }, $snapshots);
         }
 
         return view('request.print', [
             'request' => $request,
-            'signatureSerial' => $signatureSerial,
-            'requestorSignatureImage' => $this->signatureDataUri(
-                $request->e_signature_file,
-                'documents/e_signature'
-            ),
-            'approvalSignatures' => $approvalSignatures,
+            'approvalRecords' => $approvalRecords,
         ]);
-    }
-
-    private function signatureDataUri(?string $filename, string $directory): ?string
-    {
-        if (! $filename) {
-            return null;
-        }
-
-        $disk = Storage::disk('local');
-        $path = $directory . '/' . $filename;
-        if (! $disk->exists($path)) {
-            return null;
-        }
-
-        $mimeType = $disk->mimeType($path);
-        if (! in_array($mimeType, ['image/png', 'image/jpeg', 'image/gif', 'image/webp'], true)) {
-            return null;
-        }
-
-        return 'data:' . $mimeType . ';base64,' . base64_encode($disk->get($path));
     }
 
     public function proposal($id)

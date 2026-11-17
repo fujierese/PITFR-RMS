@@ -154,8 +154,8 @@ class FinalApprovalTest extends TestCase
         $request->refresh();
 
         $this->assertNotNull($request->final_approval_signature);
-        $this->assertNotNull($request->final_approval_signature_file);
-        $this->assertTrue(Storage::disk('local')->exists('documents/e_signature/approvals/' . $request->final_approval_signature_file));
+        // Account-based approval: no signature image is copied (APR-01).
+        $this->assertNull($request->final_approval_signature_file);
     }
 
     public function test_supply_office_queue_contains_only_requests_ready_for_final_approval(): void

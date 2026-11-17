@@ -221,9 +221,9 @@ class FacilityRequest extends Model
 
     public function recordApprovalSignature(string $approvalType, User $approver): void
     {
-        $signedFile = $approvalType === 'final'
-            ? $this->snapshotSignatureForRecord($approver, 'final')
-            : $this->snapshotSignatureForRecord($approver, $approvalType);
+        // Approvals are account-based: no signature image is copied (issue APR-01).
+        // Legacy records keep the image file they already reference.
+        $signedFile = null;
 
         if ($signedFile) {
             if ($approvalType === 'final') {
@@ -266,6 +266,22 @@ class FacilityRequest extends Model
 
         $this->approval_signature_meta = $meta;
         $this->save();
+    }
+
+    /**
+     * Short, stable reference for one recorded approval, printed on the form so a
+     * printed copy can be matched to the system record.
+     */
+    public static function approvalReference(array $snapshot): string
+    {
+        $basis = json_encode([
+            $snapshot['request_id'] ?? null,
+            $snapshot['approver_id'] ?? null,
+            $snapshot['type'] ?? null,
+            $snapshot['time'] ?? null,
+        ]);
+
+        return 'APR-' . strtoupper(substr(hash_hmac('sha256', (string) $basis, (string) config('app.key')), 0, 10));
     }
 
     public function snapshotSignatureForRecord(User $user, string $recordType): ?string

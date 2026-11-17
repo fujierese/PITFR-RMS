@@ -207,7 +207,7 @@ class RequestDocumentUploadTest extends TestCase
             ]);
     }
 
-    public function test_external_signature_is_required_but_receipt_is_not_required_before_availability(): void
+    public function test_no_signature_upload_is_required_to_submit(): void
     {
         $this->actingAs($this->externalUser);
 
@@ -224,31 +224,12 @@ class RequestDocumentUploadTest extends TestCase
             'equipment_quantities' => ['Tables' => 5],
         ]);
 
-        $response->assertSessionHasErrors('e_signature_file');
-        $this->assertDatabaseCount('facility_requests', 0);
-    }
-
-    public function test_all_requestors_require_e_signature(): void
-    {
-        $this->actingAs($this->studentUser);
-
-        $response = $this->post(route('requestor.store'), [
-            'department' => 'Computer Science',
-            'name_of_activity' => 'Tech Workshop',
-            'expected_participants' => 50,
-            'start_date' => now()->addDay()->toDateString(),
-            'end_date' => now()->addDay()->toDateString(),
-            'start_time' => '09:00',
-            'end_time' => '12:00',
-            'venue' => 'Conference Hall & Interaction Center (CHIC)',
-            'equipment' => ['Sound System'],
-            'equipment_quantities' => ['Sound System' => 1],
-            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
-            // Missing e_signature_file
+        // The requestor signs the printed form by hand (decision D1); no image is collected.
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('facility_requests', [
+            'requested_by_id' => $this->externalUser->id,
+            'e_signature_file' => null,
         ]);
-
-        $response->assertSessionHasErrors('e_signature_file');
-        $this->assertDatabaseCount('facility_requests', 0);
     }
 
     public function test_student_requires_both_documents(): void
@@ -268,7 +249,8 @@ class RequestDocumentUploadTest extends TestCase
             'equipment_quantities' => ['Sound System' => 1],
         ]);
 
-        $response->assertSessionHasErrors(['activity_proposal_file', 'e_signature_file']);
+        $response->assertSessionHasErrors('activity_proposal_file');
+        $response->assertSessionDoesntHaveErrors('e_signature_file');
         $this->assertDatabaseCount('facility_requests', 0);
     }
 
@@ -380,7 +362,7 @@ class RequestDocumentUploadTest extends TestCase
         $request = FacilityRequest::where('requested_by_id', $this->studentUser->id)->first();
         $this->assertNotNull($request);
         $this->assertNotNull($request->activity_proposal_file);
-        $this->assertNotNull($request->e_signature_file);
+        $this->assertNull($request->e_signature_file);
         $this->assertNull($request->igp_receipt_file);
     }
 
@@ -576,7 +558,7 @@ class RequestDocumentUploadTest extends TestCase
         $request = FacilityRequest::where('requested_by_id', $this->externalUser->id)->first();
         $this->assertNotNull($request);
         $this->assertNotNull($request->igp_receipt_file);
-        $this->assertNotNull($request->e_signature_file);
+        $this->assertNull($request->e_signature_file);
         $this->assertNull($request->activity_proposal_file);
     }
 
@@ -877,7 +859,7 @@ class RequestDocumentUploadTest extends TestCase
         $request = FacilityRequest::where('requested_by_id', $this->studentUser->id)->first();
         $this->assertNotNull($request->document_metadata);
         $this->assertArrayHasKey('activity_proposal', $request->document_metadata);
-        $this->assertArrayHasKey('e_signature', $request->document_metadata);
+        $this->assertArrayNotHasKey('e_signature', $request->document_metadata);
         $this->assertArrayHasKey('uploaded_at', $request->document_metadata['activity_proposal']);
         $this->assertArrayHasKey('original_name', $request->document_metadata['activity_proposal']);
     }

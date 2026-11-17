@@ -1232,35 +1232,23 @@
 
                         <div class="signature-block">
                             <span class="field-label">Requisitioner</span>
-                            @if($requestorSignatureImage)
-                                <img src="{{ $requestorSignatureImage }}"
-                                     alt="Requisitioner e-signature" class="e-signature-image">
-                            @else
-                                <div class="signature-line"></div>
-                            @endif
+                            <div class="signature-line"></div>
                             <div class="signature-name">{{ $requesterName }}</div>
                             <div class="signature-name" style="font-weight: 600; margin-top: 0.3rem;">{{ $requesterPosition }}</div>
-                            @if($signatureSerial)
-                                <div class="signature-serial">Signature ID: {{ $signatureSerial }}</div>
-                            @endif
+                            <div class="signature-serial">Signature over printed name</div>
                         </div>
 
                         <div class="approval-row">
                             <div class="approval-panel">
                                 <span class="title">Recommending Approval (Venue)</span>
                                 <div class="approval-list">
-                                    @if($request->venue_status === 'approved')
-                                        @foreach($approvalSignatures['venue'] as $approval)
+                                    @if($request->venue_status === 'approved' && $approvalRecords['venue'] !== [])
+                                        @foreach($approvalRecords['venue'] as $record)
                                             <div class="approval-signature-entry">
-                                                <div><strong>{{ $approval['name'] }}</strong></div>
-                                                @if($approval['image'])
-                                                    <img src="{{ $approval['image'] }}" alt="Venue custodian e-signature" class="approval-signature">
-                                                @else
-                                                    <div class="approval-signature-placeholder" aria-hidden="true"></div>
-                                                    <div>Signature not recorded</div>
-                                                @endif
-                                                @if($approval['position'])<div>{{ $approval['position'] }}</div>@endif
-                                                @if($approval['date'])<div>{{ $approval['date'] }}</div>@endif
+                                                <div><strong>Endorsed</strong> by {{ $record['role'] }}</div>
+                                                @if($record['scope'] !== '')<div>{{ $record['scope'] }}</div>@endif
+                                                @if($record['date'])<div>{{ $record['date'] }}</div>@endif
+                                                <div class="signature-serial">Ref: {{ $record['reference'] }}</div>
                                             </div>
                                         @endforeach
                                     @else
@@ -1271,18 +1259,13 @@
                             <div class="approval-panel">
                                 <span class="title">Approved By (Supply Office)</span>
                                 <div class="approval-list">
-                                    @if($request->status === 'approved')
-                                        @foreach($approvalSignatures['final'] as $approval)
+                                    @if($request->status === 'approved' && $approvalRecords['final'] !== [])
+                                        @foreach($approvalRecords['final'] as $record)
                                             <div class="approval-signature-entry">
-                                                <div><strong>{{ $approval['name'] }}</strong></div>
-                                                @if($approval['image'])
-                                                    <img src="{{ $approval['image'] }}" alt="Supply Office e-signature" class="approval-signature">
-                                                @else
-                                                    <div class="approval-signature-placeholder" aria-hidden="true"></div>
-                                                    <div>Signature not recorded</div>
-                                                @endif
-                                                @if($approval['position'])<div>{{ $approval['position'] }}</div>@endif
-                                                <div>{{ $approval['date'] ?: $finalApprovalDate }}</div>
+                                                <div><strong>Approved</strong> by {{ $record['role'] }}</div>
+                                                @if($record['scope'] !== '')<div>{{ $record['scope'] }}</div>@endif
+                                                @if($record['date'])<div>{{ $record['date'] }}</div>@endif
+                                                <div class="signature-serial">Ref: {{ $record['reference'] }}</div>
                                             </div>
                                         @endforeach
                                     @else
@@ -1296,18 +1279,13 @@
                             <div class="approval-panel">
                                 <span class="title">Recommending Approval (Equipment)</span>
                                 <div class="approval-list">
-                                    @if($request->equipment_status === 'approved')
-                                        @foreach($approvalSignatures['equipment'] as $approval)
+                                    @if($request->equipment_status === 'approved' && $approvalRecords['equipment'] !== [])
+                                        @foreach($approvalRecords['equipment'] as $record)
                                             <div class="approval-signature-entry">
-                                                <div><strong>{{ $approval['name'] }}</strong></div>
-                                                @if($approval['image'])
-                                                    <img src="{{ $approval['image'] }}" alt="Equipment custodian e-signature" class="approval-signature">
-                                                @else
-                                                    <div class="approval-signature-placeholder" aria-hidden="true"></div>
-                                                    <div>Signature not recorded</div>
-                                                @endif
-                                                @if($approval['position'])<div>{{ $approval['position'] }}</div>@endif
-                                                @if($approval['date'])<div>{{ $approval['date'] }}</div>@endif
+                                                <div><strong>Endorsed</strong> by {{ $record['role'] }}</div>
+                                                @if($record['scope'] !== '')<div>{{ $record['scope'] }}</div>@endif
+                                                @if($record['date'])<div>{{ $record['date'] }}</div>@endif
+                                                <div class="signature-serial">Ref: {{ $record['reference'] }}</div>
                                             </div>
                                         @endforeach
                                     @else
@@ -1321,6 +1299,10 @@
                                     <div><strong>{{ $statusLabel }}</strong></div>
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="signature-serial" style="margin-top: 0.4rem;">
+                            Digital Approval Records: endorsements and approvals above are recorded in PITFR-RMS under each approver's authenticated account. They are not handwritten signatures. Verify a reference with the Supply Office.
                         </div>
 
                         <div class="footer-bar">
