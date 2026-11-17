@@ -149,27 +149,7 @@
             @endif
 
             <div class="space-y-9">
-                <section class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-6 md:rounded-[44px] md:p-8 lg:p-10">
-                    <div class="grid gap-4 grid-cols-1 md:grid-cols-3 md:gap-6">
-                        <div class="flex items-center justify-center rounded-[24px] border border-slate-200 bg-white p-4">
-                            <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-20 w-20 rounded-full border border-slate-200 bg-slate-100 object-cover p-1 shadow-sm">
-                        </div>
-                        <div class="space-y-2 rounded-[24px] border border-slate-200 bg-white p-4 text-center">
-                            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Official Request Form</p>
-                            <p class="mt-1 text-base font-bold uppercase tracking-[0.06em] text-slate-800">Palompon Institute of Technology</p>
-                            <p class="text-[11px] uppercase tracking-[0.16em] text-slate-500">Quality Management System</p>
-                            <p class="mt-2 border-t border-slate-200 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">Request for the Use of Facility/Equipment</p>
-                        </div>
-                        <div class="space-y-3 rounded-[24px] border border-slate-200 bg-white p-4 text-xs text-slate-600">
-                            <p>Ref. Code: <span class="font-semibold text-slate-800">PIT-PSMO-F-05-3.7-08</span></p>
-                            <p>Rev. No: <span class="font-semibold text-slate-800">00</span></p>
-                            <div class="mt-2 flex min-h-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-sm">
-                                <img src="{{ asset('images/TUVNORD-Logo.png') }}" alt="TUV NORD ISO 9001:2015 Certified" class="max-h-12 w-auto max-w-full object-contain">
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
+                {{-- FRM-01: the form header, reference code and TUV NORD mark appear on the printed form only. --}}
                 <section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
                     <div class="mb-5 border-b border-slate-200 pb-4">
                         <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section I. Requestor Information</p>
