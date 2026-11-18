@@ -62,8 +62,12 @@
             true
         )
     ));
-    $hasAdditionalEquipment = $additionalEquipmentItems !== [];
     $additionalEquipmentQuantities = $request->getAdditionalEquipmentQuantities();
+    $additionalEquipmentAllocations = $request->getAdditionalEquipmentAllocations();
+    if ($additionalEquipmentAllocations !== []) {
+        $additionalEquipmentItems = array_keys($additionalEquipmentQuantities);
+    }
+    $hasAdditionalEquipment = $additionalEquipmentItems !== [];
     $returnOutstandingQuantities = $request->getEquipmentReturnOutstandingQuantities();
     $returnFormItems = [];
     if ($currentUser && $currentUser->isCustodianEquipment()) {
@@ -1434,8 +1438,19 @@
                             <dl class="divide-y divide-violet-100 rounded-xl border border-violet-200 bg-violet-50/60 px-4">
                                 @foreach($additionalEquipmentItems as $e)
                                     <div class="flex items-center justify-between gap-3 py-3">
-                                        <dt class="text-sm font-medium text-slate-900">{{ $e }}</dt>
-                                        <dd class="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">Qty {{ !empty($equipmentQuantities[$e]) ? $equipmentQuantities[$e] : 1 }}</dd>
+                                        <dt class="text-sm font-medium text-slate-900">
+                                            {{ $e }}
+                                            @if(count($additionalEquipmentAllocations) > 1)
+                                                <span class="mt-0.5 block text-xs font-normal text-slate-500">
+                                                    @foreach($additionalEquipmentAllocations as $allocVenue => $allocItems)
+                                                        @if(!empty($allocItems[$e]))
+                                                            <span class="mr-2 whitespace-nowrap">{{ $allocVenue }}: {{ $allocItems[$e] }}</span>
+                                                        @endif
+                                                    @endforeach
+                                                </span>
+                                            @endif
+                                        </dt>
+                                        <dd class="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">{{ count($additionalEquipmentAllocations) > 1 ? 'Total ' : 'Qty ' }}{{ $additionalEquipmentQuantities[$e] ?? (!empty($equipmentQuantities[$e]) ? $equipmentQuantities[$e] : 1) }}</dd>
                                     </div>
                                 @endforeach
                             </dl>

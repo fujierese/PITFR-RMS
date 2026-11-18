@@ -1724,6 +1724,10 @@ class RequestorController extends Controller
                 ? $submittedVenueQuantities[$venueName]
                 : [];
             foreach ($normalizedItems as $equipmentName) {
+                // Equipment the venue already provides is not a separate request (REQ-09).
+                if (in_array($equipmentName, VenueEquipmentPolicy::getDefaultEquipment($venueName), true)) {
+                    continue;
+                }
                 $hasSubmittedQuantity = array_key_exists($equipmentName, $venueQuantities)
                     || (! $hasVenueSpecificSelection && array_key_exists($equipmentName, $legacyQuantities));
                 $quantity = (int) ($venueQuantities[$equipmentName] ?? $legacyQuantities[$equipmentName] ?? 0);

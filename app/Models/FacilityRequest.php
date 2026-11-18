@@ -798,8 +798,53 @@ class FacilityRequest extends Model
         return $this->getAdditionalEquipmentQuantities() !== [];
     }
 
+    /**
+     * Equipment requested on top of what each venue provides, per venue.
+     * An item only counts as "included" for the venue that provides it, so an
+     * extra Sound System for the Gymnasium stays additional even when Balay
+     * Alumni (which includes one) is also booked.
+     *
+     * @return array<string, array<string, int>>
+     */
+    public function getAdditionalEquipmentAllocations(): array
+    {
+        $additional = [];
+
+        foreach ($this->getVenueEquipmentAllocations() as $venueName => $items) {
+            if (! is_array($items)) {
+                continue;
+            }
+
+            $included = array_map(
+                static fn (string $name): string => mb_strtolower(trim($name)),
+                \App\Services\VenueEquipmentPolicy::getDefaultEquipment((string) $venueName)
+            );
+
+            foreach ($items as $equipmentName => $quantity) {
+                if ((int) $quantity <= 0 || in_array(mb_strtolower(trim((string) $equipmentName)), $included, true)) {
+                    continue;
+                }
+
+                $additional[$venueName][$equipmentName] = ($additional[$venueName][$equipmentName] ?? 0) + (int) $quantity;
+            }
+        }
+
+        return $additional;
+    }
+
     public function getAdditionalEquipmentQuantities(): array
     {
+        if ($this->getVenueEquipmentAllocations() !== []) {
+            $totals = [];
+            foreach ($this->getAdditionalEquipmentAllocations() as $items) {
+                foreach ($items as $equipmentName => $quantity) {
+                    $totals[$equipmentName] = ($totals[$equipmentName] ?? 0) + (int) $quantity;
+                }
+            }
+
+            return $totals;
+        }
+
         $venueIncludedEquipment = [];
         foreach ($this->getVenueNames() as $venueName) {
             $venueIncludedEquipment = array_merge(
@@ -1877,7 +1922,12 @@ class FacilityRequest extends Model
             return false;
         }
 
-        return in_array($normalized, $this->getVenueIncludedEquipmentNames(), true);
+        if (! in_array($normalized, $this->getVenueIncludedEquipmentNames(), true)) {
+            return false;
+        }
+
+        // Covered by the venue only when nothing extra of it was requested elsewhere.
+        return ! array_key_exists($normalized, $this->getAdditionalEquipmentQuantities());
     }
 
     // ─── GET ALL CUSTODIAN IDs ASSIGNED TO EQUIPMENT IN THIS REQUEST ──────────

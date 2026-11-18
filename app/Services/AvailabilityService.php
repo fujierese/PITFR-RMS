@@ -93,14 +93,21 @@ class AvailabilityService
 
         $venueEquipment = $facilityRequest->getVenueEquipmentAllocations();
         if ($venueEquipment !== []) {
+            // Total the need per equipment record (by ID), across every venue that uses it.
             $equipmentRanges = [];
+            $equipmentNames = [];
             foreach ($venueEquipment as $venueName => $items) {
                 if (! is_array($items) || ! in_array($venueName, $facilityRequest->getVenueNames(), true)) {
                     continue;
                 }
-                foreach ($facilityRequest->getVenueScheduleRanges($venueName) as $venueRange) {
-                    foreach ($items as $itemName => $quantity) {
-                        $equipmentRanges[$itemName][] = [
+                foreach ($items as $itemName => $quantity) {
+                    $equipmentRecord = Equipment::query()->whereRaw('LOWER(name) = ?', [mb_strtolower(trim((string) $itemName))])->first();
+                    if (! $equipmentRecord) {
+                        continue;
+                    }
+                    $equipmentNames[$equipmentRecord->id] = $equipmentRecord->name;
+                    foreach ($facilityRequest->getVenueScheduleRanges($venueName) as $venueRange) {
+                        $equipmentRanges[$equipmentRecord->id][] = [
                             ...$venueRange,
                             'quantity' => (int) $quantity,
                         ];
@@ -108,10 +115,8 @@ class AvailabilityService
                 }
             }
 
-            foreach ($equipmentRanges as $itemName => $ranges) {
-                if (! Equipment::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($itemName)])->exists()) {
-                    continue;
-                }
+            foreach ($equipmentRanges as $equipmentId => $ranges) {
+                $itemName = $equipmentNames[$equipmentId];
 
                 $boundaries = collect($ranges)
                     ->flatMap(fn (array $range): array => [$range['start'], $range['end']])

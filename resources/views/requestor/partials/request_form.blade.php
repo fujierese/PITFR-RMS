@@ -434,7 +434,12 @@
                                             $itemIndex = $loop->parent->index . '-' . $loop->index;
                                             $itemQuantity = $oldVenueEquipmentQuantities[$venueName][$itemName] ?? ($isSelected ? 1 : '');
                                         @endphp
-                                        @if($isVisible && !$isVenueRequired)
+                                        @if($isVenueRequired)
+                                            <div class="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4" data-included-equipment="{{ $itemName }}">
+                                                <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
+                                                <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Included with venue</span>
+                                            </div>
+                                        @elseif($isVisible)
                                             <div class="equipment-row flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between {{ $itemAvailable > 0 ? 'hover:border-purple-400 hover:bg-purple-50/70' : 'border-red-100 bg-red-50/70 opacity-70' }} {{ $isSelected ? 'border-emerald-300 bg-emerald-50/60' : '' }}" data-available="{{ $itemAvailable }}" data-total="{{ $itemQty }}" data-name="{{ $itemName }}" data-venue="{{ $venueName }}" data-index="{{ $itemIndex }}">
                                                 <label class="flex flex-1 cursor-pointer items-center gap-3">
                                                     <input type="checkbox" name="venue_equipment[{{ $venueName }}][]" value="{{ $itemName }}" {{ $itemAvailable <= 0 ? 'disabled' : '' }} {{ $isSelected ? 'checked' : '' }} class="equipment-checkbox h-4 w-4 rounded border-slate-300 text-purple-600" data-equipment="{{ $itemName }}">
