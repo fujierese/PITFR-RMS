@@ -365,7 +365,7 @@
             ];
             $navigation[] = [
                 'key' => 'igp-dashboard',
-                'label' => 'Reservation Coordination',
+                'label' => 'Outsider Inquiries',
                 'route' => route('igp.index'),
                 'route_name' => 'igp.index',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14l1 12H4L5 9zm5 4h4"/></svg>',

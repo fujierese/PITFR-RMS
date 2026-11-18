@@ -142,6 +142,10 @@ class SupplyOfficeController extends Controller
             'id' => ['required', 'integer', 'exists:facility_requests,id'],
             'decision' => ['required', 'in:available,unavailable'],
             'notes' => ['required_if:decision,unavailable', 'nullable', 'string', 'max:1000'],
+            // B: optional deadline for an approved outsider inquiry to meet its requirements.
+            'outsider_hold_until' => ['nullable', 'date', 'after_or_equal:today'],
+        ], [
+            'outsider_hold_until.after_or_equal' => 'The requirements deadline cannot be in the past.',
         ]);
 
         $user = Auth::user();
@@ -212,8 +216,12 @@ class SupplyOfficeController extends Controller
                     }
 
                     $facilityRequest->supply_office_review_status = 'confirmed';
-                    if ($facilityRequest->requester?->isOutsider()) {
-                        $facilityRequest->igp_payment_status = 'awaiting_payment';
+                    if ($facilityRequest->isOutsiderInquiry()) {
+                        // B: approved subject to requirements; IGP coordinates them next.
+                        // The schedule is held until the deadline, if one is set.
+                        $facilityRequest->outsider_hold_until = ! empty($validated['outsider_hold_until'])
+                            ? \Carbon\Carbon::parse($validated['outsider_hold_until'])->endOfDay()
+                            : null;
                     }
                     $facilityRequest->supply_office_review_notes = trim((string) ($validated['notes'] ?? '')) ?: null;
                     $facilityRequest->supply_office_reviewed_by_id = $user->getKey();
@@ -266,6 +274,26 @@ class SupplyOfficeController extends Controller
             return back()->withErrors(['decision' => 'Unable to record the availability review. Please retry or contact support.']);
         }
 
+        if ($facilityRequest->isOutsiderInquiry()) {
+            $facilityRequest->refresh();
+            $approved = $validated['decision'] === 'available';
+            $facilityRequest->addHistory(
+                $approved ? 'outsider_inquiry_approved' : 'outsider_alternative_requested',
+                $approved
+                    ? 'Supply Office approved the inquiry, subject to the institution\'s requirements. IGP will coordinate them with the client.'
+                        . ($facilityRequest->outsider_hold_until ? ' Schedule held until ' . $facilityRequest->outsider_hold_until->format('M j, Y') . '.' : '')
+                    : 'Supply Office requested an alternative venue or schedule: ' . $facilityRequest->supply_office_review_notes,
+                $user->getKey()
+            );
+            if ($approved) {
+                Notification::send(
+                    User::query()->withAnyRole(['igp'])->get(),
+                    new RequestStatusChanged($facilityRequest, 'outsider_inquiry_approved', '', $user->name . ' - Supply Office')
+                );
+                $facilityRequest->requester?->notify(new RequestStatusChanged($facilityRequest, 'outsider_inquiry_approved', '', $user->name . ' - Supply Office'));
+            }
+        }
+
         if ($validated['decision'] === 'available') {
             $custodianIds = $facilityRequest->getAssignedEquipmentCustodianIds();
             foreach (User::whereIn('id', $custodianIds)->get() as $custodian) {
@@ -297,6 +325,50 @@ class SupplyOfficeController extends Controller
         }
 
         return redirect()->route('supply-office.index')->with('success', $message);
+    }
+
+    /**
+     * B.7: cancel an approved outsider inquiry whose requirements were not met by the
+     * deadline (or for another stated reason) and release its schedule.
+     */
+    public function cancelOutsiderApproval(Request $request, FacilityRequest $facilityRequest)
+    {
+        $this->ensureAdminAccess();
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ], [
+            'reason.required' => 'Give the reason for cancelling the approval (for example, requirements not completed by the deadline).',
+        ]);
+        $user = Auth::user();
+
+        $facilityRequest = DB::transaction(function () use ($facilityRequest, $validated, $user): FacilityRequest {
+            $locked = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
+            abort_unless(
+                in_array($locked->outsider_stage, FacilityRequest::OUTSIDER_HOLD_STAGES, true) && $locked->status === 'pending',
+                409,
+                'Only an approved outsider inquiry that is not yet confirmed can be cancelled here.'
+            );
+            $reason = trim($validated['reason']);
+            $locked->forceFill([
+                'status' => 'cancelled',
+                'venue_status' => 'cancelled',
+                'equipment_status' => 'cancelled',
+                'cancellation_status' => 'confirmed',
+                'cancellation_reviewed_by_id' => $user->getKey(),
+                'cancellation_reviewed_at' => now(),
+                'cancellation_notes' => $reason,
+                'outsider_hold_until' => null,
+            ])->save();
+            $locked->addHistory('cancelled', 'Supply Office (' . $user->name . ') cancelled the approval and released the schedule: ' . $reason, $user->getKey());
+
+            return $locked;
+        });
+
+        $notice = new RequestStatusChanged($facilityRequest, 'request_cancelled', trim($validated['reason']), $user->name . ' - Supply Office');
+        $facilityRequest->requester?->notify($notice);
+        Notification::send(User::query()->withAnyRole(['igp'])->get(), $notice);
+
+        return back()->with('success', 'Approval cancelled. The venue schedule is released.');
     }
 
     public function reviewCancellation(Request $request, FacilityRequest $facilityRequest)
@@ -1148,11 +1220,13 @@ class SupplyOfficeController extends Controller
                 DB::rollBack();
                 return back()->withErrors(['action' => 'The initial Supply Office availability review must be completed before final approval.']);
             }
+            // B: an outsider reservation is confirmed only after IGP has coordinated the
+            // institution's requirements with the client. Payment itself stays offline.
             if ($validated['action'] === 'approve'
-                && $fr->requester?->isOutsider()
-                && $fr->igp_payment_status !== 'paid') {
+                && $fr->isOutsiderInquiry()
+                && $fr->outsider_stage !== 'igp_coordination') {
                 DB::rollBack();
-                return back()->withErrors(['action' => 'The IGP must record the official receipt after availability confirmation and before final approval.']);
+                return back()->withErrors(['action' => 'IGP must first inform the client of the payment and other institutional requirements (For IGP Coordination) before the Supply Office confirms the reservation.']);
             }
             if ($validated['action'] === 'approve' && $fr->requester && ! $fr->requester->isVerified()) {
                 // D4: the requester's ID must be reviewed before final approval.
@@ -1262,6 +1336,14 @@ class SupplyOfficeController extends Controller
                     ));
                 }
             }
+        }
+
+        // B.8: IGP is told the Supply Office's final decision on an outsider inquiry.
+        if ($originalStatus !== $fr->status && $fr->isOutsiderInquiry()) {
+            Notification::send(
+                User::query()->withAnyRole(['igp'])->get(),
+                new RequestStatusChanged($fr, $validated['action'] === 'approve' ? 'outsider_reservation_confirmed' : 'rejected', $validated['notes'] ?? '', Auth::user()->name . ' - Supply Office')
+            );
         }
 
         $label = $validated['action'] === 'approve' ? 'approved' : 'rejected';

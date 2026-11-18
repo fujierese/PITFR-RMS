@@ -15,9 +15,21 @@ class FacilityRequestPolicy
 
     public function view(User $user, FacilityRequest $facilityRequest): bool
     {
-        return $user->id === $facilityRequest->requested_by_id
-            || $user->isAdmin()
-            || $this->managesAssignedResource($user, $facilityRequest);
+        if ($user->id === $facilityRequest->requested_by_id || $user->isAdmin()) {
+            return true;
+        }
+
+        // B: IGP coordinates outsider inquiries only.
+        if ($user->isIgp()) {
+            return $facilityRequest->isOutsiderInquiry();
+        }
+
+        // B: custodians see an outsider inquiry only after IGP forwards it.
+        if ($facilityRequest->isAwaitingIgpReview()) {
+            return false;
+        }
+
+        return $this->managesAssignedResource($user, $facilityRequest);
     }
 
     public function create(User $user): bool

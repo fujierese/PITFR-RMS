@@ -175,6 +175,29 @@
                                     <p class="text-xs font-medium text-red-600">{{ $message }}</p>
                                 @enderror
                             </div>
+                            {{-- B.1: inquiry contact details; IGP uses these to coordinate with the client. --}}
+                            <div class="grid gap-4 sm:grid-cols-3 sm:gap-5" data-outsider-contact>
+                                <div class="space-y-3">
+                                    <label for="contact_person" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Contact person <span class="required-asterisk">*</span></label>
+                                    <input id="contact_person" type="text" name="contact_person" maxlength="191" required value="{{ old('contact_person', $currentUser?->name) }}" class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">
+                                    @error('contact_person')<p class="text-xs font-medium text-red-600">{{ $message }}</p>@enderror
+                                </div>
+                                <div class="space-y-3">
+                                    <label for="contact_number" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Contact number <span class="required-asterisk">*</span></label>
+                                    <input id="contact_number" type="tel" name="contact_number" maxlength="50" required value="{{ old('contact_number', $currentUser?->contact_number) }}" class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">
+                                    @error('contact_number')<p class="text-xs font-medium text-red-600">{{ $message }}</p>@enderror
+                                </div>
+                                <div class="space-y-3">
+                                    <label for="contact_email" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Email address <span class="required-asterisk">*</span></label>
+                                    <input id="contact_email" type="email" name="contact_email" maxlength="191" required value="{{ old('contact_email', $currentUser?->username) }}" class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">
+                                    @error('contact_email')<p class="text-xs font-medium text-red-600">{{ $message }}</p>@enderror
+                                </div>
+                            </div>
+                            <div class="space-y-3">
+                                <label for="additional_remarks" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Additional remarks <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
+                                <textarea id="additional_remarks" name="additional_remarks" rows="3" maxlength="2000" class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">{{ old('additional_remarks') }}</textarea>
+                                <p class="text-xs text-slate-500">Your inquiry goes to IGP first, then the venue custodian and the Supply Office. If approved, IGP will tell you the payment and other requirements; payment is made through the institution's official procedure, not through PITFR.</p>
+                            </div>
                         @elseif ($isStudent)
                             <div class="space-y-3">
                                 <p class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Student Organization</p>

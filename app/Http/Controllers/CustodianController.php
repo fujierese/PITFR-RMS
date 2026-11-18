@@ -348,6 +348,11 @@ class CustodianController extends Controller
 
             $this->authorize($validated['action'] === 'approve' ? 'approve' : 'reject', $fr);
 
+            if ($fr->isAwaitingIgpReview()) {
+                DB::rollBack();
+                return back()->withErrors(['action' => 'This outsider inquiry is still with IGP. It reaches the venue custodian once IGP forwards it.']);
+            }
+
             // ─── APPROVE / REJECT ACTION ─────────────────────────────────────
             if ($fr->revisionHistories()->where('status', 'pending')->exists()) {
                 DB::rollBack();
@@ -481,7 +486,26 @@ class CustodianController extends Controller
 
             DB::commit();
 
-            if ($custodianType === 'venue' && $statusValue === 'rejected') {
+            // B: a custodian's endorsement or non-endorsement of an outsider inquiry goes to
+            // the Supply Office (final authority); IGP and the outsider are kept informed.
+            if ($custodianType === 'venue' && $fr->isOutsiderInquiry()) {
+                $fresh = $fr->fresh();
+                $endorsed = $statusValue === 'approved';
+                $remarks = trim((string) ($validated['notes'] ?? ''));
+                $fresh->addHistory(
+                    $endorsed ? 'outsider_inquiry_endorsed' : 'outsider_inquiry_not_endorsed',
+                    'Venue custodian ' . $user->name . ($endorsed ? ' endorsed the inquiry.' : ' did not endorse the inquiry.') . ($remarks !== '' ? ' Remarks: ' . $remarks : ''),
+                    $user->id
+                );
+                $endorsementNotice = new \App\Notifications\RequestStatusChanged($fresh, $endorsed ? 'outsider_inquiry_endorsed' : 'outsider_inquiry_not_endorsed', $remarks, $user->name);
+                Notification::send(
+                    User::query()->withAnyRole(['admin', 'supply_office', 'igp'])->get()->unique('id'),
+                    $endorsementNotice
+                );
+                $fresh->requester?->notify(new \App\Notifications\RequestStatusChanged($fresh, 'outsider_inquiry_custodian_reviewed', '', $user->name));
+            }
+
+            if ($custodianType === 'venue' && $statusValue === 'rejected' && ! $fr->isOutsiderInquiry()) {
                 $reason = trim((string) ($validated['notes'] ?? 'The selected venue is unavailable.'));
                 $notification = new \App\Notifications\RequestStatusChanged(
                     $fr,
@@ -502,11 +526,16 @@ class CustodianController extends Controller
             }
 
             // Fire Laravel event for broadcasting
-            $eventClass = $statusValue === 'approved' ? \App\Events\RequestApproved::class : \App\Events\RequestRejected::class;
             $equipmentCustodianIds = $fr->getAssignedEquipmentCustodianIds();
             $venueCustodianIds = \App\Models\Venue::whereIn('name', $fr->venue ?? [])->pluck('custodian_id')->filter()->unique()->toArray();
             $custodianIds = array_values(array_unique(array_merge($equipmentCustodianIds, $venueCustodianIds)));
-            $eventClass::dispatch($fr->id, $fr->control_number, $custodianType, $user->name, $fr->requested_by_id, $custodianIds);
+            // RequestRejected also takes the reason; passing RequestApproved's arguments put the
+            // custodian list where the owner id belongs and crashed the broadcast.
+            if ($statusValue === 'approved') {
+                \App\Events\RequestApproved::dispatch($fr->id, $fr->control_number, $custodianType, $user->name, $fr->requested_by_id, $custodianIds);
+            } else {
+                \App\Events\RequestRejected::dispatch($fr->id, $fr->control_number, $custodianType, (string) ($validated['notes'] ?? ''), $user->name, $fr->requested_by_id, $custodianIds);
+            }
 
             // ✅ Only notify if relevant status actually changed
             $shouldNotify = false;
@@ -543,6 +572,7 @@ class CustodianController extends Controller
 
             return FacilityRequest::with(['requester', 'requestVenues.venue', 'requestEquipment.requestVenue.venue', 'requestEquipment.equipment', 'reservationSchedule'])
                 ->upcomingReservation()
+                ->visibleToCustodians() // B: outsider inquiries reach custodians only after IGP forwards them
                 ->where(function ($stageQuery): void {
                     $stageQuery->where('status', 'approved')
                         ->orWhere(function ($pendingQuery): void {

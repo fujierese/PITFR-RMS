@@ -57,20 +57,20 @@ class FinalApprovalTest extends TestCase
         ]);
     }
 
-    public function test_unpaid_outsider_request_cannot_be_final_approved_from_request_details(): void
+    public function test_outsider_request_cannot_be_confirmed_before_igp_coordination(): void
     {
         $outsider = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'outsider']);
         $request = $this->createRequest([
             'requested_by_id' => $outsider->id,
             'supply_office_review_status' => 'confirmed',
-            'igp_payment_status' => 'awaiting_payment',
+            'outsider_stage' => 'approved',
         ]);
         $approver = $this->finalApprover();
 
         $this->actingAs($approver)
             ->get(route('request.show', $request->id))
             ->assertOk()
-            ->assertSee('until the IGP records the official receipt');
+            ->assertSee('until IGP informs the client of the payment and other requirements');
 
         $this->actingAs($approver)
             ->post(route('request.supply.final-approval', $request))
@@ -78,11 +78,12 @@ class FinalApprovalTest extends TestCase
         $this->assertSame('pending', $request->refresh()->status);
         Notification::assertNothingSent();
 
-        $request->update(['igp_payment_status' => 'paid']);
+        $request->update(['outsider_stage' => 'igp_coordination']);
         $this->actingAs($approver)
             ->post(route('request.supply.final-approval', $request))
             ->assertSessionHasNoErrors();
         $this->assertSame('approved', $request->refresh()->status);
+        $this->assertSame('confirmed', $request->outsider_stage);
     }
 
     public function test_status_notification_is_sent_only_after_the_workflow_change_commits(): void

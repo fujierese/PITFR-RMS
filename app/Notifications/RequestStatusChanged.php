@@ -110,6 +110,16 @@ class RequestStatusChanged extends Notification implements ShouldQueueAfterCommi
             'equipment_returned' => 'Equipment Returned',
             'change_requested' => 'Request Updated',
             'change_request_rejected' => 'Change Request Rejected',
+            // B.8: outsider inquiry workflow.
+            'outsider_inquiry_submitted' => 'New Outsider Inquiry',
+            'outsider_inquiry_forwarded' => 'Inquiry Forwarded to Venue Custodian',
+            'outsider_inquiry_endorsed' => 'Inquiry Endorsed by Venue Custodian',
+            'outsider_inquiry_not_endorsed' => 'Inquiry Not Endorsed by Venue Custodian',
+            'outsider_inquiry_custodian_reviewed' => 'Inquiry Reviewed by Venue Custodian',
+            'outsider_inquiry_approved' => 'Inquiry Approved, Subject to Requirements',
+            'outsider_requirements_sent' => 'Reservation Requirements',
+            'outsider_requirements_reported' => 'Requirements Reported Complete',
+            'outsider_reservation_confirmed' => 'Outsider Reservation Confirmed',
         ];
 
         return $titleMap[$this->status] ?? ucfirst(str_replace('_', ' ', $this->status));
@@ -151,10 +161,42 @@ class RequestStatusChanged extends Notification implements ShouldQueueAfterCommi
         };
     }
 
+    /** B.8: messages for the outsider inquiry steps; null for every other status. */
+    private function outsiderInquiryMessage(string $recipientType): ?string
+    {
+        $no = $this->facilityRequest->control_number;
+        $client = $recipientType === 'requestor';
+        $by = $this->actor ? " ({$this->actor})" : '';
+
+        return match ($this->status) {
+            'outsider_inquiry_submitted' => "A new outsider reservation inquiry ({$no}) was submitted. Review it and forward it to the venue custodian.",
+            'outsider_inquiry_forwarded' => $client
+                ? "IGP reviewed your inquiry {$no} and forwarded it to the venue custodian to check availability."
+                : "IGP forwarded outsider inquiry {$no} for venue availability review.",
+            'outsider_inquiry_endorsed' => "The venue custodian{$by} endorsed outsider inquiry {$no}. It now needs the Supply Office's decision.",
+            'outsider_inquiry_not_endorsed' => "The venue custodian{$by} did not endorse outsider inquiry {$no}"
+                . ($this->notes !== '' ? ": {$this->notes}" : '.') . ' The Supply Office will decide.',
+            'outsider_inquiry_custodian_reviewed' => "The venue custodian has reviewed your inquiry {$no}. The Supply Office will now make the decision.",
+            'outsider_inquiry_approved' => $client
+                ? "The Supply Office approved your inquiry {$no}, subject to the institution's requirements. IGP will contact you about payment and other requirements. Your reservation is confirmed only after these are completed."
+                : "The Supply Office approved outsider inquiry {$no}. Inform the client of the payment and other requirements.",
+            'outsider_requirements_sent' => "Requirements for your reservation {$no}: {$this->notes} Payment is made through the institution's official payment procedure, not through PITFR.",
+            'outsider_requirements_reported' => "IGP reports that the client completed the requirements for {$no}"
+                . ($this->notes !== '' ? ": {$this->notes}" : '.') . ' The reservation can now be confirmed.',
+            'outsider_reservation_confirmed' => "The Supply Office confirmed outsider reservation {$no}.",
+            default => null,
+        };
+    }
+
     private function buildConsolidatedMessage($notifiable = null): string
     {
         $message = '';
         $recipientType = $this->determineRecipientType($notifiable);
+
+        $outsiderMessage = $this->outsiderInquiryMessage($recipientType);
+        if ($outsiderMessage !== null) {
+            return $outsiderMessage;
+        }
 
         if (in_array($this->status, ['venue_approved', 'equipment_approved'], true)) {
             $actorText = $this->approvalActorText();

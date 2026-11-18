@@ -125,6 +125,15 @@
                             @csrf
                             <input type="hidden" name="id" value="{{ $availabilityRequest->id }}">
                             <input type="hidden" name="decision" value="available">
+                                    @if($availabilityRequest->isOutsiderInquiry())
+                                        <div class="mb-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
+                                            <p class="font-semibold">Outsider inquiry: approval is subject to requirements</p>
+                                            <p class="mt-1 text-xs">IGP then informs the client of the payment and other requirements. The reservation is confirmed only after they are completed.</p>
+                                            <label for="outsider_hold_until_{{ $availabilityRequest->id }}" class="mt-2 block text-xs font-semibold">Hold the schedule until (optional requirements deadline)</label>
+                                            <input id="outsider_hold_until_{{ $availabilityRequest->id }}" type="date" name="outsider_hold_until" min="{{ now()->toDateString() }}" value="{{ old('outsider_hold_until') }}" class="mt-1 rounded-lg border border-sky-300 bg-white px-2 py-1 text-sm">
+                                            <p class="mt-1 text-xs">While held, internal requests cannot book this venue and time. Leave blank for no hold.</p>
+                                        </div>
+                                    @endif
                             @if($availabilityRequest->is_emergency)
                                 <div>
                                     <label class="flex items-center gap-2 text-xs font-medium text-amber-800">

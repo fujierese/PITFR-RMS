@@ -95,6 +95,11 @@ class ProcessPendingReviewDeadlines extends Command
     {
         $supplyOffice = fn (): Collection => User::query()->withAnyRole(['supply_office', 'admin'])->get();
 
+        // B: an outsider inquiry still with IGP is waiting on IGP, not on the custodian.
+        if ($request->isAwaitingIgpReview()) {
+            return ['IGP review', User::query()->withAnyRole(['igp'])->get()];
+        }
+
         if ($request->venue_status !== 'approved') {
             $ids = Venue::query()->whereIn('name', $request->getVenueNames())->pluck('custodian_id')->filter();
             return ['venue confirmation', User::query()->whereIn('id', $ids)->get()];
@@ -114,8 +119,8 @@ class ProcessPendingReviewDeadlines extends Command
             return ['equipment endorsement', $users->isEmpty() ? $supplyOffice() : $users];
         }
 
-        if ($request->requester?->isOutsider() && $request->igp_payment_status !== 'paid') {
-            return ['IGP payment', User::query()->withAnyRole(['igp'])->get()];
+        if ($request->isOutsiderInquiry() && in_array($request->outsider_stage, ['submitted', 'igp_review', 'approved'], true)) {
+            return ['IGP coordination', User::query()->withAnyRole(['igp'])->get()];
         }
 
         return ['Supply Office final approval', $supplyOffice()];

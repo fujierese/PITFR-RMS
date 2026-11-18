@@ -313,6 +313,12 @@ class FacilityRequestApiController extends Controller
 
             $fr->addHistory('submitted', 'Request submitted via API by ' . $user->name, $user->id);
 
+            // B: an outsider's request is an inquiry that IGP reviews first.
+            if ($user->isOutsider() && \Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'outsider_stage')) {
+                $fr->forceFill(['outsider_stage' => 'submitted'])->save();
+                $fr->addHistory('outsider_inquiry_submitted', 'Reservation inquiry submitted by ' . $user->name . '. Waiting for IGP review.', $user->id);
+            }
+
             DB::commit();
 
             // Determine custodians (equipment + venue custodians) and fire event for broadcasting

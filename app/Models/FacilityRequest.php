@@ -35,10 +35,74 @@ class FacilityRequest extends Model
         'final_approval_signature',
         'venue_participants', 'capacity_exceptions', 'capacity_exception_status',
         'capacity_exception_reviewed_by_id', 'capacity_exception_reviewed_at',
+        // B: outsider reservation inquiries.
+        'outsider_stage', 'contact_person', 'contact_number', 'contact_email', 'additional_remarks',
+        'igp_review_notes', 'igp_forwarded_by_id', 'igp_forwarded_at',
+        'igp_coordination_notes', 'igp_coordination_started_at', 'igp_requirements_reported_at',
+        'outsider_hold_until',
     ];
+
+    /**
+     * B: outsider inquiry stages, in order. Outsider → IGP → Venue Custodian →
+     * Supply Office → IGP (requirements) → Supply Office (confirmation).
+     */
+    public const OUTSIDER_STAGES = [
+        'submitted' => 'Submitted',
+        'igp_review' => 'Under IGP Review',
+        'custodian_review' => 'Under Custodian Review',
+        'endorsed' => 'Endorsed — Under Supply Office Review',
+        'not_endorsed' => 'Not Endorsed — Under Supply Office Review',
+        'approved' => 'Approved — Awaiting IGP Coordination',
+        'igp_coordination' => 'For IGP Coordination',
+        'confirmed' => 'Confirmed',
+        'rejected' => 'Rejected',
+        'cancelled' => 'Cancelled',
+    ];
+
+    /** Stages in which an approved outsider inquiry may hold its schedule. */
+    public const OUTSIDER_HOLD_STAGES = ['approved', 'igp_coordination'];
 
     protected static function booted(): void
     {
+        // B: keep the outsider stage in step with the shared workflow fields, so the
+        // custodian, Supply Office, rejection and cancellation paths need no changes.
+        static::saving(function (self $request): void {
+            $stage = $request->getAttributes()['outsider_stage'] ?? null;
+            if ($stage === null || ! array_key_exists('outsider_stage', $request->getAttributes())) {
+                return;
+            }
+
+            $status = strtolower((string) ($request->getAttributes()['status'] ?? ''));
+            $next = $stage;
+            if ($request->isDirty('status') && in_array($status, ['approved', 'completed'], true)) {
+                $next = 'confirmed';
+            } elseif ($request->isDirty('status') && $status === 'rejected') {
+                $next = 'rejected';
+            } elseif ($request->isDirty('status') && $status === 'cancelled') {
+                $next = 'cancelled';
+            } elseif ($request->isDirty('supply_office_review_status') && $request->supply_office_review_status === 'confirmed'
+                && in_array($stage, ['endorsed', 'not_endorsed', 'custodian_review'], true)) {
+                $next = 'approved';
+            } elseif ($request->isDirty('venue_status') && $stage === 'custodian_review') {
+                $next = match ($request->venue_status) {
+                    'approved' => 'endorsed',
+                    'rejected', 'needs_reschedule' => 'not_endorsed',
+                    default => $stage,
+                };
+            } elseif ($request->isDirty('venue_status') && $request->venue_status === 'pending'
+                && in_array($stage, ['endorsed', 'not_endorsed', 'approved'], true)) {
+                // A new schedule goes back to the venue custodian.
+                $next = 'custodian_review';
+            }
+
+            if ($next !== $stage) {
+                $request->outsider_stage = $next;
+                if (! in_array($next, self::OUTSIDER_HOLD_STAGES, true)) {
+                    $request->outsider_hold_until = null;
+                }
+            }
+        });
+
         static::saved(function (self $request): void {
             if ($request->wasRecentlyCreated && $request->exists && $request->getAttribute('venue') !== null) {
                 $request->syncRelationalItems();
@@ -63,6 +127,10 @@ class FacilityRequest extends Model
         'cancellation_reviewed_at'     => 'datetime',
         'igp_paid_at'                  => 'datetime',
         'igp_refunded_at'              => 'datetime',
+        'igp_forwarded_at'             => 'datetime',
+        'igp_coordination_started_at'  => 'datetime',
+        'igp_requirements_reported_at' => 'datetime',
+        'outsider_hold_until'          => 'datetime',
         'equipment_returned_date'      => 'datetime',
         'date_requested'               => 'date',
         'start_date'                   => 'date',
@@ -75,6 +143,69 @@ class FacilityRequest extends Model
         'approval_signature_meta'      => 'array',
         'document_metadata'            => 'array',
     ];
+
+    // ─── B: OUTSIDER INQUIRIES ───────────────────────────────────────────────
+    public function isOutsiderInquiry(): bool
+    {
+        return ! empty($this->outsider_stage);
+    }
+
+    public function outsiderStageLabel(): ?string
+    {
+        return $this->isOutsiderInquiry() ? (self::OUTSIDER_STAGES[$this->outsider_stage] ?? null) : null;
+    }
+
+    /**
+     * The stage of an outsider request, inferred from its workflow fields when the
+     * request predates the inquiry workflow or was created outside the request form.
+     */
+    public function inferredOutsiderStage(): ?string
+    {
+        if ($this->isOutsiderInquiry()) {
+            return $this->outsider_stage;
+        }
+        if (! $this->requester?->isOutsider()) {
+            return null;
+        }
+
+        return match (true) {
+            in_array($this->status, ['approved', 'completed'], true) => 'confirmed',
+            $this->status === 'rejected' => 'rejected',
+            $this->status === 'cancelled' => 'cancelled',
+            $this->supply_office_review_status === 'confirmed' => 'approved',
+            $this->venue_status === 'approved' => 'endorsed',
+            in_array($this->venue_status, ['rejected', 'needs_reschedule'], true) => 'not_endorsed',
+            default => 'custodian_review',
+        };
+    }
+
+    /** Waiting for IGP: not yet visible to custodians. */
+    public function isAwaitingIgpReview(): bool
+    {
+        return in_array($this->outsider_stage, ['submitted', 'igp_review'], true);
+    }
+
+    public function hasActiveOutsiderHold(?Carbon $at = null): bool
+    {
+        // A hold exists only when the Supply Office set a requirements deadline, and it
+        // lapses on its own after that date.
+        return in_array($this->outsider_stage, self::OUTSIDER_HOLD_STAGES, true)
+            && $this->status === 'pending'
+            && $this->outsider_hold_until !== null
+            && $this->outsider_hold_until->gte($at ?? now());
+    }
+
+    /** Requests still with IGP are hidden from custodian queues. */
+    public function scopeVisibleToCustodians($query)
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'outsider_stage')) {
+            return $query;
+        }
+
+        return $query->where(function ($inner): void {
+            $inner->whereNull('outsider_stage')->orWhereNotIn('outsider_stage', ['submitted', 'igp_review']);
+        });
+    }
 
     public function getRequestingDateAttribute()
     {

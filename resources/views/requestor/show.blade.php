@@ -201,6 +201,20 @@
         $hasAdditionalEquipment && $request->equipment_status !== 'approved' => 'Waiting for assigned equipment custodian review.',
         default => 'Waiting for the designated Supply Office approver to make the final decision.',
     };
+    // B: outsider inquiries spend time with IGP, which the internal workflow does not have.
+    if ($request->status === 'pending' && $request->isOutsiderInquiry()) {
+        if ($request->isAwaitingIgpReview()) {
+            $currentWorkflowKey = 'submitted';
+            $workflowStageLabel = $request->outsiderStageLabel();
+            $workflowNextAction = 'Waiting for IGP to review the inquiry and forward it to the venue custodian.';
+        } elseif ($request->outsider_stage === 'approved') {
+            $workflowStageLabel = $request->outsiderStageLabel();
+            $workflowNextAction = 'Waiting for IGP to inform the client of the payment and other requirements.';
+        } elseif ($request->outsider_stage === 'igp_coordination' && $currentWorkflowKey === 'approval') {
+            $workflowStageLabel = $request->outsiderStageLabel();
+            $workflowNextAction = 'The client completes the requirements with IGP; the Supply Office then confirms the reservation.';
+        }
+    }
     $requestDateLabel = $request->date_requested ? \Carbon\Carbon::parse($request->date_requested)->format('M j, Y') : 'N/A';
     $lastUpdatedLabel = $request->updated_at ? \Carbon\Carbon::parse($request->updated_at)->format('M j, Y \a\t g:i A') : null;
     $proposalFilename = $request->activity_proposal_file ?: $request->proposal_file;
@@ -322,6 +336,22 @@
         $approvalTone = 'rose';
         $currentApprover = 'Supply Office';
         $nextStep = 'Schedule Coordination';
+    } elseif ($request->status === 'pending' && $request->isAwaitingIgpReview()) {
+        $approvalTitle = 'IGP is reviewing your inquiry';
+        $approvalBody = 'IGP checks the inquiry details, then forwards it to the venue custodian to check availability.';
+        $approvalTone = 'amber';
+        $currentApprover = 'IGP';
+        $nextStep = 'IGP Review';
+    } elseif ($request->status === 'pending' && in_array($request->outsider_stage, \App\Models\FacilityRequest::OUTSIDER_HOLD_STAGES, true)) {
+        $approvalTitle = $request->outsider_stage === 'approved'
+            ? 'Approved, subject to requirements'
+            : 'Complete the requirements with IGP';
+        $approvalBody = $request->outsider_stage === 'approved'
+            ? 'The Supply Office approved the inquiry. IGP will contact you about payment and other requirements. The reservation is confirmed only after these are completed.'
+            : 'IGP has sent the requirements. Once they are completed through the institution\'s official procedure, the Supply Office confirms the reservation.';
+        $approvalTone = 'amber';
+        $currentApprover = $request->outsider_stage === 'approved' ? 'IGP' : 'Client and IGP';
+        $nextStep = 'Supply Office Confirmation';
     } elseif (
         $request->status === 'pending'
         && $request->venue_status === 'pending'
@@ -406,8 +436,8 @@
         && $request->equipment_status === 'approved'
         && !$pendingChangeRequest;
     $adminAwaitingPayment = $adminFinalReady
-        && $request->requester?->isOutsider()
-        && $request->igp_payment_status !== 'paid';
+        && $request->isOutsiderInquiry()
+        && $request->outsider_stage !== 'igp_coordination';
     $adminAwaitingVerification = $adminFinalReady
         && $request->requester
         && ! $request->requester->isVerified();
@@ -1116,6 +1146,15 @@
                                     @csrf
                                     <input type="hidden" name="id" value="{{ $request->id }}">
                                     <input type="hidden" name="decision" value="available">
+                                    @if($request->isOutsiderInquiry())
+                                        <div class="mb-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
+                                            <p class="font-semibold">Outsider inquiry: approval is subject to requirements</p>
+                                            <p class="mt-1 text-xs">IGP then informs the client of the payment and other requirements. The reservation is confirmed only after they are completed.</p>
+                                            <label for="outsider_hold_until_{{ $request->id }}" class="mt-2 block text-xs font-semibold">Hold the schedule until (optional requirements deadline)</label>
+                                            <input id="outsider_hold_until_{{ $request->id }}" type="date" name="outsider_hold_until" min="{{ now()->toDateString() }}" value="{{ old('outsider_hold_until') }}" class="mt-1 rounded-lg border border-sky-300 bg-white px-2 py-1 text-sm">
+                                            <p class="mt-1 text-xs">While held, internal requests cannot book this venue and time. Leave blank for no hold.</p>
+                                        </div>
+                                    @endif
                                     @if($request->is_emergency)
                                         <label class="mb-3 flex items-center gap-2 text-sm font-medium text-amber-800">
                                             <input type="checkbox" name="urgent_document_validated" value="1" required class="rounded border-amber-400">
@@ -1156,7 +1195,7 @@
                                     @endif
                                 </div>
                             @elseif($adminAwaitingPayment)
-                                <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Final approval is disabled until the IGP records the official receipt for this Outsider reservation.</div>
+                                <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Confirmation is disabled until IGP informs the client of the payment and other requirements (For IGP Coordination).</div>
                             @elseif($adminAwaitingVerification)
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
                                     Final approval is disabled until the requester's ID is verified.
@@ -1323,6 +1362,9 @@
         $includedEquipmentCount = array_sum(array_map('count', $venueIncludedEquipment));
         $additionalEquipmentCount = count($additionalEquipmentItems);
     @endphp
+    @if($request->isOutsiderInquiry())
+        @include('requestor.partials.outsider-inquiry-panel')
+    @endif
     <section aria-labelledby="reservation-details-heading" style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex items-center gap-3 border-b border-slate-200 pb-5">
             <div class="rounded-2xl bg-emerald-100 p-3 text-emerald-700">

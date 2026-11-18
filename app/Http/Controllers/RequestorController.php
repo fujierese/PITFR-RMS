@@ -1409,6 +1409,11 @@ class RequestorController extends Controller
             'department_id'         => ['nullable', 'exists:departments,id'],
             'department'            => ['nullable', 'string', 'max:100'],
             'organization_name'     => ['nullable', 'string', 'max:191'],
+            // B: outsider inquiry contact details (pre-filled from the account).
+            'contact_person'        => ['nullable', 'string', 'max:191'],
+            'contact_number'        => ['nullable', 'string', 'max:50'],
+            'contact_email'         => ['nullable', 'email', 'max:191'],
+            'additional_remarks'    => ['nullable', 'string', 'max:2000'],
             'request_context'       => ['nullable', 'in:personal,student_organization,outside_organization'],
             'student_organization_id' => ['nullable', 'integer', 'exists:student_organizations,id'],
             'requested_by_position' => ['nullable', 'string', 'max:100'],
@@ -1947,6 +1952,17 @@ class RequestorController extends Controller
             'e_signature_file'         => $eSignatureFileName,
             'document_metadata'        => $documentMetadata,
         ];
+        // B: an outsider's request is an inquiry that IGP reviews before any custodian sees it.
+        $isOutsiderInquiry = $user->isOutsider() && \Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'outsider_stage');
+        if ($isOutsiderInquiry) {
+            $requestAttributes += [
+                'outsider_stage' => 'submitted',
+                'contact_person' => trim((string) ($validated['contact_person'] ?? '')) ?: $user->name,
+                'contact_number' => trim((string) ($validated['contact_number'] ?? '')) ?: $user->contact_number,
+                'contact_email'  => trim((string) ($validated['contact_email'] ?? '')) ?: $user->username,
+                'additional_remarks' => trim((string) ($validated['additional_remarks'] ?? '')) ?: null,
+            ];
+        }
         if (FacilityRequest::capacityRulesEnabled()) {
             $requestAttributes += [
                 'venue_participants'        => $venueParticipants ?: null,
@@ -2022,6 +2038,14 @@ class RequestorController extends Controller
         // Custodians are notified only after the Supply Office's initial availability review.
         \App\Events\RequestCreated::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, []);
 
+        if ($isOutsiderInquiry) {
+            $fr->addHistory('outsider_inquiry_submitted', 'Reservation inquiry submitted by ' . $user->name . '. Waiting for IGP review.', $user->getKey());
+            \Illuminate\Support\Facades\Notification::send(
+                User::query()->withAnyRole(['igp'])->where('is_active', true)->get(),
+                new \App\Notifications\RequestStatusChanged($fr, 'outsider_inquiry_submitted', '', $user->name)
+            );
+        }
+
         $this->clearStagedUploads();
 
         return redirect()->route('requestor.index', ['tab' => 'requests'])
@@ -2043,6 +2067,14 @@ class RequestorController extends Controller
     {
         $request   = FacilityRequest::with(['requestVenues', 'requestEquipment', 'reservationSchedule', 'histories'])->findOrFail($id);
         $this->authorize('view', $request);
+
+        // B: IGP opening a new inquiry starts its review.
+        $viewer = Auth::user();
+        if ($viewer?->isIgp() && $request->outsider_stage === 'submitted' && $request->status === 'pending') {
+            $request->forceFill(['outsider_stage' => 'igp_review'])->save();
+            $request->addHistory('igp_review_started', 'IGP (' . $viewer->name . ') started reviewing the inquiry.', $viewer->getKey());
+            $request->load('histories');
+        }
         $pendingRevision = $request->revisionHistories()->where('status', 'pending')->first();
         $pendingRevisionResponses = $pendingRevision?->getResponsesRequiringConfirmation((int) $request->requested_by_id) ?? [];
         $pendingRevisionUserIds = collect($pendingRevision?->affected_user_ids ?? [])

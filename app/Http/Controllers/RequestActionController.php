@@ -88,6 +88,10 @@ class RequestActionController extends Controller
         if ($includeSupplyOffice) {
             $recipients = $recipients->merge(User::query()->withAnyRole(['admin', 'supply_office'])->get());
         }
+        if ($facilityRequest->isOutsiderInquiry()) {
+            // B.8: IGP follows every outsider inquiry through to its end.
+            $recipients = $recipients->merge(User::query()->withAnyRole(['igp'])->get());
+        }
         $recipients = $recipients->unique('id')->values();
         if ($status === 'request_cancelled') {
             event(new RequestCancelled(
@@ -562,12 +566,12 @@ class RequestActionController extends Controller
                 return redirect()->back()->withErrors('Initial Supply Office availability review must be confirmed before final approval.');
             }
 
-            if ($facilityRequest->requester?->isOutsider() && $facilityRequest->igp_payment_status !== 'paid') {
+            if ($facilityRequest->isOutsiderInquiry() && $facilityRequest->outsider_stage !== 'igp_coordination') {
                 DB::rollBack();
                 if ($request->expectsJson()) {
-                    return response()->json(['message' => 'The IGP must record the official receipt before final approval.'], 409);
+                    return response()->json(['message' => 'IGP must first inform the client of the payment and other institutional requirements (For IGP Coordination) before the Supply Office confirms the reservation.'], 409);
                 }
-                return redirect()->back()->withErrors('The IGP must record the official receipt after availability confirmation and before final approval.');
+                return redirect()->back()->withErrors('IGP must first inform the client of the payment and other institutional requirements (For IGP Coordination) before the Supply Office confirms the reservation.');
             }
 
             if ($facilityRequest->requester && ! $facilityRequest->requester->isVerified()) {

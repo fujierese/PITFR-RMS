@@ -88,8 +88,10 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 Route::middleware(['auth', 'role:igp'])->prefix('igp')->group(function (): void {
     Route::get('/dashboard', [IgpController::class, 'index'])->name('igp.index');
-    Route::post('/requests/{facilityRequest}/payment', [IgpController::class, 'recordPayment'])->name('igp.payment');
-    Route::post('/requests/{facilityRequest}/refund', [IgpController::class, 'recordRefund'])->name('igp.refund');
+    // B: IGP reviews and coordinates outsider inquiries; payment stays offline.
+    Route::post('/inquiries/{facilityRequest}/forward', [IgpController::class, 'forward'])->name('igp.forward');
+    Route::post('/inquiries/{facilityRequest}/coordinate', [IgpController::class, 'startCoordination'])->name('igp.coordinate');
+    Route::post('/inquiries/{facilityRequest}/requirements', [IgpController::class, 'reportRequirements'])->name('igp.requirements');
     Route::get('/settings', [IgpController::class, 'settings'])->name('igp.settings');
     Route::post('/settings/profile', [IgpController::class, 'updateProfile'])->name('igp.settings.profile');
     Route::post('/settings/password', [IgpController::class, 'updatePassword'])->name('igp.settings.password');
@@ -128,6 +130,7 @@ Route::middleware(['auth', 'role:admin,supply_office'])->prefix('supply-office')
     Route::put('/equipment/{equipment}', [SupplyOfficeController::class, 'updateEquipment'])->name('supply-office.equipment.update');
     Route::delete('/equipment/{equipment}', [SupplyOfficeController::class, 'destroyEquipment'])->name('supply-office.equipment.destroy');
     Route::get('/requests/pending', [SupplyOfficeController::class, 'pendingRequests'])->name('supply-office.requests.pending');
+    Route::post('/outsider-inquiries/{facilityRequest}/cancel-approval', [SupplyOfficeController::class, 'cancelOutsiderApproval'])->name('supply-office.outsider.cancel-approval');
     // D4: account verification review.
     Route::get('/verifications', [\App\Http\Controllers\AccountVerificationController::class, 'index'])->name('supply-office.verifications');
     Route::get('/verifications/{user}/id', [\App\Http\Controllers\AccountVerificationController::class, 'file'])->name('supply-office.verifications.file');

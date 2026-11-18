@@ -420,8 +420,20 @@ class AvailabilityService
             return ['available' => false, 'message' => 'The selected venue is unavailable.', 'capacity' => $venueRecord->capacity];
         }
 
+        $holdsEnabled = \Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'outsider_hold_until');
         $requests = FacilityRequest::query()
-            ->where('status', 'approved')
+            ->where(function ($statusQuery) use ($holdsEnabled): void {
+                $statusQuery->where('status', 'approved');
+                // B.7: an approved outsider inquiry awaiting its requirements holds the schedule
+                // until the Supply Office deadline.
+                if ($holdsEnabled) {
+                    $statusQuery->orWhere(function ($holdQuery): void {
+                        $holdQuery->where('status', 'pending')
+                            ->whereIn('outsider_stage', FacilityRequest::OUTSIDER_HOLD_STAGES)
+                            ->where('outsider_hold_until', '>=', now());
+                    });
+                }
+            })
             ->when($excludeRequestId !== null, fn ($query) => $query->whereKeyNot($excludeRequestId))
             ->where(function ($query) use ($requestedStart, $requestedEnd): void {
                 $query->whereHas('reservationSchedule', function ($scheduleQuery) use ($requestedStart, $requestedEnd): void {
@@ -437,7 +449,7 @@ class AvailabilityService
             ->get();
 
         $conflicts = $requests->contains(function (FacilityRequest $request) use ($venueName, $requestedStart, $requestedEnd): bool {
-                if ($request->status !== 'approved') {
+                if ($request->status !== 'approved' && ! $request->hasActiveOutsiderHold()) {
                     return false;
                 }
                 $venueNames = array_map('strtolower', $request->getVenueNames());
