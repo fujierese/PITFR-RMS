@@ -17,3 +17,14 @@ Artisan::command('facility-requests:backfill-relations', function () {
 
 Schedule::command(SendReservationReminderNotifications::class)->everyMinute();
 Schedule::command(ProcessPendingReviewDeadlines::class)->hourly()->withoutOverlapping();
+
+// REQ-05: delete kept uploads from failed submissions after 24 hours.
+Schedule::call(function (): void {
+    $disk = \Illuminate\Support\Facades\Storage::disk('local');
+    $cutoff = now()->subDay()->getTimestamp();
+    foreach ($disk->allFiles('staged-uploads') as $path) {
+        if ($disk->lastModified($path) < $cutoff) {
+            $disk->delete($path);
+        }
+    }
+})->hourly()->name('cleanup-staged-uploads')->withoutOverlapping();

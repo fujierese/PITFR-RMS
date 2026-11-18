@@ -614,7 +614,7 @@
                                         <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
                                             <label for="activity_proposal_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
                                                 <span data-upload-action-label>Upload a file</span>
-                                                <input id="activity_proposal_file" name="activity_proposal_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only">
+                                                <input id="activity_proposal_file" name="activity_proposal_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only" @if($errors->any() && session('staged_uploads.activity_proposal_file')) data-kept="1" @endif>
                                             </label>
                                             <span>or drag and drop</span>
                                         </div>
@@ -664,6 +664,14 @@
                                 <div id="activity-proposal-preview" class="mt-3 hidden">
                                     <p class="flex items-center justify-between gap-3 text-sm text-slate-600">Selected file: <span id="activity-proposal-name" class="font-medium"></span><button type="button" data-remove-file="activity_proposal_file" class="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700" aria-label="Remove activity proposal">Remove</button></p>
                                 </div>
+                                @if ($errors->any() && session('staged_uploads.activity_proposal_file'))
+                                    {{-- REQ-05: the file from the failed submission is kept. --}}
+                                    <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" data-kept-file="activity_proposal_file">
+                                        <input type="hidden" name="kept_activity_proposal_file" value="{{ session('staged_uploads.activity_proposal_file.token') }}">
+                                        <span>We kept your activity proposal: <strong>{{ session('staged_uploads.activity_proposal_file.name') }}</strong>. You don't need to upload it again; choose a new file only to replace it.</span>
+                                        <button type="button" data-discard-kept="activity_proposal_file" class="text-xs font-semibold text-red-600 hover:text-red-700">Remove</button>
+                                    </div>
+                                @endif
                                 @error('activity_proposal_file')
                                     <p class="mt-2 text-sm text-red-500">{{ $message }}</p>
                                 @enderror
@@ -683,7 +691,7 @@
                                         <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
                                             <label for="igp_receipt_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
                                                 <span data-upload-action-label>Upload a file</span>
-                                                <input id="igp_receipt_file" name="igp_receipt_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only">
+                                                <input id="igp_receipt_file" name="igp_receipt_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only" @if($errors->any() && session('staged_uploads.igp_receipt_file')) data-kept="1" @endif>
                                             </label>
                                             <span>or drag and drop</span>
                                         </div>
@@ -733,6 +741,14 @@
                                 <div id="igp-receipt-preview" class="mt-3 hidden">
                                     <p class="flex items-center justify-between gap-3 text-sm text-slate-600">Selected file: <span id="igp-receipt-name" class="font-medium"></span><button type="button" data-remove-file="igp_receipt_file" class="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700" aria-label="Remove IGP receipt">Remove</button></p>
                                 </div>
+                                @if ($errors->any() && session('staged_uploads.igp_receipt_file'))
+                                    {{-- REQ-05: the file from the failed submission is kept. --}}
+                                    <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" data-kept-file="igp_receipt_file">
+                                        <input type="hidden" name="kept_igp_receipt_file" value="{{ session('staged_uploads.igp_receipt_file.token') }}">
+                                        <span>We kept your receipt: <strong>{{ session('staged_uploads.igp_receipt_file.name') }}</strong>. You don't need to upload it again; choose a new file only to replace it.</span>
+                                        <button type="button" data-discard-kept="igp_receipt_file" class="text-xs font-semibold text-red-600 hover:text-red-700">Remove</button>
+                                    </div>
+                                @endif
                                 @error('igp_receipt_file')
                                     <p class="mt-2 text-sm text-red-500">{{ $message }}</p>
                                 @enderror
@@ -897,6 +913,25 @@
     } else {
         initializeVenueCapacityWarning();
     }
+
+    // REQ-05: a file kept from a failed submission counts as uploaded.
+    window.pitfrHasFile = window.pitfrHasFile || ((input) => Boolean(input?.files?.length || input?.dataset?.kept === '1'));
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-discard-kept]');
+        if (!button) return;
+        const field = button.dataset.discardKept;
+        document.querySelector(`[data-kept-file="${field}"]`)?.remove();
+        const input = document.querySelector(`input[type="file"][name="${field}"]`);
+        if (input) delete input.dataset.kept;
+    });
+    document.addEventListener('change', (event) => {
+        const input = event.target;
+        if (input?.type === 'file' && input.files?.length && input.dataset.kept) {
+            // A newly chosen file replaces the kept one.
+            delete input.dataset.kept;
+            document.querySelector(`[data-kept-file="${input.name}"]`)?.remove();
+        }
+    });
 
     // REQ-03: today's date in Asia/Manila, from the server.
     window.pitfrUrgentToday = @json(now()->timezone(config('app.timezone'))->toDateString());
@@ -1833,9 +1868,9 @@
             });
             const isStudent = form.dataset.isStudent === '1';
             const requestContext = form.querySelector('[name="request_context"]')?.value;
-            const activityProposalFile = form.querySelector('[name="activity_proposal_file"]')?.files?.length > 0;
-            const proposalFile = form.querySelector('[name="proposal_file"]')?.files?.length > 0;
-            const igpReceiptFile = form.querySelector('[name="igp_receipt_file"]')?.files?.length > 0;
+            const activityProposalFile = window.pitfrHasFile(form.querySelector('[name="activity_proposal_file"]'));
+            const proposalFile = window.pitfrHasFile(form.querySelector('[name="proposal_file"]'));
+            const igpReceiptFile = window.pitfrHasFile(form.querySelector('[name="igp_receipt_file"]'));
             const hasSupportingDocument = isStudent && requestContext === 'student_organization'
                 ? (activityProposalFile || proposalFile)
                 : (isStudent || requestorType === 'faculty') && !requestContext

@@ -1293,6 +1293,79 @@ class RequestorController extends Controller
         return 'Summer Term';
     }
  
+    private const STAGED_UPLOAD_FIELDS = ['proposal_file', 'activity_proposal_file', 'igp_receipt_file'];
+
+    /**
+     * REQ-05: a browser cannot refill a file input after a failed submission, so each
+     * valid upload is copied to private storage and offered again on the next submit.
+     * A kept file is reused only when the form sends back its matching token.
+     */
+    private function restoreStagedUploads(Request $request, User $user): void
+    {
+        if (! $request->hasSession()) {
+            return;
+        }
+        $staged = (array) $request->session()->get('staged_uploads', []);
+
+        foreach (self::STAGED_UPLOAD_FIELDS as $field) {
+            $entry = $staged[$field] ?? null;
+            $file = $request->file($field);
+
+            if ($file instanceof \Illuminate\Http\UploadedFile && $file->isValid()) {
+                $extension = strtolower((string) $file->getClientOriginalExtension());
+                if (! in_array($extension, ['pdf', 'jpg', 'jpeg', 'png'], true) || $file->getSize() > 10 * 1024 * 1024) {
+                    continue; // Validation reports the problem; nothing to keep.
+                }
+                if ($entry) {
+                    Storage::disk('local')->delete($entry['path']);
+                }
+                $path = Storage::disk('local')->putFileAs("staged-uploads/{$user->id}", $file, \Illuminate\Support\Str::uuid() . '.' . $extension);
+                $staged[$field] = [
+                    'path' => $path,
+                    'name' => mb_substr($file->getClientOriginalName(), 0, 150),
+                    'token' => \Illuminate\Support\Str::random(40),
+                ];
+                continue;
+            }
+
+            if (! $entry) {
+                continue;
+            }
+
+            $keptToken = (string) $request->input("kept_{$field}", '');
+            if ($keptToken !== '' && hash_equals($entry['token'], $keptToken) && Storage::disk('local')->exists($entry['path'])) {
+                $request->files->set($field, new \Illuminate\Http\UploadedFile(
+                    Storage::disk('local')->path($entry['path']),
+                    $entry['name'],
+                    Storage::disk('local')->mimeType($entry['path']) ?: null,
+                    null,
+                    true,
+                ));
+            } elseif ($keptToken === '') {
+                // The requestor removed the kept file.
+                Storage::disk('local')->delete($entry['path']);
+                unset($staged[$field]);
+            }
+        }
+
+        $request->session()->put('staged_uploads', $staged);
+        // Laravel caches the converted file list; reset it so validation sees restored files.
+        (fn () => $this->convertedFiles = null)->call($request);
+    }
+
+    private function clearStagedUploads(): void
+    {
+        if (! request()->hasSession()) {
+            return;
+        }
+        foreach ((array) session('staged_uploads', []) as $entry) {
+            if (! empty($entry['path'])) {
+                Storage::disk('local')->delete($entry['path']);
+            }
+        }
+        session()->forget('staged_uploads');
+    }
+
     public function store(Request $request)
     {
         // Server-side guard: only registered requestors may submit requests
@@ -1304,6 +1377,8 @@ class RequestorController extends Controller
         if (!$user || !$user->isRequestee()) {
             return redirect()->route('login')->withErrors(['authorization' => 'Only registered requestors may submit facility/equipment requests.']);
         }
+        // REQ-05: keep uploaded documents across validation errors.
+        $this->restoreStagedUploads($request, $user);
         if ($user->isOutsider() && $request->boolean('is_emergency')) {
             return back()
                 ->withErrors(['is_emergency' => 'Urgent processing is available only to Institute requestors.'])
@@ -1942,6 +2017,8 @@ class RequestorController extends Controller
 
         // Custodians are notified only after the Supply Office's initial availability review.
         \App\Events\RequestCreated::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, []);
+
+        $this->clearStagedUploads();
 
         return redirect()->route('requestor.index', ['tab' => 'requests'])
                         ->with('success', 'Request submitted successfully!')

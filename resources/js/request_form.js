@@ -1,3 +1,5 @@
+// REQ-05: a file kept from a failed submission counts as uploaded.
+window.pitfrHasFile = window.pitfrHasFile || ((input) => Boolean(input?.files?.length || input?.dataset?.kept === '1'));
 const initializeReservationDurationToggles = function () {
     let previousDuration = document.querySelector('input[name="reservation_duration"]:checked')?.value || null;
 
@@ -270,8 +272,8 @@ const initializeRequestForm = function () {
             const requestorType = form.dataset.requestorType || '';
             const proposalInput = form.querySelector('[name="activity_proposal_file"], [name="proposal_file"]');
             const receiptInput = form.querySelector('[name="igp_receipt_file"]');
-            const hasProposal = Boolean(proposalInput?.files?.length);
-            const hasReceipt = Boolean(receiptInput?.files?.length);
+            const hasProposal = window.pitfrHasFile(proposalInput);
+            const hasReceipt = window.pitfrHasFile(receiptInput);
             const isEmergency = Boolean(form.querySelector('[name="is_emergency"]')?.checked);
             const isRequired = isStudent && requestContext === 'student_organization'
                 ? !hasProposal
@@ -366,8 +368,8 @@ const initializeRequestForm = function () {
 
         const requestContext = form.querySelector('[name="request_context"]')?.value;
         const isStudent = form.dataset.isStudent === '1';
-        const hasProposal = Boolean(form.querySelector('[name="activity_proposal_file"]')?.files?.length || form.querySelector('[name="proposal_file"]')?.files?.length);
-        const hasReceipt = Boolean(form.querySelector('[name="igp_receipt_file"]')?.files?.length);
+        const hasProposal = window.pitfrHasFile(form.querySelector('[name="activity_proposal_file"]')) || window.pitfrHasFile(form.querySelector('[name="proposal_file"]'));
+        const hasReceipt = window.pitfrHasFile(form.querySelector('[name="igp_receipt_file"]'));
         const hasSupportingDocument = isStudent && requestContext === 'student_organization'
             ? hasProposal
             : (isStudent || requestorType === 'faculty') && !requestContext
