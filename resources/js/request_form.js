@@ -1112,16 +1112,30 @@ const initializeRequestForm = function () {
             return;
         }
 
+        // REQ-04: show the urgent notice and the issuing-office choice as soon as Urgent is ticked.
+        const emergencyOfficeSelect = document.getElementById('emergency-office');
+        const urgentIndicator = document.getElementById('urgent-request-indicator');
         if (emergencyCheckbox.checked) {
+            emergencyJustificationWrap.classList.remove('hidden');
             emergencyJustificationWrap.style.display = 'block';
             emergencyJustificationInput.removeAttribute('disabled');
             emergencyJustificationInput.setAttribute('required', 'required');
-            emergencyJustificationInput.focus();
+            emergencyOfficeSelect?.removeAttribute('disabled');
+            emergencyOfficeSelect?.setAttribute('required', 'required');
+            urgentIndicator?.classList.remove('hidden');
+            (emergencyOfficeSelect && !emergencyOfficeSelect.value ? emergencyOfficeSelect : emergencyJustificationInput).focus();
         } else {
+            emergencyJustificationWrap.classList.add('hidden');
             emergencyJustificationWrap.style.display = 'none';
             emergencyJustificationInput.removeAttribute('required');
             emergencyJustificationInput.value = '';
             emergencyJustificationInput.setAttribute('disabled', 'disabled');
+            if (emergencyOfficeSelect) {
+                emergencyOfficeSelect.removeAttribute('required');
+                emergencyOfficeSelect.value = '';
+                emergencyOfficeSelect.setAttribute('disabled', 'disabled');
+            }
+            urgentIndicator?.classList.add('hidden');
         }
     };
 

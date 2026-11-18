@@ -80,4 +80,29 @@ class UrgentRequestDateTest extends TestCase
 
         $this->assertDatabaseHas('facility_requests', ['name_of_activity' => 'CHED Visit', 'is_emergency' => true]);
     }
+
+    public function test_urgent_toggle_shows_office_choice_and_notice_immediately(): void
+    {
+        // REQ-04: the form script enables the issuing office and shows the notice on toggle,
+        // not only after a failed submission.
+        $script = file_get_contents(resource_path('js/request_form.js'));
+        $this->assertStringContainsString("emergencyOfficeSelect?.removeAttribute('disabled')", $script);
+        $this->assertStringContainsString("urgentIndicator?.classList.remove('hidden')", $script);
+
+        $this->actingAs($this->requester)
+            ->get(route('requestor.index', ['tab' => 'create']))
+            ->assertOk()
+            ->assertSee('id="emergency-office"', false)
+            ->assertSee('id="urgent-request-indicator"', false);
+    }
+
+    public function test_server_still_requires_the_issuing_office(): void
+    {
+        $payload = $this->urgentPayload('2026-11-27');
+        unset($payload['emergency_office']);
+
+        $this->actingAs($this->requester)
+            ->post(route('requestor.store'), $payload)
+            ->assertSessionHasErrors('emergency_office');
+    }
 }
