@@ -365,15 +365,12 @@
         </div>
     @endif
 
-    <div class="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,23,42,0.06)]">
-        <div class="border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Interactive calendar</p>
-                    <p class="mt-1 text-sm text-slate-600">
-                        @if($dateSelectionMode)
-                            Select a start date, then an end date. The end date is inclusive; choose the same date twice for a one-day reservation.
-                        @elseif($user && $user->isCustodianVenue())
+    {{-- Calendar in a Google Calendar-style layout: legend sidebar, clean grid, colored event chips. --}}
+    <div class="gcal-shell">
+            @unless($dateSelectionMode)
+                <aside class="gcal-sidebar" aria-label="Calendar legend">
+                    <p class="text-xs leading-5 gcal-muted-text">
+                        @if($user && $user->isCustodianVenue())
                             Review bookings and tentative requests for your assigned venue. Use the request workflow to confirm availability or report a conflict.
                         @elseif($user && $user->isCustodianEquipment())
                             Review venue schedules for context. Confirm equipment availability in your assigned equipment review queue.
@@ -385,38 +382,52 @@
                             Review approved bookings and pending requests as availability context before contacting the Supply Office.
                         @endif
                     </p>
-                    <p id="requested-calendar-highlight" class="mt-2 hidden rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-900" aria-live="polite"></p>
-                </div>
-                @unless($dateSelectionMode)
-                    <div class="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500" aria-label="Calendar legend">
-                        <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Approved booking</span>
-                        <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>Pending review</span>
-                        <span class="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>Rejected / conflict</span>
-                        <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-sm border border-dashed border-slate-500 bg-slate-100"></span>Maintenance / closure</span>
-                        <span class="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-900"><span class="h-2.5 w-2.5 rounded-sm border border-cyan-600 bg-cyan-100"></span>Requested schedule</span>
-                        <span class="inline-flex items-center gap-2 rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>CHIC</span>
-                        <span class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-blue-600"></span>Balay Alumni</span>
-                        <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full" style="background-color: #92400e;"></span>Gym</span>
-                        <span class="inline-flex items-center gap-2 rounded-full border border-green-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full bg-green-600"></span>Covered Courts / Oval</span>
+
+                    <div class="mt-5">
+                        <h3 class="gcal-side-heading">Venues</h3>
+                        <ul class="gcal-legend-list">
+                            <li class="gcal-side-item"><span class="gcal-swatch" style="background-color: #dc2626;"></span>CHIC</li>
+                            <li class="gcal-side-item"><span class="gcal-swatch" style="background-color: #2563eb;"></span>Balay Alumni</li>
+                            <li class="gcal-side-item"><span class="gcal-swatch" style="background-color: #92400e;"></span>Gym</li>
+                            <li class="gcal-side-item"><span class="gcal-swatch" style="background-color: #16a34a;"></span>Covered Courts / Oval</li>
+                        </ul>
+                    </div>
+
+                    <div class="mt-5">
+                        <h3 class="gcal-side-heading">Status</h3>
+                        <ul class="gcal-legend-list">
+                            <li class="gcal-side-item"><span class="gcal-sample gcal-sample--solid"></span>Approved booking</li>
+                            <li class="gcal-side-item"><span class="gcal-sample gcal-sample--tentative"></span>Pending review</li>
+                            <li class="gcal-side-item"><span class="gcal-sample gcal-sample--declined"></span>Rejected / conflict</li>
+                            <li class="gcal-side-item"><span class="gcal-sample gcal-sample--maintenance"></span>Maintenance / closure</li>
+                            <li class="gcal-side-item"><span class="gcal-sample gcal-sample--requested"></span>Requested schedule</li>
+                            @if($user && $user->isCustodianVenue())
+                                <li class="gcal-side-item"><span class="gcal-sample gcal-sample--awaiting"></span>Awaiting venue confirmation</li>
+                            @endif
+                        </ul>
                         @if($user && $user->isCustodianVenue())
-                            <span class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
-                                <span class="h-2.5 w-2.5 rounded-sm border border-dashed border-amber-700 bg-amber-100"></span>
-                                Awaiting venue confirmation
-                            </span>
-                            <span class="text-xs text-amber-900">Tentative request, not an approved booking. Select it to review and confirm availability.</span>
-                        @endif
-                        <span class="text-xs text-slate-600">No event shown = no request listed for that date; check venue and time availability before submitting.</span>
-                        @if($user && $user->isAdmin())
-                            <label for="include-cancelled-events" class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
-                                <input id="include-cancelled-events" type="checkbox" class="rounded border-slate-300 text-slate-600 focus:ring-slate-500">
-                                Show cancelled
-                            </label>
+                            <p class="mt-2 text-xs leading-5 text-amber-900">Tentative request, not an approved booking. Select it to review and confirm availability.</p>
                         @endif
                     </div>
-                @endunless
+
+                    <p class="mt-5 text-xs leading-5 gcal-muted-text">No event shown = no request listed for that date; check venue and time availability before submitting.</p>
+
+                    @if($user && $user->isAdmin())
+                        <label for="include-cancelled-events" class="mt-4 inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                            <input id="include-cancelled-events" type="checkbox" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                            Show cancelled
+                        </label>
+                    @endif
+                </aside>
+            @endunless
+
+            <div class="gcal-main">
+                @if($dateSelectionMode)
+                    <p class="px-4 pt-3 text-xs leading-5 gcal-muted-text sm:px-5">Select a start date, then an end date. The end date is inclusive; choose the same date twice for a one-day reservation.</p>
+                @endif
+                <p id="requested-calendar-highlight" class="mx-4 mt-3 hidden rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-900 sm:mx-5" aria-live="polite"></p>
+                <div id="calendar" class="w-full px-2 pb-3 pt-3 sm:px-4 min-h-[420px] sm:min-h-[520px] lg:min-h-[600px]"></div>
             </div>
-        </div>
-        <div id="calendar" class="w-full p-4 sm:p-6 min-h-[420px] sm:min-h-[520px] lg:min-h-[600px]"></div>
     </div>
 
     <meta name="login-route" content="{{ route('login') }}">
@@ -1308,9 +1319,7 @@
 .fc-event {
     cursor: pointer;
     transition: all 0.2s ease;
-    border-radius: 0.75rem !important;
-    background-color: transparent !important;
-    border: 1px solid #000000 !important;
+    border-radius: 4px !important;
     margin: 0 !important;
     padding: 0 !important;
     font-size: 0.85rem !important;
@@ -1687,6 +1696,230 @@
     color: #164e63 !important;
 }
 
+/* ============================================
+   GOOGLE CALENDAR-STYLE THEME
+   Scoped to .gcal-shell #calendar so it wins over the older rules above.
+   ============================================ */
+.gcal-shell {
+    --gcal-line: #dadce0;
+    --gcal-text: #3c4043;
+    --gcal-muted: #70757a;
+    --gcal-blue: #1a73e8;
+    --gcal-blue-dark: #1967d2;
+    --gcal-blue-soft: #e8f0fe;
+    --gcal-hover: #f1f3f4;
+}
+.gcal-shell {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--gcal-line);
+    border-radius: 1rem;
+    background: #ffffff;
+}
+.gcal-sidebar { flex: none; padding: 1rem; border-bottom: 1px solid var(--gcal-line); }
+.gcal-muted-text { color: #5f6368; }
+.gcal-main { flex: 1 1 auto; min-width: 0; }
+.gcal-legend-list { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; list-style: none; padding: 0; }
+@media (min-width: 1024px) {
+    .gcal-shell { flex-direction: row; }
+    .gcal-sidebar { width: 16rem; border-bottom: none; border-right: 1px solid var(--gcal-line); }
+    .gcal-legend-list { flex-direction: column; gap: 0.5rem; }
+}
+.gcal-side-heading { font-size: 0.8125rem; font-weight: 600; color: var(--gcal-text); }
+.gcal-side-item { display: flex; align-items: center; gap: 0.625rem; font-size: 0.8125rem; color: var(--gcal-text); }
+.gcal-swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; }
+.gcal-sample { width: 22px; height: 12px; border-radius: 4px; flex: none; box-sizing: border-box; }
+.gcal-sample--solid { background: var(--gcal-blue); }
+.gcal-sample--tentative { background: var(--gcal-blue-soft); border: 1px solid var(--gcal-blue); }
+.gcal-sample--declined { background: var(--gcal-hover); border: 1px solid var(--gcal-line); position: relative; }
+.gcal-sample--declined::after { content: ''; position: absolute; left: 3px; right: 3px; top: 50%; border-top: 1px solid var(--gcal-muted); }
+.gcal-sample--maintenance { background: repeating-linear-gradient(135deg, #f1f3f4 0 3px, #dadce0 3px 5px); border: 1px dashed #9aa0a6; }
+.gcal-sample--requested { background: #ecfeff; border: 1px solid #0891b2; }
+.gcal-sample--awaiting { background: #fffbeb; border: 1px dashed #d97706; }
+
+/* Root, grid lines and toolbar */
+.gcal-shell #calendar.fc {
+    --fc-border-color: var(--gcal-line);
+    --fc-today-bg-color: transparent;
+    --fc-now-indicator-color: #ea4335;
+    --fc-page-bg-color: #ffffff;
+    color: var(--gcal-text);
+}
+.gcal-shell #calendar.fc .fc-scrollgrid,
+.gcal-shell #calendar.fc td,
+.gcal-shell #calendar.fc th { border-color: var(--gcal-line) !important; }
+.gcal-shell #calendar.fc .fc-toolbar.fc-header-toolbar { margin-bottom: 0.75rem !important; gap: 0.5rem; flex-wrap: wrap; }
+.gcal-shell #calendar.fc .fc-toolbar-chunk { display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; }
+.gcal-shell #calendar.fc .fc-toolbar-title { font-size: 1.375rem !important; font-weight: 400 !important; color: var(--gcal-text) !important; margin: 0 0 0 0.5rem !important; }
+.gcal-shell #calendar.fc .fc-button {
+    background: #ffffff !important;
+    border: 1px solid var(--gcal-line) !important;
+    color: var(--gcal-text) !important;
+    box-shadow: none !important;
+    text-transform: none !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    padding: 0.4rem 0.9rem !important;
+    border-radius: 4px !important;
+}
+.gcal-shell #calendar.fc .fc-button:hover:not(:disabled) { background: var(--gcal-hover) !important; }
+.gcal-shell #calendar.fc .fc-button:focus-visible { outline: 2px solid var(--gcal-blue) !important; outline-offset: 1px; }
+.gcal-shell #calendar.fc .fc-button-group > .fc-button { border-radius: 0 !important; }
+.gcal-shell #calendar.fc .fc-button-group > .fc-button:first-child { border-radius: 4px 0 0 4px !important; }
+.gcal-shell #calendar.fc .fc-button-group > .fc-button:last-child { border-radius: 0 4px 4px 0 !important; }
+.gcal-shell #calendar.fc .fc-button-group > .fc-button:not(:first-child) { margin-left: -1px !important; }
+.gcal-shell #calendar.fc .fc-button-active { background: var(--gcal-blue-soft) !important; color: var(--gcal-blue-dark) !important; border-color: #d2e3fc !important; position: relative; z-index: 1; }
+.gcal-shell #calendar.fc .fc-prev-button,
+.gcal-shell #calendar.fc .fc-next-button {
+    border: none !important;
+    background: transparent !important;
+    border-radius: 9999px !important;
+    width: 2.25rem; height: 2.25rem;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #5f6368 !important;
+}
+.gcal-shell #calendar.fc .fc-prev-button:hover:not(:disabled),
+.gcal-shell #calendar.fc .fc-next-button:hover:not(:disabled) { background: var(--gcal-hover) !important; }
+.gcal-shell #calendar.fc .fc-today-button { margin-right: 0.5rem !important; }
+.gcal-shell #calendar.fc .fc-button:disabled { opacity: 0.45 !important; }
+
+/* Column headers */
+.gcal-shell #calendar.fc .fc-col-header-cell { background: #ffffff !important; padding: 0.375rem 0 !important; font-weight: 500 !important; }
+.gcal-shell #calendar.fc .fc-col-header-cell-cushion {
+    display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+    font-size: 11px !important; font-weight: 500 !important; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--gcal-muted) !important; text-decoration: none !important;
+    padding: 2px 4px !important;
+}
+.gcal-dow { font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gcal-muted); }
+.gcal-dom {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.5rem; height: 2.5rem; border-radius: 9999px;
+    font-size: 1.5rem; font-weight: 400; letter-spacing: 0; color: var(--gcal-text);
+}
+.gcal-dom.is-today { background: var(--gcal-blue); color: #ffffff; }
+.gcal-dow.is-today { color: var(--gcal-blue); }
+
+/* Month grid cells */
+.gcal-shell #calendar.fc .fc-daygrid-day,
+.gcal-shell #calendar.fc .fc-daygrid-day:hover,
+.gcal-shell #calendar.fc .fc-daygrid-day.fc-day-other,
+.gcal-shell #calendar.fc .fc-daygrid-day.fc-day-weekend .fc-daygrid-day-frame,
+.gcal-shell #calendar.fc .fc-daygrid-day.fc-today,
+.gcal-shell #calendar.fc .fc-daygrid-day.fc-day-today { background-color: #ffffff !important; box-shadow: none !important; }
+.gcal-shell #calendar.fc .fc-daygrid-day-top { flex-direction: row !important; justify-content: center; }
+.gcal-shell #calendar.fc .fc-daygrid-day-number {
+    width: 24px; height: 24px;
+    margin: 4px auto 2px !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 9999px !important;
+    display: inline-flex !important; align-items: center !important; justify-content: center !important;
+    font-size: 12px !important; font-weight: 500 !important;
+    color: var(--gcal-text) !important;
+    background: transparent !important;
+    text-decoration: none !important;
+}
+.gcal-shell #calendar.fc .fc-day-other .fc-daygrid-day-number { color: #9aa0a6 !important; }
+.gcal-shell #calendar.fc .fc-daygrid-day.fc-today .fc-daygrid-day-number,
+.gcal-shell #calendar.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number { background: var(--gcal-blue) !important; color: #ffffff !important; }
+.gcal-shell #calendar.fc .day-status-icons { display: none !important; }
+.gcal-shell #calendar.fc .daily-participants-badge { background: var(--gcal-hover) !important; color: #5f6368 !important; border: none !important; box-shadow: none !important; font-weight: 500 !important; }
+
+/* Date-picker selection and requested dates (kept, in Google's blue / cyan) */
+.gcal-shell #calendar.fc .fc-daygrid-day.calendar-range-between .fc-daygrid-day-frame,
+.gcal-shell #calendar.fc .fc-daygrid-day.calendar-range-start .fc-daygrid-day-frame,
+.gcal-shell #calendar.fc .fc-daygrid-day.calendar-range-end .fc-daygrid-day-frame { background-color: var(--gcal-blue-soft) !important; }
+.gcal-shell #calendar.fc .fc-daygrid-day.calendar-range-start .fc-daygrid-day-number,
+.gcal-shell #calendar.fc .fc-daygrid-day.calendar-range-end .fc-daygrid-day-number { background: var(--gcal-blue) !important; color: #ffffff !important; }
+.gcal-shell #calendar.fc .fc-daygrid-day.requested-reservation-date .fc-daygrid-day-frame { background-color: #ecfeff !important; }
+.gcal-shell #calendar.fc .fc-daygrid-day.requested-reservation-date-start .fc-daygrid-day-frame,
+.gcal-shell #calendar.fc .fc-daygrid-day.requested-reservation-date-end .fc-daygrid-day-frame { background-color: #cffafe !important; box-shadow: inset 0 0 0 1px rgba(8, 145, 178, 0.5) !important; }
+.gcal-shell #calendar.fc .fc-daygrid-day.requested-reservation-date-start .fc-daygrid-day-number,
+.gcal-shell #calendar.fc .fc-daygrid-day.requested-reservation-date-end .fc-daygrid-day-number { background: #0891b2 !important; color: #ffffff !important; }
+
+/* Time grid */
+.gcal-shell #calendar.fc .fc-timegrid-slot { border-color: var(--gcal-line) !important; }
+.gcal-shell #calendar.fc .fc-timegrid-slot-minor { border-top-style: none !important; }
+.gcal-shell #calendar.fc .fc-timegrid-slot-label-cushion,
+.gcal-shell #calendar.fc .fc-timegrid-axis-cushion { font-size: 10px !important; color: var(--gcal-muted) !important; font-weight: 400 !important; }
+.gcal-shell #calendar.fc .fc-timegrid-slot-label { vertical-align: top !important; border-top-color: transparent !important; }
+.gcal-shell #calendar.fc .fc-timegrid-slot-label-cushion { position: relative; top: -0.6em; background: #ffffff; padding-right: 8px !important; }
+.gcal-shell #calendar.fc .fc-timegrid-col.fc-day-sat,
+.gcal-shell #calendar.fc .fc-timegrid-col.fc-day-sun,
+.gcal-shell #calendar.fc .fc-timegrid-col.fc-day-today { background: #ffffff !important; }
+.gcal-shell #calendar.fc .fc-timegrid-now-indicator-line { border-width: 2px 0 0 !important; }
+.gcal-shell #calendar.fc .fc-timegrid-now-indicator-arrow { border: none !important; width: 12px; height: 12px; border-radius: 9999px; background: var(--fc-now-indicator-color); margin-top: -6px !important; margin-left: -6px !important; }
+
+/* Events: solid = approved, tinted outline = tentative, grey struck = rejected/cancelled */
+.gcal-shell #calendar.fc .fc-event {
+    --gcal-color: var(--gcal-blue);
+    background: var(--gcal-color) !important;
+    border: 1px solid var(--gcal-color) !important;
+    border-radius: 4px !important;
+    color: #ffffff !important;
+    font-size: 12px !important;
+    line-height: 1.3 !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+.gcal-shell #calendar.fc .fc-event .fc-event-main,
+.gcal-shell #calendar.fc .fc-event .fc-event-main-frame { color: inherit !important; padding: 0 !important; }
+.gcal-shell #calendar.fc .fc-event:hover { box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15) !important; transform: none !important; }
+.gcal-shell #calendar.fc .fc-event.gcal-tentative {
+    background: #ffffff !important;
+    background: color-mix(in srgb, var(--gcal-color) 12%, #ffffff) !important;
+    color: var(--gcal-text) !important;
+}
+.gcal-shell #calendar.fc .fc-event.gcal-declined { background: var(--gcal-hover) !important; border-color: var(--gcal-line) !important; color: var(--gcal-muted) !important; }
+.gcal-shell #calendar.fc .fc-event.gcal-declined .gcal-title { text-decoration: line-through; }
+.gcal-shell #calendar.fc .fc-event.gcal-maintenance { background: repeating-linear-gradient(135deg, #f1f3f4 0 6px, #e8eaed 6px 10px) !important; border: 1px dashed #9aa0a6 !important; color: var(--gcal-text) !important; }
+.gcal-shell #calendar.fc .fc-event.awaiting-venue-confirmation-event { background: #fffbeb !important; border: 1px dashed #d97706 !important; color: #78350f !important; }
+.gcal-shell #calendar.fc .fc-timegrid-event { border-radius: 6px !important; box-shadow: 0 0 0 1px #ffffff !important; }
+.gcal-shell #calendar.fc .fc-timegrid-event:hover { box-shadow: 0 0 0 1px #ffffff, 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15) !important; }
+
+/* Month view: timed events as a dot + time + title row, like Google's month grid */
+.gcal-shell #calendar.fc .fc-daygrid-event.gcal-dotted { background: transparent !important; border-color: transparent !important; color: var(--gcal-text) !important; }
+.gcal-shell #calendar.fc .fc-daygrid-event.gcal-dotted:hover { background: var(--gcal-hover) !important; box-shadow: none !important; }
+.gcal-shell #calendar.fc .fc-daygrid-event.gcal-dotted.gcal-declined { color: var(--gcal-muted) !important; }
+.gcal-shell #calendar.fc .fc-daygrid-event { margin: 1px 4px !important; }
+
+.gcal-event { display: flex; min-width: 0; overflow: hidden; }
+.gcal-event--chip { align-items: center; gap: 6px; padding: 1px 4px; white-space: nowrap; }
+.gcal-event--bar { align-items: center; padding: 1px 6px; white-space: nowrap; font-weight: 500; }
+.gcal-event--block { flex-direction: column; gap: 1px; height: 100%; padding: 2px 6px; }
+.gcal-dot { width: 8px; height: 8px; border-radius: 9999px; flex: none; background: var(--gcal-color); border: 2px solid var(--gcal-color); box-sizing: border-box; }
+.gcal-tentative .gcal-dot,
+.awaiting-venue-confirmation-event .gcal-dot { background: #ffffff; }
+.gcal-declined .gcal-dot { background: #bdc1c6; border-color: #bdc1c6; }
+.gcal-maintenance .gcal-dot { background: #9aa0a6; border-color: #9aa0a6; }
+.gcal-time { flex: none; color: inherit; opacity: 0.85; }
+.gcal-event--chip .gcal-time { color: var(--gcal-muted); opacity: 1; }
+.gcal-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.gcal-event--block .gcal-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.gcal-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: 0.9; }
+.gcal-status { font-style: italic; }
+
+/* Requested schedule and the matching booking keep their cyan highlight */
+.gcal-shell #calendar.fc .fc-event.requested-schedule-card { background: #ecfeff !important; border: 1px solid #0891b2 !important; color: #164e63 !important; }
+.gcal-shell #calendar.fc .fc-event.requested-reservation-match {
+    background: #ecfeff !important;
+    border: 2px solid #0891b2 !important;
+    color: #164e63 !important;
+    box-shadow: 0 0 0 2px rgba(8, 145, 178, 0.25) !important;
+}
+.gcal-shell #calendar.fc .requested-schedule-card .gcal-dot,
+.gcal-shell #calendar.fc .requested-reservation-match .gcal-dot { background: #0891b2; border-color: #0891b2; }
+
+@media (max-width: 640px) {
+    .gcal-shell #calendar.fc .fc-toolbar-title { font-size: 1.125rem !important; }
+    .gcal-shell #calendar.fc .fc-button { padding: 0.35rem 0.6rem !important; font-size: 0.8125rem !important; }
+    .gcal-dom { width: 2rem; height: 2rem; font-size: 1.125rem; }
+}
+
 </style>
 
 <!-- FullCalendar JS & CSS -->
@@ -1988,19 +2221,39 @@ document.addEventListener('DOMContentLoaded', function() {
             slotEventOverlap: false,
             dayMaxEvents: false, // Show all events, don't limit
             dayMaxEventRows: false, // Don't cap rows for daygrid
+            // Google Calendar-style toolbar: Today, arrows and the title on the left, views on the right.
             headerToolbar: isDateSelectionMode ? {
-                left: 'prev,next today',
-                center: 'title',
+                left: 'today prev,next title',
+                center: '',
                 right: hasRequestedDateRange ? 'dayGridMonth,timeGridWeek,timeGridDay' : ''
             } : {
-                left: 'prev,next today',
-                center: 'title',
+                left: 'today prev,next title',
+                center: '',
                 right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            buttonText: { today: 'Today', month: 'Month', week: 'Week', day: 'Day' },
+            nowIndicator: true,
+            views: {
+                dayGridMonth: { dayHeaderFormat: { weekday: 'short' } }
+            },
+            dayHeaderContent: function(arg) {
+                if (String(arg.view.type || '').indexOf('timeGrid') !== 0 || !window.calendar) return arg.text;
+                var weekday = window.calendar.formatDate(arg.date, { weekday: 'short' });
+                var dayOfMonth = window.calendar.formatDate(arg.date, { day: 'numeric' });
+                var todayClass = arg.isToday ? ' is-today' : '';
+                return { html: '<span class="gcal-dow' + todayClass + '">' + weekday + '</span><span class="gcal-dom' + todayClass + '">' + dayOfMonth + '</span>' };
+            },
+            eventClassNames: function(arg) {
+                var props = arg.event.extendedProps || {};
+                var isMonthGrid = String(arg.view.type || '').indexOf('dayGrid') === 0;
+                if (!isMonthGrid || arg.event.display === 'background' || arg.event.allDay || props.scheduleType === 'whole_day') return [];
+                if (props.isRequestedSchedule || arg.event.classNames.includes('requested-reservation-match')) return [];
+                return ['gcal-dotted'];
             },
             slotLabelFormat: {
                 meridiem: 'short',
                 hour: 'numeric',
-                minute: '2-digit'
+                omitZeroMinute: true
             },
             eventTimeFormat: {
                 meridiem: 'short',
@@ -2225,6 +2478,17 @@ document.addEventListener('DOMContentLoaded', function() {
                             return tooltipContent;
                         }
 
+                        // Google-style look per status: solid (approved), tinted outline (tentative),
+                        // grey struck-through (rejected/cancelled), striped (maintenance).
+                        function gcalTone(statusValue, awaiting) {
+                            var normalized = String(statusValue || '').toLowerCase().replace(/[_\s]+/g, ' ').trim();
+                            if (awaiting) return 'gcal-tentative';
+                            if (['approved', 'completed', 'confirmed'].includes(normalized)) return 'gcal-solid';
+                            if (['rejected', 'cancelled', 'canceled', 'conflict'].includes(normalized)) return 'gcal-declined';
+                            if (['maintenance', 'closure', 'closed'].includes(normalized)) return 'gcal-maintenance';
+                            return 'gcal-tentative';
+                        }
+
                         // Helper function to create a single FC event object
                         function createFcEvent(event, startDatetime, endDatetime, isSegment) {
                             var status = event.extendedProps && event.extendedProps.status ? event.extendedProps.status : event.status || '';
@@ -2233,6 +2497,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
                             var classNames = ['status-event', 'status-' + String(status || 'neutral').toLowerCase().replace(/\s+/g, '-')];
                             if (awaitingVenueConfirmation) classNames.push('awaiting-venue-confirmation-event');
+                            classNames.push(gcalTone(status, awaitingVenueConfirmation));
                             if (eventMatchesRequestedSlot(event)) {
                                 classNames.push('requested-reservation-match');
                             }
@@ -2262,7 +2527,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                     displayStatus: event.extendedProps && event.extendedProps.displayStatus || status,
                                     canonicalStart: String(event.start_datetime || startDatetime || '').replace(' ', 'T'),
                                     canonicalEnd: String(event.end_datetime || endDatetime || '').replace(' ', 'T'),
-                                    isSegment: !!isSegment
+                                    isSegment: !!isSegment,
+                                    gcalColor: event.backgroundColor || (event.extendedProps && event.extendedProps.backgroundColor) || ''
                                 })
                             };
                         }
@@ -2462,29 +2728,64 @@ document.addEventListener('DOMContentLoaded', function() {
                 var title = info.event.title || '';
                 var eventProps = info.event.extendedProps || {};
                 var status = eventProps.displayStatus || eventProps.status || info.event.status || '';
-                var statusTone = getStatusBadgeTone(status);
                 var statusText = normalizeStatusLabel(status);
-                var statusLabel = statusText ? '<span class="event-status-badge ' + __esc(statusTone) + '">' + __esc(statusText) + '</span>' : '';
-                var label = '<span class="fc-event-label activity-marquee-viewport"><span class="activity-name">' + __esc(title) + '</span></span>';
 
-                var metaItems = [];
-                if (info.event.start && info.event.end) {
-                    var startStr = eventProps.canonicalStart || (typeof info.event.start === 'string' ? info.event.start : calendarDateKey(info.event.start) + 'T' + String(info.event.start.getHours()).padStart(2, '0') + ':' + String(info.event.start.getMinutes()).padStart(2, '0') + ':00');
-                    var endStr = eventProps.canonicalEnd || (typeof info.event.end === 'string' ? info.event.end : calendarDateKey(info.event.end) + 'T' + String(info.event.end.getHours()).padStart(2, '0') + ':' + String(info.event.end.getMinutes()).padStart(2, '0') + ':00');
-                    metaItems.push('<span class="fc-event-meta-item">' + __esc(formatTimeTo12Hour(startStr) + '–' + formatTimeTo12Hour(endStr)) + '</span>');
+                // Google-style short times: "9am", "9:30am", "9 – 11am", "11am – 1pm".
+                function gcalClock(dateStr) {
+                    var parts = String(dateStr || '').substring(11, 16).split(':');
+                    if (parts.length < 2 || parts[0] === '') return null;
+                    var hours = parseInt(parts[0], 10);
+                    var minutes = parseInt(parts[1], 10);
+                    return {
+                        num: (hours % 12 || 12) + (minutes ? ':' + String(minutes).padStart(2, '0') : ''),
+                        mer: hours >= 12 ? 'pm' : 'am'
+                    };
+                }
+                function toIso(value) {
+                    if (!value) return '';
+                    if (typeof value === 'string') return value;
+                    return calendarDateKey(value) + 'T' + String(value.getHours()).padStart(2, '0') + ':' + String(value.getMinutes()).padStart(2, '0') + ':00';
+                }
+                var startIso = eventProps.canonicalStart || toIso(info.event.start);
+                var endIso = eventProps.canonicalEnd || toIso(info.event.end);
+                var startClock = gcalClock(startIso);
+                var endClock = gcalClock(endIso);
+                var startLabel = startClock ? startClock.num + startClock.mer : '';
+                var rangeLabel = '';
+                if (startClock && endClock) {
+                    rangeLabel = startClock.mer === endClock.mer
+                        ? startClock.num + ' – ' + endClock.num + endClock.mer
+                        : startLabel + ' – ' + endClock.num + endClock.mer;
+                } else {
+                    rangeLabel = startLabel;
+                }
+                // Keep the full 12-hour range for screen readers.
+                var fullRange = info.event.start && info.event.end
+                    ? formatTimeTo12Hour(startIso) + ' to ' + formatTimeTo12Hour(endIso)
+                    : '';
+
+                var isWholeDay = info.event.allDay || eventProps.scheduleType === 'whole_day';
+                var isMonthGrid = String(info.view.type || '').indexOf('dayGrid') === 0;
+                var venueText = eventProps.venue ? String(eventProps.venue) : '';
+                var showStatus = statusText && statusText !== 'Approved' && !eventProps.isRequestedSchedule;
+                var srText = '<span class="sr-only">' + __esc([title, fullRange, venueText, statusText].filter(Boolean).join(', ')) + '</span>';
+
+                if (isMonthGrid && !isWholeDay) {
+                    return { html: '<div class="gcal-event gcal-event--chip" aria-hidden="true"><span class="gcal-dot"></span>'
+                        + (startLabel ? '<span class="gcal-time">' + __esc(startLabel) + '</span>' : '')
+                        + '<span class="gcal-title">' + __esc(title) + '</span></div>' + srText };
                 }
 
-                if (eventProps.venue) {
-                    var venueItems = String(eventProps.venue).split(',').map(function(venueName) {
-                        var trimmedVenue = venueName.trim();
-                        return '<span class="fc-event-meta-item venue-marquee-viewport"><span class="venue-name ' + getVenueClass(trimmedVenue) + '">' + __esc(trimmedVenue) + '</span></span>';
-                    });
-                    metaItems.push(venueItems.join(' <span aria-hidden="true">·</span> '));
+                if (isMonthGrid) {
+                    return { html: '<div class="gcal-event gcal-event--bar" aria-hidden="true"><span class="gcal-title">' + __esc(title) + '</span></div>' + srText };
                 }
 
-                var metaLine = metaItems.length ? '<div class="fc-event-meta-line">' + metaItems.join(' · ') + '</div>' : '';
-
-                return { html: '<div class="fc-event-compact"><div class="fc-event-body"><div class="fc-event-line">' + label + statusLabel + '</div>' + metaLine + '</div></div>' };
+                return { html: '<div class="gcal-event gcal-event--block" aria-hidden="true">'
+                    + '<span class="gcal-title">' + __esc(title) + '</span>'
+                    + (rangeLabel && !info.event.allDay ? '<span class="gcal-meta">' + __esc(isWholeDay ? 'Whole day' : rangeLabel) + '</span>' : '')
+                    + (venueText ? '<span class="gcal-meta">' + __esc(venueText) + '</span>' : '')
+                    + (showStatus ? '<span class="gcal-meta gcal-status">' + __esc(statusText) + '</span>' : '')
+                    + '</div>' + srText };
             },
             eventClick: function(info) {
                 if (isPublicCalendar) {
@@ -2585,7 +2886,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (calendarDateKey(info.date) === localToday) {
                     info.el.classList.add('fc-today');
-                    info.el.style.backgroundColor = '#f0fdf4';
                 }
             },
             dateClick: function(info) {
@@ -2661,11 +2961,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         delay: [400, 0]
                     });
                 }
-                if (!info.event.extendedProps.awaitingVenueConfirmation) {
-                    info.el.style.backgroundColor = 'transparent';
-                    info.el.style.borderColor = '#000000';
+                // Google-style colours come from CSS; the event's venue colour is passed as a variable.
+                info.el.style.backgroundColor = '';
+                info.el.style.borderColor = '';
+                info.el.style.color = '';
+                if (info.event.extendedProps.gcalColor) {
+                    info.el.style.setProperty('--gcal-color', info.event.extendedProps.gcalColor);
                 }
-                info.el.style.color = '#111827';
                 if (info.event.extendedProps.requestUrl) {
                     info.el.style.cursor = 'pointer';
                 }

@@ -696,8 +696,12 @@ class CalendarEventPayloadTest extends TestCase
             ->assertSee('.venue-balay { color: #2563eb; }', false)
             ->assertSee('.venue-gymnasium { color: #92400e; }', false)
             ->assertSee('.venue-covered-court { color: #16a34a; }', false)
-            ->assertSee('background-color: transparent !important;', false)
-            ->assertSee('border: 1px solid #000000 !important;', false)
+            // Google Calendar-style theme: cards take the venue colour, status sets the style.
+            ->assertSee('class="gcal-shell', false)
+            ->assertSee("info.el.style.setProperty('--gcal-color', info.event.extendedProps.gcalColor)", false)
+            ->assertSee('.gcal-shell #calendar.fc .fc-event.gcal-tentative', false)
+            ->assertSee("left: 'today prev,next title'", false)
+            ->assertSee('nowIndicator: true', false)
             ->assertSee('Assisted by:', false)
             ->assertDontSee('Venue color:', false);
     }
