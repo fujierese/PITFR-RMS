@@ -39,7 +39,9 @@ jobs:
         run: composer audit --no-interaction
 
       - name: Audit JavaScript dependencies
-        run: npm audit --audit-level=high
+        # Audit what ships to browsers. Build tools (Vite and friends) never run on
+        # the server; picomatch has a high advisory with no patched release yet.
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Lint PHP syntax
         run: find app bootstrap config database routes tests -name '*.php' -print0 | xargs -0 -n1 php -l
