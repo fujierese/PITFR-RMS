@@ -623,7 +623,7 @@
                 </div>
                 <div>
                     <dt class="font-medium text-slate-500">Proposed time</dt>
-                    <dd class="mt-1 text-slate-900">{{ $pendingRevision->new_start_time }} – {{ $pendingRevision->new_end_time }}</dd>
+                    <dd class="mt-1 text-slate-900">{{ $pendingRevision->new_start_time ? \Illuminate\Support\Carbon::parse($pendingRevision->new_start_time)->format('g:i A') : '' }} – {{ $pendingRevision->new_end_time ? \Illuminate\Support\Carbon::parse($pendingRevision->new_end_time)->format('g:i A') : '' }}</dd>
                 </div>
                 <div>
                     <dt class="font-medium text-slate-500">Venue</dt>
@@ -640,6 +640,40 @@
                     </div>
                 @endif
             </dl>
+            @if(! empty($pendingRevisionVenueChecks))
+                {{-- REQ-08: each proposed venue is checked on its own; shown to the requestor and reviewers. --}}
+                <div class="mt-3 rounded-2xl border border-amber-200 bg-white p-4" data-revision-venue-checks>
+                    <p class="text-sm font-semibold text-slate-800">Availability of each proposed venue</p>
+                    <ul class="mt-2 space-y-2">
+                        @foreach($pendingRevisionVenueChecks as $venueCheck)
+                            <li class="flex flex-wrap items-start justify-between gap-2 text-sm">
+                                <span>
+                                    <span class="font-medium text-slate-900">{{ $venueCheck['venue'] }}</span>
+                                    @if($venueCheck['available'])
+                                        <span class="ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Available</span>
+                                    @else
+                                        <span class="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">Not available</span>
+                                        <span class="mt-1 block text-xs text-red-800">{{ $venueCheck['message'] }}</span>
+                                    @endif
+                                </span>
+                                @if((int) $currentUser->id === (int) $request->requested_by_id)
+                                    <x-venue-calendar-button
+                                        :venue="$venueCheck['venue']"
+                                        :date="$pendingRevision->new_start_date?->toDateString()"
+                                        :end-date="$pendingRevision->new_end_date?->toDateString()"
+                                        :start-time="substr((string) $pendingRevision->new_start_time, 0, 5)"
+                                        :end-time="substr((string) $pendingRevision->new_end_time, 0, 5)"
+                                        :facility-request="$request"
+                                        :use-provided-schedule="true"
+                                        label="Check proposed schedule"
+                                    />
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                    <p class="mt-2 text-xs text-slate-500">Checked now against current bookings. The venue custodian checks again before confirming.</p>
+                </div>
+            @endif
             @if($pendingRevision->memorandum_priority && (int) $currentUser->id === (int) $request->requested_by_id && ! $currentUser->isCustodian())
                 <p class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">This transfer is required by a memorandum. You are being informed of the destination and reason; requestor consent is not required.</p>
             @endif
@@ -895,14 +929,18 @@
                             <form id="venue-reschedule-form" method="POST" action="{{ route('custodian.requests.revise') }}" class="hidden rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-4">
                                 @csrf
                                 <input type="hidden" name="facility_request_id" value="{{ $request->id }}">
-                                <label class="block text-sm font-medium text-slate-700">Proposed venue(s)
-                                    <select name="venue[]" multiple required class="mt-1 min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
-                                        @foreach($assignedVenueOptions as $venueOption)
-                                            <option value="{{ $venueOption }}" @selected(in_array($venueOption, $request->getVenueNames(), true))>{{ $venueOption }}</option>
+                                <fieldset>
+                                    <legend class="text-sm font-medium text-slate-700">Proposed venue(s)</legend>
+                                    <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                                        @foreach($revisionVenueOptions as $venueOption)
+                                            <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                                <input type="checkbox" name="venue[]" value="{{ $venueOption }}" data-revision-venue class="rounded border-slate-300 text-amber-600" @checked(in_array($venueOption, $request->getVenueNames(), true))>
+                                                <span>{{ $venueOption }}</span>
+                                            </label>
                                         @endforeach
-                                    </select>
-                                    <span class="mt-1 block text-xs text-slate-500">You can only propose venues assigned to you. The responsible custodian will verify the selected schedule.</span>
-                                </label>
+                                    </div>
+                                    <span class="mt-1 block text-xs text-slate-500">Any active venue can be proposed. A venue assigned to another custodian must also be confirmed by that custodian.</span>
+                                </fieldset>
                                 @foreach($request->getEquipmentItems() as $equipmentItem)
                                     <input type="hidden" name="equipment[]" value="{{ $equipmentItem }}">
                                     <input type="hidden" name="equipment_quantities[{{ $equipmentItem }}]" value="{{ $request->getEquipmentQuantities()[$equipmentItem] ?? 1 }}">
@@ -919,11 +957,17 @@
                                         <input type="date" name="end_date" min="{{ now()->toDateString() }}" value="{{ ($request->end_date ?? $request->start_date)?->toDateString() }}" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
                                     </label>
                                     <label class="text-sm font-medium text-slate-700">New start time
-                                        <input type="time" name="start_time" value="{{ $request->start_time }}" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
+                                        <input type="time" name="start_time" value="{{ $request->start_time ? substr((string) $request->start_time, 0, 5) : '' }}" step="60" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
                                     </label>
                                     <label class="text-sm font-medium text-slate-700">New end time
-                                        <input type="time" name="end_time" value="{{ $request->end_time }}" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
+                                        <input type="time" name="end_time" value="{{ $request->end_time ? substr((string) $request->end_time, 0, 5) : '' }}" step="60" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
                                     </label>
+                                    <p class="sm:col-span-2 text-xs text-slate-500">Pick the time from the time picker (hours and minutes). Reservations must start and end after 5:00 AM.</p>
+                                </div>
+                                <div class="rounded-xl border border-sky-200 bg-white p-3" data-revision-calendar data-calendar-embed-url="{{ route('calendar.embed') }}" data-request-id="{{ $request->id }}">
+                                    <p class="text-sm font-semibold text-sky-900">Check venue calendar</p>
+                                    <p class="mt-0.5 text-xs text-slate-500">Opens the calendar for each ticked venue with the dates and times above.</p>
+                                    <div class="mt-2 flex flex-wrap gap-2" data-revision-calendar-buttons></div>
                                 </div>
                                 <label class="block text-sm font-medium text-slate-700">Reason for rescheduling
                                     <textarea name="revision_reason" minlength="10" maxlength="1000" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2" placeholder="Explain why this venue schedule needs to change."></textarea>
@@ -1148,14 +1192,18 @@
                                 <p class="mt-1 text-sm text-amber-900">The existing booking remains active until all affected custodians and users confirm. Proposals expire after 24 hours if unanswered.</p>
                             </div>
                             <input type="hidden" name="facility_request_id" value="{{ $request->id }}">
-                            <label class="block text-sm font-medium text-slate-700">Proposed venue(s)
-                                <select name="venue[]" multiple required class="mt-1 min-h-32 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
-                                    @foreach($venueOptions as $venueOption)
-                                        <option value="{{ $venueOption }}" @selected(in_array($venueOption, $venueNames, true))>{{ $venueOption }}</option>
-                                    @endforeach
-                                </select>
-                                <span class="mt-1 block text-xs text-slate-500">Use Ctrl or Command to select multiple venues.</span>
-                            </label>
+                            <fieldset>
+                                    <legend class="text-sm font-medium text-slate-700">Proposed venue(s)</legend>
+                                    <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                                        @foreach($revisionVenueOptions as $venueOption)
+                                            <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                                <input type="checkbox" name="venue[]" value="{{ $venueOption }}" data-revision-venue class="rounded border-slate-300 text-amber-600" @checked(in_array($venueOption, $venueNames, true))>
+                                                <span>{{ $venueOption }}</span>
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                    <span class="mt-1 block text-xs text-slate-500">Tick every venue that should be part of the new schedule. Each venue is checked on its own.</span>
+                                </fieldset>
                             @foreach($equipmentItems as $equipmentItem)
                                 <input type="hidden" name="equipment[]" value="{{ $equipmentItem }}">
                                 <input type="hidden" name="equipment_quantities[{{ $equipmentItem }}]" value="{{ $equipmentQuantities[$equipmentItem] ?? 1 }}">
@@ -1168,12 +1216,18 @@
                                     <input type="date" name="end_date" value="{{ ($request->end_date ?? $request->start_date)?->format('Y-m-d') }}" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
                                 </label>
                                 <label class="text-sm font-medium text-slate-700">New start time
-                                    <input type="time" name="start_time" value="{{ $request->start_time }}" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
+                                    <input type="time" name="start_time" value="{{ $request->start_time ? substr((string) $request->start_time, 0, 5) : '' }}" step="60" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
                                 </label>
                                 <label class="text-sm font-medium text-slate-700">New end time
-                                    <input type="time" name="end_time" value="{{ $request->end_time }}" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
+                                    <input type="time" name="end_time" value="{{ $request->end_time ? substr((string) $request->end_time, 0, 5) : '' }}" step="60" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2">
                                 </label>
+                                <p class="sm:col-span-2 text-xs text-slate-500">Pick the time from the time picker (hours and minutes). Reservations must start and end after 5:00 AM.</p>
                             </div>
+                            <div class="rounded-xl border border-sky-200 bg-white p-3" data-revision-calendar data-calendar-embed-url="{{ route('calendar.embed') }}" data-request-id="{{ $request->id }}">
+                                    <p class="text-sm font-semibold text-sky-900">Check venue calendar</p>
+                                    <p class="mt-0.5 text-xs text-slate-500">Opens the calendar for each ticked venue with the dates and times above.</p>
+                                    <div class="mt-2 flex flex-wrap gap-2" data-revision-calendar-buttons></div>
+                                </div>
                             <label class="block text-sm font-medium text-slate-700">Reason for rescheduling
                                 <textarea name="revision_reason" minlength="10" maxlength="1000" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2" placeholder="Explain why this reservation needs to be rescheduled."></textarea>
                             </label>
@@ -1612,6 +1666,60 @@
     const cancelVenueRescheduleButton = document.getElementById('cancel-venue-reschedule-form');
     const venueRescheduleFeedback = document.getElementById('venue-reschedule-feedback');
 
+    // REQ-08: "Check venue calendar" buttons follow the ticked venues and typed dates/times.
+    document.querySelectorAll('[data-revision-calendar]').forEach((panel) => {
+        const form = panel.closest('form');
+        const container = panel.querySelector('[data-revision-calendar-buttons]');
+        if (!form || !container) return;
+        const render = () => {
+            const value = (name) => form.querySelector(`[name="${name}"]`)?.value || '';
+            const venues = [...form.querySelectorAll('[data-revision-venue]:checked')].map((input) => input.value);
+            container.replaceChildren();
+            if (venues.length === 0) {
+                const note = document.createElement('span');
+                note.className = 'text-xs text-slate-500';
+                note.textContent = 'Tick a venue to check its calendar.';
+                container.appendChild(note);
+                return;
+            }
+            venues.forEach((venue) => {
+                const url = new URL(panel.dataset.calendarEmbedUrl, window.location.origin);
+                const params = {
+                    venue,
+                    date: value('start_date'),
+                    start_date: value('start_date'),
+                    end_date: value('end_date') || value('start_date'),
+                    start_time: value('start_time').slice(0, 5),
+                    end_time: value('end_time').slice(0, 5),
+                    request_id: panel.dataset.requestId,
+                };
+                Object.entries(params).forEach(([key, val]) => { if (val) url.searchParams.set(key, val); });
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.venueCalendarOpen = '';
+                button.dataset.venueCalendarUrl = url.pathname + url.search;
+                button.dataset.venueCalendarTitle = `Availability calendar for ${venue}`;
+                button.setAttribute('aria-haspopup', 'dialog');
+                button.setAttribute('aria-controls', 'staff-venue-calendar-modal');
+                button.className = 'inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-sky-800 shadow-sm hover:bg-sky-50';
+                button.textContent = venue;
+                container.appendChild(button);
+            });
+        };
+        form.addEventListener('change', render);
+        form.addEventListener('input', render);
+        render();
+    });
+
+    const requireRevisionVenue = (form, feedback) => {
+        if (!form || form.querySelector('[data-revision-venue]:checked')) return true;
+        if (feedback) {
+            feedback.textContent = 'Choose at least one venue.';
+            feedback.className = 'rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800';
+        }
+        return false;
+    };
+
     openRescheduleButton?.addEventListener('click', () => {
         rescheduleForm?.classList.remove('hidden');
         openRescheduleButton.classList.add('hidden');
@@ -1640,6 +1748,9 @@
     venueRescheduleForm?.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (venueRescheduleForm.dataset.submitting === '1') {
+            return;
+        }
+        if (!requireRevisionVenue(venueRescheduleForm, venueRescheduleFeedback)) {
             return;
         }
 
@@ -1706,9 +1817,12 @@
             return;
         }
 
+        if (!requireRevisionVenue(rescheduleForm, rescheduleFeedback)) {
+            return;
+        }
         const submitButton = rescheduleForm.querySelector('button[type="submit"]');
-        const selectedVenues = Array.from(rescheduleForm.querySelector('[name="venue[]"]').selectedOptions)
-            .map((option) => option.textContent.trim());
+        const selectedVenues = Array.from(rescheduleForm.querySelectorAll('[data-revision-venue]:checked'))
+            .map((input) => input.value.trim());
         const confirmation = await Swal.fire({
             title: 'Send this schedule proposal?',
             text: [

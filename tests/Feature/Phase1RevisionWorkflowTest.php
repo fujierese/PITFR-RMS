@@ -507,8 +507,9 @@ class Phase1RevisionWorkflowTest extends TestCase
             ->get(route('request.show', $request))
             ->assertOk()
             ->assertSee('Check proposed schedule')
-            ->assertSee('08:00')
-            ->assertSee('16:00');
+            // REQ-08: the proposal shows readable times.
+            ->assertSee('8:00 AM')
+            ->assertSee('4:00 PM');
 
         $this->postJson(route('calendar.request-availability-check', $request), ['venue' => 'Test Venue'])
             ->assertOk()

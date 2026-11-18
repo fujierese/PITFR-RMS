@@ -695,6 +695,14 @@ class SupplyOfficeController extends Controller
         $isVenueCustodian = $user?->isCustodianVenue() ?? false;
         abort_unless($user && ($user->isAdmin() || $isVenueCustodian), 403);
 
+        // REQ-08: a time picker or a stored value may carry seconds (09:00:00); keep HH:MM.
+        foreach (['start_time', 'end_time'] as $timeField) {
+            $timeValue = trim((string) $request->input($timeField, ''));
+            if (preg_match('/^(\d{2}:\d{2}):\d{2}$/', $timeValue, $timeMatch)) {
+                $request->merge([$timeField => $timeMatch[1]]);
+            }
+        }
+
         $validated = $request->validate([
             'facility_request_id' => ['required', 'integer', 'exists:facility_requests,id'],
             'start_date' => ['required', 'date', 'after_or_equal:today'],
@@ -711,12 +719,21 @@ class SupplyOfficeController extends Controller
             'override_reason' => ['required_if:override_conflict,true', 'nullable', 'string', 'max:500'],
             'memorandum_priority' => ['nullable', 'boolean'],
             'memorandum_office' => ['required_if:memorandum_priority,1', 'nullable', Rule::in(['CHED', 'OP', 'OVP'])],
+        ], [
+            'start_time.required' => 'Enter a start time.',
+            'end_time.required' => 'Enter an end time.',
+            'start_time.regex' => 'Enter the start time as hours and minutes, for example 9:00 AM.',
+            'end_time.regex' => 'Enter the end time as hours and minutes, for example 5:00 PM.',
+            'venue.required' => 'Choose at least one venue.',
+            'venue.min' => 'Choose at least one venue.',
+            'venue.*.exists' => 'One of the chosen venues is not available for booking.',
         ]);
 
         $facilityRequest = FacilityRequest::findOrFail($validated['facility_request_id']);
         if ($isVenueCustodian) {
+            // REQ-08: a venue custodian of this request may propose any active venue.
+            // Venues owned by another custodian need that custodian's confirmation (see $responses).
             $assignedVenues = $user->venues()->pluck('name')->map(fn (string $name): string => mb_strtolower($name));
-            $requestedVenues = collect($validated['venue'])->map(fn (string $name): string => mb_strtolower($name));
             abort_unless(
                 $facilityRequest->status === 'pending'
                 && in_array($facilityRequest->venue_status, ['pending', 'needs_reschedule'], true)
@@ -724,9 +741,7 @@ class SupplyOfficeController extends Controller
                 && collect($facilityRequest->getVenueNames())
                     ->map(fn (string $name): string => mb_strtolower($name))
                     ->intersect($assignedVenues)
-                    ->isNotEmpty()
-                && $requestedVenues->isNotEmpty()
-                && $requestedVenues->diff($assignedVenues)->isEmpty(),
+                    ->isNotEmpty(),
                 403,
                 'You may only propose a new schedule for a pending request assigned to one of your venues.'
             );
@@ -790,6 +805,16 @@ class SupplyOfficeController extends Controller
             ->unique()
             ->values()
             ->all();
+        // Custodians of the old or new venues and equipment; a requestor who is also one
+        // of them must still respond to a memorandum-priority transfer.
+        $custodianUserIds = Venue::query()
+            ->whereIn('name', array_unique(array_merge($oldState['venue'], $newState['venue'])))
+            ->pluck('custodian_id')
+            ->merge(Equipment::query()->whereIn('name', array_unique(array_merge($oldState['equipment'], $newState['equipment'])))->pluck('custodian_id'))
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
         $responses = [];
         foreach ($affectedUserIds as $affectedUserId) {
             $responses[(string) $affectedUserId] = $memoPriority
@@ -811,34 +836,29 @@ class SupplyOfficeController extends Controller
             $validated['end_time']
         );
 
-        $venueConflict = false;
+        // REQ-08: check every venue and item on its own and name each one that conflicts.
+        $parts = [];
         foreach ($validated['venue'] as $venueName) {
-            if ($availabilityService->checkVenueTimeRangeForReview(
+            $venueMessage = $availabilityService->checkVenueTimeRangeForReview(
                 $venueName,
                 $range['start'],
                 $range['end'],
                 $facilityRequest->id
-            ) !== null) {
-                $venueConflict = true;
-                break;
+            );
+            if ($venueMessage !== null) {
+                $parts[] = $venueName . ': ' . $venueMessage;
             }
         }
 
-        // Check equipment availability
-        $equipmentConflict = false;
         foreach (($validated['equipment'] ?? []) as $equipment) {
             $qty = (int) ($validated['equipment_quantities'][$equipment] ?? 1);
             if (!$availabilityService->checkEquipmentAvailability($equipment, $qty, $range['start'], $range['end'], $facilityRequest->id)['available']) {
-                $equipmentConflict = true;
-                break;
+                $parts[] = $equipment . ': not enough units available for this schedule';
             }
         }
 
-        if ($venueConflict || $equipmentConflict) {
+        if ($parts !== []) {
             $conflictDetected = true;
-            $parts = [];
-            if ($venueConflict) $parts[] = 'Venue conflict detected';
-            if ($equipmentConflict) $parts[] = 'Equipment availability issue';
             $conflictDetails = implode('; ', $parts);
 
             // Pending requests are still proposals; the venue custodian rechecks availability

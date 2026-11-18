@@ -2116,9 +2116,31 @@ class RequestorController extends Controller
             }
         }
  
+        // REQ-08: every active venue can be proposed, and each proposed venue is checked on its own.
+        $revisionVenueOptions = Venue::query()->where('is_active', true)->orderBy('name')->pluck('name');
+        if ($revisionVenueOptions->isEmpty()) {
+            $revisionVenueOptions = collect(self::VENUE_OPTIONS);
+        }
+        $pendingRevisionVenueChecks = [];
+        if ($pendingRevision && $pendingRevision->new_start_date && $pendingRevision->new_start_time && $pendingRevision->new_end_time) {
+            $proposedRange = FacilityRequest::normalizeScheduleRange(
+                $pendingRevision->new_start_date->toDateString(),
+                substr((string) $pendingRevision->new_start_time, 0, 5),
+                ($pendingRevision->new_end_date ?? $pendingRevision->new_start_date)->toDateString(),
+                substr((string) $pendingRevision->new_end_time, 0, 5)
+            );
+            $availabilityService = app(\App\Services\AvailabilityService::class);
+            foreach ($pendingRevision->new_venue ?? [] as $proposedVenue) {
+                $message = $availabilityService->checkVenueTimeRangeForReview($proposedVenue, $proposedRange['start'], $proposedRange['end'], $request->id);
+                $pendingRevisionVenueChecks[] = ['venue' => $proposedVenue, 'available' => $message === null, 'message' => $message];
+            }
+        }
+
         return view('requestor.show', [
             'request'                 => $request,
             'pendingRevision'         => $pendingRevision,
+            'pendingRevisionVenueChecks' => $pendingRevisionVenueChecks,
+            'revisionVenueOptions'    => $revisionVenueOptions,
             'pendingRevisionResponses' => $pendingRevisionResponses,
             'pendingRevisionUsers'    => $pendingRevisionUsers,
             'assignedVenueOptions'   => $assignedVenueOptions,
