@@ -846,11 +846,24 @@
         const wholeDay = duration === 'whole_day';
         startTime.readOnly = wholeDay;
         endTime.readOnly = wholeDay;
-        if (!wholeDay) return;
+        if (!wholeDay) {
+            // REQ-06: times filled in by "Whole day" are cleared when switching back,
+            // so the requestor starts from empty fields instead of deleting 08:00/17:00.
+            [['08:00', startTime], ['17:00', endTime]].forEach(([value, field]) => {
+                if (field.dataset.autoFilled !== '1') return;
+                delete field.dataset.autoFilled;
+                if (field.value !== value) return;
+                field.value = '';
+                field.dispatchEvent(new Event('input', { bubbles: true }));
+                field.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            return;
+        }
 
         [['08:00', startTime], ['17:00', endTime]].forEach(([value, field]) => {
             if (field.value === value) return;
             field.value = value;
+            field.dataset.autoFilled = '1';
             field.dispatchEvent(new Event('input', { bubbles: true }));
             field.dispatchEvent(new Event('change', { bubbles: true }));
         });
