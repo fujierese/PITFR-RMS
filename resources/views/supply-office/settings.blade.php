@@ -7,4 +7,5 @@
         'showOrganization' => false,
         'isAdmin' => true,
     ])
+    @include('supply-office.partials.email-delivery')
 @endsection

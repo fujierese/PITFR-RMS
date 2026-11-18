@@ -46,11 +46,23 @@
     if ($user && $user->isCustodian()) {
         $assignedResource = $meaningfulValue($user->assignedCustodianResourceLabel());
         $displayIdentity = ($assignedResource ?? 'No assigned resource') . ' — ' . ($user->role_label ?? 'Custodian');
-    } elseif ($isStaffAccount) {
-        $displayOffice = $meaningfulValue($user->office_or_organization);
-        $displayIdentity = $displayContext
-            . ($displayOffice ? ' · ' . $displayOffice : '')
-            . ($displayPosition ? ' — ' . $displayPosition : '');
+    } elseif ($user && $user->role === 'requestor' && in_array($user->requestor_type, ['student', 'student_organization', 'faculty', 'staff', 'outsider'], true)) {
+        // A.1: "[Organization (student orgs, outsiders) / Department or office (faculty, staff)] — [Role type]".
+        $departmentName = $meaningfulValue($user->departmentRecord?->name) ?? $meaningfulValue($user->department);
+        $organizationName = $meaningfulValue($user->studentOrganizations()->first()?->name) ?? $meaningfulValue($user->office_or_organization);
+        [$identityPlace, $defaultRole] = match ($user->requestor_type) {
+            'student', 'student_organization' => [$organizationName ?? $departmentName, $organizationName ? 'Student Representative' : 'Student'],
+            'faculty' => [$departmentName, 'Faculty'],
+            'staff' => [$meaningfulValue($user->office_or_organization) ?? $departmentName, 'Staff'],
+            'outsider' => [$meaningfulValue($user->office_or_organization), 'Outsider'],
+        };
+        // The person's own position (e.g. President, Department Chair) is the role type;
+        // generic category words fall back to the default for the account type.
+        $genericPositions = ['student', 'student organization', 'faculty', 'staff', 'external partner', 'outsider', 'other'];
+        $identityRole = $displayPosition !== null && ! in_array(strtolower($displayPosition), $genericPositions, true)
+            ? $displayPosition
+            : $defaultRole;
+        $displayIdentity = $identityPlace ? $identityPlace . ' — ' . $identityRole : $identityRole;
     } else {
         $displayIdentity = $displayContext . ($displayPosition ? ' — ' . $displayPosition : '');
     }
@@ -596,9 +608,9 @@
         </div>
         {{-- D6 / PRV-01: privacy information on every dashboard. --}}
         <div class="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 text-xs text-slate-700">
-            <p class="font-semibold text-emerald-900">Data Privacy (RA 10173)</p>
+            <p class="font-semibold text-emerald-900">Help &amp; Information</p>
             <p class="mt-1">PIT handles your personal information under the Data Privacy Act of 2012.</p>
-            <button type="button" data-open-info-modal="privacy" aria-haspopup="dialog" aria-controls="faq-modal" class="mt-2 font-semibold text-emerald-800 underline underline-offset-2">Read the Privacy Notice</button>
+            <a href="{{ route('privacy.data-protection') }}" class="mt-2 inline-block font-semibold text-emerald-800 underline underline-offset-2">Privacy &amp; Data Protection</a>
         </div>
     </nav>
 </div>

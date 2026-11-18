@@ -29,6 +29,11 @@
     $isStudent = $effectiveRequestorType === 'student';
     $isFaculty = $effectiveRequestorType === 'faculty' || ($currentUser?->role ?? null) === 'faculty';
     $isExternal = in_array($effectiveRequestorType, ['outsider'], true);
+    // A.1: accounts created without a college/department pick them on the form instead
+    // of failing a hidden, read-only check they cannot fix.
+    $needsCollegeChoice = ! $isExternal
+        && (empty($profileCollegeId ?? null) || empty($profileDepartmentId ?? null))
+        && isset($colleges) && $colleges->isNotEmpty();
     $selectedCollegeId = old('college_id', $profileCollegeId ?? null);
     $selectedDepartmentId = old('department_id', $profileDepartmentId ?? null);
     $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
@@ -73,14 +78,19 @@
                 </div>
                 <div class="flex shrink-0 flex-wrap items-center gap-y-2 sm:justify-end">
                     <span id="draft-status" class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm ring-1 ring-amber-200">
-                        <span data-draft-status-indicator class="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500 animate-pulse"></span>
-                        <span data-draft-status-label>Draft autosave</span>
+                        <span data-draft-status-indicator class="h-2.5 w-2.5 shrink-0 rounded-full bg-slate-400"></span>
+                        <span data-draft-status-label>No changes yet</span>
                     </span>
                     <span class="ml-3 text-xs text-slate-500">Saved on this browser for up to 30 days.</span>
                     <button type="button" data-discard-request-draft aria-label="Discard this account's saved request draft" class="ml-3 text-xs font-semibold text-slate-600 underline decoration-slate-300 underline-offset-2 transition hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
                         Discard saved draft
                     </button>
                 </div>
+            </div>
+
+            <div id="draft-restored-notice" class="hidden mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status" aria-live="polite">
+                <span data-draft-restored-text>We restored your draft.</span>
+                <span class="text-emerald-800">It is saved on this browser for your account only.</span>
             </div>
 
             <div class="mb-6">
@@ -184,12 +194,75 @@
                                     <p class="text-xs font-medium text-red-600">{{ $message }}</p>
                                 @enderror
                                 <input type="hidden" name="organization_name" value="{{ old('organization_name', $trustedOrganizationDisplay) }}">
-                                <input type="hidden" name="college_id" value="{{ $profileCollegeId }}">
-                                <input type="hidden" name="department_id" value="{{ $profileDepartmentId }}">
-                                @error('department_id')
-                                    <p class="text-xs font-medium text-red-600">{{ $message }}</p>
-                                @enderror
+                                @unless ($needsCollegeChoice)
+                                    <input type="hidden" name="college_id" value="{{ $profileCollegeId }}">
+                                    <input type="hidden" name="department_id" value="{{ $profileDepartmentId }}">
+                                    @error('department_id')
+                                        <p class="text-xs font-medium text-red-600">{{ $message }}</p>
+                                    @enderror
+                                @endunless
                             </div>
+                            @if ($needsCollegeChoice)
+                            <div class="grid gap-4 sm:grid-cols-2 sm:gap-5" data-college-picker>
+                                <div class="space-y-3">
+                                    <label for="college_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">College <span class="required-asterisk">*</span></label>
+                                    <select id="college_id" name="college_id" required class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">
+                                        <option value="">Select college</option>
+                                        @foreach ($colleges as $collegeOption)
+                                            <option value="{{ $collegeOption->id }}" @selected((string) $selectedCollegeId === (string) $collegeOption->id)>{{ $collegeOption->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('college_id')
+                                        <p class="text-xs font-medium text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+                                <div class="space-y-3">
+                                    <label for="department_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Department / Requisitioning Office <span class="required-asterisk">*</span></label>
+                                    <select id="department_id" name="department_id" required data-selected="{{ $selectedDepartmentId }}" class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">
+                                        @foreach ($colleges as $collegeOption)
+                                            @foreach ($collegeOption->departments as $departmentOption)
+                                                <option value="{{ $departmentOption->id }}" data-college-id="{{ $collegeOption->id }}">{{ $departmentOption->name }}</option>
+                                            @endforeach
+                                        @endforeach
+                                    </select>
+                                    @error('department_id')
+                                        <p class="text-xs font-medium text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+                                <p class="text-xs text-slate-500 sm:col-span-2">Your account has no college or department on file. Choose them here; you can also save them in Settings.</p>
+                            </div>
+                        @endif
+                        @elseif ($needsCollegeChoice)
+                            @if ($needsCollegeChoice)
+                            <div class="grid gap-4 sm:grid-cols-2 sm:gap-5" data-college-picker>
+                                <div class="space-y-3">
+                                    <label for="college_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">College <span class="required-asterisk">*</span></label>
+                                    <select id="college_id" name="college_id" required class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">
+                                        <option value="">Select college</option>
+                                        @foreach ($colleges as $collegeOption)
+                                            <option value="{{ $collegeOption->id }}" @selected((string) $selectedCollegeId === (string) $collegeOption->id)>{{ $collegeOption->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('college_id')
+                                        <p class="text-xs font-medium text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+                                <div class="space-y-3">
+                                    <label for="department_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Department / Requisitioning Office <span class="required-asterisk">*</span></label>
+                                    <select id="department_id" name="department_id" required data-selected="{{ $selectedDepartmentId }}" class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">
+                                        @foreach ($colleges as $collegeOption)
+                                            @foreach ($collegeOption->departments as $departmentOption)
+                                                <option value="{{ $departmentOption->id }}" data-college-id="{{ $collegeOption->id }}">{{ $departmentOption->name }}</option>
+                                            @endforeach
+                                        @endforeach
+                                    </select>
+                                    @error('department_id')
+                                        <p class="text-xs font-medium text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+                                <p class="text-xs text-slate-500 sm:col-span-2">Your account has no college or department on file. Choose them here; you can also save them in Settings.</p>
+                            </div>
+                        @endif
                         @else
                             <div class="space-y-3">
                                 <p class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">College</p>
@@ -1363,71 +1436,33 @@
             closeVenueCalendarModal();
         });
 
-        const draftStatus = document.getElementById('draft-status');
-        let formIsDirty = false;
+        // Draft status and the leave-page warning are handled by resources/js/request_form.js (A.4).
 
-        const updateDraftStatus = (dirty) => {
-            if (!draftStatus) return;
-
-            const indicator = draftStatus.querySelector('[data-draft-status-indicator]');
-            const label = draftStatus.querySelector('[data-draft-status-label]');
-
-            if (indicator) {
-                indicator.className = dirty
-                    ? 'h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse'
-                    : 'h-2.5 w-2.5 rounded-full bg-emerald-500';
-            }
-
-            if (draftStatus) {
-                draftStatus.className = dirty
-                    ? 'inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-sm ring-1 ring-amber-200'
-                    : 'inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm ring-1 ring-emerald-200';
-            }
-
-            if (label) {
-                label.textContent = dirty ? 'Unsaved changes' : 'Draft autosave';
-            }
-        };
-
-        const markFormDirty = () => {
-            if (!formIsDirty) {
-                formIsDirty = true;
-                updateDraftStatus(true);
-            }
-        };
-
-        form.querySelectorAll('input, textarea, select').forEach((field) => {
-            field.addEventListener('input', markFormDirty);
-            field.addEventListener('change', markFormDirty);
-        });
-
-        form.addEventListener('submit', (event) => {
+        const microphoneSelectionIsInvalid = () => {
             const hasBothMicrophoneTypes = [...form.querySelectorAll('[data-venue-equipment-group]:not(.hidden)')].some((group) => (
                 group.querySelector('.equipment-checkbox:checked[value="Wireless Microphones"]')
                 && group.querySelector('.equipment-checkbox:checked[value="Non-Wireless Microphones"]')
             ));
             const microphoneError = document.getElementById('microphone-selection-error');
             if (hasBothMicrophoneTypes) {
-                event.preventDefault();
                 microphoneError?.classList.remove('hidden');
                 microphoneError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                return;
             }
-            formIsDirty = false;
-            updateDraftStatus(false);
-        });
+            return hasBothMicrophoneTypes;
+        };
 
-        window.addEventListener('beforeunload', (event) => {
-            if (formIsDirty && !window.requestFormDraftNavigation) {
+        form.addEventListener('swal-before-confirm', (event) => {
+            if (microphoneSelectionIsInvalid()) {
                 event.preventDefault();
-                event.returnValue = '';
             }
         });
-        window.addEventListener('pageshow', () => {
-            window.requestFormDraftNavigation = false;
+
+        form.addEventListener('submit', (event) => {
+            if (microphoneSelectionIsInvalid()) {
+                event.preventDefault();
+            }
         });
 
-        updateDraftStatus(false);
 
         const venueScheduleGroups = form.querySelectorAll('[data-venue-schedule]');
 

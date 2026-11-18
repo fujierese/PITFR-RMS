@@ -80,7 +80,7 @@ img {
     -premailer-cellpadding: 0;
     -premailer-cellspacing: 0;
     -premailer-width: 100%;
-    background-color: #fafafa;
+    background-color: #f1f5f9;
     margin: 0;
     padding: 0;
     width: 100%;
@@ -98,25 +98,43 @@ img {
 /* Header */
 
 .header {
-    padding: 25px 0;
+    background-color: #047857;
+    padding: 22px 0 20px;
     text-align: center;
 }
 
 .header a {
-    color: #18181b;
-    font-size: 19px;
+    color: #ffffff;
+    font-size: 17px;
     font-weight: bold;
     text-decoration: none;
+}
+
+.header-title {
+    color: #ffffff;
+    display: block;
+    font-size: 17px;
+    font-weight: bold;
+    margin-top: 6px;
+}
+
+.header-subtitle {
+    color: #d1fae5;
+    display: block;
+    font-size: 12px;
+    font-weight: normal;
+    margin-top: 2px;
 }
 
 /* Logo */
 
 .logo {
-    height: 75px;
-    margin-top: 15px;
-    margin-bottom: 10px;
-    max-height: 75px;
-    width: 75px;
+    background-color: #ffffff;
+    border-radius: 9999px;
+    height: 56px;
+    max-height: 56px;
+    padding: 4px;
+    width: 56px;
 }
 
 /* Body */
@@ -125,9 +143,9 @@ img {
     -premailer-cellpadding: 0;
     -premailer-cellspacing: 0;
     -premailer-width: 100%;
-    background-color: #fafafa;
-    border-bottom: 1px solid #fafafa;
-    border-top: 1px solid #fafafa;
+    background-color: #f1f5f9;
+    border-bottom: 1px solid #f1f5f9;
+    border-top: 1px solid #f1f5f9;
     margin: 0;
     padding: 0;
     width: 100%;
@@ -176,13 +194,14 @@ img {
 }
 
 .footer p {
-    color: #a1a1aa;
+    color: #64748b;
     font-size: 12px;
+    line-height: 1.6;
     text-align: center;
 }
 
 .footer a {
-    color: #a1a1aa;
+    color: #047857;
     text-decoration: underline;
 }
 
@@ -239,11 +258,11 @@ img {
 
 .button-blue,
 .button-primary {
-    background-color: #18181b;
-    border-bottom: 8px solid #18181b;
-    border-left: 18px solid #18181b;
-    border-right: 18px solid #18181b;
-    border-top: 8px solid #18181b;
+    background-color: #047857;
+    border-bottom: 10px solid #047857;
+    border-left: 22px solid #047857;
+    border-right: 22px solid #047857;
+    border-top: 10px solid #047857;
 }
 
 .button-green,
@@ -267,12 +286,12 @@ img {
 /* Panels */
 
 .panel {
-    border-left: #18181b solid 4px;
+    border-left: #047857 solid 4px;
     margin: 21px 0;
 }
 
 .panel-content {
-    background-color: #fafafa;
+    background-color: #ecfdf5;
     color: #52525b;
     padding: 16px;
 }

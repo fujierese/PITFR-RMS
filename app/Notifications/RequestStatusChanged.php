@@ -1,6 +1,8 @@
 <?php
 namespace App\Notifications;
 
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
+use App\Notifications\Concerns\QueuesMailAfterCommit;
 use App\Models\FacilityRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
@@ -8,9 +10,9 @@ use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 
-class RequestStatusChanged extends Notification
-{
-    use Queueable;
+class RequestStatusChanged extends Notification implements ShouldQueueAfterCommit
+{
+    use Queueable, QueuesMailAfterCommit;
     use UsesWorkflowNotificationChannels;
 
     public function __construct(

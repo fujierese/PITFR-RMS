@@ -2,6 +2,8 @@
 
 namespace App\Notifications;
 
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
+use App\Notifications\Concerns\QueuesMailAfterCommit;
 use App\Models\FacilityRequest;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
@@ -9,9 +11,9 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use App\Notifications\Concerns\UsesNotificationPreferences;
 
-class ReservationReminderNotification extends Notification
+class ReservationReminderNotification extends Notification implements ShouldQueueAfterCommit
 {
-    use Queueable;
+    use Queueable, QueuesMailAfterCommit;
     use UsesNotificationPreferences;
 
     public function __construct(

@@ -41,7 +41,8 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringContainsString('Request Submission Steps', $html);
         $this->assertStringContainsString('Choose Venue & Schedule', $html);
         $this->assertStringContainsString('Calendar availability is not a confirmation.', $html);
-        $this->assertStringContainsString('Draft autosave', $html);
+        $this->assertStringContainsString('data-draft-status-label', $html); // A.4: dynamic draft badge
+        $this->assertStringContainsString('id="draft-restored-notice"', $html);
         // FRM-01: the official header appears on the printed form only.
         $this->assertStringNotContainsString('Official Request Form', $html);
         $this->assertStringContainsString('Submission checklist', $html);

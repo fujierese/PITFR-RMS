@@ -2,14 +2,17 @@
 
 namespace App\Notifications;
 
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
+use App\Notifications\Concerns\QueuesMailAfterCommit;
+use Illuminate\Bus\Queueable;
 use App\Models\FacilityRequest;
 use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ReservationRevised extends Notification
+class ReservationRevised extends Notification implements ShouldQueueAfterCommit
 {
-    use UsesWorkflowNotificationChannels;
+    use UsesWorkflowNotificationChannels, Queueable, QueuesMailAfterCommit;
 
     protected FacilityRequest $facilityRequest;
     protected array $oldState;

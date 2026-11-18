@@ -1,15 +1,17 @@
 <?php
 namespace App\Notifications;
 
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
+use App\Notifications\Concerns\QueuesMailAfterCommit;
 use App\Models\FacilityRequest;
 use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class NewFacilityRequestNotification extends Notification
+class NewFacilityRequestNotification extends Notification implements ShouldQueueAfterCommit
 {
-    use Queueable;
+    use Queueable, QueuesMailAfterCommit;
     use UsesWorkflowNotificationChannels;
 
     public function __construct(public FacilityRequest $facilityRequest, public ?string $actor = null)

@@ -28,3 +28,17 @@ Schedule::call(function (): void {
         }
     }
 })->hourly()->name('cleanup-staged-uploads')->withoutOverlapping();
+
+// NTF-02: deliver queued notification emails without a long-running daemon.
+// The heartbeat tells the app a worker is active (otherwise mail is sent immediately).
+// The worker keeps polling for ~55 seconds, so queued emails go out within seconds.
+Schedule::call(fn () => \App\Support\MailQueue::recordHeartbeat())
+    ->everyMinute()
+    ->name('queue-worker-heartbeat');
+Schedule::command('queue:work', [
+    '--queue' => 'default',
+    '--sleep' => 3,
+    '--tries' => 3,
+    '--max-time' => 55,
+])->everyMinute()->withoutOverlapping(2)->runInBackground()->name('queue-worker');
+Schedule::command('queue:prune-failed', ['--hours' => 24 * 30])->daily();

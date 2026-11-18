@@ -16,17 +16,20 @@ class PublicInformationPagesTest extends TestCase
             ->assertSee('Frequently Asked Questions')
             ->assertSee('Does an urgent request skip approval?');
 
-        $this->get(route('privacy.policy'))
+        $this->get(route('privacy.data-protection'))
             ->assertOk()
-            ->assertSee('Draft — not an approved institutional policy.')
-            ->assertSee('PIT has not provided an official privacy contact or process')
-            ->assertDontSee('[To be confirmed by PIT]');
-
-        $this->get(route('privacy.data-act'))
-            ->assertOk()
+            ->assertSee('Privacy &amp; Data Protection', false)
+            ->assertSee('A. Privacy Notice')
+            ->assertSee('B. Purpose of Data Collection')
+            ->assertSee('C. Data Protection')
+            ->assertSee('D. Data Privacy Rights')
             ->assertSee('Republic Act No. 10173')
-            ->assertSee('Contact the institution through its established communication channels')
-            ->assertSee('not legal advice');
+            ->assertDontSee('Data Protection Officer')
+            ->assertDontSee('To be completed by PIT');
+
+        // The old addresses lead to the same page.
+        $this->get('/privacy-policy')->assertRedirect('/privacy-and-data-protection');
+        $this->get('/data-privacy-act')->assertRedirect('/privacy-and-data-protection#data-privacy-rights');
     }
 
     public function test_faq_navigation_opens_the_faq_modal_on_public_and_authenticated_layouts(): void
@@ -49,25 +52,17 @@ class PublicInformationPagesTest extends TestCase
             ->assertSee('id="faq-modal"', false);
     }
 
-    public function test_all_guest_information_links_open_the_shared_modal_instead_of_navigating(): void
+    public function test_privacy_page_is_linked_for_guests_and_every_role(): void
     {
-        $this->get(route('home'))
-            ->assertOk()
-            ->assertSee('data-open-info-modal="privacy"', false)
-            ->assertSee('data-open-info-modal="data-privacy"', false)
-            ->assertDontSee('href="' . route('privacy.policy') . '"', false)
-            ->assertDontSee('href="' . route('privacy.data-act') . '"', false)
-            ->assertSee('id="info-modal-title"', false)
-            ->assertSee('data-info-modal-panel="privacy"', false)
-            ->assertSee('data-info-modal-panel="data-privacy"', false);
+        $link = 'href="' . route('privacy.data-protection') . '"';
+        $this->get(route('home'))->assertOk()->assertSee($link, false);
 
-        $user = \App\Models\User::factory()->create(['role' => 'requestor']);
-        $this->actingAs($user)
-            ->get(route('requestor.index'))
-            ->assertOk()
-            ->assertSee('data-open-info-modal="privacy"', false)
-            ->assertSee('data-open-info-modal="data-privacy"', false)
-            ->assertDontSee('href="' . route('privacy.policy') . '"', false)
-            ->assertDontSee('href="' . route('privacy.data-act') . '"', false);
+        foreach (['requestor', 'custodian-venue', 'custodian-equipment', 'admin'] as $role) {
+            $user = \App\Models\User::factory()->create(['role' => $role]);
+            $this->actingAs($user)
+                ->get($user->getDashboardRoute())
+                ->assertOk()
+                ->assertSee($link, false);
+        }
     }
 }

@@ -21,7 +21,7 @@
     <script src="https://unpkg.com/tippy.js@6"></script>
     <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/themes/light.css">
 </head>
-<body class="@yield('body-class', 'overflow-x-hidden bg-slate-100 min-h-screen text-slate-900')">
+<body class="@yield('body-class', 'overflow-x-hidden bg-slate-100 min-h-screen text-slate-900')" data-draft-owner="{{ auth()->user()?->id ?? '' }}" @if(session('request_draft_submitted')) data-request-draft-submitted="1" @endif>
 
 <div class="min-h-screen bg-slate-100">
     @auth
@@ -36,7 +36,7 @@
         </button>
     @endauth
 
-    <main class="min-h-screen overflow-x-hidden px-3 py-3 pt-16 sm:px-4 sm:py-4 sm:pt-6 md:px-6 lg:ml-80 lg:min-h-screen lg:overflow-y-auto lg:px-8 lg:py-6 lg:pt-8">
+    <main class="min-h-screen overflow-x-hidden px-3 py-3 {{ auth()->check() ? 'pt-16 lg:ml-80' : 'pt-6' }} sm:px-4 sm:py-4 sm:pt-6 md:px-6 lg:min-h-screen lg:overflow-y-auto lg:px-8 lg:py-6 lg:pt-8">
         <div class="mx-auto w-full max-w-none lg:max-w-7xl">
             @if(session('success'))
                 <div role="status" aria-live="polite" aria-label="Success" class="mb-6 rounded-3xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-sm">
@@ -71,13 +71,12 @@
                     @yield('content')
         </div>
     </main>
-    <footer class="border-t border-slate-200 bg-white px-4 py-5 text-center text-sm text-slate-600 lg:ml-80">
+    <footer class="border-t border-slate-200 bg-white px-4 py-5 text-center text-sm text-slate-600 {{ auth()->check() ? 'lg:ml-80' : '' }}">
         <nav class="flex flex-wrap justify-center gap-x-5 gap-y-2" aria-label="Help and legal information">
             <button type="button" class="font-medium text-emerald-800 underline-offset-4 hover:underline" data-open-faq-modal aria-haspopup="dialog" aria-controls="faq-modal">FAQ</button>
-            <button type="button" class="font-medium text-emerald-800 underline-offset-4 hover:underline" data-open-info-modal="privacy" aria-haspopup="dialog" aria-controls="faq-modal">Privacy Policy (Draft)</button>
-            <button type="button" class="font-medium text-emerald-800 underline-offset-4 hover:underline" data-open-info-modal="data-privacy" aria-haspopup="dialog" aria-controls="faq-modal">Data Privacy Act of 2012</button>
+            <a href="{{ route('privacy.data-protection') }}" class="font-medium text-emerald-800 underline-offset-4 hover:underline">Privacy &amp; Data Protection</a>
         </nav>
-        <p class="mt-2 text-xs text-slate-500">Privacy information is a draft and must be reviewed by PIT before official use.</p>
+        <p class="mt-2 text-xs text-slate-500">PITFR handles personal information in accordance with RA 10173, the Data Privacy Act of 2012.</p>
     </footer>
     @include('components.venue-calendar-modal')
     @include('components.faq-modal')
@@ -262,6 +261,13 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-swal-confirm]').forEach(function (form) {
         form.addEventListener('submit', async function (event) {
             event.preventDefault();
+
+            // Let the form's own checks run first; a page script cancels this event
+            // when the form is incomplete, so the dialog never submits an invalid form.
+            const readyCheck = new CustomEvent('swal-before-confirm', { cancelable: true });
+            if (!form.dispatchEvent(readyCheck)) {
+                return;
+            }
 
             const result = await Swal.fire({
                 title: form.dataset.swalTitle || 'Are you sure?',

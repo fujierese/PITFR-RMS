@@ -371,7 +371,9 @@ class NotificationTest extends TestCase
         $notification = new \App\Notifications\ReservationRescheduleProposed($revision);
 
         $this->assertSame(['database', 'mail'], $notification->via($requester));
-        $this->assertNotInstanceOf(\Illuminate\Contracts\Queue\ShouldQueue::class, $notification);
+        // NTF-02: the in-app notice is delivered immediately; only the email is queued, after commit.
+        $this->assertInstanceOf(\Illuminate\Contracts\Queue\ShouldQueueAfterCommit::class, $notification);
+        $this->assertSame('sync', $notification->viaConnections()['database']);
     }
 
     public function test_workflow_mail_is_skipped_for_invalid_addresses_without_suppressing_in_app_notice(): void

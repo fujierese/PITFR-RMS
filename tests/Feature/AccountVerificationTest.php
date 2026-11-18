@@ -246,7 +246,7 @@ class AccountVerificationTest extends TestCase
 
         $this->actingAs($user)->get(route('requestor.index'))
             ->assertOk()
-            ->assertSee('Data Privacy (RA 10173)')
-            ->assertSee('Read the Privacy Notice');
+            ->assertSee('Help &amp; Information', false)
+            ->assertSee('href="' . route('privacy.data-protection') . '"', false);
     }
 }

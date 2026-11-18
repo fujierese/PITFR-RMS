@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use App\Http\Requests\LoginRequest;
 use App\Mail\RegistrationOtp;
@@ -309,6 +310,19 @@ class AuthController extends Controller
             'office_or_organization' => ['nullable', 'string', 'max:191'],
             'organization_acronym' => ['nullable', 'string', 'max:50'],
             'organization_type' => ['nullable', 'string', 'max:100'],
+            // A.2: PIT members give their College and Department; outsiders do not.
+            'college_id' => [
+                Rule::requiredIf(fn (): bool => User::verificationEnabled()
+                    && in_array($request->input('requestor_type'), ['student', 'faculty', 'staff'], true)
+                    && College::query()->exists()),
+                'nullable', 'integer', 'exists:colleges,id',
+            ],
+            'department_id' => [
+                Rule::requiredIf(fn (): bool => User::verificationEnabled()
+                    && in_array($request->input('requestor_type'), ['student', 'faculty', 'staff'], true)
+                    && Department::query()->exists()),
+                'nullable', 'integer', 'exists:departments,id',
+            ],
             'contact_number' => ['nullable', 'string', 'max:50'],
             // D4: claimed category and proof of identity.
             'requestor_type' => ['nullable', 'string', 'max:30'],
@@ -317,8 +331,8 @@ class AuthController extends Controller
         ], [
             'username.unique' => 'Unable to complete registration with the provided details.',
             'school_id_number.regex' => 'Student ID must be in format: 23-0098-635 (2 digits - 4 digits - 3 digits)',
-            'college_id.required_if' => 'College is required for student registration',
-            'department_id.required_if' => 'Department is required for student registration',
+            'college_id.required' => 'Choose your college.',
+            'department_id.required' => 'Choose your department.',
             'office_or_organization.required_if' => 'Organization name is required for this account type.',
         ]);
 

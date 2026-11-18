@@ -1,9 +1,9 @@
 @extends('layouts.app')
-@section('title', 'Privacy Policy Draft')
+@section('title', 'Privacy & Data Protection')
 
 @section('content')
-<div class="space-y-6">
-    <x-page-header eyebrow="Privacy and transparency" title="Privacy Policy" description="Draft notice for the PIT Facility and Equipment Request System." accent="emerald" />
+<div class="mx-auto max-w-4xl space-y-6">
+    <x-page-header eyebrow="Help & Information" title="Privacy & Data Protection" description="How PITFR collects, uses, stores and protects your personal information." accent="emerald" />
     @include('legal.privacy-content')
 </div>
 @endsection

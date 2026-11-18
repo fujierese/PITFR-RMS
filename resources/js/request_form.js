@@ -120,6 +120,48 @@ const initializeRequestForm = function () {
     const legacyDraftStorageKeys = ['pitfr-request-draft', 'pitfr-request-draft-session', 'pitfr-request-draft-cache'];
     let draftDatabasePromise;
     let draftSaveQueue = Promise.resolve();
+    // A.4: one source of truth for the draft badge and the "Leave site?" warning.
+    // States: clean (nothing typed), dirty (changed since the last save), saving, saved.
+    let draftChangeCounter = 0;
+    let draftAutosaveTimer = null;
+    const draftBadgeStyles = {
+        clean: ['border-slate-200 bg-slate-50 text-slate-700 ring-slate-200', 'bg-slate-400'],
+        dirty: ['border-amber-200 bg-amber-50 text-amber-900 ring-amber-200', 'bg-amber-500 animate-pulse'],
+        saving: ['border-sky-200 bg-sky-50 text-sky-900 ring-sky-200', 'bg-sky-500 animate-pulse'],
+        saved: ['border-emerald-200 bg-emerald-50 text-emerald-800 ring-emerald-200', 'bg-emerald-500'],
+    };
+    const formatDraftTime = function (timestamp) {
+        const date = new Date(Number(timestamp));
+        const sameDay = date.toDateString() === new Date().toDateString();
+        return sameDay
+            ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+            : date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    };
+    const setDraftState = function (state, labelText) {
+        form.dataset.draftState = state;
+        if (!draftStatus) {
+            return;
+        }
+        const [tone, dot] = draftBadgeStyles[state] || draftBadgeStyles.clean;
+        draftStatus.className = 'inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm ring-1 ' + tone;
+        const indicator = draftStatus.querySelector('[data-draft-status-indicator]');
+        if (indicator) {
+            indicator.className = 'h-2.5 w-2.5 shrink-0 rounded-full ' + dot;
+        }
+        const label = draftStatus.querySelector('[data-draft-status-label]');
+        if (label) {
+            label.textContent = labelText;
+        }
+    };
+    const markDraftChanged = function () {
+        if (form.dataset.requestDraftClearing === '1') {
+            return;
+        }
+        draftChangeCounter += 1;
+        setDraftState('dirty', 'Unsaved changes');
+        clearTimeout(draftAutosaveTimer);
+        draftAutosaveTimer = setTimeout(function () { saveDraft(); }, 800);
+    };
     const urgentCheckbox = document.getElementById('urgent-processing-checkbox') || document.getElementById('is-emergency-checkbox');
     const emergencyCheckbox = urgentCheckbox;
     const emergencyJustificationWrap = document.getElementById('urgent-justification-wrap') || document.getElementById('emergency-justification-wrap');
@@ -733,6 +775,10 @@ const initializeRequestForm = function () {
             return Promise.resolve(false);
         }
 
+        clearTimeout(draftAutosaveTimer);
+        const changeAtStart = draftChangeCounter;
+        setDraftState('saving', 'Saving…');
+
         const persistDraft = async function () {
             const formData = new FormData(form);
             const draft = {};
@@ -761,19 +807,21 @@ const initializeRequestForm = function () {
                 .find(radio => radio.checked)?.value || '';
 
             try {
+                const savedAt = Date.now();
                 const record = JSON.stringify({
                     format: 'pitfr-request-draft',
                     version: 1,
                     ownerId: draftOwnerId,
-                    updatedAt: Date.now(),
+                    updatedAt: savedAt,
                     draft: draft
                 });
                 localStorage.setItem(draftStorageKey, record);
                 sessionStorage.setItem(draftStorageKey, record);
-                if (draftStatus) {
-                    const label = draftStatus.querySelector('[data-draft-status-label]');
-                    if (label) {
-                        label.textContent = 'Draft saved just now';
+                if (form.dataset.requestDraftClearing !== '1') {
+                    if (draftChangeCounter === changeAtStart) {
+                        setDraftState('saved', 'Draft saved at ' + formatDraftTime(savedAt));
+                    } else {
+                        setDraftState('dirty', 'Unsaved changes');
                     }
                 }
             } catch (error) {
@@ -785,12 +833,7 @@ const initializeRequestForm = function () {
             return true;
         }).catch(function (error) {
             console.error('Draft autosave failed', error);
-            if (draftStatus) {
-                const label = draftStatus.querySelector('[data-draft-status-label]');
-                if (label) {
-                    label.textContent = 'Draft attachment could not be saved';
-                }
-            }
+            setDraftState('dirty', 'Unsaved changes (draft could not be saved)');
             return false;
         });
         return draftSaveQueue;
@@ -828,9 +871,8 @@ const initializeRequestForm = function () {
                 || Array.isArray(record.draft)
             ) {
                 await clearDraftStorage();
-                if (draftStatus) {
-                    draftStatus.textContent = 'Saved draft expired or could not be verified';
-                }
+                delete form.dataset.requestDraftClearing;
+                setDraftState('clean', 'Saved draft expired or could not be verified');
                 return;
             }
 
@@ -911,20 +953,18 @@ const initializeRequestForm = function () {
             clearTimeout(conflictCheckTimeout);
             conflictCheckTimeout = setTimeout(checkConflicts, 250);
 
-            if (draftStatus) {
-                const label = draftStatus.querySelector('[data-draft-status-label]');
-                if (label) {
-                    label.textContent = 'Draft restored (kept for up to 30 days)';
-                }
+            setDraftState('saved', 'Draft saved at ' + formatDraftTime(record.updatedAt));
+            const restoredNotice = document.getElementById('draft-restored-notice');
+            if (restoredNotice) {
+                const restoredAt = new Date(Number(record.updatedAt)).toLocaleString([], {
+                    month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+                });
+                restoredNotice.querySelector('[data-draft-restored-text]').textContent = 'We restored your draft from ' + restoredAt + '.';
+                restoredNotice.classList.remove('hidden');
             }
         } catch (error) {
             console.error('Draft restore failed', error);
-            if (draftStatus) {
-                const label = draftStatus.querySelector('[data-draft-status-label]');
-                if (label) {
-                    label.textContent = 'Draft attachment could not be restored';
-                }
-            }
+            setDraftState('dirty', 'Draft attachment could not be restored');
         }
     };
 
@@ -2079,7 +2119,21 @@ const initializeRequestForm = function () {
     restoreDraft();
     form.querySelector('[data-discard-request-draft]')?.addEventListener('click', async function (event) {
         const button = event.currentTarget;
-        if (!window.confirm('Discard the saved request draft for this account? This cannot be undone.')) {
+        const confirmed = window.Swal
+            ? (await window.Swal.fire({
+                title: 'Discard saved draft?',
+                text: 'Everything you entered on this form, including attached files, will be removed. This cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                reverseButtons: true,
+                focusCancel: true,
+                confirmButtonText: 'Yes, discard draft',
+                cancelButtonText: 'Keep draft',
+                confirmButtonColor: '#b91c1c',
+                cancelButtonColor: '#9CA3AF',
+            })).isConfirmed
+            : window.confirm('Discard the saved request draft for this account? This cannot be undone.');
+        if (!confirmed) {
             return;
         }
 
@@ -2116,14 +2170,29 @@ const initializeRequestForm = function () {
         });
     });
     form.addEventListener('confirmed-submit', function (event) {
-        if (typeof event.detail?.waitUntil !== 'function') {
-            return;
+        // Save the latest state, then pause autosave while the request is sent. The draft
+        // is cleared only after the server accepts it (see request_draft_housekeeping.js),
+        // so a rejected submission keeps everything that was typed.
+        const finalSave = saveDraft().finally(function () {
+            form.dataset.requestDraftClearing = '1';
+            window.requestFormDraftNavigation = true;
+        });
+        if (typeof event.detail?.waitUntil === 'function') {
+            event.detail.waitUntil(finalSave);
         }
-
-        event.detail.waitUntil(clearDraftStorage(true).catch(function (error) {
-            console.error('Request draft cleanup before submission failed', error);
-            throw error;
-        }));
+    });
+    form.addEventListener('input', markDraftChanged);
+    form.addEventListener('change', markDraftChanged);
+    window.addEventListener('beforeunload', function (event) {
+        const state = form.dataset.draftState;
+        if ((state === 'dirty' || state === 'saving') && !window.requestFormDraftNavigation) {
+            event.preventDefault();
+            event.returnValue = '';
+        }
+    });
+    window.addEventListener('pageshow', function () {
+        window.requestFormDraftNavigation = false;
+        delete form.dataset.requestDraftClearing;
     });
     updateOtherVenueVisibility();
     updateSelectedItemsSummary();
@@ -2248,11 +2317,34 @@ const initializeRequestForm = function () {
 
     syncOvernightEndDate();
 
+    // The "Submit this request?" dialog asks first; an incomplete form never reaches it.
+    form.addEventListener('swal-before-confirm', function (e) {
+        const clickedButton = document.activeElement && document.activeElement.matches('button[type="submit"]') ? document.activeElement : form.querySelector('button[type="submit"]');
+        if (!runSubmitChecks(clickedButton)) {
+            e.preventDefault();
+        }
+    });
+
     form.addEventListener('submit', function (e) {
+        const clickedButton = document.activeElement && document.activeElement.matches('button[type="submit"]') ? document.activeElement : form.querySelector('button[type="submit"]');
+        if (!runSubmitChecks(clickedButton)) {
+            e.preventDefault();
+            return false;
+        }
+
+        if (clickedButton && !form.hasAttribute('data-swal-confirm')) {
+            clickedButton.setAttribute('data-loading', '1');
+            const loadingLabel = clickedButton.textContent?.toLowerCase().includes('save') ? 'Saving...' : 'Submitting...';
+            setSubmitButtonLoading(clickedButton, loadingLabel);
+        }
+
+        return true;
+    });
+
+    function runSubmitChecks(clickedButton) {
         ensureCsrfToken();
         updateChecklistState();
 
-        const clickedButton = document.activeElement && document.activeElement.matches('button[type="submit"]') ? document.activeElement : form.querySelector('button[type="submit"]');
         const requiredOk = validateRequiredFields();
         const dateTimeOk = validateDateTimeRange();
         const urgentScheduleOk = validateUrgentSchedules();
@@ -2262,7 +2354,6 @@ const initializeRequestForm = function () {
             .every(id => document.getElementById(id)?.checked === true);
 
         if (!requiredOk || !dateTimeOk || !urgentScheduleOk || !qtyOk || hasConflict || !checklistComplete) {
-            e.preventDefault();
             if (!checklistComplete) {
                 if (checklistWarning) {
                     checklistWarning.textContent = 'Please complete all checklist items before submitting this request.';
@@ -2279,14 +2370,9 @@ const initializeRequestForm = function () {
             return false;
         }
 
-        if (clickedButton && !form.hasAttribute('data-swal-confirm')) {
-            clickedButton.setAttribute('data-loading', '1');
-            const loadingLabel = clickedButton.textContent?.toLowerCase().includes('save') ? 'Saving...' : 'Submitting...';
-            setSubmitButtonLoading(clickedButton, loadingLabel);
-        }
-
+        checklistWarning?.classList.add('hidden');
         return true;
-    });
+    }
 };
 
 window.initializeRequestForm = initializeRequestForm;

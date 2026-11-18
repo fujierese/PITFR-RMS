@@ -14,9 +14,6 @@
             <section data-info-modal-panel="privacy" class="hidden">
                 @include('legal.privacy-content')
             </section>
-            <section data-info-modal-panel="data-privacy" class="hidden">
-                @include('legal.data-privacy-content')
-            </section>
         </div>
     </div>
 </dialog>
@@ -30,8 +27,7 @@
         const panels = dialog.querySelectorAll('[data-info-modal-panel]');
         const titles = {
             faq: 'Frequently Asked Questions',
-            privacy: 'Privacy Policy (Draft)',
-            'data-privacy': 'Data Privacy Act of 2012',
+            privacy: 'Privacy & Data Protection',
         };
 
         document.querySelectorAll('[data-open-faq-modal], [data-open-info-modal]').forEach((trigger) => {

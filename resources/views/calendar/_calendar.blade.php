@@ -1903,6 +1903,10 @@
 .gcal-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: 0.9; }
 .gcal-status { font-style: italic; }
 
+/* A.5: one-line label for bookings shorter than an hour */
+.gcal-shell #calendar.fc .fc-timegrid-event .gcal-event--chip { height: 100%; align-items: center; padding: 0 6px; overflow: hidden; }
+.gcal-shell #calendar.fc .fc-timegrid-event .gcal-time--short { color: inherit; opacity: 0.85; font-weight: 500; }
+
 /* Requested schedule and the matching booking keep their cyan highlight */
 .gcal-shell #calendar.fc .fc-event.requested-schedule-card { background: #ecfeff !important; border: 1px solid #0891b2 !important; color: #164e63 !important; }
 .gcal-shell #calendar.fc .fc-event.requested-reservation-match {
@@ -2218,7 +2222,8 @@ document.addEventListener('DOMContentLoaded', function() {
             timeZone: 'Asia/Manila',
             locale: 'en',
             eventDisplay: 'block',
-            slotEventOverlap: false,
+            slotEventOverlap: false, // overlapping bookings sit side by side
+            eventMinHeight: 22, // short bookings stay readable
             dayMaxEvents: false, // Show all events, don't limit
             dayMaxEventRows: false, // Don't cap rows for daygrid
             // Google Calendar-style toolbar: Today, arrows and the title on the left, views on the right.
@@ -2592,6 +2597,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
                             const segments = [];
                             let segmentDate = startDate;
+
+                            // A.5: an end time at or before the start time means the booking runs
+                            // overnight (e.g. 4 PM to 2 AM): one span per night, which FullCalendar
+                            // then draws up to midnight and continues on the next day.
+                            if (endTime <= startTime) {
+                                while (segmentDate < endDate) {
+                                    const nextDate = addCalendarDate(segmentDate);
+                                    segments.push(createFcEvent(
+                                        dailyEvent,
+                                        segmentDate + 'T' + startTime,
+                                        nextDate + 'T' + endTime,
+                                        true
+                                    ));
+                                    segmentDate = nextDate;
+                                }
+                                return segments;
+                            }
+
                             while (segmentDate <= endDate) {
                                 segments.push(createFcEvent(
                                     dailyEvent,
@@ -2643,10 +2666,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (hasRequestedDateRange && hasRequestedTimeRange) {
                             const highlightStartTime = requestedStartTime.length === 5 ? requestedStartTime + ':00' : requestedStartTime;
                             const highlightEndTime = requestedEndTime.length === 5 ? requestedEndTime + ':00' : requestedEndTime;
-                            const endTimeParts = highlightEndTime.split(':').map(Number);
-                            const highlightVisualEndTime = endTimeParts[1] === 0 && endTimeParts[2] === 0 && endTimeParts[0] < 23
-                                ? String(endTimeParts[0]).padStart(2, '0') + ':59:59'
-                                : highlightEndTime;
+                            // A.5: the highlight uses the same start/end as every booking block.
+                            const highlightVisualEndTime = highlightEndTime;
                             let highlightDate = requestedStartDate;
                             while (highlightDate <= requestedEndDate) {
                                 const requestedVenue = calendarParams.get('venue') || '';
@@ -2688,6 +2709,32 @@ document.addEventListener('DOMContentLoaded', function() {
                                     });
                                 }
                                 highlightDate = addCalendarDate(highlightDate);
+                            }
+                        }
+
+                        // A.5: never hide bookings that start before the default 8 AM grid start.
+                        if (String(viewType || '').indexOf('timeGrid') === 0 && window.calendar) {
+                            var earliestHour = 8;
+                            var viewStartKey = calendarDateKey(window.calendar.view.activeStart);
+                            var viewEndKey = calendarDateKey(window.calendar.view.activeEnd);
+                            mapped.forEach(function (segment) {
+                                if (segment.allDay || segment.display === 'background' || typeof segment.start !== 'string') return;
+                                var segmentEndKey = typeof segment.end === 'string' ? segment.end.substring(0, 10) : segment.start.substring(0, 10);
+                                if (segment.start.substring(0, 10) >= viewEndKey || segmentEndKey < viewStartKey) return;
+                                if (segment.start.substring(0, 10) < viewStartKey) { earliestHour = 0; return; }
+                                var startHour = parseInt(segment.start.substring(11, 13), 10);
+                                var startDay = segment.start.substring(0, 10);
+                                var endDay = typeof segment.end === 'string' ? segment.end.substring(0, 10) : startDay;
+                                if (endDay > startDay) {
+                                    var endHour = parseInt(segment.end.substring(11, 13), 10);
+                                    var endMinute = parseInt(segment.end.substring(14, 16), 10) || 0;
+                                    if (endHour > 0 || endMinute > 0) earliestHour = 0; // overnight: show its next-day part
+                                }
+                                if (!isNaN(startHour)) earliestHour = Math.min(earliestHour, startHour);
+                            });
+                            var nextMinTime = String(earliestHour).padStart(2, '0') + ':00';
+                            if (window.calendar.getOption('slotMinTime') !== nextMinTime) {
+                                window.calendar.setOption('slotMinTime', nextMinTime);
                             }
                         }
 
@@ -2780,9 +2827,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     return { html: '<div class="gcal-event gcal-event--bar" aria-hidden="true"><span class="gcal-title">' + __esc(title) + '</span></div>' + srText };
                 }
 
+                // A.5: bookings shorter than an hour get one line so the text is not cut mid-row.
+                var segmentMinutes = info.event.start && info.event.end ? (info.event.end - info.event.start) / 60000 : 60;
+                if (!info.event.allDay && segmentMinutes < 60) {
+                    return { html: '<div class="gcal-event gcal-event--chip" aria-hidden="true">'
+                        + '<span class="gcal-title">' + __esc(title) + '</span>'
+                        + (startLabel ? '<span class="gcal-time gcal-time--short">' + __esc(rangeLabel) + '</span>' : '')
+                        + '</div>' + srText };
+                }
+
+                // A.5: a booking that crosses midnight is drawn up to the day boundary; say so.
+                var continuationNote = '';
+                if (!info.event.allDay && info.isStart === false && info.isEnd === false) continuationNote = 'Continues all day';
+                else if (!info.event.allDay && info.isEnd === false) continuationNote = 'Continues next day';
+                else if (!info.event.allDay && info.isStart === false) continuationNote = 'From previous day';
                 return { html: '<div class="gcal-event gcal-event--block" aria-hidden="true">'
                     + '<span class="gcal-title">' + __esc(title) + '</span>'
                     + (rangeLabel && !info.event.allDay ? '<span class="gcal-meta">' + __esc(isWholeDay ? 'Whole day' : rangeLabel) + '</span>' : '')
+                    + (continuationNote ? '<span class="gcal-meta gcal-status">' + __esc(continuationNote) + '</span>' : '')
                     + (venueText ? '<span class="gcal-meta">' + __esc(venueText) + '</span>' : '')
                     + (showStatus ? '<span class="gcal-meta gcal-status">' + __esc(statusText) + '</span>' : '')
                     + '</div>' + srText };

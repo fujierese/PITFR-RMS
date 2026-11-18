@@ -2,16 +2,17 @@
 
 namespace App\Notifications;
 
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
+use App\Notifications\Concerns\QueuesMailAfterCommit;
 use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\DatabaseMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class EquipmentReturned extends Notification
+class EquipmentReturned extends Notification implements ShouldQueueAfterCommit
 {
-    use Queueable;
+    use Queueable, QueuesMailAfterCommit;
     use UsesWorkflowNotificationChannels;
 
     protected $equipment;

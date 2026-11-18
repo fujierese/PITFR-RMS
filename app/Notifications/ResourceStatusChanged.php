@@ -1,6 +1,8 @@
 <?php
 namespace App\Notifications;
 
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
+use App\Notifications\Concerns\QueuesMailAfterCommit;
 use App\Models\Venue;
 use App\Models\Equipment;
 use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
@@ -8,9 +10,9 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
 
-class ResourceStatusChanged extends Notification
+class ResourceStatusChanged extends Notification implements ShouldQueueAfterCommit
 {
-    use Queueable;
+    use Queueable, QueuesMailAfterCommit;
     use UsesWorkflowNotificationChannels;
 
     /**

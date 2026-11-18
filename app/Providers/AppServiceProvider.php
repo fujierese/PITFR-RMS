@@ -34,6 +34,35 @@ class AppServiceProvider extends ServiceProvider
                 'notifiable_id' => method_exists($event->notifiable, 'getKey') ? $event->notifiable->getKey() : null,
                 'exception' => $event->data['exception'] ?? null,
             ]);
+            if ($event->channel === 'mail') {
+                rescue(fn () => \Illuminate\Support\Facades\Cache::put(\App\Support\MailQueue::LAST_FAILED_KEY, [
+                    'at' => now()->getTimestamp(),
+                    'reason' => \Illuminate\Support\Str::limit((string) (($event->data['exception'] ?? null)?->getMessage() ?? 'Unknown error'), 200),
+                ], now()->addDays(30)), null, false);
+            }
+        });
+
+        // NTF-02: track email delivery so the Supply Office can see whether mail is flowing.
+        Event::listen(\Illuminate\Notifications\Events\NotificationSent::class, function ($event): void {
+            if ($event->channel !== 'mail') {
+                return;
+            }
+            Log::info('Notification email sent.', [
+                'notification' => $event->notification::class,
+                'notifiable_id' => method_exists($event->notifiable, 'getKey') ? $event->notifiable->getKey() : null,
+            ]);
+            rescue(fn () => \Illuminate\Support\Facades\Cache::put(\App\Support\MailQueue::LAST_SENT_KEY, now()->getTimestamp(), now()->addDays(30)), null, false);
+        });
+
+        \Illuminate\Support\Facades\Queue::failing(function (\Illuminate\Queue\Events\JobFailed $event): void {
+            Log::error('Queued job failed after its retries.', [
+                'job' => $event->job->resolveName(),
+                'exception' => $event->exception->getMessage(),
+            ]);
+            rescue(fn () => \Illuminate\Support\Facades\Cache::put(\App\Support\MailQueue::LAST_FAILED_KEY, [
+                'at' => now()->getTimestamp(),
+                'reason' => \Illuminate\Support\Str::limit($event->exception->getMessage(), 200),
+            ], now()->addDays(30)), null, false);
         });
     }
 }

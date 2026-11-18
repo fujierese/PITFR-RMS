@@ -2,14 +2,17 @@
 
 namespace App\Notifications;
 
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
+use App\Notifications\Concerns\QueuesMailAfterCommit;
+use Illuminate\Bus\Queueable;
 use App\Models\RevisionHistory;
 use App\Notifications\Concerns\UsesWorkflowNotificationChannels;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ReservationRescheduleProposed extends Notification
+class ReservationRescheduleProposed extends Notification implements ShouldQueueAfterCommit
 {
-    use UsesWorkflowNotificationChannels;
+    use UsesWorkflowNotificationChannels, Queueable, QueuesMailAfterCommit;
 
     public function __construct(public RevisionHistory $revision)
     {

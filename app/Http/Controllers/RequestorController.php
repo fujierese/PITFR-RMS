@@ -2026,6 +2026,7 @@ class RequestorController extends Controller
 
         return redirect()->route('requestor.index', ['tab' => 'requests'])
                         ->with('success', 'Request submitted successfully!')
+                        ->with('request_draft_submitted', true)
                         ->with('warning', $capacityWarning);
     }
  

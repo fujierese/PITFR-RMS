@@ -72,7 +72,10 @@ class RegistrationFormTest extends TestCase
         $response->assertOk()
             ->assertSee('Office, department or organization')
             ->assertSee('Leave blank if you are requesting as an individual.')
-            ->assertDontSee('College of Technology and Engineering');
+            // A.2: students, faculty and staff now choose their College and Department.
+            ->assertSee('id="college_department_section"', false)
+            ->assertSee('name="college_id"', false)
+            ->assertSee('name="department_id"', false);
     }
 
     public function test_registration_form_marks_required_fields_and_shows_password_strength(): void
@@ -230,7 +233,7 @@ class RegistrationFormTest extends TestCase
             'contact_number' => '09171234567',
             'office_or_organization' => 'External Company',
             'organization_type' => 'Company',
-        ]);
+        ] + $this->collegeAndDepartment());
 
         $response->assertRedirect(route('register.verify'));
         $this->assertDatabaseHas('users', ['username' => $email, 'role' => 'requestor', 'requestor_type' => 'outsider']);
@@ -1076,6 +1079,29 @@ class RegistrationFormTest extends TestCase
         ];
     }
 
+    public function test_pit_member_registration_requires_and_saves_college_and_department(): void
+    {
+        $data = $this->registrationData(['requestor_type' => 'student']);
+        unset($data['college_id'], $data['department_id']);
+        $this->post(route('register.post'), $data)
+            ->assertSessionHasErrors(['college_id' => 'Choose your college.', 'department_id' => 'Choose your department.']);
+
+        $email = 'member-' . uniqid() . '@test.com';
+        $choice = $this->collegeAndDepartment();
+        $this->post(route('register.post'), $this->registrationData(['username' => $email, 'requestor_type' => 'student']))
+            ->assertRedirect(route('register.verify'));
+        $user = User::where('username', $email)->firstOrFail();
+        $this->assertSame((int) $choice['college_id'], (int) $user->college_id);
+        $this->assertSame((int) $choice['department_id'], (int) $user->department_id);
+    }
+
+    public function test_outsider_registration_does_not_need_a_college(): void
+    {
+        $data = $this->registrationData(['requestor_type' => 'outsider']);
+        unset($data['college_id'], $data['department_id']);
+        $this->post(route('register.post'), $data)->assertRedirect(route('register.verify'));
+    }
+
     private function registrationData(array $overrides = []): array
     {
         return array_merge([
@@ -1088,6 +1114,14 @@ class RegistrationFormTest extends TestCase
             'username' => 'public-registration-' . uniqid() . '@test.com',
             'password' => 'Password12345!',
             'password_confirmation' => 'Password12345!',
-        ], $overrides);
+        ], $this->collegeAndDepartment(), $overrides);
+    }
+
+    /** A.2: PIT member registrations include a College and a Department. */
+    private function collegeAndDepartment(): array
+    {
+        $department = \App\Models\Department::query()->orderBy('id')->firstOrFail();
+
+        return ['college_id' => $department->college_id, 'department_id' => $department->id];
     }
 }

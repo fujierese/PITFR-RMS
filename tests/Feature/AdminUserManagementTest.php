@@ -613,7 +613,7 @@ class AdminUserManagementTest extends TestCase
 
         $this->view('components.dashboard-sidebar', ['user' => $staff])
             ->assertSee('Juan Santos Dela Cruz')
-            ->assertSee('Staff · Registrar Office — Administrative Assistant');
+            ->assertSee('Registrar Office — Administrative Assistant'); // A.1 label format
     }
 
     public function test_create_user_form_lists_staff_offices_and_saves_department_for_igp(): void

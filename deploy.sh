@@ -98,4 +98,21 @@ echo "==> Rebuilding caches"
 "$PHP" artisan optimize
 "$PHP" artisan queue:restart || true
 
+# NTF-02: the scheduler sends reminders, processes review deadlines and runs the
+# queue worker that delivers notification emails. Add its cron entry once, if no
+# schedule:run entry exists yet. Set INSTALL_CRON=0 in .deploy.env to skip.
+if [ "${INSTALL_CRON:-1}" != "0" ] && command -v crontab >/dev/null 2>&1; then
+    if crontab -l 2>/dev/null | grep -q "schedule:run"; then
+        echo "==> Scheduler cron entry already present"
+    else
+        PHP_ABS="$("$PHP" -r 'echo PHP_BINARY;' 2>/dev/null || echo "$PHP")"
+        CRON_LINE="* * * * * cd $(pwd -P) && $PHP_ABS artisan schedule:run >> /dev/null 2>&1"
+        if { crontab -l 2>/dev/null; echo "$CRON_LINE"; } | crontab -; then
+            echo "==> Added scheduler cron entry: $CRON_LINE"
+        else
+            echo "==> Could not add the cron entry; add it in cPanel > Cron Jobs: $CRON_LINE"
+        fi
+    fi
+fi
+
 echo "==> Deployed $(git rev-parse --short HEAD)"

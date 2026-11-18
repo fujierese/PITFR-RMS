@@ -117,6 +117,66 @@
                                 </div>
                             </fieldset>
 
+                            {{-- A.2: PIT members choose their College and Department from the directory. --}}
+                            <div id="college_department_section" class="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label for="college_id" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">College <span class="text-red-500" aria-hidden="true">*</span></label>
+                                    <select id="college_id" name="college_id" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                                        <option value="">Choose your college</option>
+                                        @foreach(($colleges ?? collect()) as $college)
+                                            <option value="{{ $college->id }}" @selected((string) old('college_id') === (string) $college->id)>{{ $college->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="department_id" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Department <span class="text-red-500" aria-hidden="true">*</span></label>
+                                    <select id="department_id" name="department_id" data-selected="{{ old('department_id') }}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
+                                        <option value="">Choose your college first</option>
+                                        @foreach(($colleges ?? collect()) as $college)
+                                            @foreach($college->departments as $department)
+                                                <option value="{{ $department->id }}" data-college-id="{{ $college->id }}" @selected((string) old('department_id') === (string) $department->id)>{{ $department->name }}</option>
+                                            @endforeach
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <script>
+                                (function () {
+                                    var section = document.getElementById('college_department_section');
+                                    var college = document.getElementById('college_id');
+                                    var department = document.getElementById('department_id');
+                                    if (!section || !college || !department) return;
+                                    var allDepartments = Array.prototype.slice.call(department.options).filter(function (o) { return o.value; })
+                                        .map(function (o) { return { value: o.value, label: o.textContent, college: o.dataset.collegeId }; });
+                                    function fillDepartments() {
+                                        var keep = department.value || department.dataset.selected || '';
+                                        department.innerHTML = '';
+                                        department.add(new Option(college.value ? 'Choose your department' : 'Choose your college first', ''));
+                                        allDepartments.filter(function (d) { return d.college === college.value; })
+                                            .forEach(function (d) { department.add(new Option(d.label, d.value, false, d.value === keep)); });
+                                        department.disabled = !college.value || section.hidden;
+                                    }
+                                    function toggle() {
+                                        var checked = document.querySelector('[data-requestor-type]:checked');
+                                        var member = !!checked && checked.value !== 'outsider';
+                                        var orgSection = document.getElementById('organization_section');
+                                        section.hidden = !member;
+                                        college.disabled = !member;
+                                        college.required = member;
+                                        department.required = member;
+                                        if (orgSection) {
+                                            orgSection.hidden = member;
+                                            orgSection.querySelectorAll('input').forEach(function (i) { i.disabled = member; });
+                                        }
+                                        fillDepartments();
+                                    }
+                                    college.addEventListener('change', function () { department.dataset.selected = ''; fillDepartments(); });
+                                    document.querySelectorAll('[data-requestor-type]').forEach(function (r) { r.addEventListener('change', toggle); });
+                                    document.addEventListener('DOMContentLoaded', toggle);
+                                    toggle();
+                                })();
+                            </script>
+
                             <div id="verification_section" class="rounded-2xl border border-slate-200 bg-slate-50 p-4" data-institutional-domains="{{ implode(',', $institutionalDomains ?? []) }}">
                                 <p class="text-sm font-semibold text-slate-800">Identity verification</p>
                                 <p id="verification_auto" class="mt-2 hidden rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
@@ -173,6 +233,7 @@
                             </script>
                         @endif
 
+                        <div id="organization_section" class="space-y-4">
                         <div>
                             <label for="office_or_organization" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Office, department or organization <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
                             <input id="office_or_organization" type="text" name="office_or_organization" value="{{ old('office_or_organization') }}" maxlength="191" list="organization_suggestions" autocomplete="organization" placeholder="Start typing, or enter your company or group" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
@@ -193,6 +254,7 @@
                                 <label for="organization_type" class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Organization type <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
                                 <input id="organization_type" type="text" name="organization_type" value="{{ old('organization_type') }}" maxlength="100" placeholder="Example: Company, NGO, School" class="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
                             </div>
+                        </div>
                         </div>
 
                         <div class="grid gap-4 sm:grid-cols-2">
@@ -223,8 +285,8 @@
                                 <label class="flex items-start gap-3">
                                     <input type="checkbox" name="privacy_accepted" value="1" required @checked(old('privacy_accepted')) class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600">
                                     <span>
-                                        I have read the <a href="{{ route('privacy.policy') }}" target="_blank" rel="noopener" class="font-semibold text-emerald-700 underline">Privacy Notice</a> and agree that PIT may process my personal information for facility reservations, as described there and under the
-                                        <a href="{{ route('privacy.data-act') }}" target="_blank" rel="noopener" class="font-semibold text-emerald-700 underline">Data Privacy Act of 2012 (RA 10173)</a>. <span class="text-red-500" aria-hidden="true">*</span>
+                                        I have read the <a href="{{ route('privacy.data-protection') }}" target="_blank" rel="noopener" class="font-semibold text-emerald-700 underline">Privacy Notice</a> and agree that PIT may process my personal information for facility reservations, as described there and under the
+                                        <a href="{{ route('privacy.data-protection') }}#data-privacy-rights" target="_blank" rel="noopener" class="font-semibold text-emerald-700 underline">Data Privacy Act of 2012 (RA 10173)</a>. <span class="text-red-500" aria-hidden="true">*</span>
                                     </span>
                                 </label>
                                 @error('privacy_accepted')<p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
