@@ -993,6 +993,16 @@ class SupplyOfficeController extends Controller
 
         $venue->update($validated);
 
+        // REQ-02: tell the Supply Office which bookings no longer fit.
+        if ($venue->wasChanged('capacity') && $venue->capacity !== null) {
+            $affected = FacilityRequest::activeRequestsAboveCapacity($venue, (int) $venue->capacity);
+            if ($affected->isNotEmpty()) {
+                return back()->with('success', 'Venue updated successfully.')->with('warning',
+                    "The new capacity ({$venue->capacity}) is below the participants of " . $affected->count()
+                    . ' active booking(s): ' . $affected->pluck('control_number')->implode(', ') . '. Each one was noted in its history; review them.');
+            }
+        }
+
         return back()->with('success', 'Venue updated successfully.');
     }
 

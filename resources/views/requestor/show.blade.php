@@ -1074,6 +1074,11 @@
                                             Urgent memo/proposal reviewed
                                         </label>
                                     @endif
+                                    @if($request->venuesWithoutCapacity() !== [])
+                                        <p class="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                                            Capacity not set for: {{ implode(', ', $request->venuesWithoutCapacity()) }}. Check that it fits {{ $request->expected_participants }} participants before confirming.
+                                        </p>
+                                    @endif
                                     @if($request->hasPendingCapacityException())
                                         <div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                                             <p class="font-semibold">Capacity exception requested</p>

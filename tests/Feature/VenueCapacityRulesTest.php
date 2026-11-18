@@ -129,4 +129,50 @@ class VenueCapacityRulesTest extends TestCase
             ->assertSee('Request a capacity exception')
             ->assertSee('data-venue-capacity="50"', false);
     }
+
+    public function test_participants_equal_to_capacity_are_allowed(): void
+    {
+        // REQ-02.
+        $this->actingAs($this->requester)
+            ->post(route('requestor.store'), $this->payload(['Covered Court'], ['expected_participants' => 50]))
+            ->assertSessionHasNoErrors();
+        $this->assertNull(FacilityRequest::firstOrFail()->capacity_exception_status);
+    }
+
+    public function test_zero_capacity_cannot_be_saved(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $venue = Venue::where('name', 'Covered Court')->firstOrFail();
+
+        $this->actingAs($admin)->put(route('supply-office.venues.update', $venue), [
+            'name' => 'Covered Court', 'custodian_id' => $venue->custodian_id, 'capacity' => 0,
+        ])->assertSessionHasErrors('capacity');
+    }
+
+    public function test_lowering_capacity_below_active_bookings_warns_and_records_history(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $venue = Venue::where('name', 'Gymnasium')->firstOrFail();
+        $this->actingAs($this->requester)
+            ->post(route('requestor.store'), $this->payload(['Gymnasium']))
+            ->assertSessionHasNoErrors();
+        $request = FacilityRequest::firstOrFail();
+
+        $this->actingAs($admin)->put(route('supply-office.venues.update', $venue), [
+            'name' => 'Gymnasium', 'custodian_id' => $venue->custodian_id, 'capacity' => 60,
+        ])->assertSessionHas('warning', fn (string $w): bool => str_contains($w, $request->control_number));
+
+        $this->assertDatabaseHas('request_histories', ['facility_request_id' => $request->id, 'action' => 'venue_capacity_lowered']);
+    }
+
+    public function test_reviewer_is_told_when_a_venue_has_no_capacity(): void
+    {
+        Venue::where('name', 'Gymnasium')->update(['capacity' => null]);
+        $this->actingAs($this->requester)
+            ->post(route('requestor.store'), $this->payload(['Gymnasium']))
+            ->assertSessionHasNoErrors();
+        $request = FacilityRequest::firstOrFail();
+
+        $this->assertSame(['Gymnasium'], $request->venuesWithoutCapacity());
+    }
 }

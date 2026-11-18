@@ -321,6 +321,35 @@ class FacilityRequest extends Model
         return (int) ($perVenue[$venueName] ?? $this->expected_participants ?? 0);
     }
 
+    /**
+     * REQ-02: pending or approved, not-yet-finished requests at this venue whose
+     * participants are above the given capacity.
+     */
+    public static function activeRequestsAboveCapacity(Venue $venue, int $capacity): \Illuminate\Support\Collection
+    {
+        $name = mb_strtolower((string) $venue->name);
+
+        return static::query()
+            ->whereIn('status', ['pending', 'approved'])
+            ->where(fn ($q) => $q->whereNull('end_date')->orWhereDate('end_date', '>=', now()->toDateString()))
+            ->get()
+            ->filter(fn (self $r): bool => in_array($name, array_map('mb_strtolower', $r->getVenueNames()), true)
+                && $r->participantsForVenue((string) $venue->name) > $capacity)
+            ->values();
+    }
+
+    /** REQ-02: selected venues with no capacity on record, for the reviewer to check. */
+    public function venuesWithoutCapacity(): array
+    {
+        $names = $this->getVenueNames();
+        if ($names === []) {
+            return [];
+        }
+        $known = Venue::query()->whereIn('name', $names)->whereNotNull('capacity')->pluck('name')->all();
+
+        return array_values(array_diff($names, $known, ['Others (specify)']));
+    }
+
     private static ?bool $historyAuditColumns = null;
 
     private static function historyHasAuditColumns(): bool
