@@ -2452,10 +2452,17 @@ class RequestorController extends Controller
                 $range['start'],
                 $range['end'],
             );
+            // REQ-10: a clash with a request still under review is only a warning here;
+            // the Supply Office is blocked from confirming both.
+            $pendingNotice = null;
+            if ($availability['available'] && $this->availabilityService->checkVenueTimeRangeForReview($venueName, $range['start'], $range['end']) !== null) {
+                $pendingNotice = 'Another request for this venue and time is still awaiting review. You can still submit; the Supply Office will confirm only one of them.';
+            }
             $results[] = [
                 'venue' => $venueName,
                 'available' => $availability['available'],
                 'message' => $availability['message'] ?? null,
+                'pending_notice' => $pendingNotice,
             ];
         }
 

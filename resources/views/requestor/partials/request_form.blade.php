@@ -1612,9 +1612,11 @@
                         const status = result.group.querySelector('.venue-availability');
                         if (status) {
                             status.textContent = result.available
-                                ? `${result.venue} is available for this schedule. Supply Office confirmation is still required.`
+                                ? (result.pending_notice
+                                    ? `${result.venue} is open for this schedule. ${result.pending_notice}`
+                                    : `${result.venue} is available for this schedule. Supply Office confirmation is still required.`)
                                 : `${result.venue} is unavailable for this schedule. ${result.message || ''}`;
-                            status.className = `venue-availability mt-3 text-xs ${result.available ? 'text-emerald-700' : 'text-amber-800'}`;
+                            status.className = `venue-availability mt-3 text-xs ${result.available && !result.pending_notice ? 'text-emerald-700' : 'text-amber-800'}`;
                         }
                     });
                     const isAvailable = results.every((result) => result.available);
