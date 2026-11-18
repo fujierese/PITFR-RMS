@@ -13,6 +13,21 @@ class CalendarEventPayloadTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_only_the_card_matching_the_selected_slot_is_highlighted(): void
+    {
+        // REQ-07: the highlight uses each card's own venue, dates and times,
+        // not every card that belongs to the same request.
+        $requestor = User::factory()->create(['role' => 'requestor']);
+        $this->actingAs($requestor)->get(route('calendar.embed', [
+            'venue' => 'Balay Alumni', 'request_id' => 5,
+            'start_date' => '2026-10-26', 'end_date' => '2026-10-26',
+            'start_time' => '09:00', 'end_time' => '12:30',
+        ]))->assertOk()
+            ->assertSee('function eventMatchesRequestedSlot(event)', false)
+            ->assertSee('if (eventMatchesRequestedSlot(event)) {', false)
+            ->assertDontSee("&& String(event.extendedProps && event.extendedProps.facilityRequestId || '') === requestedRequestId", false);
+    }
+
     public function test_embedded_calendar_is_a_date_picker_without_dashboard_navigation(): void
     {
         $requestor = User::factory()->create(['role' => 'requestor']);

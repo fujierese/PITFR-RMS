@@ -2129,9 +2129,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Store all events globally for dayCell rendering
                         window.allEventsData = data;
-                        var hasMatchingRequestedReservation = !!requestedRequestId && data.some(function(event) {
+                        // REQ-07: a card is highlighted only when it is this request's booking
+                        // for the selected venue and its own dates and times equal the selected slot.
+                        var requestedVenueName = String(calendarParams.get('venue') || '').trim().toLowerCase();
+                        function eventMatchesRequestedSlot(event) {
+                            if (!requestedRequestId || !hasRequestedDateRange || !hasRequestedTimeRange) return false;
                             var eventProps = event.extendedProps || {};
                             if (String(eventProps.facilityRequestId || '') !== requestedRequestId) return false;
+
+                            var eventVenues = (eventProps.eventVenue ? [eventProps.eventVenue] : String(event.venue || eventProps.venue || '').split(','))
+                                .map(function(name) { return String(name).trim().toLowerCase(); })
+                                .filter(Boolean);
+                            if (requestedVenueName && eventVenues.length && eventVenues.indexOf(requestedVenueName) === -1) return false;
 
                             var eventStart = String(event.start_datetime || event.start || '').replace(' ', 'T');
                             var eventEnd = String(event.end_datetime || event.end || '').replace(' ', 'T');
@@ -2139,7 +2148,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 && eventEnd.slice(0, 10) === requestedEndDate
                                 && eventStart.slice(11, 16) === requestedStartTime.slice(0, 5)
                                 && eventEnd.slice(11, 16) === requestedEndTime.slice(0, 5);
-                        });
+                        }
+                        var hasMatchingRequestedReservation = data.some(eventMatchesRequestedSlot);
 
                         // Helper function to create tooltip content
                         function createTooltipContent(event, status) {
@@ -2223,10 +2233,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             var displayTitle = event.extendedProps && event.extendedProps.purpose ? event.extendedProps.purpose : (event.title || 'Facility Request');
                             var classNames = ['status-event', 'status-' + String(status || 'neutral').toLowerCase().replace(/\s+/g, '-')];
                             if (awaitingVenueConfirmation) classNames.push('awaiting-venue-confirmation-event');
-                            if (
-                                hasMatchingRequestedReservation
-                                && String(event.extendedProps && event.extendedProps.facilityRequestId || '') === requestedRequestId
-                            ) {
+                            if (eventMatchesRequestedSlot(event)) {
                                 classNames.push('requested-reservation-match');
                             }
 
