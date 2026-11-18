@@ -898,6 +898,39 @@
         initializeVenueCapacityWarning();
     }
 
+    // REQ-03: today's date in Asia/Manila, from the server.
+    window.pitfrUrgentToday = @json(now()->timezone(config('app.timezone'))->toDateString());
+    const urgentToday = window.pitfrUrgentToday;
+    const initializeUrgentDateLimit = () => {
+        const form = document.getElementById('request-form');
+        const urgent = form?.querySelector('[name="is_emergency"]');
+        if (!form || !urgent) return;
+        const dateInputs = () => [...form.querySelectorAll('input[type="date"][name^="venue_schedules"]')];
+        const apply = () => {
+            dateInputs().forEach((input) => {
+                if (urgent.checked) {
+                    input.dataset.normalMax = input.dataset.normalMax ?? (input.max || '');
+                    input.min = urgentToday;
+                    input.max = urgentToday;
+                    if (input.value && input.value !== urgentToday) {
+                        input.value = urgentToday;
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                } else {
+                    input.min = urgentToday;
+                    input.max = input.dataset.normalMax || '';
+                }
+            });
+        };
+        urgent.addEventListener('change', apply);
+        apply();
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeUrgentDateLimit, { once: true });
+    } else {
+        initializeUrgentDateLimit();
+    }
+
     // D2: a venue whose capacity is below its participant count cannot be selected
     // unless the requestor asks for a capacity exception with a reason.
     const initializeVenueCapacityRules = () => {
@@ -1202,6 +1235,17 @@
                 || (event.data.endDate !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(event.data.endDate))
                 || (event.data.endDate !== '' && event.data.endDate < event.data.startDate)
             ) {
+                return;
+            }
+
+            // REQ-03: urgent requests can only be held today (institutional timezone).
+            if (form.querySelector('[name="is_emergency"]')?.checked
+                && (event.data.startDate !== window.pitfrUrgentToday || (event.data.endDate !== '' && event.data.endDate !== window.pitfrUrgentToday))) {
+                selectedCalendarRange = null;
+                if (applyVenueCalendarDates) applyVenueCalendarDates.disabled = true;
+                if (venueCalendarSelectionStatus) {
+                    venueCalendarSelectionStatus.textContent = `Urgent requests can only be held today (${window.pitfrUrgentToday}). Select today on the calendar.`;
+                }
                 return;
             }
 

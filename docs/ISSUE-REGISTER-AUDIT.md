@@ -108,3 +108,4 @@ Status: **Confirmed** (problem exists as described) · **Partly** (some of it is
 |---|---|
 | REQ-01 | **Done with D2** (see above). |
 | REQ-02 | **Fixed.** Participants equal to capacity are allowed; zero capacity cannot be saved (minimum 1 on every venue form). The Supply Office sees "Capacity not set for: …" during availability review. Lowering a venue's capacity below active bookings shows a warning listing the affected control numbers, and adds a `venue_capacity_lowered` history entry to each one; this works on every venue edit path. Tests in `VenueCapacityRulesTest`. |
+| REQ-03 | **Fixed.** The server already required an urgent schedule to be entirely on today's date (Asia/Manila). The form now matches: when Urgent is ticked, every venue's date fields are limited to today and switch to today, and the venue calendar refuses any other date ("Urgent requests can only be held today"). Test: `UrgentRequestDateTest`. |
