@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Venue;
 use App\Services\AvailabilityService;
 use App\Services\VenueEquipmentPolicy;
+use App\Support\EquipmentQuantity;
 use App\Http\Controllers\Concerns\ManagesAccountSettings;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -958,7 +959,9 @@ class RequestorController extends Controller
             'venue' => ['required', 'string', Rule::in($this->activeVenueOptions())],
             'other_venue' => ['prohibited'],
             'equipment' => ['nullable', 'array'],
+            'equipment.*' => ['string', 'distinct:ignore_case'],
             'equipment_quantities' => ['nullable', 'array'],
+            'equipment_quantities.*' => EquipmentQuantity::rules(),
         ];
 
         if (!$isNeedsReschedule) {
@@ -970,7 +973,8 @@ class RequestorController extends Controller
             'venue.required' => 'Choose a venue. Every request needs at least one venue; equipment is requested together with a venue.',
             'venue.in' => 'Choose one of the listed venues. Venues that are no longer available cannot be requested.',
             'other_venue.prohibited' => '"Others" is not a venue. Choose one of the listed venues.',
-        ]);
+            'equipment.*.distinct' => 'Each equipment item can be selected only once.',
+        ] + EquipmentQuantity::messages('equipment_quantities.*'));
 
         if (
             ($validated['reservation_duration'] ?? 'specific_time') === 'specific_time'
@@ -1012,7 +1016,21 @@ class RequestorController extends Controller
         $validated['end_date'] = $scheduleRange['end']?->toDateString() ?? $validated['end_date'] ?? $validated['start_date'];
 
         $selectedEquipment = array_values(array_filter($validated['equipment'] ?? [], fn($item) => !empty($item)));
-        $selectedQuantities = $validated['equipment_quantities'] ?? [];
+        $selectedQuantities = array_filter($validated['equipment_quantities'] ?? [], static fn ($qty): bool => $qty !== null && $qty !== '');
+        // REQ-12: only listed equipment, and every quantity belongs to a selected item.
+        $requestableEquipment = \App\Models\Equipment::query()->where('is_active', true)->pluck('name')->all() ?: self::EQUIPMENT_OPTIONS;
+        $unlistedEquipment = array_values(array_filter(
+            $selectedEquipment,
+            static fn ($item): bool => ! in_array(mb_strtolower((string) $item), array_map('mb_strtolower', $requestableEquipment), true)
+        ));
+        if ($unlistedEquipment !== []) {
+            return back()->withErrors(['equipment' => 'These items cannot be requested: ' . implode(', ', $unlistedEquipment) . '. Choose from the listed equipment.'])->withInput();
+        }
+        // The edit form keeps the quantity box of an item the requestor unticked, so a
+        // quantity without a selected item is dropped here rather than rejected.
+        foreach (EquipmentQuantity::unmatched($selectedQuantities, $selectedEquipment) as $unselectedItem) {
+            unset($selectedQuantities[$unselectedItem]);
+        }
         $explicitEquipment = $selectedEquipment;
         $quantities = [];
 
@@ -1459,10 +1477,10 @@ class RequestorController extends Controller
             'venue_equipment.*.*' => ['string'],
             'venue_equipment_quantities' => ['nullable', 'array'],
             'venue_equipment_quantities.*' => ['array'],
-            'venue_equipment_quantities.*.*' => ['nullable', 'integer', 'min:1'],
+            'venue_equipment_quantities.*.*' => EquipmentQuantity::rules(),
             'equipment'             => 'nullable|array',
             'equipment_quantities'  => 'nullable|array',
-            'equipment_quantities.*' => ['nullable', 'integer', 'min:1'],
+            'equipment_quantities.*' => EquipmentQuantity::rules(),
             'other_venue'           => 'prohibited',
             'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
             'emergency_office' => ['required_if:is_emergency,1', 'nullable', Rule::in(['CHED', 'OP', 'OVP'])],
@@ -1531,7 +1549,7 @@ class RequestorController extends Controller
             'venue.min' => 'Choose a venue. Every request needs at least one venue; equipment is requested together with a venue.',
             'venue.*.in' => 'Choose one of the listed venues. Venues that are no longer available cannot be requested.',
             'other_venue.prohibited' => '"Others" is not a venue. Choose one of the listed venues.',
-        ]);
+        ] + EquipmentQuantity::messages('venue_equipment_quantities.*.*') + EquipmentQuantity::messages('equipment_quantities.*'));
 
         $venue = array_values(array_unique(array_map(
             static fn (string $venueName): string => trim($venueName),
@@ -1748,6 +1766,15 @@ class RequestorController extends Controller
             $venueQuantities = is_array($submittedVenueQuantities[$venueName] ?? null)
                 ? $submittedVenueQuantities[$venueName]
                 : [];
+            // REQ-12: every quantity belongs to a selected item.
+            $unmatchedQuantities = EquipmentQuantity::unmatched(
+                array_filter($hasVenueSpecificSelection ? $venueQuantities : $legacyQuantities, static fn ($qty): bool => $qty !== null && $qty !== ''),
+                $normalizedItems,
+                static fn (string $name): string => self::canonicalizeEquipmentName($name)
+            );
+            if ($unmatchedQuantities !== []) {
+                return back()->withErrors(['equipment' => EquipmentQuantity::unmatchedMessage($unmatchedQuantities, $venueName)])->withInput();
+            }
             foreach ($normalizedItems as $equipmentName) {
                 // Equipment the venue already provides is not a separate request (REQ-09).
                 if (in_array($equipmentName, VenueEquipmentPolicy::getDefaultEquipment($venueName), true)) {

@@ -164,6 +164,24 @@
                                     </div>
                                 </div>
                             @endforeach
+                            <script>
+                                // REQ-12: show and send a quantity only for ticked equipment.
+                                document.querySelectorAll('.equipment-row').forEach(function (row) {
+                                    var checkbox = row.querySelector('.equipment-checkbox');
+                                    var wrap = row.querySelector('.quantity-input-wrap');
+                                    var input = wrap ? wrap.querySelector('input[type="number"]') : null;
+                                    if (!checkbox || !input) { return; }
+                                    var sync = function () {
+                                        var on = checkbox.checked && !checkbox.disabled;
+                                        wrap.style.display = on ? 'block' : 'none';
+                                        input.disabled = !on;
+                                        input.required = on;
+                                        if (on && (!input.value || Number(input.value) < 1)) { input.value = 1; }
+                                    };
+                                    checkbox.addEventListener('change', sync);
+                                    sync();
+                                });
+                            </script>
                         </div>
                     </div>
                 </div>

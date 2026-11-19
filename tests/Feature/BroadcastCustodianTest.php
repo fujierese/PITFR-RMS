@@ -47,6 +47,7 @@ class BroadcastCustodianTest extends TestCase
                 'department' => 'IT',
                 'venue' => ['Gymnasium'],
                 'equipment' => ['Industrial Fan'],
+                'equipment_quantities' => ['Industrial Fan' => 1],
             ])
             ->assertStatus(201);
 
@@ -185,6 +186,7 @@ class BroadcastCustodianTest extends TestCase
                 'department' => 'Ops',
                 'venue' => ['Gymnasium'],
                 'equipment' => ['Iwata Cooler Fan'],
+                'equipment_quantities' => ['Iwata Cooler Fan' => 1],
             ])
             ->assertStatus(201);
 
@@ -226,6 +228,7 @@ class BroadcastCustodianTest extends TestCase
                 'department' => 'Events',
                 'venue' => ['Gymnasium'],
                 'equipment' => ['Industrial Fan', 'Iwata Cooler Fan'],
+                'equipment_quantities' => ['Industrial Fan' => 1, 'Iwata Cooler Fan' => 1],
             ])
             ->assertStatus(201);
 

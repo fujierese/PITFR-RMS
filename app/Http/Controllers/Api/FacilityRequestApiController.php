@@ -152,11 +152,11 @@ class FacilityRequestApiController extends Controller
             'equipment.*' => [
                 'required',
                 'string',
-                'distinct',
+                'distinct:ignore_case',
                 Rule::exists('equipment', 'name')->where('is_active', true),
             ],
             'equipment_quantities' => 'nullable|array',
-            'equipment_quantities.*' => ['required', 'integer', 'min:1'],
+            'equipment_quantities.*' => \App\Support\EquipmentQuantity::rules(required: true),
             'other_venue' => 'prohibited',
             'department' => 'required|string|max:100',
             'is_emergency' => 'nullable|boolean',
@@ -167,7 +167,23 @@ class FacilityRequestApiController extends Controller
             'venue.min' => 'Choose a venue. Every request needs at least one venue; equipment is requested together with a venue.',
             'venue.*.exists' => 'Choose an active venue. Venues that are no longer available cannot be requested.',
             'other_venue.prohibited' => '"Others" is not a venue. Choose one of the listed venues.',
-        ]);
+            'equipment.*.distinct' => 'Each equipment item can be listed only once.',
+        ] + \App\Support\EquipmentQuantity::messages('equipment_quantities.*'));
+
+        // REQ-12: every selected item has a quantity, and every quantity has an item.
+        $selectedApiEquipment = $validated['equipment'] ?? [];
+        $apiQuantities = $validated['equipment_quantities'] ?? [];
+        $unmatchedQuantities = \App\Support\EquipmentQuantity::unmatched($apiQuantities, $selectedApiEquipment);
+        if ($unmatchedQuantities !== []) {
+            throw ValidationException::withMessages(['equipment_quantities' => \App\Support\EquipmentQuantity::unmatchedMessage($unmatchedQuantities)]);
+        }
+        $missingQuantities = array_values(array_filter(
+            $selectedApiEquipment,
+            static fn (string $item): bool => ! array_key_exists($item, $apiQuantities)
+        ));
+        if ($missingQuantities !== []) {
+            throw ValidationException::withMessages(['equipment_quantities' => 'Enter a quantity for ' . implode(', ', $missingQuantities) . '.']);
+        }
 
         if (
             ($validated['reservation_duration'] ?? 'specific_time') === 'specific_time'
@@ -223,7 +239,7 @@ class FacilityRequestApiController extends Controller
         $quantities = [];
         if (!empty($validated['equipment'])) {
             foreach ($validated['equipment'] as $item) {
-                $qty = (int) ($validated['equipment_quantities'][$item] ?? 1);
+                $qty = (int) $validated['equipment_quantities'][$item];
                 $quantities[$item] = $qty;
 
                 $eq = Equipment::whereRaw('LOWER(name) = ?', [strtolower($item)])->first();
