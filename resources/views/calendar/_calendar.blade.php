@@ -384,25 +384,29 @@
                     </p>
 
                     <div class="mt-5">
-                        <h3 class="gcal-side-heading">Venues</h3>
+                        <div class="flex items-center justify-between gap-2">
+                            <h3 class="gcal-side-heading">Venues</h3>
+                            <button type="button" class="gcal-filter-reset hidden" data-filter-reset>Show all</button>
+                        </div>
+                        <p class="mt-1 text-xs gcal-muted-text">Click an item to show or hide it.</p>
                         <ul class="gcal-legend-list">
-                            <li class="gcal-side-item"><span class="gcal-swatch" style="background-color: #dc2626;"></span>CHIC</li>
-                            <li class="gcal-side-item"><span class="gcal-swatch" style="background-color: #2563eb;"></span>Balay Alumni</li>
-                            <li class="gcal-side-item"><span class="gcal-swatch" style="background-color: #92400e;"></span>Gym</li>
-                            <li class="gcal-side-item"><span class="gcal-swatch" style="background-color: #16a34a;"></span>Covered Courts / Oval</li>
+                            <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="venue" data-filter-key="chic" aria-pressed="true"><span class="gcal-swatch" style="--gcal-swatch: #dc2626;"></span><span>CHIC</span></button></li>
+                            <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="venue" data-filter-key="balay" aria-pressed="true"><span class="gcal-swatch" style="--gcal-swatch: #2563eb;"></span><span>Balay Alumni</span></button></li>
+                            <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="venue" data-filter-key="gym" aria-pressed="true"><span class="gcal-swatch" style="--gcal-swatch: #92400e;"></span><span>Gym</span></button></li>
+                            <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="venue" data-filter-key="courts" aria-pressed="true"><span class="gcal-swatch" style="--gcal-swatch: #16a34a;"></span><span>Covered Courts / Oval</span></button></li>
                         </ul>
                     </div>
 
                     <div class="mt-5">
                         <h3 class="gcal-side-heading">Status</h3>
                         <ul class="gcal-legend-list">
-                            <li class="gcal-side-item"><span class="gcal-sample gcal-sample--solid"></span>Approved booking</li>
-                            <li class="gcal-side-item"><span class="gcal-sample gcal-sample--tentative"></span>Pending review</li>
-                            <li class="gcal-side-item"><span class="gcal-sample gcal-sample--declined"></span>Rejected / conflict</li>
-                            <li class="gcal-side-item"><span class="gcal-sample gcal-sample--maintenance"></span>Maintenance / closure</li>
-                            <li class="gcal-side-item"><span class="gcal-sample gcal-sample--requested"></span>Requested schedule</li>
+                            <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="approved" aria-pressed="true"><span class="gcal-sample gcal-sample--solid"></span><span>Approved booking</span></button></li>
+                            <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="pending" aria-pressed="true"><span class="gcal-sample gcal-sample--tentative"></span><span>Pending review</span></button></li>
+                            <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="declined" aria-pressed="true"><span class="gcal-sample gcal-sample--declined"></span><span>Rejected / conflict</span></button></li>
+                            <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="maintenance" aria-pressed="true"><span class="gcal-sample gcal-sample--maintenance"></span><span>Maintenance / closure</span></button></li>
+                            <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="requested" aria-pressed="true"><span class="gcal-sample gcal-sample--requested"></span><span>Requested schedule</span></button></li>
                             @if($user && $user->isCustodianVenue())
-                                <li class="gcal-side-item"><span class="gcal-sample gcal-sample--awaiting"></span>Awaiting venue confirmation</li>
+                                <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="awaiting" aria-pressed="true"><span class="gcal-sample gcal-sample--awaiting"></span><span>Awaiting venue confirmation</span></button></li>
                             @endif
                         </ul>
                         @if($user && $user->isCustodianVenue())
@@ -1728,7 +1732,25 @@
 }
 .gcal-side-heading { font-size: 0.8125rem; font-weight: 600; color: var(--gcal-text); }
 .gcal-side-item { display: flex; align-items: center; gap: 0.625rem; font-size: 0.8125rem; color: var(--gcal-text); }
-.gcal-swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; }
+.gcal-swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; background-color: var(--gcal-swatch); border: 2px solid var(--gcal-swatch); box-sizing: border-box; }
+/* Legend filters: click to show or hide, like Google Calendar's calendar list. */
+.gcal-filter { width: 100%; margin: -0.25rem -0.375rem; padding: 0.25rem 0.375rem; border: 0; border-radius: 0.5rem; background: transparent; text-align: left; cursor: pointer; }
+.gcal-filter:hover { background: var(--gcal-hover); }
+.gcal-filter:focus-visible { outline: 2px solid var(--gcal-blue); outline-offset: 1px; }
+.gcal-filter[aria-pressed="false"] { color: var(--gcal-muted); }
+.gcal-filter[aria-pressed="false"] > span:last-child { text-decoration: line-through; }
+.gcal-filter[aria-pressed="false"] .gcal-swatch { background-color: transparent; }
+.gcal-filter[aria-pressed="false"] .gcal-sample { opacity: 0.35; }
+.gcal-filter-reset { border: 0; background: transparent; padding: 0; font-size: 0.75rem; font-weight: 600; color: var(--gcal-blue); cursor: pointer; }
+.gcal-filter-reset:hover { text-decoration: underline; }
+.gcal-legend-list:has(.gcal-filter) { flex-direction: column; flex-wrap: nowrap; gap: 2px; }
+.gcal-legend-list:has(.gcal-filter) > li { width: 100%; }
+.gcal-filter { margin: 0 -0.375rem; width: calc(100% + 0.75rem); }
+/* All-day row chips: activity title first, then venue and status, cut with an ellipsis. */
+.gcal-event--allday { display: flex; min-width: 0; overflow: hidden; }
+.gcal-event--allday .gcal-title { flex: 0 1 auto; max-width: 100%; font-weight: 600; }
+.gcal-event--allday .gcal-allday-meta { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.9; }
+.gcal-shell #calendar.fc .fc-timegrid-more-link { background: var(--gcal-hover); color: var(--gcal-text); font-size: 0.75rem; font-weight: 600; border-radius: 4px; padding: 2px 6px; box-shadow: 0 1px 2px rgba(0,0,0,.15); bottom: auto !important; height: auto; }
 .gcal-sample { width: 22px; height: 12px; border-radius: 4px; flex: none; box-sizing: border-box; }
 .gcal-sample--solid { background: var(--gcal-blue); }
 .gcal-sample--tentative { background: var(--gcal-blue-soft); border: 1px solid var(--gcal-blue); }
@@ -2016,6 +2038,91 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Legend filters. A hidden venue or status is left out of the events handed to
+    // the calendar; the choice is remembered in this browser only.
+    var LEGEND_FILTER_STORAGE_KEY = 'pitfr.calendar.hiddenLegend';
+
+    function hiddenLegendKeys() {
+        var hidden = { venue: [], status: [] };
+        document.querySelectorAll('.gcal-filter[aria-pressed="false"]').forEach(function (button) {
+            var group = button.getAttribute('data-filter-group');
+            if (hidden[group]) hidden[group].push(button.getAttribute('data-filter-key'));
+        });
+        return hidden;
+    }
+
+    function legendVenueKey(venueName) {
+        var normalized = normalizeVenueName(venueName);
+        if (normalized.includes('chic') || normalized.includes('conference hall')) return 'chic';
+        if (normalized.includes('balay alumni')) return 'balay';
+        if (normalized.includes('gym')) return 'gym';
+        if (normalized.includes('oval') || normalized.includes('court')) return 'courts';
+        return 'other';
+    }
+
+    function legendStatusKey(segment) {
+        var id = String(segment.id || '');
+        var classes = Array.isArray(segment.classNames) ? segment.classNames : [];
+        if (id.indexOf('requested-reservation-window') === 0 || id.indexOf('requested-schedule-card') === 0) return 'requested';
+        if (classes.indexOf('awaiting-venue-confirmation-event') !== -1) return 'awaiting';
+        if (classes.indexOf('gcal-solid') !== -1) return 'approved';
+        if (classes.indexOf('gcal-declined') !== -1) return 'declined';
+        if (classes.indexOf('gcal-maintenance') !== -1) return 'maintenance';
+        if (classes.indexOf('gcal-tentative') !== -1) return 'pending';
+        return 'other';
+    }
+
+    function passesLegendFilter(segment) {
+        var hidden = hiddenLegendKeys();
+        if (!hidden.venue.length && !hidden.status.length) return true;
+        var statusKey = legendStatusKey(segment);
+        if (hidden.status.indexOf(statusKey) !== -1) return false;
+        if (statusKey === 'requested' || !hidden.venue.length) return true;
+        // A booking for several venues stays visible while any of them is shown.
+        var venueText = String((segment.extendedProps && segment.extendedProps.venue) || '');
+        var venueKeys = venueText.split(/,|;|\n/).map(legendVenueKey);
+        if (!venueKeys.length) venueKeys = ['other'];
+        return venueKeys.some(function (key) { return key === 'other' || hidden.venue.indexOf(key) === -1; });
+    }
+
+    function setupLegendFilters(calendar) {
+        var buttons = Array.prototype.slice.call(document.querySelectorAll('.gcal-filter'));
+        if (!buttons.length) return;
+        var resetButton = document.querySelector('[data-filter-reset]');
+        var saved = null;
+        try { saved = JSON.parse(window.localStorage.getItem(LEGEND_FILTER_STORAGE_KEY) || 'null'); } catch (error) { saved = null; }
+        if (saved && typeof saved === 'object') {
+            buttons.forEach(function (button) {
+                var list = saved[button.getAttribute('data-filter-group')];
+                if (Array.isArray(list) && list.indexOf(button.getAttribute('data-filter-key')) !== -1) {
+                    button.setAttribute('aria-pressed', 'false');
+                }
+            });
+        }
+        var syncReset = function () {
+            var anyHidden = buttons.some(function (button) { return button.getAttribute('aria-pressed') === 'false'; });
+            if (resetButton) resetButton.classList.toggle('hidden', !anyHidden);
+        };
+        var apply = function () {
+            syncReset();
+            try { window.localStorage.setItem(LEGEND_FILTER_STORAGE_KEY, JSON.stringify(hiddenLegendKeys())); } catch (error) {}
+            calendar.refetchEvents();
+        };
+        buttons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                button.setAttribute('aria-pressed', button.getAttribute('aria-pressed') === 'false' ? 'true' : 'false');
+                apply();
+            });
+        });
+        if (resetButton) {
+            resetButton.addEventListener('click', function () {
+                buttons.forEach(function (button) { button.setAttribute('aria-pressed', 'true'); });
+                apply();
+            });
+        }
+        syncReset();
+    }
+
     function normalizeVenueName(value) {
         return String(value || '').toLowerCase().trim();
     }
@@ -2239,8 +2346,13 @@ document.addEventListener('DOMContentLoaded', function() {
             buttonText: { today: 'Today', month: 'Month', week: 'Week', day: 'Day' },
             nowIndicator: true,
             views: {
-                dayGridMonth: { dayHeaderFormat: { weekday: 'short' } }
+                dayGridMonth: { dayHeaderFormat: { weekday: 'short' } },
+                // Keep overlapping bookings readable: at most 2 side by side in the grid and
+                // 3 rows in the all-day row; the rest open from a "+N more" link.
+                timeGrid: { eventMaxStack: 2, dayMaxEventRows: 3 }
             },
+            moreLinkClick: 'popover',
+            moreLinkContent: function(arg) { return '+' + arg.num + ' more'; },
             dayHeaderContent: function(arg) {
                 if (String(arg.view.type || '').indexOf('timeGrid') !== 0 || !window.calendar) return arg.text;
                 var weekday = window.calendar.formatDate(arg.date, { weekday: 'short' });
@@ -2628,6 +2740,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             return segments;
                         }
 
+                        // Whole-day bookings sit in the all-day row at the top of the week and day
+                        // views, as in Google Calendar, so the time grid keeps room for timed bookings.
+                        function asAllDayRowEvent(segment) {
+                            var props = segment.extendedProps || {};
+                            if (props.scheduleType !== 'whole_day' || typeof segment.start !== 'string') return segment;
+                            var day = segment.start.substring(0, 10);
+                            if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return segment;
+                            return Object.assign({}, segment, { allDay: true, start: day, end: addCalendarDate(day) });
+                        }
+
                         // Transform events based on view type
                         var isTimeGridView = viewType === 'timeGridWeek' || viewType === 'timeGridDay';
                         var isMonthView = viewType === 'dayGridMonth';
@@ -2658,7 +2780,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 const canonicalEnd = String(event.end_datetime || endDatetime).replace(' ', 'T');
                                 const timedEvent = Object.assign({}, event, { allDay: !!event.allDay });
                                 segmentTimedEventByDay(timedEvent, canonicalStart, canonicalEnd).forEach(function(segment) {
-                                    mapped.push(segment);
+                                    mapped.push(asAllDayRowEvent(segment));
                                 });
                             }
                         });
@@ -2711,6 +2833,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 highlightDate = addCalendarDate(highlightDate);
                             }
                         }
+
+                        mapped = mapped.filter(passesLegendFilter);
 
                         // A.5: never hide bookings that start before the default 8 AM grid start.
                         if (String(viewType || '').indexOf('timeGrid') === 0 && window.calendar) {
@@ -2825,6 +2949,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (isMonthGrid) {
                     return { html: '<div class="gcal-event gcal-event--bar" aria-hidden="true"><span class="gcal-title">' + __esc(title) + '</span></div>' + srText };
+                }
+
+                if (info.event.allDay) {
+                    var allDayMeta = [venueText, showStatus ? statusText : ''].filter(Boolean).join(' · ');
+                    return { html: '<div class="gcal-event gcal-event--chip gcal-event--allday" aria-hidden="true">'
+                        + '<span class="gcal-title">' + __esc(title) + '</span>'
+                        + (allDayMeta ? '<span class="gcal-allday-meta">' + __esc(allDayMeta) + '</span>' : '')
+                        + '</div>' + srText };
                 }
 
                 // A.5: bookings shorter than an hour get one line so the text is not cut mid-row.
@@ -3042,6 +3174,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         window.calendar = calendar;
+        setupLegendFilters(calendar);
         calendar.render();
         var cancelledToggle = document.getElementById('include-cancelled-events');
         if (cancelledToggle) {
