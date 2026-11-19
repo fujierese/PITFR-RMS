@@ -72,6 +72,12 @@ class AvailabilityService
         bool $ignoreVenueConflicts = false
     ): ?string
     {
+        // REQ-13: a deactivated venue or item is never bookable, urgent or not.
+        $inactiveMessage = $this->inactiveResourceMessage($facilityRequest);
+        if ($inactiveMessage !== null) {
+            return $inactiveMessage;
+        }
+
         $requestedStart = $facilityRequest->getRequestedStartDateTime();
         $requestedEnd = $facilityRequest->getRequestedEndDateTime();
 
@@ -171,6 +177,74 @@ class AvailabilityService
                     return $availability['message'] ?? 'Requested equipment is not available.';
                 }
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * REQ-13: the first venue or equipment item of this request that has been
+     * deactivated, checked by stable ID where the request has one and by name
+     * otherwise. Null when everything is still active.
+     */
+    public function inactiveResourceMessage(FacilityRequest $facilityRequest): ?string
+    {
+        $venueNames = array_values(array_filter(array_map('strval', $facilityRequest->getVenueNames())));
+        $venueIds = [];
+        $equipmentIds = [];
+        if ($facilityRequest->exists) {
+            $venueIds = $facilityRequest->requestVenues()->whereNotNull('venue_id')->pluck('venue_id')->all();
+            $equipmentIds = $facilityRequest->requestEquipment()->whereNotNull('equipment_id')->pluck('equipment_id')->all();
+        }
+
+        $lowerVenueNames = [];
+        foreach ($venueNames as $name) {
+            $lower = mb_strtolower(trim($name));
+            $lowerVenueNames[] = $lower;
+            if ($lower === 'balay alumni') {
+                $lowerVenueNames[] = 'balay alumni hall';
+            }
+        }
+        $inactiveVenue = Venue::query()
+            ->where('is_active', false)
+            ->where(function ($query) use ($lowerVenueNames, $venueIds): void {
+                $query->whereRaw('1 = 0');
+                if ($lowerVenueNames !== []) {
+                    $query->orWhereIn(DB::raw('LOWER(TRIM(name))'), $lowerVenueNames);
+                }
+                if ($venueIds !== []) {
+                    $query->orWhereIn('id', $venueIds);
+                }
+            })
+            ->first();
+        if ($inactiveVenue) {
+            return "{$inactiveVenue->name} is no longer available for booking. Choose another venue.";
+        }
+
+        $equipmentNames = array_keys($facilityRequest->getEquipmentQuantities());
+        foreach ($facilityRequest->getVenueEquipmentAllocations() as $items) {
+            if (is_array($items)) {
+                $equipmentNames = array_merge($equipmentNames, array_keys($items));
+            }
+        }
+        $lowerEquipmentNames = array_values(array_unique(array_map(
+            static fn ($name): string => mb_strtolower(trim((string) $name)),
+            $equipmentNames
+        )));
+        $inactiveEquipment = Equipment::query()
+            ->where('is_active', false)
+            ->where(function ($query) use ($lowerEquipmentNames, $equipmentIds): void {
+                $query->whereRaw('1 = 0');
+                if ($lowerEquipmentNames !== []) {
+                    $query->orWhereIn(DB::raw('LOWER(TRIM(name))'), $lowerEquipmentNames);
+                }
+                if ($equipmentIds !== []) {
+                    $query->orWhereIn('id', $equipmentIds);
+                }
+            })
+            ->first();
+        if ($inactiveEquipment) {
+            return "{$inactiveEquipment->name} is no longer available for booking. Remove it from the request.";
         }
 
         return null;

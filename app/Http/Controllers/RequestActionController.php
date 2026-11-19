@@ -281,6 +281,13 @@ class RequestActionController extends Controller
                 abort(403);
             }
 
+            // REQ-13: a deactivated venue or item blocks approval, even for an urgent request.
+            $inactiveMessage = $this->availabilityService->inactiveResourceMessage($facilityRequest);
+            if ($inactiveMessage !== null) {
+                DB::rollBack();
+                return redirect()->back()->withErrors($inactiveMessage);
+            }
+
             $conflictMessage = $isVenueConfirmation
                 ? $this->availabilityService->checkFacilityRequestForReview($facilityRequest)
                 : $this->checkHybridResources($facilityRequest);

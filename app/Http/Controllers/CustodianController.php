@@ -803,6 +803,9 @@ class CustodianController extends Controller
             'name' => ['required', 'string', 'max:200'],
             'capacity' => ['nullable', 'integer', 'min:1'],
         ]);
+        if ($renameError = \App\Support\ResourceRename::venueError($validated['name'], $venue)) {
+            return back()->withErrors(['name' => $renameError])->withInput();
+        }
         $venue->update($validated);
 
         return redirect()->route('custodian.venue')->with('success', 'Venue updated successfully.');
@@ -871,6 +874,9 @@ class CustodianController extends Controller
             'quantity_available' => ['required', 'integer', 'min:0'],
         ]);
         $validated['quantity_available'] = min($validated['quantity'], $validated['quantity_available']);
+        if ($renameError = \App\Support\ResourceRename::equipmentError($validated['name'], $equipment)) {
+            return back()->withErrors(['name' => $renameError])->withInput();
+        }
         $equipment->update($validated);
 
         return redirect()->route('custodian.equipment')->with('success', 'Equipment updated successfully.');

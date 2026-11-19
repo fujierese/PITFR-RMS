@@ -37,6 +37,10 @@
         <form id="request-form" method="POST" action="{{ route('requestor.update', $request->id) }}" class="space-y-4 p-3 sm:space-y-6 sm:p-6" enctype="multipart/form-data" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($user->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-exclude-request-id="{{ $request->id }}" data-is-needs-reschedule="{{ $isNeedsReschedule ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
             @csrf
             @method('PUT')
+            <input type="hidden" name="form_version" value="{{ \App\Http\Controllers\RequestorController::editFormVersion($request) }}">
+            @error('form_version')
+                <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">{{ $message }}</div>
+            @enderror
 
             <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                 <h2 class="text-lg font-semibold text-slate-900">Request Information</h2>

@@ -492,16 +492,39 @@ class RequestorController extends Controller
     }
 
     /**
-     * REQ-11: venues a requestor may choose: the active venues, or the built-in list
-     * when the venue directory is empty.
+     * REQ-11 / REQ-13: the one list of venues a requestor may choose, used by the
+     * request form, submitting, editing and the availability check: every active
+     * venue, plus the built-in names that have no venue record. A deactivated venue
+     * is never on the list.
      *
      * @return list<string>
      */
-    private function activeVenueOptions(): array
+    private function requestableVenueOptions(): array
     {
-        $names = Venue::query()->where('is_active', true)->orderBy('name')->pluck('name')->filter()->values()->all();
+        $normalize = static function ($name): string {
+            $value = trim((string) $name);
 
-        return $names !== [] ? $names : self::VENUE_OPTIONS;
+            return strtolower($value) === 'balay alumni hall' ? 'Balay Alumni' : $value;
+        };
+        $records = Venue::query()->orderBy('name')->get(['name', 'is_active']);
+        $known = $records->map(fn (Venue $venue): string => mb_strtolower($normalize($venue->name)))->all();
+        $active = $records->filter(fn (Venue $venue): bool => (bool) $venue->is_active)
+            ->map(fn (Venue $venue): string => $normalize($venue->name))
+            ->filter()
+            ->values()
+            ->all();
+        $builtIn = array_values(array_filter(
+            self::VENUE_OPTIONS,
+            static fn (string $name): bool => ! in_array(mb_strtolower($name), $known, true)
+        ));
+
+        return array_values(array_unique(array_merge($active, $builtIn)));
+    }
+
+    /** REQ-13: identifies the version of a request an edit form was opened on. */
+    public static function editFormVersion(FacilityRequest $facilityRequest): string
+    {
+        return (string) ($facilityRequest->updated_at?->getTimestamp() ?? 0);
     }
 
     private const VENUE_OPTIONS = [
@@ -687,14 +710,7 @@ class RequestorController extends Controller
 
         $venueCapacityMap = [];
         $venueRecords = Venue::query()->where('is_active', true)->orderBy('name')->get();
-        $venueOptions = array_values(array_unique(array_map(function ($venueName): string {
-            $value = trim((string) $venueName);
-
-            return strtolower($value) === 'balay alumni hall' ? 'Balay Alumni' : $value;
-        }, array_merge(
-            $venueRecords->pluck('name')->filter()->values()->all(),
-            self::VENUE_OPTIONS
-        ))));
+        $venueOptions = $this->requestableVenueOptions();
 
         foreach ($venueOptions as $venueName) {
             $venueCapacityMap[$venueName] = $this->availabilityService->getVenueCapacity($venueName);
@@ -900,8 +916,8 @@ class RequestorController extends Controller
             $equipmentQuantityLimits[$itemName] = $this->getEditableEquipmentQuantityLimit($facilityRequest, $itemName);
         }
 
-        // REQ-11: only active venues can be chosen, the same list the request form uses.
-        $editVenueOptions = $this->activeVenueOptions();
+        // REQ-11 / REQ-13: the same list the request form uses.
+        $editVenueOptions = $this->requestableVenueOptions();
         $venueCapacityMap = [];
         foreach ($editVenueOptions as $venueName) {
             $venueCapacityMap[$venueName] = $this->availabilityService->getVenueCapacity($venueName);
@@ -933,6 +949,15 @@ class RequestorController extends Controller
             abort(403);
         }
 
+        // REQ-13: refuse to save over changes made after this form was opened.
+        if ($request->filled('form_version')
+            && (string) $request->input('form_version') !== self::editFormVersion($facilityRequest)) {
+            return redirect()->route('requestor.edit', $facilityRequest)->withErrors([
+                'form_version' => 'This request was changed after you opened the form, so your edits were not saved. '
+                    . 'Review the latest details below and make your changes again.',
+            ]);
+        }
+
         $request->merge([
             'start_date' => $request->input('start_date', $request->input('requesting_date')),
             'end_date' => $request->input('end_date', $request->input('requesting_end_date')),
@@ -956,7 +981,7 @@ class RequestorController extends Controller
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i'],
             // REQ-11: every request needs one active venue; equipment is optional.
-            'venue' => ['required', 'string', Rule::in($this->activeVenueOptions())],
+            'venue' => ['required', 'string', Rule::in($this->requestableVenueOptions())],
             'other_venue' => ['prohibited'],
             'equipment' => ['nullable', 'array'],
             'equipment.*' => ['string', 'distinct:ignore_case'],
@@ -1422,7 +1447,7 @@ class RequestorController extends Controller
         $hasDepartmentDirectory = College::query()->exists() && Department::query()->exists();
         $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
 
-        $activeVenueNames = Venue::query()->where('is_active', true)->pluck('name')->all();
+        $requestableVenueNames = $this->requestableVenueOptions();
 
         $profileCollegeId = $user->college_id ?? null;
         $profileDepartmentId = $user->department_id ?? null;
@@ -1471,7 +1496,7 @@ class RequestorController extends Controller
             'capacity_exceptions'   => ['nullable', 'array'],
             'capacity_exceptions.*' => ['nullable', 'string', 'max:500'],
             'venue'                 => ['required', 'array', 'min:1'],
-            'venue.*'               => ['required', 'string', Rule::in(array_merge(self::VENUE_OPTIONS, $activeVenueNames))],
+            'venue.*'               => ['required', 'string', Rule::in($requestableVenueNames)],
             'venue_equipment' => ['nullable', 'array'],
             'venue_equipment.*' => ['array'],
             'venue_equipment.*.*' => ['string'],
@@ -2506,10 +2531,7 @@ class RequestorController extends Controller
         $this->currentUser();
         $validated = $request->validate([
             'venues' => ['required', 'array', 'min:1'],
-            'venues.*' => ['required', 'string', Rule::in(array_merge(
-                self::VENUE_OPTIONS,
-                Venue::query()->where('is_active', true)->pluck('name')->all()
-            ))],
+            'venues.*' => ['required', 'string', Rule::in($this->requestableVenueOptions())],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'start_time' => ['required', 'date_format:H:i'],

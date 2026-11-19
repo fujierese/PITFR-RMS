@@ -1063,6 +1063,9 @@ class SupplyOfficeController extends Controller
             'capacity' => ['nullable', 'integer', 'min:1'],
         ]);
 
+        if ($nameError = \App\Support\ResourceRename::venueError($validated['name'])) {
+            return back()->withErrors(['name' => $nameError])->withInput();
+        }
         Venue::create($validated);
 
         return back()->with('success', 'Venue created successfully.');
@@ -1083,6 +1086,9 @@ class SupplyOfficeController extends Controller
             'capacity' => ['nullable', 'integer', 'min:1'],
         ]);
 
+        if ($renameError = \App\Support\ResourceRename::venueError($validated['name'], $venue)) {
+            return back()->withErrors(['name' => $renameError])->withInput();
+        }
         $venue->update($validated);
 
         // REQ-02: tell the Supply Office which bookings no longer fit.
@@ -1132,6 +1138,9 @@ class SupplyOfficeController extends Controller
         ]);
 
         $validated['quantity_available'] = $validated['quantity_available'] ?? $validated['quantity'];
+        if ($nameError = \App\Support\ResourceRename::equipmentError($validated['name'])) {
+            return back()->withErrors(['name' => $nameError])->withInput();
+        }
         Equipment::create($validated);
 
         return back()->with('success', 'Equipment created successfully.');
@@ -1154,6 +1163,9 @@ class SupplyOfficeController extends Controller
         ]);
 
         $validated['quantity_available'] = $validated['quantity_available'] ?? $validated['quantity'];
+        if ($renameError = \App\Support\ResourceRename::equipmentError($validated['name'], $equipment)) {
+            return back()->withErrors(['name' => $renameError])->withInput();
+        }
         $equipment->update($validated);
 
         return back()->with('success', 'Equipment updated successfully.');
