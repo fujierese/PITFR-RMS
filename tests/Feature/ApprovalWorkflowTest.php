@@ -21,7 +21,7 @@ class ApprovalWorkflowTest extends TestCase
         Notification::fake();
     }
 
-    private function createRequestForApproval(User $requester): FacilityRequest
+    private function createRequestForApproval(User $requester, string $controlNumber = 'FER-2026-030'): FacilityRequest
     {
         $venueCustodian = User::factory()->create(['role' => 'custodian-venue']);
         Venue::create([
@@ -30,7 +30,7 @@ class ApprovalWorkflowTest extends TestCase
         ]);
 
         $request = FacilityRequest::create([
-            'control_number' => 'FER-2026-030',
+            'control_number' => $controlNumber,
             'date_requested' => now()->toDateString(),
             'department' => 'IT Department',
             'name_of_activity' => 'Approval Flow Test',
@@ -191,8 +191,7 @@ class ApprovalWorkflowTest extends TestCase
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         $admin = User::factory()->create(['role' => 'admin', 'username' => 'asala@gmail.com']);
         $firstRequest = $this->createRequestForApproval($requester);
-        $secondRequest = $this->createRequestForApproval($requester);
-        $secondRequest->update(['control_number' => 'FER-2026-031']);
+        $secondRequest = $this->createRequestForApproval($requester, 'FER-2026-031');
 
         $this->actingAs($admin)
             ->post(route('supply-office.update'), [
@@ -234,9 +233,8 @@ class ApprovalWorkflowTest extends TestCase
             'equipment' => ['Single Projector'],
             'equipment_quantities' => ['Single Projector' => 1],
         ]);
-        $secondRequest = $this->createRequestForApproval($requester);
+        $secondRequest = $this->createRequestForApproval($requester, 'FER-2026-032');
         $secondRequest->update([
-            'control_number' => 'FER-2026-032',
             'venue' => ['Separate Training Room'],
             'equipment' => ['Single Projector'],
             'equipment_quantities' => ['Single Projector' => 1],

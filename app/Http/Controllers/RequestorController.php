@@ -1435,6 +1435,12 @@ class RequestorController extends Controller
         if (!$user || !$user->isRequestee()) {
             return redirect()->route('login')->withErrors(['authorization' => 'Only registered requestors may submit facility/equipment requests.']);
         }
+        // REQ-14: the same form sent twice (double click, refresh, Back, retry) does not
+        // make a second request.
+        $submissionToken = FacilityRequest::normalizeSubmissionToken($request->input('submission_token'));
+        if ($alreadySubmitted = FacilityRequest::findBySubmissionToken((int) $user->id, $submissionToken)) {
+            return $this->alreadySubmittedResponse($alreadySubmitted);
+        }
         // REQ-05: keep uploaded documents across validation errors.
         $this->restoreStagedUploads($request, $user);
         if ($user->isOutsider() && $request->boolean('is_emergency')) {
@@ -1934,6 +1940,20 @@ class RequestorController extends Controller
 
         // Get the document upload service
         $documentUploadService = app(\App\Services\DocumentUploadService::class);
+        // REQ-14: each document is checked and recorded on its own; when anything fails
+        // later, every file saved for this attempt is removed again.
+        $discardUploadedDocuments = function () use (&$proposalFileName, &$activityProposalFileName, &$igpReceiptFileName, &$eSignatureFileName): void {
+            foreach ([
+                ['proposal_file', $proposalFileName],
+                ['activity_proposal', $activityProposalFileName],
+                ['igp_receipt', $igpReceiptFileName],
+                ['e_signature', $eSignatureFileName],
+            ] as [$documentType, $filename]) {
+                if ($filename) {
+                    Storage::disk('local')->delete("documents/{$documentType}/{$filename}");
+                }
+            }
+        };
 
         // Handle proposal file upload (backward compatibility)
         if ($request->hasFile('proposal_file')) {
@@ -1961,6 +1981,7 @@ class RequestorController extends Controller
                     'original_name' => $file->getClientOriginalName(),
                 ];
             } else {
+                $discardUploadedDocuments();
                 return back()->withErrors(['activity_proposal_file' => $result['error']])->withInput();
             }
         }
@@ -1976,6 +1997,7 @@ class RequestorController extends Controller
                     'original_name' => $file->getClientOriginalName(),
                 ];
             } else {
+                $discardUploadedDocuments();
                 return back()->withErrors(['igp_receipt_file' => $result['error']])->withInput();
             }
         }
@@ -2024,6 +2046,9 @@ class RequestorController extends Controller
             'e_signature_file'         => $eSignatureFileName,
             'document_metadata'        => $documentMetadata,
         ];
+        if ($submissionToken !== null && FacilityRequest::submissionTokensEnabled()) {
+            $requestAttributes['submission_token'] = $submissionToken;
+        }
         // B: an outsider's request is an inquiry that IGP reviews before any custodian sees it.
         $isOutsiderInquiry = $user->isOutsider() && \Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'outsider_stage');
         if ($isOutsiderInquiry) {
@@ -2076,26 +2101,38 @@ class RequestorController extends Controller
         );
         if ($availabilityMessage) {
             DB::rollBack();
-
-            foreach ([
-                ['proposal_file', $proposalFileName],
-                ['activity_proposal', $activityProposalFileName],
-                ['igp_receipt', $igpReceiptFileName],
-                ['e_signature', $eSignatureFileName],
-            ] as [$documentType, $filename]) {
-                if ($filename) {
-                    Storage::disk('local')->delete("documents/{$documentType}/{$filename}");
-                }
-            }
+            $discardUploadedDocuments();
 
             $errorKey = str_contains(strtolower($availabilityMessage), 'venue') ? 'venue' : 'equipment';
 
             return back()->withErrors([$errorKey => $availabilityMessage])->withInput();
         }
 
-        $fr = FacilityRequest::create($requestAttributes);
-        $fr->syncRelationalItems($venueSchedules, $venueEquipment);
-        DB::commit();
+        // REQ-14: the request, its schedule and items, and its history are saved together
+        // or not at all.
+        try {
+            $fr = $this->createRequestRecord($requestAttributes);
+            $fr->syncRelationalItems($venueSchedules, $venueEquipment);
+            $fr->addHistory('submitted', 'Request submitted by ' . $user->name . '.', $user->getKey());
+            if ($isOutsiderInquiry) {
+                $fr->addHistory('outsider_inquiry_submitted', 'Reservation inquiry submitted by ' . $user->name . '. Waiting for IGP review.', $user->getKey());
+            }
+            DB::commit();
+        } catch (\Throwable $exception) {
+            DB::rollBack();
+            $discardUploadedDocuments();
+
+            // The same form arrived twice at the same moment: the other copy was saved.
+            if ($duplicate = FacilityRequest::findBySubmissionToken((int) $user->id, $submissionToken)) {
+                return $this->alreadySubmittedResponse($duplicate);
+            }
+
+            report($exception);
+
+            return back()
+                ->withErrors(['request' => 'Your request could not be saved, so nothing was submitted. Please try again. If this keeps happening, contact the Supply Office.'])
+                ->withInput();
+        }
 
         // Determine custodians using authoritative model helper (includes authorized alternates)
         $equipmentCustodianIds = $fr->getAssignedEquipmentCustodianIds();
@@ -2111,7 +2148,6 @@ class RequestorController extends Controller
         \App\Events\RequestCreated::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, []);
 
         if ($isOutsiderInquiry) {
-            $fr->addHistory('outsider_inquiry_submitted', 'Reservation inquiry submitted by ' . $user->name . '. Waiting for IGP review.', $user->getKey());
             \Illuminate\Support\Facades\Notification::send(
                 User::query()->withAnyRole(['igp'])->where('is_active', true)->get(),
                 new \App\Notifications\RequestStatusChanged($fr, 'outsider_inquiry_submitted', '', $user->name)
@@ -2126,6 +2162,34 @@ class RequestorController extends Controller
                         ->with('warning', $capacityWarning);
     }
  
+    /**
+     * REQ-14: creates the request row; if another request took the control number in
+     * the meantime, tries again with a new one.
+     */
+    private function createRequestRecord(array $attributes): FacilityRequest
+    {
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                return DB::transaction(fn (): FacilityRequest => FacilityRequest::create($attributes));
+            } catch (\Illuminate\Database\UniqueConstraintViolationException $exception) {
+                $controlNumberTaken = str_contains($exception->getMessage(), 'control_number');
+                if (! $controlNumberTaken || $attempt >= 3) {
+                    throw $exception;
+                }
+                $attributes['control_number'] = FacilityRequest::generateControlNumber();
+            }
+        }
+    }
+
+    private function alreadySubmittedResponse(FacilityRequest $facilityRequest)
+    {
+        $this->clearStagedUploads();
+
+        return redirect()->route('requestor.index', ['tab' => 'requests'])
+            ->with('success', 'This request was already submitted as ' . $facilityRequest->control_number . '. It was not submitted again.')
+            ->with('request_draft_submitted', true);
+    }
+
     public function destroy(Request $request)
     {
         $facilityRequest = FacilityRequest::query()

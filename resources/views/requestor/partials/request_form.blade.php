@@ -66,6 +66,8 @@
 
 <form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="Submit this request?" data-swal-text="Please confirm that the request details are complete and correct." data-swal-icon="question" data-swal-confirm-text="Yes, submit request" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-venue-availability-url="{{ route('requestor.venue.availability') }}" data-draft-owner-id="{{ $currentUser?->id ?? '' }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-can-request-urgent="{{ $isExternal ? '0' : '1' }}" data-urgent-timezone="{{ config('app.timezone') }}" data-venue-capacities="{{ json_encode($venueCapacityMap ?? []) }}" data-venue-default-equipment="{{ json_encode($venueDefaultEquipmentMap ?? []) }}">
     @csrf
+    {{-- REQ-14: one token per form, so sending it twice makes one request. --}}
+    <input type="hidden" name="submission_token" value="{{ old('submission_token', (string) \Illuminate\Support\Str::uuid()) }}">
 
 <div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]">
     <section class="bg-white p-4 sm:p-6 lg:p-8">

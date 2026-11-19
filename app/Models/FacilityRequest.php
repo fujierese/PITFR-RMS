@@ -15,6 +15,7 @@ class FacilityRequest extends Model
     protected $table = 'facility_requests';
 
     protected $fillable = [
+        'submission_token',
         'control_number', 'date_requested', 'department', 'organization_name', 'request_context', 'student_organization_id', 'name_of_activity',
         'expected_participants', 'start_date', 'end_date', 'start_time', 'end_time', 'reservation_duration', 'venue', 'equipment', 'purpose',
         'equipment_quantities', 'other_venue', 'equipment_custodian_statuses',
@@ -847,11 +848,57 @@ class FacilityRequest extends Model
         return null;
     }
 
+    /**
+     * REQ-14: a control number no other request (deleted ones included) has. Numbers
+     * stay in the FER-YYYY-NNN form; once most of this year's four-digit numbers are
+     * taken, five digits are used.
+     */
     public static function generateControlNumber(): string
     {
         $year = now()->year;
-        $num  = str_pad(rand(1, 9999), 3, '0', STR_PAD_LEFT);
-        return "FER-{$year}-{$num}";
+        $taken = fn (string $candidate): bool => static::withTrashed()->where('control_number', $candidate)->exists();
+
+        for ($attempt = 0; $attempt < 50; $attempt++) {
+            $candidate = sprintf('FER-%d-%03d', $year, random_int(1, 9999));
+            if (! $taken($candidate)) {
+                return $candidate;
+            }
+        }
+
+        do {
+            $candidate = sprintf('FER-%d-%05d', $year, random_int(10000, 99999));
+        } while ($taken($candidate));
+
+        return $candidate;
+    }
+
+    private static ?bool $submissionTokenColumn = null;
+
+    /** REQ-14: false until the submission_token migration has run. */
+    public static function submissionTokensEnabled(): bool
+    {
+        return self::$submissionTokenColumn ??= \Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'submission_token');
+    }
+
+    /** REQ-14: a usable one-time form token, or null. */
+    public static function normalizeSubmissionToken(mixed $token): ?string
+    {
+        $token = is_string($token) ? trim($token) : '';
+
+        return preg_match('/^[A-Za-z0-9-]{16,64}$/', $token) === 1 ? $token : null;
+    }
+
+    /** REQ-14: the request this user already created from the same form, if any. */
+    public static function findBySubmissionToken(int $userId, ?string $token): ?self
+    {
+        if ($token === null || ! self::submissionTokensEnabled()) {
+            return null;
+        }
+
+        return static::withTrashed()
+            ->where('submission_token', $token)
+            ->where('requested_by_id', $userId)
+            ->first();
     }
 
     public function scopeMatchesVenue(Builder $query, string $venueName): Builder

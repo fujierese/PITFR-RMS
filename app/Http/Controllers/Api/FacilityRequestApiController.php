@@ -112,6 +112,16 @@ class FacilityRequestApiController extends Controller
     {
         $this->authorize('create', FacilityRequest::class);
         $user = Auth::user();
+        // REQ-14: a retried call with the same Idempotency-Key returns the request the
+        // first call created instead of making a second one.
+        $submissionToken = FacilityRequest::normalizeSubmissionToken($request->header('Idempotency-Key'));
+        if ($user && ($alreadySubmitted = FacilityRequest::findBySubmissionToken((int) $user->id, $submissionToken))) {
+            return response()->json([
+                'success' => true,
+                'request' => $alreadySubmitted,
+                'message' => 'This request was already submitted; it was not created again.',
+            ], 200);
+        }
         if ($user?->isOutsider() && $request->boolean('is_emergency')) {
             throw ValidationException::withMessages([
                 'is_emergency' => 'Urgent processing is available only to Institute requestors.',
@@ -303,6 +313,7 @@ class FacilityRequestApiController extends Controller
             }
 
             $fr = FacilityRequest::create([
+                ...($submissionToken !== null && FacilityRequest::submissionTokensEnabled() ? ['submission_token' => $submissionToken] : []),
                 'control_number' => FacilityRequest::generateControlNumber(),
                 'date_requested' => now()->toDateString(),
                 'department' => $validated['department'],
@@ -364,6 +375,13 @@ class FacilityRequestApiController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            if ($user && ($duplicate = FacilityRequest::findBySubmissionToken((int) $user->id, $submissionToken))) {
+                return response()->json([
+                    'success' => true,
+                    'request' => $duplicate,
+                    'message' => 'This request was already submitted; it was not created again.',
+                ], 200);
+            }
             Log::error('FacilityRequestApiController@store failed: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
