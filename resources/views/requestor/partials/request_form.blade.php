@@ -171,7 +171,7 @@
                         @if ($isExternal)
                             <div class="space-y-3">
                                 <label for="organization_name" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Organization Name <span class="required-asterisk">*</span></label>
-                                <input id="organization_name" type="text" name="organization_name" value="{{ old('organization_name', trim((string) $currentUser?->office_or_organization) ?: 'Individual / Personal') }}" readonly required class="w-full rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('organization_name') border-red-300 bg-red-50 @enderror">
+                                <input id="organization_name" type="text" name="organization_name" maxlength="191" value="{{ old('organization_name', trim((string) $currentUser?->office_or_organization) ?: 'Individual / Personal') }}" readonly required class="w-full rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('organization_name') border-red-300 bg-red-50 @enderror">
                                 <p class="text-xs text-slate-500">This is your registered organization. If it is missing or incorrect, update your account details before submitting.</p>
                                 @error('organization_name')
                                     <p class="text-xs font-medium text-red-600">{{ $message }}</p>
@@ -327,21 +327,21 @@
                     <div class="space-y-4 md:space-y-6">
                         <div>
                             <label for="name_of_activity" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Activity Name <span class="required-asterisk">*</span></label>
-                            <input id="name_of_activity" type="text" name="name_of_activity" required value="{{ old('name_of_activity') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('name_of_activity') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('name_of_activity') ? 'true' : 'false' }}">
+                            <input id="name_of_activity" type="text" name="name_of_activity" required maxlength="200" value="{{ old('name_of_activity') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('name_of_activity') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('name_of_activity') ? 'true' : 'false' }}">
                             @error('name_of_activity')
                                 <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                             @enderror
                         </div>
                         <div>
                             <label for="purpose" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Purpose <span class="required-asterisk">*</span></label>
-                            <textarea id="purpose" name="purpose" rows="3" required class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('purpose') border-red-300 bg-red-50 @enderror">{{ old('purpose') }}</textarea>
+                            <textarea id="purpose" name="purpose" rows="3" required maxlength="2000" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('purpose') border-red-300 bg-red-50 @enderror">{{ old('purpose') }}</textarea>
                             @error('purpose')
                                 <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                             @enderror
                         </div>
                         <div>
                                 <label for="expected_participants" class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Expected No. of Participants <span class="required-asterisk">*</span></label>
-                                <input id="expected_participants" type="number" name="expected_participants" required min="1" value="{{ old('expected_participants') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('expected_participants') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('expected_participants') ? 'true' : 'false' }}">
+                                <input id="expected_participants" type="number" name="expected_participants" required min="1" max="100000" value="{{ old('expected_participants') }}" class="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:bg-white @error('expected_participants') border-red-300 bg-red-50 @enderror" aria-invalid="{{ $errors->has('expected_participants') ? 'true' : 'false' }}">
                                 @error('expected_participants')
                                     <p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>
                                 @enderror
@@ -1555,7 +1555,13 @@
 
             if (summaryDetails.equipment) {
                 if (selectedEquipment.length) {
-                    summaryDetails.equipment.innerHTML = selectedEquipment.map((item) => `<li class="text-sm text-slate-700">${item}</li>`).join('');
+                    // REQ-15: names are inserted as text, never as HTML.
+                    summaryDetails.equipment.replaceChildren(...selectedEquipment.map((item) => {
+                        const li = document.createElement('li');
+                        li.className = 'text-sm text-slate-700';
+                        li.textContent = item;
+                        return li;
+                    }));
                 } else {
                     summaryDetails.equipment.innerHTML = '<li class="text-sm text-slate-500">No additional equipment selected</li>';
                 }

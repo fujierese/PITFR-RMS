@@ -784,7 +784,7 @@ class SupplyOfficeController extends Controller
             'venue' => ['required', 'array', 'min:1', 'max:10'],
             'venue.*' => ['required', 'string', Rule::exists('venues', 'name')->where('is_active', true)],
             'equipment' => ['nullable', 'array'],
-            'equipment.*' => ['string'],
+            'equipment.*' => ['string', 'max:191'],
             'equipment_quantities' => ['nullable', 'array'],
             'revision_reason' => ['required', 'string', 'min:10', 'max:1000'],
             'override_conflict' => ['nullable', 'boolean'],
@@ -1060,7 +1060,7 @@ class SupplyOfficeController extends Controller
                     ->orWhereJsonContains('additional_roles', 'custodian-venue')
                     ->orWhereJsonContains('additional_roles', 'custodian')),
             ],
-            'capacity' => ['nullable', 'integer', 'min:1'],
+            'capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
         ]);
 
         if ($nameError = \App\Support\ResourceRename::venueError($validated['name'])) {
@@ -1083,7 +1083,7 @@ class SupplyOfficeController extends Controller
                     ->orWhereJsonContains('additional_roles', 'custodian-venue')
                     ->orWhereJsonContains('additional_roles', 'custodian')),
             ],
-            'capacity' => ['nullable', 'integer', 'min:1'],
+            'capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
         ]);
 
         if ($renameError = \App\Support\ResourceRename::venueError($validated['name'], $venue)) {
@@ -1133,7 +1133,7 @@ class SupplyOfficeController extends Controller
                     ->orWhereJsonContains('additional_roles', 'custodian-equipment')
                     ->orWhereJsonContains('additional_roles', 'custodian')),
             ],
-            'quantity' => ['required', 'integer', 'min:1'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:100000'],
             'quantity_available' => ['nullable', 'integer', 'min:0'],
         ]);
 
@@ -1158,7 +1158,7 @@ class SupplyOfficeController extends Controller
                     ->orWhereJsonContains('additional_roles', 'custodian-equipment')
                     ->orWhereJsonContains('additional_roles', 'custodian')),
             ],
-            'quantity' => ['required', 'integer', 'min:1'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:100000'],
             'quantity_available' => ['nullable', 'integer', 'min:0'],
         ]);
 
@@ -1195,7 +1195,7 @@ class SupplyOfficeController extends Controller
         $validated = $request->validate([
             'id'       => 'required|integer|exists:facility_requests,id',
             'action'   => 'required|in:approve,reject',
-            'notes'    => 'nullable|string',
+            'notes'    => 'nullable|string|max:1000',
             'priority' => 'nullable|in:regular,institutional',
         ]);
 
@@ -1914,7 +1914,7 @@ class SupplyOfficeController extends Controller
             ]);
 
             foreach ($requests as $req) {
-                fputcsv($handle, [
+                fputcsv($handle, \App\Support\CsvCell::row([
                     $req->control_number,
                     $req->date_requested,
                     $req->department,
@@ -1928,7 +1928,7 @@ class SupplyOfficeController extends Controller
                     $req->priority,
                     $req->status,
                     $req->approved_date?->format('Y-m-d'),
-                ]);
+                ]));
             }
 
             fclose($handle);

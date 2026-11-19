@@ -47,11 +47,11 @@
                 <div class="mt-4 grid gap-4 md:grid-cols-2">
                     <div>
                         <label class="text-sm font-medium text-slate-700">Activity Title</label>
-                        <input type="text" name="name_of_activity" value="{{ old('name_of_activity', $request->name_of_activity) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" {{ $isNeedsReschedule ? 'readonly' : 'required' }}>
+                        <input type="text" name="name_of_activity" maxlength="200" value="{{ old('name_of_activity', $request->name_of_activity) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" {{ $isNeedsReschedule ? 'readonly' : 'required' }}>
                     </div>
                     <div>
                         <label class="text-sm font-medium text-slate-700">Department</label>
-                        <input type="text" name="department" value="{{ old('department', $request->department) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" {{ $isNeedsReschedule ? 'readonly' : 'required' }}>
+                        <input type="text" name="department" maxlength="100" value="{{ old('department', $request->department) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" {{ $isNeedsReschedule ? 'readonly' : 'required' }}>
                     </div>
                     <div>
                         <label class="text-sm font-medium text-slate-700">Start Date</label>
@@ -63,7 +63,7 @@
                     </div>
                     <div>
                         <label class="text-sm font-medium text-slate-700">Expected Participants</label>
-                        <input type="number" name="expected_participants" min="1" value="{{ old('expected_participants', $request->expected_participants) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" required>
+                        <input type="number" name="expected_participants" min="1" max="100000" value="{{ old('expected_participants', $request->expected_participants) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" required>
                         <div id="capacity-warning-banner" role="status" aria-live="polite" class="mt-3 hidden rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900"></div>
                     </div>
                     <div class="reservation-duration-group md:col-span-2">

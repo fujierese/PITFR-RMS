@@ -13,6 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // REQ-15: trimming plus removal of control characters from submitted text.
+        $middleware->replace(\Illuminate\Foundation\Http\Middleware\TrimStrings::class, \App\Http\Middleware\CleanTextInput::class);
         $middleware->web(append: [
             \Illuminate\Http\Middleware\HandleCors::class,
             \App\Http\Middleware\EnsureActiveAccount::class,

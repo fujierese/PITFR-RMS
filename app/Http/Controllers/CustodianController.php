@@ -788,7 +788,7 @@ class CustodianController extends Controller
         abort(403, 'Custodians cannot create venues. Venues are created and assigned by administrators.');
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
-            'capacity' => ['nullable', 'integer', 'min:1'],
+            'capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
         ]);
         Venue::create($validated + ['custodian_id' => $user->id, 'is_active' => true]);
 
@@ -801,7 +801,7 @@ class CustodianController extends Controller
         abort_unless($user->isCustodianVenue() && $venue->custodian_id === $user->id, 403);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
-            'capacity' => ['nullable', 'integer', 'min:1'],
+            'capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
         ]);
         if ($renameError = \App\Support\ResourceRename::venueError($validated['name'], $venue)) {
             return back()->withErrors(['name' => $renameError])->withInput();
@@ -855,7 +855,7 @@ class CustodianController extends Controller
         abort(403, 'Custodians cannot create equipment. Equipment is created and assigned by administrators.');
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
-            'quantity' => ['required', 'integer', 'min:1'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:100000'],
             'quantity_available' => ['nullable', 'integer', 'min:0'],
         ]);
         $validated['quantity_available'] = min($validated['quantity'], $validated['quantity_available'] ?? $validated['quantity']);
@@ -870,7 +870,7 @@ class CustodianController extends Controller
         abort_unless($user->isCustodianEquipment() && $equipment->custodian_id === $user->id, 403);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
-            'quantity' => ['required', 'integer', 'min:1'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:100000'],
             'quantity_available' => ['required', 'integer', 'min:0'],
         ]);
         $validated['quantity_available'] = min($validated['quantity'], $validated['quantity_available']);

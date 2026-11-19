@@ -17,7 +17,7 @@ class StoreReservationRequest extends FormRequest
         return [
             'department' => ['required', 'string', 'max:100'],
             'name_of_activity' => ['required', 'string', 'max:200'],
-            'expected_participants' => ['required', 'integer', 'min:1'],
+            'expected_participants' => ['required', 'integer', 'min:1', 'max:100000'],
             'start_date' => ['required', 'date', 'after_or_equal:today'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'start_time' => ['required', 'date_format:H:i'],
