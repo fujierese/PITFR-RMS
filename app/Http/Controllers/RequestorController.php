@@ -490,6 +490,19 @@ class RequestorController extends Controller
             ->with('success', $successMessage);
     }
 
+    /**
+     * REQ-11: venues a requestor may choose: the active venues, or the built-in list
+     * when the venue directory is empty.
+     *
+     * @return list<string>
+     */
+    private function activeVenueOptions(): array
+    {
+        $names = Venue::query()->where('is_active', true)->orderBy('name')->pluck('name')->filter()->values()->all();
+
+        return $names !== [] ? $names : self::VENUE_OPTIONS;
+    }
+
     private const VENUE_OPTIONS = [
         'Conference Hall & Interaction Center (CHIC)', 'Gymnasium', 'Balay Alumni',
         'Oval Grounds', 'Covered Court', 'Volleyball Court',
@@ -886,15 +899,17 @@ class RequestorController extends Controller
             $equipmentQuantityLimits[$itemName] = $this->getEditableEquipmentQuantityLimit($facilityRequest, $itemName);
         }
 
+        // REQ-11: only active venues can be chosen, the same list the request form uses.
+        $editVenueOptions = $this->activeVenueOptions();
         $venueCapacityMap = [];
-        foreach (self::VENUE_OPTIONS as $venueName) {
+        foreach ($editVenueOptions as $venueName) {
             $venueCapacityMap[$venueName] = $this->availabilityService->getVenueCapacity($venueName);
         }
 
         return view('requestor.edit', [
             'request' => $facilityRequest,
             'user' => $user,
-            'venueOptions' => self::VENUE_OPTIONS,
+            'venueOptions' => $editVenueOptions,
             'equipmentOptions' => self::EQUIPMENT_OPTIONS,
             'controlNumber' => $facilityRequest->control_number,
             'equipment' => \App\Models\Equipment::where('is_active', true)->get(),
@@ -939,10 +954,11 @@ class RequestorController extends Controller
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i'],
-            'venue' => ['required', 'string', Rule::in(array_merge(self::VENUE_OPTIONS, ['Others (specify)']))],
-            'other_venue' => ['nullable', 'string', 'max:200', 'required_if:venue,Others (specify)'],
-            'equipment' => ['required', 'array', 'min:1'],
-            'equipment_quantities' => ['required', 'array'],
+            // REQ-11: every request needs one active venue; equipment is optional.
+            'venue' => ['required', 'string', Rule::in($this->activeVenueOptions())],
+            'other_venue' => ['prohibited'],
+            'equipment' => ['nullable', 'array'],
+            'equipment_quantities' => ['nullable', 'array'],
         ];
 
         if (!$isNeedsReschedule) {
@@ -950,7 +966,11 @@ class RequestorController extends Controller
             $rules['name_of_activity'] = ['required', 'string', 'max:200'];
         }
 
-        $validated = $request->validate($rules);
+        $validated = $request->validate($rules, [
+            'venue.required' => 'Choose a venue. Every request needs at least one venue; equipment is requested together with a venue.',
+            'venue.in' => 'Choose one of the listed venues. Venues that are no longer available cannot be requested.',
+            'other_venue.prohibited' => '"Others" is not a venue. Choose one of the listed venues.',
+        ]);
 
         if (
             ($validated['reservation_duration'] ?? 'specific_time') === 'specific_time'
@@ -1067,17 +1087,12 @@ class RequestorController extends Controller
             $submittedVenue = reset($submittedVenue);
         }
         $submittedVenue = trim((string) $submittedVenue);
-        $allowedVenues = Venue::query()->where('is_active', true)->pluck('name')->filter()->values()->all();
-        if ($allowedVenues === []) {
-            $allowedVenues = self::VENUE_OPTIONS;
-        }
-        $venue = in_array($submittedVenue, $allowedVenues, true) ? [$submittedVenue] : [];
+        // REQ-11: validated above, so the request always keeps a venue.
+        $venue = [$submittedVenue];
 
-        if (!empty($venue)) {
-            $venueAvailability = $this->checkVenueAvailabilityForEdit($submittedVenue, $startDateTime, $endDateTime, $facilityRequest->id);
-            if (!$venueAvailability['available']) {
-                return back()->withErrors(['venue' => $venueAvailability['message'] ?? 'Scheduling conflict detected.'])->withInput();
-            }
+        $venueAvailability = $this->checkVenueAvailabilityForEdit($submittedVenue, $startDateTime, $endDateTime, $facilityRequest->id);
+        if (!$venueAvailability['available']) {
+            return back()->withErrors(['venue' => $venueAvailability['message'] ?? 'Scheduling conflict detected.'])->withInput();
         }
 
         $fillData = [
@@ -1511,7 +1526,12 @@ class RequestorController extends Controller
             ]);
         }
 
-        $validated = $request->validate($rules);
+        $validated = $request->validate($rules, [
+            'venue.required' => 'Choose a venue. Every request needs at least one venue; equipment is requested together with a venue.',
+            'venue.min' => 'Choose a venue. Every request needs at least one venue; equipment is requested together with a venue.',
+            'venue.*.in' => 'Choose one of the listed venues. Venues that are no longer available cannot be requested.',
+            'other_venue.prohibited' => '"Others" is not a venue. Choose one of the listed venues.',
+        ]);
 
         $venue = array_values(array_unique(array_map(
             static fn (string $venueName): string => trim($venueName),

@@ -21,6 +21,8 @@ class BroadcastCustodianTest extends TestCase
     {
         parent::setUp();
         Notification::fake();
+        // REQ-11: every request needs an active venue.
+        Venue::create(['name' => 'Gymnasium', 'custodian_id' => User::factory()->create(['role' => 'custodian-venue'])->id, 'is_active' => true]);
     }
 
     public function test_requestcreated_includes_primary_custodian()
@@ -43,6 +45,7 @@ class BroadcastCustodianTest extends TestCase
                 'start_time' => '09:00',
                 'end_time' => '12:00',
                 'department' => 'IT',
+                'venue' => ['Gymnasium'],
                 'equipment' => ['Industrial Fan'],
             ])
             ->assertStatus(201);
@@ -64,6 +67,7 @@ class BroadcastCustodianTest extends TestCase
                 'start_time' => '05:00',
                 'end_time' => '06:00',
                 'department' => 'IT',
+                'venue' => ['Gymnasium'],
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('start_time');
@@ -100,6 +104,7 @@ class BroadcastCustodianTest extends TestCase
                 'start_time' => '15:00',
                 'end_time' => '17:00',
                 'department' => 'IT',
+                'venue' => ['Gymnasium'],
                 'is_emergency' => true,
                 'emergency_justification' => 'Urgent review requested.',
             ])
@@ -122,6 +127,7 @@ class BroadcastCustodianTest extends TestCase
                 'start_time' => '15:00',
                 'end_time' => '03:00',
                 'department' => 'IT',
+                'venue' => ['Gymnasium'],
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('end_time');
@@ -144,6 +150,7 @@ class BroadcastCustodianTest extends TestCase
                 'start_time' => '00:00',
                 'end_time' => '23:59',
                 'department' => 'IT',
+                'venue' => ['Gymnasium'],
             ])
             ->assertCreated();
 
@@ -176,6 +183,7 @@ class BroadcastCustodianTest extends TestCase
                 'start_time' => '10:00',
                 'end_time' => '11:00',
                 'department' => 'Ops',
+                'venue' => ['Gymnasium'],
                 'equipment' => ['Iwata Cooler Fan'],
             ])
             ->assertStatus(201);
@@ -216,6 +224,7 @@ class BroadcastCustodianTest extends TestCase
                 'start_time' => '08:00',
                 'end_time' => '10:00',
                 'department' => 'Events',
+                'venue' => ['Gymnasium'],
                 'equipment' => ['Industrial Fan', 'Iwata Cooler Fan'],
             ])
             ->assertStatus(201);

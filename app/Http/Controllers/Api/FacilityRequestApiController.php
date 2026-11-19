@@ -139,7 +139,9 @@ class FacilityRequestApiController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i',
-            'venue' => 'nullable|array|max:1',
+            // REQ-11: same rule as the web form: one active venue and a full schedule;
+            // equipment is optional and checked for the same schedule.
+            'venue' => 'required|array|min:1|max:1',
             'venue.*' => [
                 'required',
                 'string',
@@ -155,11 +157,16 @@ class FacilityRequestApiController extends Controller
             ],
             'equipment_quantities' => 'nullable|array',
             'equipment_quantities.*' => ['required', 'integer', 'min:1'],
-            'other_venue' => 'nullable|string|max:200',
+            'other_venue' => 'prohibited',
             'department' => 'required|string|max:100',
             'is_emergency' => 'nullable|boolean',
             'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
             'emergency_office' => ['required_if:is_emergency,1', 'nullable', Rule::in(['CHED', 'OP', 'OVP'])],
+        ], [
+            'venue.required' => 'Choose a venue. Every request needs at least one venue; equipment is requested together with a venue.',
+            'venue.min' => 'Choose a venue. Every request needs at least one venue; equipment is requested together with a venue.',
+            'venue.*.exists' => 'Choose an active venue. Venues that are no longer available cannot be requested.',
+            'other_venue.prohibited' => '"Others" is not a venue. Choose one of the listed venues.',
         ]);
 
         if (
@@ -292,7 +299,6 @@ class FacilityRequestApiController extends Controller
                 'venue' => $validated['venue'] ?? [],
                 'equipment' => $validated['equipment'] ?? [],
                 'equipment_quantities' => $quantities,
-                'other_venue' => $validated['other_venue'] ?? null,
                 'requested_by_id' => $user->id,
                 'status' => 'pending',
                 'venue_status' => 'pending',

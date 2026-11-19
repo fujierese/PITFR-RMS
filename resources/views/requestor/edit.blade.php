@@ -95,7 +95,7 @@
                         <label class="text-sm font-medium text-slate-700">Venue</label>
                         <select name="venue" class="mt-1 min-h-[3rem] w-full rounded-2xl border border-slate-200 px-3 py-2" required>
                             <option value="" disabled {{ old('venue', $request->getVenueNames()[0] ?? '') === '' ? 'selected' : '' }}>Choose a venue</option>
-                            @foreach(array_merge($venueOptions, ['Others (specify)']) as $venue)
+                            @foreach($venueOptions as $venue)
                                 <option value="{{ $venue }}" {{ old('venue', $request->getVenueNames()[0] ?? '') === $venue ? 'selected' : '' }}>{{ $venue }}</option>
                             @endforeach
                         </select>

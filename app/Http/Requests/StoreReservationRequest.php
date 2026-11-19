@@ -22,10 +22,10 @@ class StoreReservationRequest extends FormRequest
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i'],
-            'venue' => ['nullable', 'array'],
+            'venue' => ['required', 'array', 'min:1'], // REQ-11: a venue is always required
             'equipment' => ['nullable', 'array'],
             'equipment_quantities' => ['nullable', 'array'],
-            'other_venue' => ['nullable', 'string', 'max:200'],
+            'other_venue' => ['prohibited'],
             'priority' => ['nullable', 'in:regular,institutional'],
             'is_emergency' => ['nullable', 'boolean'],
         ];
