@@ -16,6 +16,8 @@ use App\Notifications\ResetPasswordNotification;
 
 class User extends Authenticatable implements CanResetPassword
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     use HasFactory, Notifiable, HasApiTokens, CanResetPasswordTrait;
 
     protected static function booted(): void

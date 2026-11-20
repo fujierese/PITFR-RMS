@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class CalendarEvent extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     use HasFactory;
 
     protected $fillable = [

@@ -10,6 +10,8 @@ use LogicException;
  */
 class RequestHistory extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     protected $fillable = [
         'facility_request_id', 'user_id', 'actor_role', 'request_version', 'request_fingerprint',
         'action', 'detail', 'occurred_at',

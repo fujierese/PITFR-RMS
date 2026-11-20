@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class RevisionHistory extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     protected $table = 'revision_histories';
 
     protected $fillable = [

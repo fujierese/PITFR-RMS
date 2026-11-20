@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AuditLog extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     protected $table = 'audit_logs';
 
     protected $fillable = [

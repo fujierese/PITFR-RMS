@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class SystemLog extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     protected $fillable = ['log_name', 'event', 'message', 'causer_type', 'causer_id', 'subject_type', 'subject_id', 'properties'];
 
     protected $casts = [

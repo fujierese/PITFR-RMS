@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Schema;
 
 class FacilityRequest extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     use HasFactory, SoftDeletes;
     protected $table = 'facility_requests';
 

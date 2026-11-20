@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class RequestChangeRequest extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     protected $fillable = [
         'facility_request_id',
         'requested_by_id',

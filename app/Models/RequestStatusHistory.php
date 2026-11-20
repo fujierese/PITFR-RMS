@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class RequestStatusHistory extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     use SoftDeletes;
     protected $table = 'request_status_history';
 

@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class College extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     use HasFactory;
 
     protected $fillable = ['name', 'abbreviation', 'description'];

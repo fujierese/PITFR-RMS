@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Equipment extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     use HasFactory;
 
     protected $fillable = ['name', 'custodian_id', 'authorized_custodian_ids', 'quantity', 'quantity_available', 'is_active'];

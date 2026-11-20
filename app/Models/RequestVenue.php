@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class RequestVenue extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     use SoftDeletes;
     protected $table = 'request_venues';
 

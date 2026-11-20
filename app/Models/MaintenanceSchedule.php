@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class MaintenanceSchedule extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     protected $fillable = ['venue_id', 'equipment_id', 'title', 'description', 'start_datetime', 'end_datetime', 'status'];
 
     protected $casts = [

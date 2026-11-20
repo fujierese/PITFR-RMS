@@ -5,6 +5,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Venue extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     protected $fillable = ['name', 'custodian_id', 'capacity', 'is_active'];
 
     protected $casts = [

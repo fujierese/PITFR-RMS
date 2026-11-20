@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class StudentOrganizationMember extends Model
 {
+    use \App\Models\Concerns\SerializesDatesInAppTimezone;
+
     protected $fillable = [
         'user_id', 'student_organization_id', 'membership_role', 'can_submit_requests', 'is_active',
     ];

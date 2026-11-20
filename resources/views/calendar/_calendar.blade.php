@@ -2327,6 +2327,20 @@ document.addEventListener('DOMContentLoaded', function() {
             // Let FullCalendar calculate slot height from the visible grid.
             contentHeight: 'auto',
             timeZone: 'Asia/Manila',
+            // REQ-17: without a time zone plugin FullCalendar takes "now" from the device
+            // clock, so a device set to another zone showed the wrong "today" and the
+            // current-time line hours off. Give it the current Philippine wall-clock time.
+            now: function() {
+                var parts = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Manila',
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+                }).formatToParts(new Date()).reduce(function(values, part) {
+                    values[part.type] = part.value;
+                    return values;
+                }, {});
+                return parts.year + '-' + parts.month + '-' + parts.day + 'T' + parts.hour + ':' + parts.minute + ':' + parts.second;
+            },
             locale: 'en',
             eventDisplay: 'block',
             slotEventOverlap: false, // overlapping bookings sit side by side
