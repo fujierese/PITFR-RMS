@@ -1502,10 +1502,7 @@ class FacilityRequest extends Model
             );
         }
 
-        return [[
-            'start' => $this->getRequestedStartDateTime(),
-            'end' => $this->getRequestedEndDateTime(),
-        ]];
+        return self::dailyRanges($this->getRequestedStartDateTime(), $this->getRequestedEndDateTime());
     }
 
     public function overlapsVenueScheduleRange(string $venueName, Carbon $requestedStart, Carbon $requestedEnd): bool
@@ -1877,7 +1874,9 @@ class FacilityRequest extends Model
     {
         $normalizedDuration = strtolower(trim($duration));
         if (! in_array($normalizedDuration, ['whole_day', 'whole-day', 'whole day'], true)) {
-            return [self::resolveReservationDuration($duration, $startDateValue, $startTimeValue, $endDateValue, $endTimeValue)];
+            $range = self::resolveReservationDuration($duration, $startDateValue, $startTimeValue, $endDateValue, $endTimeValue);
+
+            return self::dailyRanges($range['start'], $range['end']);
         }
 
         $timezone = config('app.timezone', 'Asia/Manila');
@@ -1887,6 +1886,55 @@ class FacilityRequest extends Model
 
         for ($date = $firstDate->copy(); $date->lte($lastDate); $date->addDay()) {
             $ranges[] = self::normalizeScheduleRange($date->toDateString(), '08:00', $date->toDateString(), '17:00');
+        }
+
+        return $ranges;
+    }
+
+    /**
+     * REQ-16: the time actually booked by a schedule that covers more than one date,
+     * the same way the calendar draws it:
+     * - end time later than start time (Mon-Wed, 8:00 AM to 5:00 PM): those hours on
+     *   each day, so the evenings and nights in between stay free;
+     * - end time at or before start time (Mon-Wed, 8:00 PM to 6:00 AM): each night,
+     *   from the start time to the end time the next morning.
+     * A schedule within one date, or one night, is returned as it is. A span of more
+     * than about a year is kept as one block (stricter) instead of hundreds of days.
+     *
+     * @return array<int, array{start: ?Carbon, end: ?Carbon}>
+     */
+    public static function dailyRanges(?Carbon $start, ?Carbon $end): array
+    {
+        if (! $start || ! $end || $end->lte($start) || $start->isSameDay($end)) {
+            return [['start' => $start, 'end' => $end]];
+        }
+
+        $firstDay = $start->copy()->startOfDay();
+        $lastDay = $end->copy()->startOfDay();
+        if ($firstDay->diffInDays($lastDay) > 400) {
+            return [['start' => $start, 'end' => $end]];
+        }
+
+        $startTime = $start->format('H:i:s');
+        $endTime = $end->format('H:i:s');
+        $ranges = [];
+
+        if ($endTime > $startTime) {
+            for ($day = $firstDay->copy(); $day->lte($lastDay); $day->addDay()) {
+                $ranges[] = [
+                    'start' => $day->copy()->setTimeFromTimeString($startTime),
+                    'end' => $day->copy()->setTimeFromTimeString($endTime),
+                ];
+            }
+
+            return $ranges;
+        }
+
+        for ($day = $firstDay->copy(); $day->lt($lastDay); $day->addDay()) {
+            $ranges[] = [
+                'start' => $day->copy()->setTimeFromTimeString($startTime),
+                'end' => $day->copy()->addDay()->setTimeFromTimeString($endTime),
+            ];
         }
 
         return $ranges;

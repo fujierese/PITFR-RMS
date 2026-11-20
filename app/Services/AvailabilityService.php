@@ -328,6 +328,7 @@ class AvailabilityService
         if (! $availability['available']) {
             return $availability['message'] ?? 'The proposed venue schedule is unavailable.';
         }
+        $requestedRanges = FacilityRequest::dailyRanges($requestedStart, $requestedEnd);
 
         $pendingConflict = FacilityRequest::query()
             ->where('status', 'pending')
@@ -335,10 +336,8 @@ class AvailabilityService
             ->where(fn ($query) => $query->matchesVenue($venueName))
             ->with(['requestVenues', 'reservationSchedule'])
             ->get()
-            ->contains(fn (FacilityRequest $otherRequest): bool => $otherRequest->overlapsVenueScheduleRange(
-                $venueName,
-                $requestedStart,
-                $requestedEnd,
+            ->contains(fn (FacilityRequest $otherRequest): bool => collect($requestedRanges)->contains(
+                fn (array $range): bool => $otherRequest->overlapsVenueScheduleRange($venueName, $range['start'], $range['end'])
             ));
 
         return $pendingConflict
@@ -473,6 +472,21 @@ class AvailabilityService
         $requestedStart = $requestedStart ?? now();
         $requestedEnd = $requestedEnd ?? $requestedStart->copy()->addHour();
 
+        // REQ-16: a schedule over several dates books the same hours each day (or each
+        // night); the busiest of those days decides.
+        $dailyRanges = FacilityRequest::dailyRanges($requestedStart, $requestedEnd);
+        if (count($dailyRanges) > 1) {
+            $busiest = null;
+            foreach ($dailyRanges as $range) {
+                $result = $this->checkEquipmentAvailability($itemName, $quantity, $range['start'], $range['end'], $excludeRequestId);
+                if ($busiest === null || ($result['available_qty'] ?? 0) < ($busiest['available_qty'] ?? 0)) {
+                    $busiest = $result;
+                }
+            }
+
+            return $busiest;
+        }
+
         $outstanding = $this->getOutstandingEquipmentQuantity($itemName, $requestedStart, $requestedEnd, $excludeRequestId);
         $available = max(0, (int) $equipment->quantity - $outstanding);
 
@@ -486,6 +500,21 @@ class AvailabilityService
 
     public function checkVenueAvailability(string $venueName, Carbon $requestedStart, Carbon $requestedEnd, ?int $excludeRequestId = null): array
     {
+        // REQ-16: a schedule over several dates books the same hours each day (or each
+        // night); every one of those days must be free.
+        $dailyRanges = FacilityRequest::dailyRanges($requestedStart, $requestedEnd);
+        if (count($dailyRanges) > 1) {
+            $result = null;
+            foreach ($dailyRanges as $range) {
+                $result = $this->checkVenueAvailability($venueName, $range['start'], $range['end'], $excludeRequestId);
+                if (! $result['available']) {
+                    return $result;
+                }
+            }
+
+            return $result;
+        }
+
         $venue = Venue::where('name', $venueName)->first();
         $venueRecord = $venue ?: null;
         $capacity = $this->getVenueCapacity($venueName);

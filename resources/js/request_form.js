@@ -34,7 +34,7 @@ const initializeReservationDurationToggles = function () {
                 field.classList.toggle('opacity-60', isWholeDay);
                 field.classList.toggle('cursor-not-allowed', isWholeDay);
                 if (isWholeDay) {
-                    field.value = field.name === 'start_time' ? '08:00' : '23:59';
+                    field.value = field.name === 'start_time' ? '08:00' : '17:00';
                 } else if (previousDuration === 'whole_day' || (!document.querySelector('input[name="reservation_duration"]:checked') && previousDuration)) {
                     field.value = '';
                 }
@@ -455,7 +455,7 @@ const initializeRequestForm = function () {
             ? `${formatDisplayDate(startDate)}${startDate === endDate ? '' : ` - ${formatDisplayDate(endDate)}`}`
             : 'Not selected';
         if (summaryDetails.time) summaryDetails.time.textContent = isWholeDay
-            ? 'Whole day (08:00 AM - 11:59 PM)'
+            ? 'Whole day (08:00 AM - 05:00 PM)'
             : startTime && endTime ? `${formatDisplayTime(startTime)} - ${formatDisplayTime(endTime)}` : 'Not selected';
         if (summaryDetails.equipment) {
             summaryDetails.equipment.innerHTML = selectedEquipment.length

@@ -828,6 +828,14 @@ class SupplyOfficeController extends Controller
                 'end_time'
             );
         }
+        // REQ-16: an end time at or before the start time on the same date is not a schedule.
+        if (\Carbon\Carbon::parse($validated['start_date'])->isSameDay(\Carbon\Carbon::parse($validated['end_date'])) && $validated['end_time'] <= $validated['start_time']) {
+            return $this->revisionFailure(
+                $request,
+                'The end time must be after the start time. For an overnight booking, set the end date to the next day.',
+                'end_time'
+            );
+        }
 
         // Check if revision is allowed
         if (!$facilityRequest->canBeRevised()) {
@@ -1400,6 +1408,14 @@ class SupplyOfficeController extends Controller
             'new_start_time' => ['required', 'date_format:H:i'],
             'new_end_time' => ['required', 'date_format:H:i'],
         ]);
+
+        // REQ-16: the moved reservation follows the same time rules as every other schedule.
+        if ($validated['new_start_time'] <= '05:00' || $validated['new_end_time'] <= '05:00') {
+            return back()->withErrors(['new_end_time' => 'Reservations cannot start or end between 12:00 AM and 5:00 AM. Choose times after 5:00 AM.'])->withInput();
+        }
+        if (\Carbon\Carbon::parse($validated['new_start_date'])->isSameDay(\Carbon\Carbon::parse($validated['new_end_date'])) && $validated['new_end_time'] <= $validated['new_start_time']) {
+            return back()->withErrors(['new_end_time' => 'The end time must be after the start time. For an overnight booking, set the end date to the next day.'])->withInput();
+        }
 
         $urgentRequest = FacilityRequest::findOrFail($validated['urgent_request_id']);
         $conflictingRequest = FacilityRequest::findOrFail($validated['conflicting_request_id']);

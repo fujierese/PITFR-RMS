@@ -226,6 +226,12 @@ class RequestorController extends Controller
             $newState['end_date'],
             $newState['end_time']
         );
+        // REQ-16: never accept a proposal whose end is not after its start.
+        if (! $range['start'] || ! $range['end'] || $range['end']->lte($range['start'])) {
+            return back()->withErrors([
+                'revision' => 'This proposed schedule ends before it starts. Contact the Supply Office for a revised schedule.',
+            ]);
+        }
         $availabilityService = $this->availabilityService;
         $venueConflict = false;
         foreach ($newState['venue'] as $venueName) {
