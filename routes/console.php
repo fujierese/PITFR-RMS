@@ -42,3 +42,7 @@ Schedule::command('queue:work', [
     '--max-time' => 55,
 ])->everyMinute()->withoutOverlapping(2)->runInBackground()->name('queue-worker');
 Schedule::command('queue:prune-failed', ['--hours' => 24 * 30])->daily();
+
+// REQ-18: report-only check that old request columns agree with venue, item and
+// schedule rows; logs a warning when they do not. Repair with requests:reconcile --fix.
+Schedule::command('requests:reconcile')->dailyAt('02:30')->withoutOverlapping()->name('request-data-check');

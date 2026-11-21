@@ -916,6 +916,14 @@ class RequestorController extends Controller
         if ($facilityRequest->requested_by_id !== $user->id || !$shouldAllowEdit) {
             abort(403);
         }
+        // REQ-18: the edit form keeps one venue; saving a multi-venue request there would
+        // drop the other venues and their schedules.
+        if (! $facilityRequest->isEditableWithSingleVenueForm()) {
+            return redirect()->route('request.show', $facilityRequest)->withErrors([
+                'edit' => 'This request books more than one venue, and the edit form can only keep one, so it cannot be edited here. '
+                    . 'To change it, cancel it and submit a new request, or ask the Supply Office for a schedule change.',
+            ]);
+        }
 
         $equipmentQuantityLimits = [];
         foreach ($facilityRequest->getEquipmentItems() as $itemName) {
@@ -953,6 +961,14 @@ class RequestorController extends Controller
 
         if ($facilityRequest->requested_by_id !== $user->id || !$shouldAllowEdit) {
             abort(403);
+        }
+        // REQ-18: the edit form keeps one venue; saving a multi-venue request there would
+        // drop the other venues and their schedules.
+        if (! $facilityRequest->isEditableWithSingleVenueForm()) {
+            return redirect()->route('request.show', $facilityRequest)->withErrors([
+                'edit' => 'This request books more than one venue, and the edit form can only keep one, so it cannot be edited here. '
+                    . 'To change it, cancel it and submit a new request, or ask the Supply Office for a schedule change.',
+            ]);
         }
 
         // REQ-13: refuse to save over changes made after this form was opened.

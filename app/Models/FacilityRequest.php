@@ -1439,6 +1439,16 @@ class FacilityRequest extends Model
         return ($hours * 60) + $minutes;
     }
 
+    /**
+     * REQ-18: the requestor edit form holds one venue and one schedule. A request that
+     * books several venues would lose the others when saved there, so it is changed
+     * through a cancellation and new request, or a Supply Office schedule change.
+     */
+    public function isEditableWithSingleVenueForm(): bool
+    {
+        return count($this->getVenueNames()) <= 1;
+    }
+
     public function getVenueSchedule(string $venueName): array
     {
         $this->loadMissing('requestVenues');
@@ -1723,31 +1733,20 @@ class FacilityRequest extends Model
             ->all();
     }
 
+    /**
+     * REQ-18: the venue and item rows are the source of truth; the old JSON columns are
+     * only a copy. (This used to return just the rows missing from the old column, so
+     * when the two disagreed in part, e.g. rows Gym + CHIC and an old column of Gym,
+     * only CHIC was reported and the Gym booking dropped out of every check.)
+     */
     private function preferRelationValuesOverLegacy(array $relationValues, array $legacyValues): array
     {
-        $filteredRelationValues = array_values(array_filter($relationValues, static function ($value) use ($legacyValues): bool {
-            return !in_array($value, $legacyValues, true);
-        }));
-
-        if (!empty($filteredRelationValues)) {
-            return array_values(array_unique(array_filter($filteredRelationValues)));
-        }
-
         return array_values(array_unique(array_filter($relationValues)));
     }
 
+    /** REQ-18: item rows are the source of truth (see preferRelationValuesOverLegacy). */
     private function preferRelationQuantitiesOverLegacy(array $relationQuantities, array $legacyQuantities): array
     {
-        $relationKeys = array_keys($relationQuantities);
-        $legacyKeys = array_keys($legacyQuantities);
-        $filteredRelationQuantities = array_filter($relationQuantities, static function ($value, $key) use ($legacyKeys): bool {
-            return !in_array($key, $legacyKeys, true);
-        }, ARRAY_FILTER_USE_BOTH);
-
-        if (!empty($filteredRelationQuantities)) {
-            return $filteredRelationQuantities;
-        }
-
         return $relationQuantities;
     }
 

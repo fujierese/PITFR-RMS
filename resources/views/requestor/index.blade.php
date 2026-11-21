@@ -262,6 +262,7 @@
                                             || ($statusKey === 'pending'
                                                 && $requestItem->venue_status === 'pending'
                                                 && $requestItem->equipment_status === 'pending');
+                                        $canEdit = $canEdit && $requestItem->isEditableWithSingleVenueForm();
                                         $canCancel = in_array($statusKey, ['pending', 'approved'], true)
                                             && $requestItem->cancellation_status !== 'pending'
                                             && $requestItem->start_date?->toDateString() > now()->toDateString();
@@ -395,6 +396,7 @@
                                 || ($statusKey === 'pending'
                                     && $requestItem->venue_status === 'pending'
                                     && $requestItem->equipment_status === 'pending');
+                            $canEdit = $canEdit && $requestItem->isEditableWithSingleVenueForm();
                             $canCancel = in_array($statusKey, ['pending', 'approved'], true)
                                 && $requestItem->cancellation_status !== 'pending'
                                 && $requestItem->start_date?->toDateString() > now()->toDateString();
