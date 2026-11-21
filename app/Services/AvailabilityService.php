@@ -77,6 +77,11 @@ class AvailabilityService
         if ($inactiveMessage !== null) {
             return $inactiveMessage;
         }
+        // REQ-19: an outsider's request never includes a venue closed to outsiders.
+        $venueRuleMessage = \App\Support\VenueRules::requestMessage($facilityRequest);
+        if ($venueRuleMessage !== null) {
+            return $venueRuleMessage;
+        }
 
         $requestedStart = $facilityRequest->getRequestedStartDateTime();
         $requestedEnd = $facilityRequest->getRequestedEndDateTime();

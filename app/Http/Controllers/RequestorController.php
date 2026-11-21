@@ -505,7 +505,11 @@ class RequestorController extends Controller
      *
      * @return list<string>
      */
-    private function requestableVenueOptions(): array
+    /**
+     * REQ-19: with a requestor given, venues closed to that requestor (the Gym for
+     * outsiders) are left out.
+     */
+    private function requestableVenueOptions(?\App\Models\User $requestor = null): array
     {
         $normalize = static function ($name): string {
             $value = trim((string) $name);
@@ -524,7 +528,10 @@ class RequestorController extends Controller
             static fn (string $name): bool => ! in_array(mb_strtolower($name), $known, true)
         ));
 
-        return array_values(array_unique(array_merge($active, $builtIn)));
+        $options = array_values(array_unique(array_merge($active, $builtIn)));
+        $closed = \App\Support\VenueRules::closedVenuesFor($requestor, $options);
+
+        return array_values(array_diff($options, $closed));
     }
 
     /** REQ-13: identifies the version of a request an edit form was opened on. */
@@ -716,7 +723,7 @@ class RequestorController extends Controller
 
         $venueCapacityMap = [];
         $venueRecords = Venue::query()->where('is_active', true)->orderBy('name')->get();
-        $venueOptions = $this->requestableVenueOptions();
+        $venueOptions = $this->requestableVenueOptions($user);
 
         foreach ($venueOptions as $venueName) {
             $venueCapacityMap[$venueName] = $this->availabilityService->getVenueCapacity($venueName);
@@ -747,6 +754,7 @@ class RequestorController extends Controller
             'profileMeta'       => $profileMeta,
             'activeTab'         => $request->get('tab', 'calendar'),
             'venueOptions'      => $venueOptions,
+            'venueActivityRequired' => collect($venueOptions)->filter(fn (string $name): bool => \App\Support\VenueRules::requiresActivityType($name))->values()->all(),
             'venueRecords'      => $venueRecords,
             'colleges'          => $colleges,
             'departments'       => $departments,
@@ -931,7 +939,7 @@ class RequestorController extends Controller
         }
 
         // REQ-11 / REQ-13: the same list the request form uses.
-        $editVenueOptions = $this->requestableVenueOptions();
+        $editVenueOptions = $this->requestableVenueOptions($user);
         $venueCapacityMap = [];
         foreach ($editVenueOptions as $venueName) {
             $venueCapacityMap[$venueName] = $this->availabilityService->getVenueCapacity($venueName);
@@ -946,6 +954,10 @@ class RequestorController extends Controller
             'equipment' => \App\Models\Equipment::where('is_active', true)->get(),
             'equipmentQuantityLimits' => $equipmentQuantityLimits,
             'venueCapacityMap' => $venueCapacityMap,
+            'venueActivityRequired' => collect($editVenueOptions)->filter(fn (string $name): bool => \App\Support\VenueRules::requiresActivityType($name))->values()->all(),
+            'currentActivity' => $facilityRequest->getVenueNames() !== []
+                ? array_intersect_key($facilityRequest->getVenueSchedule($facilityRequest->getVenueNames()[0]), array_flip(['activity_type', 'activity_type_detail']))
+                : [],
         ]);
     }
 
@@ -1003,7 +1015,9 @@ class RequestorController extends Controller
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i'],
             // REQ-11: every request needs one active venue; equipment is optional.
-            'venue' => ['required', 'string', Rule::in($this->requestableVenueOptions())],
+            'venue' => ['required', 'string', Rule::in($this->requestableVenueOptions($user))],
+            'activity_type' => ['nullable', 'string', Rule::in(array_keys(\App\Support\VenueRules::ACTIVITY_TYPES))],
+            'activity_type_detail' => ['nullable', 'string', 'max:200'],
             'other_venue' => ['prohibited'],
             'equipment' => ['nullable', 'array'],
             'equipment.*' => ['string', 'max:191', 'distinct:ignore_case'],
@@ -1154,6 +1168,15 @@ class RequestorController extends Controller
         $submittedVenue = trim((string) $submittedVenue);
         // REQ-11: validated above, so the request always keeps a venue.
         $venue = [$submittedVenue];
+        // REQ-19: the activity type for a venue that asks for it; an unchanged venue
+        // keeps what was chosen before unless a new choice is sent.
+        $previousVenueSchedule = in_array($submittedVenue, $facilityRequest->getVenueNames(), true)
+            ? $facilityRequest->getVenueSchedule($submittedVenue) : [];
+        $activityType = $request->filled('activity_type') ? $request->input('activity_type') : ($previousVenueSchedule['activity_type'] ?? null);
+        $activityDetail = $request->filled('activity_type') ? $request->input('activity_type_detail') : ($previousVenueSchedule['activity_type_detail'] ?? null);
+        if ($activityError = \App\Support\VenueRules::activityTypeError($submittedVenue, $activityType, $activityDetail)) {
+            return back()->withErrors(['activity_type' => $activityError])->withInput();
+        }
 
         $venueAvailability = $this->checkVenueAvailabilityForEdit($submittedVenue, $startDateTime, $endDateTime, $facilityRequest->id);
         if (!$venueAvailability['available']) {
@@ -1193,6 +1216,11 @@ class RequestorController extends Controller
 
         $facilityRequest->save();
         $facilityRequest->syncRelationalItems();
+        if (\Illuminate\Support\Facades\Schema::hasColumn('request_venues', 'activity_type')) {
+            $facilityRequest->requestVenues()->where('name', $submittedVenue)
+                ->update(\App\Support\VenueRules::activityFields($submittedVenue, $activityType, $activityDetail));
+            $facilityRequest->unsetRelation('requestVenues');
+        }
 
         if ($isNeedsReschedule) {
             $facilityRequest->addHistory('needs_reschedule', 'Reservation rescheduled by requestor after Priority Override.');
@@ -1475,7 +1503,13 @@ class RequestorController extends Controller
         $hasDepartmentDirectory = College::query()->exists() && Department::query()->exists();
         $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
 
-        $requestableVenueNames = $this->requestableVenueOptions();
+        // REQ-19: outsiders cannot book venues closed to them; say so plainly instead of
+        // the generic "choose a listed venue".
+        $closedVenues = \App\Support\VenueRules::closedVenuesFor($user, array_filter((array) $request->input('venue', []), 'is_string'));
+        if ($closedVenues !== []) {
+            return back()->withErrors(['venue' => \App\Support\VenueRules::closedVenueMessage($closedVenues)])->withInput();
+        }
+        $requestableVenueNames = $this->requestableVenueOptions($user);
 
         $profileCollegeId = $user->college_id ?? null;
         $profileDepartmentId = $user->department_id ?? null;
@@ -1660,6 +1694,13 @@ class RequestorController extends Controller
                 ])->withInput();
             }
 
+            // REQ-19: a venue that asks for it needs the type of school activity.
+            $activityType = $submittedSchedules[$venueName]['activity_type'] ?? null;
+            $activityDetail = $submittedSchedules[$venueName]['activity_type_detail'] ?? null;
+            if ($activityError = \App\Support\VenueRules::activityTypeError($venueName, $activityType, $activityDetail)) {
+                return back()->withErrors(["venue_schedules.{$venueName}.activity_type" => $activityError])->withInput();
+            }
+
             $scheduleRanges[$venueName] = $range;
             $venueSchedules[$venueName] = [
                 'start_date' => $range['start']->toDateString(),
@@ -1667,7 +1708,7 @@ class RequestorController extends Controller
                 'start_time' => $range['start']->format('H:i'),
                 'end_time' => $range['end']->format('H:i'),
                 'reservation_duration' => $duration,
-            ];
+            ] + \App\Support\VenueRules::activityFields($venueName, $activityType, $activityDetail);
         }
 
         $startDateTime = collect($scheduleRanges)->pluck('start')->sort()->first();
@@ -2614,10 +2655,10 @@ class RequestorController extends Controller
 
     public function venueAvailability(Request $request)
     {
-        $this->currentUser();
+        $availabilityUser = $this->currentUser();
         $validated = $request->validate([
             'venues' => ['required', 'array', 'min:1'],
-            'venues.*' => ['required', 'string', Rule::in($this->requestableVenueOptions())],
+            'venues.*' => ['required', 'string', Rule::in($this->requestableVenueOptions($availabilityUser))],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'start_time' => ['required', 'date_format:H:i'],

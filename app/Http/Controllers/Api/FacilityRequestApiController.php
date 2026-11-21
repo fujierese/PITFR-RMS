@@ -168,6 +168,9 @@ class FacilityRequestApiController extends Controller
             'equipment_quantities' => 'nullable|array',
             'equipment_quantities.*' => \App\Support\EquipmentQuantity::rules(required: true),
             'other_venue' => 'prohibited',
+            // REQ-19: the type of school activity, for a venue that asks for it (the Gym).
+            'activity_type' => ['nullable', 'string', Rule::in(array_keys(\App\Support\VenueRules::ACTIVITY_TYPES))],
+            'activity_type_detail' => ['nullable', 'string', 'max:200'],
             'department' => 'required|string|max:100',
             'is_emergency' => 'nullable|boolean',
             'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
@@ -179,6 +182,18 @@ class FacilityRequestApiController extends Controller
             'other_venue.prohibited' => '"Others" is not a venue. Choose one of the listed venues.',
             'equipment.*.distinct' => 'Each equipment item can be listed only once.',
         ] + \App\Support\EquipmentQuantity::messages('equipment_quantities.*'));
+
+        // REQ-19: outsiders cannot book venues closed to them, and a venue that asks for
+        // it needs the type of school activity.
+        $closedApiVenues = \App\Support\VenueRules::closedVenuesFor($user, $validated['venue'] ?? []);
+        if ($closedApiVenues !== []) {
+            throw ValidationException::withMessages(['venue' => \App\Support\VenueRules::closedVenueMessage($closedApiVenues)]);
+        }
+        foreach ($validated['venue'] ?? [] as $apiVenueName) {
+            if ($activityError = \App\Support\VenueRules::activityTypeError($apiVenueName, $validated['activity_type'] ?? null, $validated['activity_type_detail'] ?? null)) {
+                throw ValidationException::withMessages(['activity_type' => $activityError]);
+            }
+        }
 
         // REQ-12: every selected item has a quantity, and every quantity has an item.
         $selectedApiEquipment = $validated['equipment'] ?? [];
@@ -343,6 +358,14 @@ class FacilityRequestApiController extends Controller
                     ]]
                     : [],
             ]);
+
+            if (\Illuminate\Support\Facades\Schema::hasColumn('request_venues', 'activity_type')) {
+                foreach ($validated['venue'] ?? [] as $apiVenueName) {
+                    $fr->requestVenues()->where('name', $apiVenueName)->update(
+                        \App\Support\VenueRules::activityFields($apiVenueName, $validated['activity_type'] ?? null, $validated['activity_type_detail'] ?? null)
+                    );
+                }
+            }
 
             $fr->addHistory('submitted', 'Request submitted via API by ' . $user->name, $user->id);
 

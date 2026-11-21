@@ -21,6 +21,8 @@ class RequestVenue extends Model
         'start_time',
         'end_time',
         'reservation_duration',
+        'activity_type',
+        'activity_type_detail',
     ];
 
     protected $casts = [

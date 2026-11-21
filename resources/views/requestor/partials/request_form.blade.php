@@ -448,6 +448,20 @@
                                             </label>
                                         </fieldset>
                                         <p class="venue-availability mt-3 text-xs text-slate-500" aria-live="polite">Select dates and times to check availability.</p>
+                                        @if (in_array($v, $venueActivityRequired ?? [], true))
+                                            {{-- REQ-19: this venue asks for the type of school activity. --}}
+                                            <div class="mt-3" data-venue-activity>
+                                                <label for="venue_activity_{{ $loop->index }}" class="text-xs font-semibold text-slate-600">Type of school activity <span class="required-asterisk">*</span></label>
+                                                <select id="venue_activity_{{ $loop->index }}" name="venue_schedules[{{ $v }}][activity_type]" {{ $isVenueSelected ? 'required' : '' }} data-venue-activity-type class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
+                                                    <option value="">Choose the activity</option>
+                                                    @foreach (\App\Support\VenueRules::ACTIVITY_TYPES as $activityKey => $activityLabel)
+                                                        <option value="{{ $activityKey }}" @selected(($venueScheduleOld['activity_type'] ?? '') === $activityKey)>{{ $activityLabel }}</option>
+                                                    @endforeach
+                                                </select>
+                                                <input type="text" name="venue_schedules[{{ $v }}][activity_type_detail]" maxlength="200" value="{{ $venueScheduleOld['activity_type_detail'] ?? '' }}" placeholder="Describe the school activity" aria-label="Describe the school activity" data-venue-activity-detail class="{{ ($venueScheduleOld['activity_type'] ?? '') === 'other' ? '' : 'hidden' }} mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
+                                                @error('venue_schedules.' . $v . '.activity_type')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                            </div>
+                                        @endif
                                         @error('venue_schedules.' . $v . '.start_date')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                                         @error('venue_schedules.' . $v . '.end_date')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                                         @error('venue_schedules.' . $v . '.start_time')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
@@ -2021,4 +2035,27 @@
     } else {
         initializeRequestFormDraftUi();
     }
+</script>
+
+{{-- REQ-19: the activity type is required only while its venue is selected; "Other" asks for a description. --}}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-venue-activity]').forEach(function (box) {
+            var option = box.closest('[data-venue-option]');
+            var checkbox = option ? option.querySelector('input[name="venue[]"]') : null;
+            var select = box.querySelector('[data-venue-activity-type]');
+            var detail = box.querySelector('[data-venue-activity-detail]');
+            if (!select || !detail) return;
+            var sync = function () {
+                var selected = !!(checkbox && checkbox.checked);
+                var other = select.value === 'other';
+                select.required = selected;
+                detail.classList.toggle('hidden', !other);
+                detail.required = selected && other;
+            };
+            if (checkbox) checkbox.addEventListener('change', sync);
+            select.addEventListener('change', sync);
+            sync();
+        });
+    });
 </script>

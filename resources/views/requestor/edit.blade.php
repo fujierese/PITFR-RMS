@@ -97,12 +97,25 @@
                 <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                     <div>
                         <label class="text-sm font-medium text-slate-700">Venue</label>
-                        <select name="venue" class="mt-1 min-h-[3rem] w-full rounded-2xl border border-slate-200 px-3 py-2" required>
+                        <select name="venue" class="mt-1 min-h-[3rem] w-full rounded-2xl border border-slate-200 px-3 py-2" required data-edit-venue data-activity-venues='@json($venueActivityRequired ?? [])'>
                             <option value="" disabled {{ old('venue', $request->getVenueNames()[0] ?? '') === '' ? 'selected' : '' }}>Choose a venue</option>
                             @foreach($venueOptions as $venue)
                                 <option value="{{ $venue }}" {{ old('venue', $request->getVenueNames()[0] ?? '') === $venue ? 'selected' : '' }}>{{ $venue }}</option>
                             @endforeach
                         </select>
+                        {{-- REQ-19: venues that ask for the type of school activity (the Gym). --}}
+                        @php $editActivity = old('activity_type', $currentActivity['activity_type'] ?? ''); @endphp
+                        <div class="mt-3 hidden" data-edit-activity>
+                            <label for="edit_activity_type" class="text-sm font-medium text-slate-700">Type of school activity <span class="text-red-600">*</span></label>
+                            <select id="edit_activity_type" name="activity_type" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" data-edit-activity-type>
+                                <option value="">Choose the activity</option>
+                                @foreach (\App\Support\VenueRules::ACTIVITY_TYPES as $activityKey => $activityLabel)
+                                    <option value="{{ $activityKey }}" @selected($editActivity === $activityKey)>{{ $activityLabel }}</option>
+                                @endforeach
+                            </select>
+                            <input type="text" name="activity_type_detail" maxlength="200" value="{{ old('activity_type_detail', $currentActivity['activity_type_detail'] ?? '') }}" placeholder="Describe the school activity" aria-label="Describe the school activity" data-edit-activity-detail class="mt-2 hidden w-full rounded-2xl border border-slate-200 px-3 py-2">
+                            @error('activity_type')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                        </div>
                         <div id="venue-conflict-alert-wrap" class="mt-3"></div>
                     </div>
                     <div>
@@ -216,4 +229,27 @@
             </div>
         </form>
     </div>
-</div>@endsection
+</div>
+<script>
+    // REQ-19: show and require the activity type only for venues that ask for it.
+    document.addEventListener('DOMContentLoaded', function () {
+        var venue = document.querySelector('[data-edit-venue]');
+        var box = document.querySelector('[data-edit-activity]');
+        if (!venue || !box) return;
+        var venues = JSON.parse(venue.dataset.activityVenues || '[]');
+        var select = box.querySelector('[data-edit-activity-type]');
+        var detail = box.querySelector('[data-edit-activity-detail]');
+        var sync = function () {
+            var needed = venues.indexOf(venue.value) !== -1;
+            var other = select.value === 'other';
+            box.classList.toggle('hidden', !needed);
+            select.required = needed;
+            detail.classList.toggle('hidden', !(needed && other));
+            detail.required = needed && other;
+        };
+        venue.addEventListener('change', sync);
+        select.addEventListener('change', sync);
+        sync();
+    });
+</script>
+@endsection

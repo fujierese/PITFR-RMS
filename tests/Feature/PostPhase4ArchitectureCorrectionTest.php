@@ -300,7 +300,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
             'end_date' => now()->addDay()->toDateString(),
             'start_time' => '10:00',
             'end_time' => '12:00',
-            'venue' => 'Gymnasium',
+            'venue' => 'Covered Court',
             'equipment' => [],
             'equipment_quantities' => [],
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),

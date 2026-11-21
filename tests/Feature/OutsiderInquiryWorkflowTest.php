@@ -48,7 +48,7 @@ class OutsiderInquiryWorkflowTest extends TestCase
         $this->igp = User::factory()->create(['role' => 'igp', 'name' => 'Ina IGP']);
         $this->custodian = User::factory()->create(['role' => 'custodian-venue', 'name' => 'Gym Custodian']);
         $this->supplyOffice = User::factory()->create(['role' => 'admin', 'username' => config('pitfr.final_approver_username')]);
-        Venue::create(['name' => 'Gymnasium', 'capacity' => 500, 'custodian_id' => $this->custodian->id, 'is_active' => true]);
+        Venue::create(['name' => 'Covered Court', 'capacity' => 500, 'custodian_id' => $this->custodian->id, 'is_active' => true]);
     }
 
     private function submitInquiry(array $overrides = []): FacilityRequest
@@ -59,8 +59,8 @@ class OutsiderInquiryWorkflowTest extends TestCase
             'name_of_activity' => 'Company Anniversary',
             'purpose' => 'Annual gathering',
             'expected_participants' => 120,
-            'venue' => ['Gymnasium'],
-            'venue_schedules' => ['Gymnasium' => [
+            'venue' => ['Covered Court'],
+            'venue_schedules' => ['Covered Court' => [
                 'start_date' => $this->date, 'end_date' => $this->date,
                 'start_time' => '13:00', 'end_time' => '17:00',
                 'reservation_duration' => 'specific_time',
@@ -157,7 +157,7 @@ class OutsiderInquiryWorkflowTest extends TestCase
         $inquiry = $this->submitInquiry();
         $inquiry->update(['outsider_stage' => 'igp_coordination', 'status' => 'approved', 'venue_status' => 'approved', 'supply_office_review_status' => 'confirmed', 'equipment_status' => 'approved']);
 
-        $result = app(AvailabilityService::class)->checkVenueAvailability('Gymnasium', Carbon::parse($this->date . ' 14:00'), Carbon::parse($this->date . ' 15:00'));
+        $result = app(AvailabilityService::class)->checkVenueAvailability('Covered Court', Carbon::parse($this->date . ' 14:00'), Carbon::parse($this->date . ' 15:00'));
         $this->assertFalse($result['available']);
     }
 
@@ -168,11 +168,11 @@ class OutsiderInquiryWorkflowTest extends TestCase
         $this->approveBySupplyOffice($inquiry, now()->addDays(3)->toDateString());
 
         $slot = [Carbon::parse($this->date . ' 14:00'), Carbon::parse($this->date . ' 15:00')];
-        $this->assertFalse(app(AvailabilityService::class)->checkVenueAvailability('Gymnasium', ...$slot)['available'], 'Held schedule must block internal requests.');
+        $this->assertFalse(app(AvailabilityService::class)->checkVenueAvailability('Covered Court', ...$slot)['available'], 'Held schedule must block internal requests.');
 
         // After the deadline the hold lapses on its own.
         $this->travelTo(now()->addDays(4));
-        $this->assertTrue(app(AvailabilityService::class)->checkVenueAvailability('Gymnasium', ...$slot)['available']);
+        $this->assertTrue(app(AvailabilityService::class)->checkVenueAvailability('Covered Court', ...$slot)['available']);
         $this->travelBack();
 
         // The Supply Office can cancel the approval, which releases the schedule.
@@ -191,7 +191,7 @@ class OutsiderInquiryWorkflowTest extends TestCase
         $this->approveBySupplyOffice($inquiry);
 
         $this->assertFalse($inquiry->fresh()->hasActiveOutsiderHold());
-        $this->assertTrue(app(AvailabilityService::class)->checkVenueAvailability('Gymnasium', Carbon::parse($this->date . ' 14:00'), Carbon::parse($this->date . ' 15:00'))['available']);
+        $this->assertTrue(app(AvailabilityService::class)->checkVenueAvailability('Covered Court', Carbon::parse($this->date . ' 14:00'), Carbon::parse($this->date . ' 15:00'))['available']);
     }
 
     public function test_custodian_non_endorsement_goes_to_the_supply_office(): void
@@ -239,8 +239,8 @@ class OutsiderInquiryWorkflowTest extends TestCase
             'department' => 'IT',
             'name_of_activity' => 'Faculty Seminar',
             'expected_participants' => 30,
-            'venue' => ['Gymnasium'],
-            'venue_schedules' => ['Gymnasium' => ['start_date' => $this->date, 'end_date' => $this->date, 'start_time' => '08:00', 'end_time' => '10:00', 'reservation_duration' => 'specific_time']],
+            'venue' => ['Covered Court'],
+            'venue_schedules' => ['Covered Court' => ['start_date' => $this->date, 'end_date' => $this->date, 'start_time' => '08:00', 'end_time' => '10:00', 'reservation_duration' => 'specific_time']],
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 50, 'image/png'),
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 50, 'application/pdf'),
         ]);

@@ -1163,6 +1163,18 @@ class FacilityRequest extends Model
             }
         }
 
+        // REQ-19: rebuilding the rows from the old columns (edit, accepted schedule change)
+        // keeps the activity each venue was booked for.
+        $previousActivities = [];
+        if (Schema::hasTable('request_venues') && Schema::hasColumn('request_venues', 'activity_type')) {
+            foreach (DB::table('request_venues')->where('facility_request_id', $this->getKey())->whereNotNull('activity_type')->get(['name', 'activity_type', 'activity_type_detail']) as $row) {
+                $previousActivities[mb_strtolower(trim((string) $row->name))] = [
+                    'activity_type' => $row->activity_type,
+                    'activity_type_detail' => $row->activity_type_detail,
+                ];
+            }
+        }
+
         if (Schema::hasTable('request_venues')) {
             DB::table('request_venues')->where('facility_request_id', $this->getKey())->delete();
         }
@@ -1203,6 +1215,10 @@ class FacilityRequest extends Model
                         'end_time' => $this->end_time ?? $this->start_time,
                         'reservation_duration' => $this->reservation_duration ?? 'specific_time',
                     ];
+                }
+
+                if (! array_key_exists('activity_type', $schedule) && isset($previousActivities[mb_strtolower(trim($venueName))])) {
+                    $schedule += $previousActivities[mb_strtolower(trim($venueName))];
                 }
 
                 $payload = array_merge(
@@ -1413,11 +1429,14 @@ class FacilityRequest extends Model
                         ? ($durationHours ? ' ' : '') . $durationRemainder . ' minute' . ($durationRemainder === 1 ? '' : 's')
                         : '');
 
+                $activity = \App\Support\VenueRules::activityLabel($schedule['activity_type'] ?? null, $schedule['activity_type_detail'] ?? null);
+
                 return [
                     'venue' => $venueName,
                     'dates' => $dates,
                     'time' => $time,
-                    'label' => $dates . ' · ' . $time,
+                    'activity' => $activity,
+                    'label' => $dates . ' · ' . $time . ($activity ? ' · Activity: ' . $activity : ''),
                     'duration' => $hasValidDailyDuration ? ($duration ?: 'Not specified') : 'Schedule needs review',
                 ];
             })
@@ -1463,6 +1482,9 @@ class FacilityRequest extends Model
                 'start_time' => $venue->start_time ?? $this->start_time,
                 'end_time' => $venue->end_time ?? $this->end_time,
                 'reservation_duration' => $venue->reservation_duration ?? 'specific_time',
+                // REQ-19: the school activity chosen for a venue that asks for it.
+                'activity_type' => $venue->activity_type ?? null,
+                'activity_type_detail' => $venue->activity_type_detail ?? null,
             ];
         }
 

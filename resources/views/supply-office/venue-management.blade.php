@@ -38,6 +38,16 @@
                     <option value="{{ $custodian->id }}" @selected(old('custodian_id') == $custodian->id)>{{ $custodian->name }} — {{ $custodian->role_label }}</option>
                 @endforeach
             </select>
+            <label class="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
+                <input type="hidden" name="open_to_outsiders" value="0">
+                <input type="checkbox" name="open_to_outsiders" value="1" @checked(old('open_to_outsiders', '1') == '1') class="h-4 w-4 rounded border-slate-300 text-emerald-600">
+                Open to outside requestors
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
+                <input type="hidden" name="requires_activity_type" value="0">
+                <input type="checkbox" name="requires_activity_type" value="1" @checked(old('requires_activity_type') == '1') class="h-4 w-4 rounded border-slate-300 text-emerald-600">
+                Ask for the type of school activity (prom, orientation, seminar, pickleball, badminton, other)
+            </label>
             <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Add Venue</button>
         </form>
 
@@ -54,7 +64,15 @@
                 <tbody class="divide-y divide-slate-100">
                     @forelse($venues as $venue)
                         <tr>
-                            <td class="px-4 py-4 font-medium text-slate-900">{{ $venue->name }}</td>
+                            <td class="px-4 py-4 font-medium text-slate-900">
+                                {{ $venue->name }}
+                                @if(isset($venue->open_to_outsiders) && ! $venue->open_to_outsiders)
+                                    <span class="ml-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200">PIT users only</span>
+                                @endif
+                                @if($venue->requires_activity_type ?? false)
+                                    <span class="ml-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">Activity type asked</span>
+                                @endif
+                            </td>
                             <td class="px-4 py-4">{{ $venue->capacity ?? '—' }}</td>
                             <td class="px-4 py-4">{{ $venue->custodian?->name ?? '—' }}</td>
                             <td class="px-4 py-4 text-right">
@@ -90,6 +108,19 @@
                                                         <option value="{{ $custodian->id }}" @selected(old('custodian_id', $venue->custodian_id) == $custodian->id)>{{ $custodian->name }} — {{ $custodian->role_label }}</option>
                                                     @endforeach
                                                 </select>
+                                            </label>
+                                        </div>
+                                        {{-- REQ-19: venue rules the server enforces. --}}
+                                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                            <label class="flex items-center gap-2 text-sm text-slate-700">
+                                                <input type="hidden" name="open_to_outsiders" value="0">
+                                                <input type="checkbox" name="open_to_outsiders" value="1" @checked(old('open_to_outsiders', $venue->open_to_outsiders ?? true)) class="h-4 w-4 rounded border-slate-300 text-emerald-600">
+                                                Open to outside requestors
+                                            </label>
+                                            <label class="flex items-center gap-2 text-sm text-slate-700">
+                                                <input type="hidden" name="requires_activity_type" value="0">
+                                                <input type="checkbox" name="requires_activity_type" value="1" @checked(old('requires_activity_type', $venue->requires_activity_type ?? false)) class="h-4 w-4 rounded border-slate-300 text-emerald-600">
+                                                Ask for the type of school activity
                                             </label>
                                         </div>
                                         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

@@ -37,7 +37,7 @@ class FinalApprovalTest extends TestCase
             'end_date' => now()->addDays(2)->toDateString(),
             'start_time' => '09:00',
             'end_time' => '11:00',
-            'venue' => ['Gymnasium'],
+            'venue' => ['Covered Court'],
             'equipment' => [],
             'equipment_quantities' => [],
             'requested_by_id' => $requester->id,

@@ -7,15 +7,21 @@ class Venue extends Model
 {
     use \App\Models\Concerns\SerializesDatesInAppTimezone;
 
-    protected $fillable = ['name', 'custodian_id', 'capacity', 'is_active'];
+    protected $fillable = ['name', 'custodian_id', 'capacity', 'is_active', 'open_to_outsiders', 'requires_activity_type'];
 
     protected $casts = [
         'capacity' => 'integer',
         'is_active' => 'boolean',
+        'open_to_outsiders' => 'boolean',
+        'requires_activity_type' => 'boolean',
     ];
 
     protected static function booted(): void
     {
+        // REQ-19: venue rules are cached per request; a saved venue clears them.
+        static::saved(fn () => \App\Support\VenueRules::flush());
+        static::deleted(fn () => \App\Support\VenueRules::flush());
+
         static::updated(function (self $venue): void {
             if ($venue->wasChanged('custodian_id')) {
                 FacilityRequest::reopenVenueEndorsementsAfterReassignment($venue, $venue->getOriginal('name'));

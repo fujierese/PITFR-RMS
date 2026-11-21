@@ -828,6 +828,12 @@ class SupplyOfficeController extends Controller
                 'end_time'
             );
         }
+        // REQ-19: a schedule change cannot move an outsider's request into a venue closed
+        // to outsiders.
+        $closedRevisionVenues = \App\Support\VenueRules::closedVenuesFor($facilityRequest->requester, $validated['venue']);
+        if ($closedRevisionVenues !== []) {
+            return $this->revisionFailure($request, \App\Support\VenueRules::closedVenueMessage($closedRevisionVenues), 'venue');
+        }
         // REQ-16: an end time at or before the start time on the same date is not a schedule.
         if (\Carbon\Carbon::parse($validated['start_date'])->isSameDay(\Carbon\Carbon::parse($validated['end_date'])) && $validated['end_time'] <= $validated['start_time']) {
             return $this->revisionFailure(
@@ -1069,10 +1075,16 @@ class SupplyOfficeController extends Controller
                     ->orWhereJsonContains('additional_roles', 'custodian')),
             ],
             'capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            // REQ-19: venue rules.
+            'open_to_outsiders' => ['sometimes', 'boolean'],
+            'requires_activity_type' => ['sometimes', 'boolean'],
         ]);
 
         if ($nameError = \App\Support\ResourceRename::venueError($validated['name'])) {
             return back()->withErrors(['name' => $nameError])->withInput();
+        }
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('venues', 'open_to_outsiders')) {
+            unset($validated['open_to_outsiders'], $validated['requires_activity_type']);
         }
         Venue::create($validated);
 
@@ -1092,10 +1104,16 @@ class SupplyOfficeController extends Controller
                     ->orWhereJsonContains('additional_roles', 'custodian')),
             ],
             'capacity' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            // REQ-19: venue rules.
+            'open_to_outsiders' => ['sometimes', 'boolean'],
+            'requires_activity_type' => ['sometimes', 'boolean'],
         ]);
 
         if ($renameError = \App\Support\ResourceRename::venueError($validated['name'], $venue)) {
             return back()->withErrors(['name' => $renameError])->withInput();
+        }
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('venues', 'open_to_outsiders')) {
+            unset($validated['open_to_outsiders'], $validated['requires_activity_type']);
         }
         $venue->update($validated);
 
