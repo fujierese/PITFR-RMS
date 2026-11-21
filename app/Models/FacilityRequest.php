@@ -1459,6 +1459,45 @@ class FacilityRequest extends Model
     }
 
     /**
+     * CHG-02: whether two venue names mean the same venue (case and surrounding spaces
+     * ignored; "Balay Alumni Hall" is the same as "Balay Alumni").
+     */
+    public static function sameVenueName(?string $first, ?string $second): bool
+    {
+        $normalize = static function (?string $name): string {
+            $value = mb_strtolower(trim((string) $name));
+
+            return $value === 'balay alumni hall' ? 'balay alumni' : $value;
+        };
+
+        return $normalize($first) !== '' && $normalize($first) === $normalize($second);
+    }
+
+    /** CHG-02: the option in the list that is this venue, or null. */
+    public static function matchVenueOption(?string $name, iterable $options): ?string
+    {
+        foreach ($options as $option) {
+            if (self::sameVenueName($name, (string) $option)) {
+                return (string) $option;
+            }
+        }
+
+        return null;
+    }
+
+    /** CHG-02: whether this request books the venue shown as $option. */
+    public function booksVenue(string $option): bool
+    {
+        foreach ($this->getVenueNames() as $name) {
+            if (self::sameVenueName($name, $option)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * REQ-18: the requestor edit form holds one venue and one schedule. A request that
      * books several venues would lose the others when saved there, so it is changed
      * through a cancellation and new request, or a Supply Office schedule change.

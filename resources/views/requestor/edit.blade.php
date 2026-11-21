@@ -97,12 +97,21 @@
                 <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                     <div>
                         <label class="text-sm font-medium text-slate-700">Venue</label>
+                        @php
+                            // CHG-02: start from the venue this request asked for, matched by name
+                            // (case and the "Balay Alumni Hall" alias ignored).
+                            $requestedVenueName = $request->getVenueNames()[0] ?? '';
+                            $selectedEditVenue = old('venue', \App\Models\FacilityRequest::matchVenueOption($requestedVenueName, $venueOptions) ?? '');
+                        @endphp
                         <select name="venue" class="mt-1 min-h-[3rem] w-full rounded-2xl border border-slate-200 px-3 py-2" required data-edit-venue data-activity-venues='@json($venueActivityRequired ?? [])'>
-                            <option value="" disabled {{ old('venue', $request->getVenueNames()[0] ?? '') === '' ? 'selected' : '' }}>Choose a venue</option>
+                            <option value="" disabled {{ $selectedEditVenue === '' ? 'selected' : '' }}>Choose a venue</option>
                             @foreach($venueOptions as $venue)
-                                <option value="{{ $venue }}" {{ old('venue', $request->getVenueNames()[0] ?? '') === $venue ? 'selected' : '' }}>{{ $venue }}</option>
+                                <option value="{{ $venue }}" {{ $selectedEditVenue === $venue ? 'selected' : '' }}>{{ $venue }}</option>
                             @endforeach
                         </select>
+                        @if($requestedVenueName !== '' && \App\Models\FacilityRequest::matchVenueOption($requestedVenueName, $venueOptions) === null)
+                            <p class="mt-2 text-sm text-amber-700">You asked for {{ $requestedVenueName }}, which can no longer be booked. Choose another venue.</p>
+                        @endif
                         {{-- REQ-19: venues that ask for the type of school activity (the Gym). --}}
                         @php $editActivity = old('activity_type', $currentActivity['activity_type'] ?? ''); @endphp
                         <div class="mt-3 hidden" data-edit-activity>

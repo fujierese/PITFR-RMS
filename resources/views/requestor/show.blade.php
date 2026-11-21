@@ -968,11 +968,15 @@
                                     <div class="mt-2 grid gap-2 sm:grid-cols-2">
                                         @foreach($revisionVenueOptions as $venueOption)
                                             <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                                                <input type="checkbox" name="venue[]" value="{{ $venueOption }}" data-revision-venue class="rounded border-slate-300 text-amber-600" @checked(in_array($venueOption, $request->getVenueNames(), true))>
+                                                <input type="checkbox" name="venue[]" value="{{ $venueOption }}" data-revision-venue class="rounded border-slate-300 text-amber-600" @checked($request->booksVenue($venueOption))>
                                                 <span>{{ $venueOption }}</span>
                                             </label>
                                         @endforeach
                                     </div>
+                                    @php $unavailableRequestedVenues = collect($request->getVenueNames())->filter(fn ($name) => \App\Models\FacilityRequest::matchVenueOption($name, $revisionVenueOptions) === null); @endphp
+                                    @if($unavailableRequestedVenues->isNotEmpty())
+                                        <span class="mt-1 block text-xs text-amber-700">Requested but no longer bookable: {{ $unavailableRequestedVenues->implode(', ') }}. Choose another venue.</span>
+                                    @endif
                                     <span class="mt-1 block text-xs text-slate-500">Any active venue can be proposed. A venue assigned to another custodian must also be confirmed by that custodian.</span>
                                 </fieldset>
                                 @foreach($request->getEquipmentItems() as $equipmentItem)
@@ -1242,11 +1246,15 @@
                                     <div class="mt-2 grid gap-2 sm:grid-cols-2">
                                         @foreach($revisionVenueOptions as $venueOption)
                                             <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                                                <input type="checkbox" name="venue[]" value="{{ $venueOption }}" data-revision-venue class="rounded border-slate-300 text-amber-600" @checked(in_array($venueOption, $venueNames, true))>
+                                                <input type="checkbox" name="venue[]" value="{{ $venueOption }}" data-revision-venue class="rounded border-slate-300 text-amber-600" @checked($request->booksVenue($venueOption))>
                                                 <span>{{ $venueOption }}</span>
                                             </label>
                                         @endforeach
                                     </div>
+                                    @php $unavailableRequestedVenues = collect($request->getVenueNames())->filter(fn ($name) => \App\Models\FacilityRequest::matchVenueOption($name, $revisionVenueOptions) === null); @endphp
+                                    @if($unavailableRequestedVenues->isNotEmpty())
+                                        <span class="mt-1 block text-xs text-amber-700">Requested but no longer bookable: {{ $unavailableRequestedVenues->implode(', ') }}. Choose another venue.</span>
+                                    @endif
                                     <span class="mt-1 block text-xs text-slate-500">Tick every venue that should be part of the new schedule. Each venue is checked on its own.</span>
                                 </fieldset>
                             @foreach($equipmentItems as $equipmentItem)
