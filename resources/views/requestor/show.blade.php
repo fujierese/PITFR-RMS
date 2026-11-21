@@ -953,7 +953,7 @@
                                 </form>
                             @endif
                             @if($canVenueCustodianReschedule)
-                                <button type="button" id="open-venue-reschedule-form" data-availability-actions="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" class="{{ $canConfirmVenueAvailability ? 'hidden ' : '' }}w-full sm:flex-1 inline-flex items-center justify-center rounded-2xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100">
+                                <button type="button" id="open-venue-reschedule-form" data-availability-conflict-action="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" class="{{ $canConfirmVenueAvailability ? 'hidden ' : '' }}w-full sm:flex-1 inline-flex items-center justify-center rounded-2xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100">
                                     Suggest a new schedule
                                 </button>
                             @endif
@@ -1221,7 +1221,9 @@
                                     All reviews are complete. Final approval is restricted to the designated approver.
                                 </div>
                             @endif
-                            @if($request->status === 'pending' || $request->status === 'approved')
+                            {{-- CHG-01: only when there is a conflict, an urgent request needs the slot, or the requestor asked. --}}
+                            @if(($request->status === 'pending' || $request->status === 'approved') && ($scheduleChangeReason ?? null))
+                                <p class="sm:col-span-2 lg:col-span-3 text-xs font-medium text-amber-800">Schedule change available: {{ $scheduleChangeReason }}</p>
                                 <button type="button" id="open-reschedule-form" class="sm:col-span-2 lg:col-span-1 w-full inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-100">
                                     {{ $request->status === 'approved' ? 'Propose Approved-Booking Change' : 'Reschedule Reservation' }}
                                 </button>

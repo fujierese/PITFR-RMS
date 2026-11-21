@@ -65,6 +65,12 @@
                     element.classList.toggle('hidden', !complete);
                 }
             });
+            // CHG-01: "Suggest a new schedule" appears only once a conflict is found.
+            document.querySelectorAll('[data-availability-conflict-action]').forEach((element) => {
+                if (element.dataset.availabilityConflictAction === group) {
+                    element.classList.toggle('hidden', !complete || !hasConflict);
+                }
+            });
             document.querySelectorAll('[data-availability-confirm]').forEach((element) => {
                 if (element.dataset.availabilityConfirm === group) {
                     element.classList.toggle('hidden', !complete || hasConflict);

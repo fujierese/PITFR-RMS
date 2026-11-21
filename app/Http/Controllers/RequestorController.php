@@ -2226,6 +2226,48 @@ class RequestorController extends Controller
     }
  
     /**
+     * CHG-01: why the Supply Office may propose a schedule change now, or null when
+     * nothing calls for one. The change route itself stays limited to the Supply
+     * Office (and assigned venue custodians for their own venues).
+     */
+    private function scheduleChangeReason(FacilityRequest $request): ?string
+    {
+        if (! in_array($request->status, ['pending', 'approved'], true)) {
+            return null;
+        }
+        if ($request->requestChangeRequests()->where('status', 'pending')->exists()) {
+            return 'The requestor asked for a change.';
+        }
+        if ($request->status === 'pending'
+            && ($request->supply_office_review_status === 'unavailable'
+                || in_array('needs_reschedule', [$request->venue_status, $request->equipment_status], true))) {
+            return 'The requested schedule was marked unavailable.';
+        }
+
+        $conflict = $request->status === 'pending'
+            ? $this->availabilityService->checkFacilityRequestForReview($request)
+            : $this->availabilityService->checkFacilityRequest($request, $request->id);
+        if ($conflict !== null) {
+            return $conflict;
+        }
+
+        if ($request->status === 'approved') {
+            $urgent = FacilityRequest::query()
+                ->where('status', 'pending')
+                ->whereKeyNot($request->id)
+                ->where(fn ($query) => $query->where('is_emergency', true)->orWhere('priority', 'institutional'))
+                ->with(['requestVenues', 'reservationSchedule'])
+                ->get()
+                ->first(fn (FacilityRequest $candidate): bool => $this->availabilityService->getApprovedVenueConflicts($candidate)->contains('id', $request->id));
+            if ($urgent) {
+                return "Urgent request {$urgent->control_number} needs this booking's venue and time.";
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * REQ-14: creates the request row; if another request took the control number in
      * the meantime, tries again with a new one.
      */
@@ -2372,8 +2414,15 @@ class RequestorController extends Controller
             }
         }
 
+        // CHG-01: the Supply Office's schedule-change button appears only when there is
+        // a reason to move the booking.
+        $scheduleChangeReason = $viewer && ($viewer->isSupplyOffice() || $viewer->isAdmin())
+            ? $this->scheduleChangeReason($request)
+            : null;
+
         return view('requestor.show', [
             'request'                 => $request,
+            'scheduleChangeReason'    => $scheduleChangeReason,
             'pendingRevision'         => $pendingRevision,
             'pendingRevisionVenueChecks' => $pendingRevisionVenueChecks,
             'revisionVenueOptions'    => $revisionVenueOptions,
