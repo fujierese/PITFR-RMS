@@ -173,7 +173,7 @@ class FacilityRequestApiController extends Controller
             'activity_type_detail' => ['nullable', 'string', 'max:200'],
             'department' => 'required|string|max:100',
             'is_emergency' => 'nullable|boolean',
-            'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
+            'emergency_justification' => 'required_if:is_emergency,1|nullable|string|max:1000',
             'emergency_office' => ['required_if:is_emergency,1', 'nullable', Rule::in(['CHED', 'OP', 'OVP'])],
         ], [
             'venue.required' => 'Choose a venue. Every request needs at least one venue; equipment is requested together with a venue.',

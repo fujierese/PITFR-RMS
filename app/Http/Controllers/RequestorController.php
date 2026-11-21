@@ -1569,7 +1569,7 @@ class RequestorController extends Controller
             'equipment_quantities'  => 'nullable|array',
             'equipment_quantities.*' => EquipmentQuantity::rules(),
             'other_venue'           => 'prohibited',
-            'emergency_justification' => 'required_if:is_emergency,1|string|max:1000',
+            'emergency_justification' => 'required_if:is_emergency,1|nullable|string|max:1000',
             'emergency_office' => ['required_if:is_emergency,1', 'nullable', Rule::in(['CHED', 'OP', 'OVP'])],
             'is_emergency'          => 'nullable|boolean',
         ];
