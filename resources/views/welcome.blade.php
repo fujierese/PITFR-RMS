@@ -338,7 +338,6 @@
 @include('components.faq-modal')
 
 <!-- FullCalendar CSS -->
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
 
 <!-- Tippy.js for Tooltips -->
 <script src="https://unpkg.com/tippy.js@6"></script>

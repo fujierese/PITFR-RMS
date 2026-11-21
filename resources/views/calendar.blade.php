@@ -2,7 +2,6 @@
 @section('title', 'Facility Calendar Dashboard')
 
 @push('styles')
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
 <style>
     .fc-header-toolbar {
         flex-wrap: wrap;

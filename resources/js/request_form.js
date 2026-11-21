@@ -429,8 +429,8 @@ const initializeRequestForm = function () {
         if (venueChecklist) venueChecklist.checked = selectedScheduleGroups.length > 0 && schedulesComplete && (!hasEquipmentSelection || hasAvailableEquipmentSelected);
         if (documentChecklist) documentChecklist.checked = hasSupportingDocument;
         if (signatureChecklist) signatureChecklist.checked = eSignatureSelected;
-        if (checklistWarning && [requiredChecklist, venueChecklist, documentChecklist, signatureChecklist].every(function (item) {
-            return item?.checked === true;
+        if (checklistWarning && [requiredChecklist, venueChecklist, documentChecklist, signatureChecklist].filter(Boolean).every(function (item) {
+            return item.checked === true;
         })) {
             checklistWarning.classList.add('hidden');
             checklistWarning.textContent = '';
@@ -2350,8 +2350,12 @@ const initializeRequestForm = function () {
         const urgentScheduleOk = validateUrgentSchedules();
         const qtyOk = validateQuantities();
         const hasConflict = hasConflictBlocker;
+        // Only the checklist items shown on this form count. The e-signature item was
+        // removed from the form (APR-01), and requiring it blocked every submission.
         const checklistComplete = ['checklist-required-fields', 'checklist-venue-availability', 'checklist-document-upload', 'checklist-e-signature']
-            .every(id => document.getElementById(id)?.checked === true);
+            .map(id => document.getElementById(id))
+            .filter(Boolean)
+            .every(item => item.checked === true);
 
         if (!requiredOk || !dateTimeOk || !urgentScheduleOk || !qtyOk || hasConflict || !checklistComplete) {
             if (!checklistComplete) {
