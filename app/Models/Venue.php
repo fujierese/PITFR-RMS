@@ -25,6 +25,13 @@ class Venue extends Model
         static::updated(function (self $venue): void {
             if ($venue->wasChanged('custodian_id')) {
                 FacilityRequest::reopenVenueEndorsementsAfterReassignment($venue, $venue->getOriginal('name'));
+                // REQ-20: note the change on its bookings and tell the new custodian.
+                \App\Support\VenueLifecycle::custodianChanged($venue, $venue->getOriginal('custodian_id') ? (int) $venue->getOriginal('custodian_id') : null);
+            }
+            // REQ-20: bookings are kept; they are noted and their requestors and the Supply
+            // Office are told (whoever made the change: custodian or Supply Office).
+            if ($venue->wasChanged('is_active')) {
+                \App\Support\VenueLifecycle::activeChanged($venue);
             }
 
             // REQ-02: lowering capacity below existing bookings is recorded on each affected request.

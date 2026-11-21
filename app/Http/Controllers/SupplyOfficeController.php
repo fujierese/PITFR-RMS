@@ -1117,6 +1117,12 @@ class SupplyOfficeController extends Controller
         }
         $venue->update($validated);
 
+        // REQ-20: say which bookings the new custodian now looks after.
+        if ($venue->wasChanged('custodian_id')
+            && ($reassignWarning = \App\Support\VenueLifecycle::warningFor($venue, \App\Support\VenueLifecycle::liveBookings($venue), 'reassigned'))) {
+            return back()->with('success', 'Venue updated successfully.')->with('warning', $reassignWarning);
+        }
+
         // REQ-02: tell the Supply Office which bookings no longer fit.
         if ($venue->wasChanged('capacity') && $venue->capacity !== null) {
             $affected = FacilityRequest::activeRequestsAboveCapacity($venue, (int) $venue->capacity);
@@ -1134,17 +1140,29 @@ class SupplyOfficeController extends Controller
     {
         $this->ensureAdminAccess();
 
-        $hasActiveReservation = FacilityRequest::whereIn('status', ['pending', 'approved'])
-            ->where(fn ($query) => $query->matchesVenue($venue->name))
-            ->exists();
-
-        if ($hasActiveReservation) {
-            return back()->withErrors(['venue' => 'Cannot delete venue because it still has active reservations.']);
+        // REQ-20: a venue any request refers to (past ones included) is deactivated, not
+        // deleted, so bookings, history and reports keep it.
+        if ($deleteError = \App\Support\VenueLifecycle::deleteError($venue)) {
+            return back()->withErrors(['venue' => $deleteError]);
         }
 
         $venue->delete();
 
         return back()->with('success', 'Venue deleted successfully.');
+    }
+
+    /** REQ-20: deactivate or reactivate a venue; its bookings are kept and noted. */
+    public function toggleVenue(Request $request, Venue $venue)
+    {
+        $this->ensureAdminAccess();
+
+        $wasActive = (bool) $venue->is_active;
+        $bookings = \App\Support\VenueLifecycle::liveBookings($venue);
+        $venue->update(['is_active' => ! $wasActive]);
+
+        return back()
+            ->with('success', $wasActive ? "{$venue->name} was deactivated. It can no longer be booked." : "{$venue->name} is available for booking again.")
+            ->with('warning', $wasActive ? \App\Support\VenueLifecycle::warningFor($venue, $bookings, 'deactivated') : null);
     }
 
     public function storeEquipment(Request $request)

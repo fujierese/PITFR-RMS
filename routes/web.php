@@ -126,6 +126,7 @@ Route::middleware(['auth', 'role:admin,supply_office'])->prefix('supply-office')
     Route::post('/venues', [SupplyOfficeController::class, 'storeVenue'])->name('supply-office.venues.store');
     Route::put('/venues/{venue}', [SupplyOfficeController::class, 'updateVenue'])->name('supply-office.venues.update');
     Route::delete('/venues/{venue}', [SupplyOfficeController::class, 'destroyVenue'])->name('supply-office.venues.destroy');
+    Route::patch('/venues/{venue}/toggle', [SupplyOfficeController::class, 'toggleVenue'])->name('supply-office.venues.toggle');
     Route::post('/equipment', [SupplyOfficeController::class, 'storeEquipment'])->name('supply-office.equipment.store');
     Route::put('/equipment/{equipment}', [SupplyOfficeController::class, 'updateEquipment'])->name('supply-office.equipment.update');
     Route::delete('/equipment/{equipment}', [SupplyOfficeController::class, 'destroyEquipment'])->name('supply-office.equipment.destroy');

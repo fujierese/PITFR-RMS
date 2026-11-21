@@ -54,7 +54,7 @@ final class ResourceRename
     }
 
     /** Pending requests, and approved ones that have not ended yet. */
-    private static function liveRequests()
+    public static function liveRequests()
     {
         return FacilityRequest::query()->where(function ($query): void {
             $query->where('status', 'pending')

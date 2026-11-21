@@ -817,35 +817,13 @@ class CustodianController extends Controller
         abort_unless($user->isCustodianVenue() && $venue->custodian_id === $user->id, 403);
         
         $wasActive = $venue->is_active;
+        $bookings = \App\Support\VenueLifecycle::liveBookings($venue);
+        // REQ-20: the venue model notes the change on each booking and notifies the
+        // requestors and the Supply Office.
         $venue->update(['is_active' => ! $venue->is_active]);
+        $warning = $wasActive ? \App\Support\VenueLifecycle::warningFor($venue, $bookings, 'deactivated') : null;
 
-        // Notify affected users (requestors with pending/approved requests using this venue)
-        try {
-            $affectedRequestors = \App\Models\FacilityRequest::where(function ($query) use ($venue) {
-                $query->orWhere(fn ($subQuery) => $subQuery->matchesVenue($venue->name));
-            })
-            ->whereIn('status', ['pending', 'approved'])
-            ->distinct()
-            ->pluck('requested_by_id')
-            ->filter()
-            ->unique();
-
-            foreach ($affectedRequestors as $requestorId) {
-                $requestor = \App\Models\User::find($requestorId);
-                if ($requestor) {
-                    $requestor->notify(new \App\Notifications\ResourceStatusChanged(
-                        $venue,
-                        $venue->is_active ? 'enabled' : 'disabled',
-                        'venue',
-                        $user->name
-                    ));
-                }
-            }
-        } catch (\Throwable $e) {
-            \Log::warning('Failed to notify users of venue status change: ' . $e->getMessage());
-        }
-
-        return redirect()->route('custodian.venue')->with('success', 'Venue availability updated.');
+        return redirect()->route('custodian.venue')->with('success', 'Venue availability updated.')->with('warning', $warning);
     }
 
     public function storeEquipment(Request $request)
