@@ -139,7 +139,18 @@
         </section>
     @endif
 
-    @if ($activeTab === 'create')
+    @if ($activeTab === 'create' && ! empty($recentSubmission))
+        {{-- QA-1: a request was just submitted; Back or reopening the form shows it instead of a form ready to send again. --}}
+        <section class="w-full rounded-[24px] border border-emerald-200 bg-emerald-50 p-6 shadow-sm sm:p-8" data-recent-submission>
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Request submitted</p>
+            <h2 class="mt-2 text-xl font-semibold text-slate-900">Your request was submitted as {{ $recentSubmission['control_number'] }}.</h2>
+            <p class="mt-2 text-sm text-slate-700">It was saved once and is now waiting for review. Going back to the form does not send it again.</p>
+            <div class="mt-5 flex flex-col gap-3 sm:flex-row">
+                <a href="{{ route('request.show', $recentSubmission['id']) }}" class="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700">View {{ $recentSubmission['control_number'] }}</a>
+                <a href="{{ route('requestor.index', ['tab' => 'create', 'new_request' => 1]) }}" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">Start a new request</a>
+            </div>
+        </section>
+    @elseif ($activeTab === 'create')
         <section class="w-full">
             @include('requestor.partials.request_form')
         </section>

@@ -764,7 +764,10 @@ class RequestorController extends Controller
                 ? $user->studentOrganizations()->orderBy('name')->get()
                 : collect(),
             'equipOptions'      => self::EQUIPMENT_OPTIONS,
-            'controlNumber'     => FacilityRequest::generateControlNumber(),
+            // QA-1: the real control number is assigned when the request is saved; the
+            // form no longer shows a preview number that changes on every visit.
+            'controlNumber'     => null,
+            'recentSubmission'  => $this->recentSubmission($request),
             'equipment'         => $equipment,
             'venueCapacityMap'  => $venueCapacityMap,
             'venueDefaultEquipmentMap' => $venueDefaultEquipmentMap,
@@ -2218,9 +2221,10 @@ class RequestorController extends Controller
         }
 
         $this->clearStagedUploads();
+        $this->rememberSubmission($fr);
 
         return redirect()->route('requestor.index', ['tab' => 'requests'])
-                        ->with('success', 'Request submitted successfully!')
+                        ->with('success', 'Request submitted successfully as ' . $fr->control_number . '.')
                         ->with('request_draft_submitted', true)
                         ->with('warning', $capacityWarning);
     }
@@ -2286,9 +2290,40 @@ class RequestorController extends Controller
         }
     }
 
+    /**
+     * QA-1: after a successful submission, going Back to the form (or opening it again
+     * within a few minutes) shows that request instead of a fresh form ready to be
+     * sent again. "Start a new request" clears it.
+     */
+    private function rememberSubmission(FacilityRequest $facilityRequest): void
+    {
+        session()->put('recent_request_submission', [
+            'id' => $facilityRequest->getKey(),
+            'control_number' => $facilityRequest->control_number,
+            'at' => now()->getTimestamp(),
+        ]);
+    }
+
+    private function recentSubmission(Request $request): ?array
+    {
+        if ($request->boolean('new_request')) {
+            session()->forget('recent_request_submission');
+
+            return null;
+        }
+
+        $recent = session('recent_request_submission');
+        if (! is_array($recent) || (now()->getTimestamp() - (int) ($recent['at'] ?? 0)) > 15 * 60) {
+            return null;
+        }
+
+        return $recent;
+    }
+
     private function alreadySubmittedResponse(FacilityRequest $facilityRequest)
     {
         $this->clearStagedUploads();
+        $this->rememberSubmission($facilityRequest);
 
         return redirect()->route('requestor.index', ['tab' => 'requests'])
             ->with('success', 'This request was already submitted as ' . $facilityRequest->control_number . '. It was not submitted again.')

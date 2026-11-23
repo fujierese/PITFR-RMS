@@ -90,6 +90,35 @@ class DuplicateSubmitGuardTest extends TestCase
         $this->assertCount(1, $this->storedFiles());
     }
 
+    public function test_going_back_to_the_form_after_submitting_shows_the_submitted_request(): void
+    {
+        $this->submit((string) Str::uuid())->assertSessionHasNoErrors();
+        $request = FacilityRequest::query()->sole();
+
+        // Back (or reopening the form) does not offer a fresh form ready to send again.
+        $this->actingAs($this->requestor)->get(route('requestor.index', ['tab' => 'create']))
+            ->assertOk()
+            ->assertSee('Your request was submitted as ' . $request->control_number . '.')
+            ->assertSee('View ' . $request->control_number)
+            ->assertDontSee('name="submission_token"', false);
+
+        // Starting a new request on purpose gives an empty form.
+        $this->actingAs($this->requestor)->get(route('requestor.index', ['tab' => 'create', 'new_request' => 1]))
+            ->assertOk()
+            ->assertSee('name="submission_token"', false)
+            ->assertDontSee('Your request was submitted as', false);
+        $this->actingAs($this->requestor)->get(route('requestor.index', ['tab' => 'create']))
+            ->assertSee('name="submission_token"', false);
+    }
+
+    public function test_the_form_does_not_show_a_control_number_before_submitting(): void
+    {
+        $this->actingAs($this->requestor)->get(route('requestor.index', ['tab' => 'create']))
+            ->assertOk()
+            ->assertSee('value="Assigned when you submit"', false)
+            ->assertDontSee('value="FER-', false);
+    }
+
     public function test_separate_forms_and_old_forms_without_a_token_still_submit(): void
     {
         $this->submit((string) Str::uuid())->assertSessionHasNoErrors();

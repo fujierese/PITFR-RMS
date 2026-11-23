@@ -309,7 +309,7 @@
                         <div class="grid gap-4 sm:grid-cols-2 sm:gap-5">
                             <div class="space-y-3">
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Control Number</p>
-                                <input type="text" value="{{ $controlNumber }}" readonly class="w-full rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-600 cursor-not-allowed">
+                                <input type="text" value="{{ $controlNumber ?: 'Assigned when you submit' }}" readonly aria-label="Control number" class="w-full rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-600 cursor-not-allowed">
                             </div>
                             <div class="space-y-3">
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Date Requested</p>
@@ -2057,5 +2057,14 @@
             select.addEventListener('change', sync);
             sync();
         });
+    });
+</script>
+
+{{-- QA-1: a form restored by Back/Forward from the browser cache is reloaded, so the server can show the request that was already submitted. --}}
+<script>
+    window.addEventListener('pageshow', function (event) {
+        if (event.persisted) {
+            window.location.reload();
+        }
     });
 </script>
