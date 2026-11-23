@@ -107,19 +107,5 @@
     <x-status-badge :status="$badgeStatus" :label="$statusLabel" />
 @endif
 @if (!$showWorkflowStage && $badgeStatus === 'pending' && $overallStatus === 'pending')
-    <div class="mt-1 space-y-0.5 text-[11px] leading-4 text-slate-500" title="Current request handlers">
-        @if ($venueStatus === 'pending')
-            @forelse ($venueAssignments as $assignment)
-                <p><span class="font-semibold text-slate-700">Venue:</span> {{ $assignment['venue'] }} · <span class="font-semibold text-slate-700">Custodian in charge:</span> {{ $assignment['custodian'] ?: 'assigned custodian' }}</p>
-            @empty
-                <p><span class="font-semibold text-slate-700">Venue custodian:</span> {{ $formatCustodians($venueCustodians) }}</p>
-            @endforelse
-        @endif
-        @if ($equipmentStatus === 'pending')
-            <p><span class="font-semibold text-slate-700">Equipment custodian:</span> {{ $formatCustodians($equipmentCustodians) }}</p>
-        @endif
-        @if (!$showWorkflowStage && $venueStatus === 'approved' && $equipmentStatus === 'approved')
-            <p><span class="font-semibold text-slate-700">Next:</span> Supply Office</p>
-        @endif
-    </div>
+    <p class="mt-1 text-[11px] leading-4 text-slate-500">{{ $workflowStageLabel }}</p>
 @endif

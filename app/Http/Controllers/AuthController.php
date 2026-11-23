@@ -301,15 +301,20 @@ class AuthController extends Controller
             $request->merge(['username' => strtolower(trim((string) ($googleProfile['email'] ?? '')))]);
         }
 
+        $guestRegistration = User::verificationEnabled()
+            && in_array((string) $request->input('requestor_type', 'outsider'), ['', 'outsider'], true);
+
         $data = $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
             'surname' => ['required', 'string', 'max:100'],
             'username' => ['required', 'email', 'max:50', 'unique:users,username'],
             'password' => [$isGoogleRegistration ? 'nullable' : 'required', 'string', PasswordRule::defaults(), 'confirmed'],
-            'office_or_organization' => ['nullable', 'string', 'max:191'],
-            'organization_acronym' => ['nullable', 'string', 'max:50'],
-            'organization_type' => ['nullable', 'string', 'max:100'],
+            // QA-10: guests say which office, department or organization they represent and
+            // its type; PIT members do not (their college and department are used).
+            'office_or_organization' => [Rule::requiredIf($guestRegistration), 'nullable', 'string', 'max:191'],
+            'organization_type' => [Rule::requiredIf($guestRegistration), 'nullable', 'string', Rule::in(User::ORGANIZATION_TYPES)],
+            'organization_type_other' => [Rule::requiredIf(fn (): bool => $guestRegistration && $request->input('organization_type') === 'Other'), 'nullable', 'string', 'max:80'],
             // A.2: PIT members give their College and Department; outsiders do not.
             'college_id' => [
                 Rule::requiredIf(fn (): bool => User::verificationEnabled()
@@ -333,7 +338,10 @@ class AuthController extends Controller
             'school_id_number.regex' => 'Student ID must be in format: 23-0098-635 (2 digits - 4 digits - 3 digits)',
             'college_id.required' => 'Choose your college.',
             'department_id.required' => 'Choose your department.',
-            'office_or_organization.required_if' => 'Organization name is required for this account type.',
+            'office_or_organization.required' => 'Enter your office, department or organization.',
+            'organization_type.required' => 'Choose your organization type.',
+            'organization_type.in' => 'Choose one of the listed organization types.',
+            'organization_type_other.required' => 'Describe your organization type.',
         ]);
 
         // D6 / REG-06: the Privacy Notice must be accepted; the time is recorded.
@@ -402,8 +410,9 @@ class AuthController extends Controller
                 'is_active' => true,
                 'school_id_number' => $data['school_id_number'] ?? null,
                 'office_or_organization' => $org,
-                'organization_acronym' => $data['organization_acronym'] ?? null,
-                'organization_type' => $data['organization_type'] ?? null,
+                'organization_type' => ($data['organization_type'] ?? null) === 'Other' && filled($data['organization_type_other'] ?? null)
+                    ? 'Other: ' . trim($data['organization_type_other'])
+                    : ($data['organization_type'] ?? null),
                 'contact_number' => $data['contact_number'] ?? null,
                 'department' => $departmentName,
                 'college_id' => $data['college_id'] ?? null,

@@ -198,7 +198,7 @@ class RequestDocumentUploadTest extends TestCase
         $this->actingAs($this->externalUser)
             ->get(route('requestor.index', ['tab' => 'create']))
             ->assertOk()
-            ->assertSee('Urgent processing is available only to Institute requestors.')
+            ->assertSee('Urgent processing is for PIT requestors only.')
             ->assertDontSee('Request Urgent Processing');
 
         $this->post(route('requestor.store'), ['is_emergency' => true])

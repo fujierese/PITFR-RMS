@@ -32,6 +32,7 @@ class AccountVerificationTest extends TestCase
     {
         return array_merge([
             'privacy_accepted' => '1',
+            'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization',
             'first_name' => 'Ana',
             'surname' => 'Reyes',
             'username' => 'ana@example.com',

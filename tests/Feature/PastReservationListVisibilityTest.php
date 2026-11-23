@@ -175,7 +175,7 @@ class PastReservationListVisibilityTest extends TestCase
         $this->actingAs($requester)
             ->get(route('requestor.index', ['tab' => 'requests']))
             ->assertOk()
-            ->assertSee('Venue Schedules')
+            ->assertSee('Schedule')
             ->assertSee($expectedRange);
 
         $this->actingAs($admin)

@@ -32,7 +32,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
         foreach (['student', 'faculty', 'student_organization'] as $type) {
             $username = $type . '-' . uniqid() . '@test.com';
 
-            $this->post(route('register.post'), ['privacy_accepted' => '1', 
+            $this->post(route('register.post'), ['privacy_accepted' => '1', 'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization', 
                 'first_name' => 'Forged',
                 'surname' => 'Account',
                 'username' => $username,
@@ -40,7 +40,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
                 'password_confirmation' => 'Password12345!',
                 'requestor_type' => $type,
                 'office_or_organization' => 'Forged Organization',
-                'organization_type' => 'Company',
+                'organization_type' => 'Private Organization',
             ])->assertRedirect(route('register.verify'));
 
             $this->assertDatabaseHas('users', [

@@ -239,15 +239,12 @@
                     <div class="mt-8 hidden overflow-hidden rounded-[28px] border border-slate-200 shadow-[0_12px_40px_rgba(15,23,42,0.05)] lg:block">
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-slate-200 bg-white">
-                            <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
+                            <thead class="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                                 <tr>
-                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Control Number</th>
-                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Activity</th>
-                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Venue</th>
-                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Equipment</th>
-                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Venue Schedules</th>
-                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Status</th>
-                                    <th class="sticky top-0 bg-slate-50 px-4 py-4">Actions</th>
+                                    <th class="sticky top-0 bg-slate-50 px-5 py-3">Request</th>
+                                    <th class="sticky top-0 bg-slate-50 px-5 py-3">Schedule</th>
+                                    <th class="sticky top-0 bg-slate-50 px-5 py-3">Status</th>
+                                    <th class="sticky top-0 bg-slate-50 px-5 py-3 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 bg-white text-sm text-slate-700">
@@ -288,78 +285,39 @@
                                         };
                                     @endphp
                                     <tr class="cursor-pointer transition hover:bg-slate-50 focus:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500" data-request-url="{{ route('request.show', $requestItem->id) }}" role="link" tabindex="0" aria-label="Open request details for {{ $requestItem->control_number ?? 'request' }}">
-                                        <td class="whitespace-nowrap px-4 py-4 font-semibold text-slate-900">{{ $requestItem->control_number ?? '-' }}</td>
-                                        <td class="px-4 py-4">
-                                            <div class="font-semibold text-slate-900">{{ $requestItem->name_of_activity ?? '-' }}</div>
-                                            <div class="mt-1 text-xs text-slate-500">{{ $requestItem->department ?? 'N/A' }}</div>
+                                        <td class="px-5 py-4 align-top">
+                                            <div class="text-xs font-semibold text-slate-500">{{ $requestItem->control_number ?? '-' }}</div>
+                                            <div class="mt-1 font-semibold text-slate-900">{{ $requestItem->name_of_activity ?? '-' }}</div>
+                                            @if ($requestItem->department)
+                                                <div class="mt-0.5 text-xs text-slate-500">{{ $requestItem->department }}</div>
+                                            @endif
                                         </td>
-                                        <td class="px-4 py-4">{{ $venueLabel }}</td>
-                                        <td class="px-4 py-4 align-top">
-                                            @forelse ($equipmentGroups as $equipmentVenue => $equipmentItems)
-                                                <div class="mb-3 last:mb-0">
-                                                    <div class="font-semibold text-slate-900">{{ $equipmentVenue }}</div>
-                                                    <ul class="mt-1 space-y-1 text-xs leading-5 text-slate-600">
-                                                        @foreach (array_slice($equipmentItems, 0, 2, true) as $equipmentName => $quantity)
-                                                            <li class="break-words">{{ $equipmentName }} <span class="whitespace-nowrap font-medium text-slate-500">×{{ $quantity }}</span></li>
-                                                        @endforeach
-                                                    </ul>
-                                                    @if (count($equipmentItems) > 2)
-                                                        <details class="mt-1">
-                                                            <summary class="cursor-pointer text-xs font-medium text-emerald-700 hover:text-emerald-800">Show {{ count($equipmentItems) - 2 }} more</summary>
-                                                            <ul class="mt-1 space-y-1 text-xs leading-5 text-slate-600">
-                                                                @foreach (array_slice($equipmentItems, 2, null, true) as $equipmentName => $quantity)
-                                                                    <li class="break-words">{{ $equipmentName }} <span class="whitespace-nowrap font-medium text-slate-500">×{{ $quantity }}</span></li>
-                                                                @endforeach
-                                                            </ul>
-                                                        </details>
-                                                    @endif
+                                        <td class="px-5 py-4 align-top">
+                                            @forelse($venueScheduleSummaries as $schedule)
+                                                <div class="mb-2 last:mb-0">
+                                                    <div class="font-medium text-slate-900">{{ $schedule['venue'] }}</div>
+                                                    <div class="text-xs text-slate-500">{{ $schedule['label'] }}</div>
                                                 </div>
                                             @empty
                                                 <span class="text-slate-400">—</span>
                                             @endforelse
-                                        </td>
-                                        <td class="px-4 py-4">
-                                            @forelse($venueScheduleSummaries as $schedule)
-                                                <div class="mb-2 last:mb-0">
-                                                    <div class="font-medium text-slate-900">{{ $schedule['venue'] }}</div>
-                                                    <div class="mt-1 text-xs text-slate-500">{{ $schedule['label'] }}</div>
-                                                </div>
-                                            @empty
-                                                <span>—</span>
-                                            @endforelse
-                                        </td>
-                                        <td class="px-4 py-4">
-                                            <div class="flex flex-wrap gap-2">
-                                                <x-request-status-badge :request="$requestItem" />
-                                                @if ($priorityLabel)
-                                                    <span class="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $priorityBadgeClass }}" title="{{ $isUrgent ? 'Urgent request' : 'Request priority' }}" aria-label="{{ $isUrgent ? 'Urgent request' : 'Request priority: ' . $priorityLabel }}">@if($isUrgent)<span aria-hidden="true">⚠</span>@endif {{ $priorityLabel }}</span>
-                                                @endif
-                                            </div>
-                                            @if ($progressLabels)
-                                            <div class="mt-3 space-y-2">
-                                                @foreach ($progressLabels as $progressIndex => $progressLabel)
-                                                    @php
-                                                        $progressComplete = $progressIndex + 1 <= $progressActiveIndex;
-                                                        $terminalFailure = in_array($statusKey, ['rejected', 'cancelled'], true) && $progressIndex === count($progressLabels) - 1;
-                                                        $progressIndicatorClass = !$progressComplete
-                                                            ? 'bg-slate-200 text-slate-500'
-                                                            : ($terminalFailure ? 'bg-rose-500 text-white' : ($statusKey === 'pending' ? 'bg-amber-400 text-white' : 'bg-emerald-500 text-white'));
-                                                        $progressTextClass = !$progressComplete
-                                                            ? ''
-                                                            : ($terminalFailure ? 'font-semibold text-rose-700' : ($statusKey === 'pending' ? 'font-semibold text-amber-800' : 'font-semibold text-slate-900'));
-                                                    @endphp
-                                                    <div class="flex items-center gap-2 text-xs text-slate-500">
-                                                        <span class="flex h-5 w-5 items-center justify-center rounded-full {{ $progressIndicatorClass }}">
-                                                            {{ $progressIndex + 1 }}
-                                                        </span>
-                                                        <span class="{{ $progressTextClass }}">{{ $progressLabel }}</span>
-                                                    </div>
-                                                @endforeach
-                                            </div>
+                                            @php
+                                                $equipmentLine = collect($equipmentGroups)->flatMap(fn ($items) => collect($items)->map(fn ($quantity, $name) => $name . ' ×' . $quantity))->values();
+                                            @endphp
+                                            @if ($equipmentLine->isNotEmpty())
+                                                <div class="mt-2 text-xs text-slate-500"><span class="font-medium text-slate-600">Equipment:</span> {{ $equipmentLine->take(3)->implode(', ') }}{{ $equipmentLine->count() > 3 ? ' +' . ($equipmentLine->count() - 3) . ' more' : '' }}</div>
                                             @endif
                                         </td>
-                                        <td class="px-4 py-4">
-                                            <div class="flex flex-wrap gap-2">
+                                        <td class="px-5 py-4 align-top">
+                                            <div class="flex flex-wrap items-start gap-2">
+                                                <div><x-request-status-badge :request="$requestItem" /></div>
+                                                @if ($priorityLabel)
+                                                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset {{ $priorityBadgeClass }}">{{ $priorityLabel }}</span>
+                                                @endif
+                                            </div>
+                                        </td>
+                                        <td class="px-5 py-4 align-top">
+                                            <div class="flex flex-wrap justify-end gap-2">
                                                 @if ($canEdit)
                                                     <button type="button" data-edit-url="{{ route('requestor.edit', $requestItem->id) }}" class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Edit</button>
                                                 @endif

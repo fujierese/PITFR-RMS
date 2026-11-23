@@ -288,7 +288,7 @@ class AuthFlowTest extends TestCase
         $this->assertSame('new-outsider@example.com', session('google_registration_profile.email'));
         $this->assertGuest();
 
-        $this->post(route('register.post'), ['privacy_accepted' => '1', 
+        $this->post(route('register.post'), ['privacy_accepted' => '1', 'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization', 
             'first_name' => 'New',
             'surname' => 'Outsider',
             'username' => 'forged@example.com',
@@ -300,7 +300,7 @@ class AuthFlowTest extends TestCase
             'is_active' => false,
             'email_verified_at' => null,
             'office_or_organization' => 'External Company',
-            'organization_type' => 'Company',
+            'organization_type' => 'Private Organization',
         ])->assertRedirect(route('requestor.index'));
 
         $registered = User::where('username', 'new-outsider@example.com')->firstOrFail();

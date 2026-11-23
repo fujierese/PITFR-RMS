@@ -240,6 +240,14 @@ class User extends Authenticatable implements CanResetPassword
     }
 
     /** Decision D4: accepted IDs for account verification. */
+    /** QA-10: organization types offered at sign-up ("Other" asks for a description). */
+    public const ORGANIZATION_TYPES = [
+        'Government Agency',
+        'Private Organization',
+        'School or Educational Institution',
+        'Other',
+    ];
+
     public const VERIFICATION_ID_TYPES = [
         'pit_id' => 'PIT ID (student, faculty or staff)',
         'philsys' => 'National ID (PhilSys)',

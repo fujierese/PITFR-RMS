@@ -83,14 +83,13 @@
                 <div class="max-w-3xl">
                     <p class="text-xs font-semibold uppercase tracking-[0.32em] text-emerald-600">Official request form</p>
                     <h2 class="mt-2 text-2xl font-semibold text-slate-950">Request for the Use of Facility and Equipment</h2>
-                    <p class="mt-3 text-sm leading-6 text-slate-600">Please complete all required fields before submitting your request. Fields marked with <span class="required-asterisk">*</span> are required.</p>
+                    <p class="mt-3 text-sm leading-6 text-slate-600">Fields marked <span class="required-asterisk">*</span> are required.</p>
                 </div>
                 <div class="flex shrink-0 flex-wrap items-center gap-y-2 sm:justify-end">
                     <span id="draft-status" class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm ring-1 ring-amber-200">
                         <span data-draft-status-indicator class="h-2.5 w-2.5 shrink-0 rounded-full bg-slate-400"></span>
                         <span data-draft-status-label>No changes yet</span>
                     </span>
-                    <span class="ml-3 text-xs text-slate-500">Saved on this browser for up to 30 days.</span>
                     <button type="button" data-discard-request-draft aria-label="Discard this account's saved request draft" class="ml-3 text-xs font-semibold text-slate-600 underline decoration-slate-300 underline-offset-2 transition hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
                         Discard saved draft
                     </button>
@@ -99,51 +98,6 @@
 
             <div id="draft-restored-notice" class="hidden mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status" aria-live="polite">
                 <span data-draft-restored-text>We restored your draft.</span>
-                <span class="text-emerald-800">It is saved on this browser for your account only.</span>
-            </div>
-
-            <div class="mb-6">
-                <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Request Submission Steps</p>
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Step 1</p>
-                        <p class="mt-1 text-sm font-semibold text-slate-900">Request Details</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 2</p>
-                        <p class="mt-1 text-sm font-semibold text-slate-900">Choose Venue & Schedule</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 3</p>
-                        <p class="mt-1 text-sm font-semibold text-slate-900">Select Equipment</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step 4</p>
-                        <p class="mt-1 text-sm font-semibold text-slate-900">Review & Submit</p>
-                    </div>
-                </div>
-                <p class="mt-3 text-xs leading-5 text-slate-600">
-                    After submission, the Supply Office checks availability first. If available, the request goes to the relevant custodian(s) for review, then returns to the Supply Office for the final decision. Calendar availability is not a confirmation.
-                </p>
-            </div>
-
-            <div class="mb-6 rounded-[24px] border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
-                <div class="flex items-start gap-3">
-                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-cyan-700 shadow-sm">
-                        <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <circle cx="12" cy="12" r="9"></circle>
-                            <path d="M12 16v-4M12 8h.01"></path>
-                        </svg>
-                    </div>
-                    <div class="flex-1">
-                        <p class="text-lg font-bold text-cyan-900">Need help? Start here.</p>
-                        <ul class="mt-2 space-y-1 text-base text-cyan-800">
-                            <li>• Enter your details, then choose the venue, date, and time you need.</li>
-                            <li>• Select any equipment you need for your activity.</li>
-                            <li>• Upload clear PDF, JPG, or PNG files smaller than 10MB.</li>
-                        </ul>
-                    </div>
-                </div>
             </div>
 
             <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-6 md:rounded-[28px] md:p-8 lg:p-10">
@@ -172,7 +126,6 @@
                 <section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
                     <div class="mb-5 border-b border-slate-200 pb-4">
                         <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section I. Requestor Information</p>
-                        <p class="mt-1 text-sm text-slate-500">Provide the requesting office and the reference details for this submission.</p>
                     </div>
                     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
                         @if ($isExternal)
@@ -329,7 +282,6 @@
                 <section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
                     <div class="mb-5 border-b border-slate-200 pb-4">
                         <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section II. Activity Details</p>
-                        <p class="mt-1 text-sm text-slate-500">State the purpose of the activity, expected attendance, and requested dates and times.</p>
                     </div>
                     <div class="space-y-4 md:space-y-6">
                         <div>
@@ -362,22 +314,10 @@
                         <div class="flex items-center justify-between gap-4">
                             <div>
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section III. Venue</p>
-                                <p class="mt-1 text-sm text-slate-500">Select every facility / venue needed for the activity.</p>
                             </div>
                             <p class="text-xs text-slate-500">Choose one or more</p>
                         </div>
                     </div>
-                            @if ($isExternal)
-                                <div class="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                                    <p class="font-semibold text-slate-800">Outsider Guidance</p>
-                                    <p class="mt-1">Applicable rental fees and payment procedures</p>
-                                </div>
-                            @elseif ($isStudent)
-                                <div id="student-personal-guidance" class="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                                    <p class="font-semibold text-slate-800">Personal request guidance</p>
-                                    <p class="mt-1">Personal requests require the applicable payment receipt.</p>
-                                </div>
-                            @endif
                     <div class="mt-4 space-y-3">
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             @php $capacityRulesEnabled = \App\Models\FacilityRequest::capacityRulesEnabled(); @endphp
@@ -489,14 +429,13 @@
                         <div class="flex items-center justify-between gap-4">
                             <div>
                                 <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Equipment by Venue</p>
-                                <p class="mt-1 text-sm text-slate-500">Equipment already provided with a venue is included automatically. Select only additional equipment you need.</p>
+                                <p class="mt-1 text-sm text-slate-500">Equipment that comes with a venue is already included. Select only extra items.</p>
                             </div>
                             <div class="flex items-center gap-2">
-                                <p class="text-xs text-slate-500">Real-time availability</p>
                             </div>
                         </div>
                     </div>
-                    <p class="mb-3 text-xs text-slate-500">Choose either Wireless or Non-Wireless Microphones. Sir Rogelio Guillemer handles Sound System and microphone requests.</p>
+                    <p class="mb-3 text-xs text-slate-500">Choose either wireless or non-wireless microphones, not both.</p>
                     <p id="microphone-selection-error" class="mb-3 hidden text-sm font-medium text-red-600" role="alert">Select either Wireless or Non-Wireless Microphones, not both.</p>
                     @php
                         $equipmentList = $equipment instanceof \Illuminate\Support\Collection ? $equipment->all() : $equipment;
@@ -603,7 +542,6 @@
                     <div class="mb-5 flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
                         <div>
                             <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Selected Items Summary</p>
-                            <p class="mt-1 text-sm text-slate-500">Review your selections before submitting.</p>
                         </div>
                         <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Live</span>
                     </div>
@@ -649,14 +587,7 @@
 
                 <section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
                     <div class="mb-5 border-b border-slate-200 pb-4">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section VI. Request Classification</p>
-                        <p class="mt-1 text-sm text-slate-500">
-                            @if ($isExternal)
-                                Priority classification is determined during approval. Outside organization requests follow the standard review process.
-                            @else
-                                Priority classification is determined during approval. Institute requestors may request urgent processing for events scheduled today.
-                            @endif
-                        </p>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section IV. Priority</p>
                     </div>
                     <div class="grid grid-cols-1 gap-5 lg:grid-cols-[1.2fr_0.8fr]">
                         <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
@@ -678,16 +609,14 @@
                             </div>
                             <div id="urgent-request-indicator" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 {{ $urgentRequested && !$isExternal ? '' : 'hidden' }}">
                                 <span class="font-semibold">🔴 Urgent Processing Requested</span>
-                                <p class="mt-1 text-xs text-red-600">This is an indicator only and does not automatically change the request priority.</p>
                             </div>
-                            <p class="mt-4 text-xs leading-5 text-slate-500">The final priority status remains under the authority of the Custodian or Administrator during the approval process.</p>
                         </div>
                         <div class="rounded-3xl border border-amber-200 bg-amber-50/80 p-5 shadow-sm">
                             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Urgent Request</p>
                             @if ($isExternal)
-                                <p class="mt-3 text-xs leading-5 text-slate-600">Urgent processing is available only to Institute requestors. Outside organization requests follow the standard review process.</p>
+                                <p class="mt-3 text-xs leading-5 text-slate-600">Urgent processing is for PIT requestors only.</p>
                             @else
-                                <p class="mt-3 text-xs leading-5 text-slate-600">Available only for events scheduled today. The start time must be now or later. Enter a reason and upload the required supporting document. Urgent processing is subject to review and is not guaranteed.</p>
+                                <p class="mt-3 text-xs leading-5 text-slate-600">For events today only. Requires a reason and a supporting document.</p>
                                 <label class="mt-4 flex items-start gap-3 cursor-pointer">
                                     <input type="checkbox" name="is_emergency" id="urgent-processing-checkbox" value="1" {{ old('is_emergency') ? 'checked' : '' }} class="mt-1 h-4 w-4 rounded border-amber-300 text-amber-600">
                                     <span class="text-sm font-semibold text-amber-800">Request Urgent Processing</span>
@@ -716,8 +645,7 @@
 
                 <section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
                     <div class="mb-5 border-b border-slate-200 pb-4">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section IV. Required Documents</p>
-                        <p class="mt-1 text-sm text-slate-500">Upload the required supporting documents for this request.</p>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section V. Documents</p>
                     </div>
 
                     <div class="space-y-6">
@@ -727,10 +655,7 @@
                                 <label for="activity_proposal_file" class="mb-3 block text-sm font-semibold text-slate-700">
                                     Activity Proposal <span class="required-asterisk">*</span>
                                 </label>
-                                <p class="mb-3 text-xs text-slate-500">Required document: Comprehensive proposal describing the activity objectives, expected outcomes, and how facilities/equipment support the activity goals.</p>
-                                <div class="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                                    Tip: Upload the proposal as a PDF when possible. Supported files are PDF, JPG, JPEG, or PNG, and each file must be under 10MB.
-                                </div>
+                                <p class="mb-3 text-xs text-slate-500">Describe the activity, its objectives and how the venue and equipment will be used.</p>
                                 <div data-upload-box class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition duration-200 hover:border-emerald-400">
                                     <div class="space-y-3 text-center">
                                         <svg class="mx-auto h-14 w-14 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
@@ -886,17 +811,12 @@
                             </div>
                         @endif
 
-                        <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Section V. Signature</p>
-                            <p class="mt-2 text-sm text-slate-600">No signature upload is needed. Sign the printed request form by hand. Custodian and Supply Office approvals are recorded in the system under their accounts.</p>
-                        </div>
                     </div>
                 </section>
 
                 <section class="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
                     <div class="mb-5 border-b border-slate-200 pb-4">
                         <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Submission checklist</p>
-                        <p class="mt-1 text-sm text-slate-500">Please review the following before submitting your request.</p>
                     </div>
                     <div id="submission-checklist-alert" role="alert" aria-live="assertive" class="mb-4 hidden rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></div>
                     <div class="space-y-3">
@@ -909,7 +829,7 @@
                         <div class="flex items-start gap-3">
                             <input id="checklist-venue-availability" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
                             <button type="button" data-checklist-target="checklist-venue-availability" class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
-                                Venue and equipment details ready for Supply Office availability review
+                                Venue, schedule and equipment are complete
                             </button>
                         </div>
                         <div class="flex items-start gap-3">
@@ -922,7 +842,7 @@
                 </section>
 
                 <div class="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                    <p class="text-sm leading-6 text-slate-600">I certify that the information provided is true, complete, and accurate. I understand that approval is subject to institutional policies, facility availability, and administrative review.</p>
+                    <p class="text-sm leading-6 text-slate-600">By submitting, I confirm that the information above is true and complete.</p>
                 </div>
 
                 <div class="flex flex-col-reverse gap-3 pt-2 md:flex-row md:items-center md:justify-end md:pt-4">

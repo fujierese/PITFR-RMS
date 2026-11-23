@@ -37,7 +37,7 @@ class RegistrationFormTest extends TestCase
         $response = $this->get(route('register'));
 
         $response->assertOk()
-            ->assertSee('Requestor registration')
+            ->assertSee('Create an account')
             ->assertSee('I am registering as')
             ->assertSee('Identity verification')
             // D7: office/organization is a separate display field with suggestions.
@@ -71,7 +71,10 @@ class RegistrationFormTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Office, department or organization')
-            ->assertSee('Leave blank if you are requesting as an individual.')
+            ->assertSee('Shown on your request forms.')
+            // QA-10: a short list of organization types; no acronym field.
+            ->assertSee('School or Educational Institution')
+            ->assertDontSee('name="organization_acronym"', false)
             // A.2: students, faculty and staff now choose their College and Department.
             ->assertSee('id="college_department_section"', false)
             ->assertSee('name="college_id"', false)
@@ -84,40 +87,46 @@ class RegistrationFormTest extends TestCase
 
         $this->assertStringContainsString('Fields marked', $html);
         foreach (['First name', 'Surname', 'Email address', 'Password', 'Confirm password'] as $label) {
-            $this->assertMatchesRegularExpression('/>'.preg_quote($label, '/').' <span class="text-red-500" aria-hidden="true">\*<\/span>/', $html, "$label should be marked required");
+            $this->assertMatchesRegularExpression('/>'.preg_quote($label, '/').' <span class="reg-required" aria-hidden="true">\*<\/span>/', $html, "$label should be marked required");
         }
-        $this->assertStringContainsString('placeholder="At least 12 characters"', $html);
+        $this->assertStringContainsString('At least 12 characters, with upper- and lower-case letters, a number and a symbol.', $html);
         $this->assertStringNotContainsString('At least 6 characters', $html);
         $this->assertStringContainsString('id="password_strength"', $html);
         $this->assertDoesNotMatchRegularExpression('/name="organization_type"[^>]*required/', $html);
         $this->assertDoesNotMatchRegularExpression('/name="office_or_organization"[^>]*required/', $html);
     }
 
-    public function test_individual_can_register_without_organization_name_or_type(): void
+    public function test_guests_give_their_organization_and_its_type(): void
     {
-        $email = 'individual'.uniqid().'@test.com';
-
-        $this->post(route('register.post'), ['privacy_accepted' => '1', 
+        // QA-10: a guest names the office, department or organization they represent and
+        // chooses its type; "Other" needs a short description.
+        $base = [
+            'privacy_accepted' => '1',
             'first_name' => 'Ina',
-            'surname' => 'Individual',
-            'username' => $email,
+            'surname' => 'Guest',
             'password' => 'Password12345!',
             'password_confirmation' => 'Password12345!',
-        ])->assertSessionHasNoErrors()->assertRedirect(route('register.verify'));
-
-        $this->assertDatabaseHas('users', [
-            'username' => $email,
             'requestor_type' => 'outsider',
-            'office_or_organization' => null,
-            'organization_type' => null,
-        ]);
+        ];
+
+        $this->post(route('register.post'), $base + ['username' => 'guest1' . uniqid() . '@test.com'])
+            ->assertSessionHasErrors(['office_or_organization' => 'Enter your office, department or organization.', 'organization_type' => 'Choose your organization type.']);
+        $this->post(route('register.post'), $base + ['username' => 'guest2' . uniqid() . '@test.com', 'office_or_organization' => 'Leyte Events Co.', 'organization_type' => 'Company'])
+            ->assertSessionHasErrors(['organization_type' => 'Choose one of the listed organization types.']);
+        $this->post(route('register.post'), $base + ['username' => 'guest3' . uniqid() . '@test.com', 'office_or_organization' => 'Leyte Events Co.', 'organization_type' => 'Other'])
+            ->assertSessionHasErrors(['organization_type_other' => 'Describe your organization type.']);
+
+        $email = 'guest4' . uniqid() . '@test.com';
+        $this->post(route('register.post'), $base + ['username' => $email, 'office_or_organization' => 'Leyte Events Co.', 'organization_type' => 'Other', 'organization_type_other' => 'Events cooperative'])
+            ->assertSessionHasNoErrors()->assertRedirect(route('register.verify'));
+        $this->assertDatabaseHas('users', ['username' => $email, 'office_or_organization' => 'Leyte Events Co.', 'organization_type' => 'Other: Events cooperative']);
     }
 
     public function test_registration_rejects_passwords_without_mixed_characters(): void
     {
         foreach (['alllowercase123!', 'ALLUPPERCASE123!', 'NoNumbersHere!!', 'NoSymbols12345'] as $weak) {
             $email = 'weak'.uniqid().'@test.com';
-            $this->post(route('register.post'), ['privacy_accepted' => '1', 
+            $this->post(route('register.post'), ['privacy_accepted' => '1', 'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization', 
                 'first_name' => 'Weak',
                 'surname' => 'Password',
                 'username' => $email,
@@ -135,7 +144,7 @@ class RegistrationFormTest extends TestCase
     public function test_public_registration_ignores_submitted_student_classification(): void
     {
         $username = 'johndoe' . uniqid() . '@test.com';
-        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 
+        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization', 
             'first_name' => 'John',
             'middle_name' => 'Michael',
             'surname' => 'Doe',
@@ -147,7 +156,7 @@ class RegistrationFormTest extends TestCase
             'department_id' => 1,
             'school_id_number' => '23-0098-635',
             'office_or_organization' => 'External Company',
-            'organization_type' => 'Company',
+            'organization_type' => 'Private Organization',
             'contact_number' => '09171234567',
         ]);
 
@@ -168,7 +177,7 @@ class RegistrationFormTest extends TestCase
     public function test_public_student_registration_does_not_use_student_specific_fields_for_classification(): void
     {
         $email = 'johndoe' . uniqid() . '@test.com';
-        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 
+        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization', 
             'first_name' => 'John',
             'middle_name' => '',
             'surname' => 'Doe',
@@ -180,7 +189,7 @@ class RegistrationFormTest extends TestCase
             'department_id' => 1,
             'school_id_number' => 'invalid-id',
             'office_or_organization' => 'External Company',
-            'organization_type' => 'Company',
+            'organization_type' => 'Private Organization',
             'contact_number' => '09171234567',
         ]);
 
@@ -194,7 +203,7 @@ class RegistrationFormTest extends TestCase
     public function test_external_user_can_register_without_student_id(): void
     {
         $email = 'janeext' . uniqid() . '@test.com';
-        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 
+        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization', 
             'first_name' => 'Jane',
             'middle_name' => '',
             'surname' => 'External',
@@ -202,7 +211,7 @@ class RegistrationFormTest extends TestCase
             'password' => 'Password12345!',
             'password_confirmation' => 'Password12345!',
             'office_or_organization' => 'External Company',
-            'organization_type' => 'External Company',
+            'organization_type' => 'Private Organization',
             'contact_number' => '09171234567',
         ]);
 
@@ -221,7 +230,7 @@ class RegistrationFormTest extends TestCase
     public function test_public_registration_ignores_submitted_student_fields_and_creates_outsider(): void
     {
         $email = 'johndoe' . uniqid() . '@test.com';
-        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 
+        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization', 
             'first_name' => 'John',
             'middle_name' => '',
             'surname' => 'Doe',
@@ -232,7 +241,7 @@ class RegistrationFormTest extends TestCase
             'school_id_number' => '23-0098-635',
             'contact_number' => '09171234567',
             'office_or_organization' => 'External Company',
-            'organization_type' => 'Company',
+            'organization_type' => 'Private Organization',
         ] + $this->collegeAndDepartment());
 
         $response->assertRedirect(route('register.verify'));
@@ -243,7 +252,7 @@ class RegistrationFormTest extends TestCase
     {
         $username = 'faculty' . uniqid() . '@test.com';
         $facultyId = 'FAC-' . uniqid();
-        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 
+        $response = $this->post(route('register.post'), ['privacy_accepted' => '1', 'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization', 
             'first_name' => 'Faculty',
             'middle_name' => '',
             'surname' => 'Member',
@@ -256,7 +265,7 @@ class RegistrationFormTest extends TestCase
             'faculty_id' => $facultyId,
             'position' => 'Department Chair',
             'office_or_organization' => 'External Company',
-            'organization_type' => 'Company',
+            'organization_type' => 'Private Organization',
             'contact_number' => '09171234567',
         ]);
 
@@ -285,7 +294,7 @@ class RegistrationFormTest extends TestCase
     public function test_public_registration_ignores_student_and_faculty_fields(): void
     {
         $email = 'faculty' . uniqid() . '@test.com';
-        $this->post(route('register.post'), ['privacy_accepted' => '1', 
+        $this->post(route('register.post'), ['privacy_accepted' => '1', 'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization', 
             'first_name' => 'Faculty',
             'surname' => 'Member',
             'username' => $email,
@@ -295,7 +304,7 @@ class RegistrationFormTest extends TestCase
             'college_id' => 1,
             'department_id' => 1,
             'office_or_organization' => 'External Company',
-            'organization_type' => 'Company',
+            'organization_type' => 'Private Organization',
         ])->assertRedirect(route('register.verify'));
         $this->assertDatabaseHas('users', ['username' => $email, 'role' => 'requestor', 'requestor_type' => 'outsider']);
     }
@@ -1068,10 +1077,11 @@ class RegistrationFormTest extends TestCase
     {
         return [
             'privacy_accepted' => '1',
+            'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization',
             'first_name' => 'Test',
             'surname' => 'Outsider',
             'office_or_organization' => 'Test Organization',
-            'organization_type' => 'External Organization',
+            'organization_type' => 'Private Organization',
             'username' => 'otp' . uniqid() . '@test.com',
             'password' => 'Password12345!',
             'password_confirmation' => 'Password12345!',
@@ -1106,11 +1116,12 @@ class RegistrationFormTest extends TestCase
     {
         return array_merge([
             'privacy_accepted' => '1',
+            'office_or_organization' => 'Test Organization', 'organization_type' => 'Private Organization',
             'first_name' => 'Public',
             'middle_name' => '',
             'surname' => 'Outsider',
             'office_or_organization' => 'External Company',
-            'organization_type' => 'Company',
+            'organization_type' => 'Private Organization',
             'username' => 'public-registration-' . uniqid() . '@test.com',
             'password' => 'Password12345!',
             'password_confirmation' => 'Password12345!',

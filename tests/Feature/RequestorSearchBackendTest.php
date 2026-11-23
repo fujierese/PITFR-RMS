@@ -122,7 +122,7 @@ class RequestorSearchBackendTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Urgent');
-        $response->assertSee('bg-rose-500 text-white', false);
+        $response->assertSee('bg-rose-100 text-rose-700', false);
         $response->assertDontSee('>Regular<', false);
         $response->assertSee($urgentRequest->control_number);
 
@@ -189,10 +189,8 @@ class RequestorSearchBackendTest extends TestCase
             ->assertSee('×3')
             ->assertSee('Covered Court')
             ->assertSee('Chairs')
-            ->assertSee('Custodian in charge:')
-            ->assertSee('Arlene Sala')
-            ->assertSee('Equipment custodian:')
-            ->assertSee('Rogelio Guillermo')
+            // UI cleanup: the list shows a short status line; custodian names are on the request page.
+            ->assertSee('Awaiting venue')
             ->assertDontSee('Sound System ×1');
     }
 

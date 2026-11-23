@@ -35,18 +35,17 @@ class RequestFormFeedbackTest extends TestCase
             'requestorType' => 'outsider',
         ])->render();
 
-        $this->assertStringContainsString('Outsider Guidance', $html);
-        $this->assertStringContainsString('Applicable rental fees and payment procedures', $html);
         $this->assertStringContainsString('Selected Items Summary', $html);
-        $this->assertStringContainsString('Request Submission Steps', $html);
-        $this->assertStringContainsString('Choose Venue & Schedule', $html);
-        $this->assertStringContainsString('Calendar availability is not a confirmation.', $html);
+        // UI cleanup: no step bar, help box or guidance boxes; sections are numbered in order.
+        $this->assertStringNotContainsString('Request Submission Steps', $html);
+        $this->assertStringContainsString('Section IV. Priority', $html);
+        $this->assertStringContainsString('Section V. Documents', $html);
         $this->assertStringContainsString('data-draft-status-label', $html); // A.4: dynamic draft badge
         $this->assertStringContainsString('id="draft-restored-notice"', $html);
         // FRM-01: the official header appears on the printed form only.
         $this->assertStringNotContainsString('Official Request Form', $html);
         $this->assertStringContainsString('Submission checklist', $html);
-        $this->assertStringContainsString('Venue and equipment details ready for Supply Office availability review', $html);
+        $this->assertStringContainsString('Venue, schedule and equipment are complete', $html);
         $this->assertStringContainsString('data-venue-availability-url', $html);
         $this->assertStringContainsString("input.addEventListener('change', function () {", $html);
         $this->assertStringContainsString('toggleScheduleFields();', $html);
@@ -104,7 +103,8 @@ class RequestFormFeedbackTest extends TestCase
         ])->render();
 
         $this->assertStringContainsString('name="requested_by_position" value="External Partner"', $html);
-        $this->assertStringContainsString('No signature upload is needed', $html);
+        // QA-9: the form has no signature section.
+        $this->assertStringNotContainsString('Section V. Signature', $html);
         $this->assertStringNotContainsString('Saved e-signature available', $html);
         $this->assertMatchesRegularExpression('/<div class="venue-schedule mt-4 hidden" data-venue-schedule data-venue-name="Gymnasium">/', $html);
         $this->assertStringContainsString('data-venue-equipment-group data-venue-name="Gymnasium"', $html);
@@ -131,7 +131,7 @@ class RequestFormFeedbackTest extends TestCase
         $this->assertStringContainsString('Provided with this venue (not a separate equipment request): Sound System, Aircon, Chairs', $html);
         $this->assertStringContainsString('data-draft-owner-id="' . $requestor->id . '"', $html);
         $this->assertStringContainsString('data-discard-request-draft', $html);
-        $this->assertStringContainsString('Saved on this browser for up to 30 days.', $html);
+        $this->assertStringContainsString('data-discard-request-draft', $html);
         $this->assertStringContainsString("new CustomEvent('confirmed-submit'", $html);
         $this->assertStringNotContainsString('name="venue_equipment[Balay Alumni][]" value="Sound System"', $html);
         $this->assertStringNotContainsString('name="venue_equipment[Balay Alumni][]" value="Aircon"', $html);
