@@ -149,14 +149,31 @@
     $workflowSteps[] = ['label' => 'Final Approval', 'key' => 'approval'];
     $workflowSteps[] = ['label' => $reservationLifecycleStepLabel, 'key' => 'lifecycle'];
 
+    // QA-4: the Venue Check stage shows what actually happened. A venue that needs another
+    // schedule, or a suggested new schedule, is not a failed check; only a rejection is.
+    $scheduleChanges = $request->revisionHistories()->with('revisedBy')->get();
+    $latestScheduleChange = $scheduleChanges->first();
+    $venueStage = match (true) {
+        $request->venue_status === 'rejected' => ['state' => 'rejected', 'label' => 'Venue rejected'],
+        $pendingRevision !== null => ['state' => 'rescheduled', 'label' => 'Suggested new schedule: waiting for response'],
+        $request->venue_status === 'needs_reschedule' && $latestScheduleChange?->status === 'rejected' => ['state' => 'warning', 'label' => 'Rescheduling declined'],
+        $request->venue_status === 'needs_reschedule' => ['state' => 'warning', 'label' => 'Awaiting Supply Office coordination'],
+        $request->venue_status === 'approved' && $latestScheduleChange?->status === 'accepted' => ['state' => 'approved', 'label' => 'Schedule rescheduled and confirmed'],
+        $request->venue_status === 'approved' => ['state' => 'approved', 'label' => 'Venue available'],
+        $latestScheduleChange?->status === 'accepted' => ['state' => 'rescheduled', 'label' => 'Schedule rescheduled: waiting for venue confirmation'],
+        default => ['state' => 'pending', 'label' => 'Waiting for venue confirmation'],
+    };
+    $workflowStepNotes = ['venue' => $venueStage['label']];
+    if ($supplyOfficeReviewStatus === 'unavailable') {
+        $workflowStepNotes['supply_office'] = 'Awaiting Supply Office coordination';
+    }
+
     $workflowStatuses = [
         'submitted' => 'approved',
         'supply_office' => $supplyOfficeReviewStatus === 'confirmed'
             ? 'approved'
-            : ($supplyOfficeReviewStatus === 'unavailable' ? 'rejected' : 'pending'),
-        'venue' => $request->venue_status === 'needs_reschedule'
-            ? 'rejected'
-            : $request->venue_status,
+            : ($supplyOfficeReviewStatus === 'unavailable' ? 'warning' : 'pending'),
+        'venue' => $venueStage['state'],
         'equipment' => $request->equipment_status,
         'approval' => $request->status === 'approved' || $request->status === 'completed'
             ? 'approved'
@@ -177,8 +194,9 @@
     };
     $workflowStageLabel = match (true) {
         $request->status === 'cancelled' => 'Cancelled',
-        $request->venue_status === 'needs_reschedule' => 'Venue Unavailable — Supply Office Coordination',
-        $request->status === 'needs_reschedule' && $request->supply_office_review_status === 'unavailable' => 'Availability Unavailable — Reschedule Needed',
+        $pendingRevision !== null => 'Suggested New Schedule — Waiting for Response',
+        $request->venue_status === 'needs_reschedule' => $venueStage['label'] === 'Rescheduling declined' ? 'Rescheduling Declined — Choose Another Schedule' : 'Awaiting Supply Office Coordination',
+        $request->status === 'needs_reschedule' && $request->supply_office_review_status === 'unavailable' => 'Awaiting Supply Office Coordination — New Schedule Needed',
         $request->status === 'rejected' && $request->venue_status === 'rejected' => 'Rejected at Venue Review',
         $request->status === 'rejected' && $hasAdditionalEquipment && $request->equipment_status === 'rejected' => 'Rejected at Equipment Review',
         $request->status === 'rejected' => 'Rejected at Final Approval',
@@ -524,19 +542,77 @@
                         @php
                             $stepStatus = $workflowStatuses[$step['key']] ?? 'pending';
                             $isCurrent = $step['key'] === $currentWorkflowKey;
-                            $stepIcon = $stepStatus === 'rejected' ? '✕' : ($stepStatus === 'approved' ? '✓' : ($isCurrent ? '◉' : '🕐'));
-                            $stepTone = $stepStatus === 'rejected' ? 'rose' : ($stepStatus === 'approved' ? 'emerald' : ($isCurrent ? 'amber' : 'slate'));
+                            $stepIcon = match ($stepStatus) {
+                                'rejected' => '✕',
+                                'approved' => '✓',
+                                'warning' => '⚠',
+                                'rescheduled' => '📅',
+                                default => $isCurrent ? '◉' : '🕐',
+                            };
+                            $stepTone = match ($stepStatus) {
+                                'rejected' => 'rose',
+                                'approved' => 'emerald',
+                                'warning' => 'amber',
+                                'rescheduled' => 'sky',
+                                default => $isCurrent ? 'amber' : 'slate',
+                            };
+                            $stepNote = $workflowStepNotes[$step['key']] ?? null;
                         @endphp
                         <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
-                            <div class="mx-auto flex h-8 w-8 items-center justify-center rounded-full text-lg {{ $stepTone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : ($stepTone === 'rose' ? 'bg-rose-100 text-rose-700' : ($stepTone === 'amber' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500')) }}" aria-label="{{ $stepStatus }}">
+                            <div class="mx-auto flex h-8 w-8 items-center justify-center rounded-full text-lg {{ $stepTone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : ($stepTone === 'rose' ? 'bg-rose-100 text-rose-700' : ($stepTone === 'amber' ? 'bg-amber-100 text-amber-700' : ($stepTone === 'sky' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500'))) }}" aria-label="{{ $stepStatus }}">
                                 {{ $stepIcon }}
                             </div>
                             <p class="mt-2 text-sm font-semibold text-slate-800">{{ $step['label'] }}</p>
+                            @if($stepNote)
+                                <p class="mt-1 text-xs {{ $stepTone === 'rose' ? 'text-rose-700' : ($stepTone === 'emerald' ? 'text-emerald-700' : ($stepTone === 'sky' ? 'text-sky-700' : 'text-amber-800')) }}" data-step-note="{{ $step['key'] }}">{{ $stepNote }}</p>
+                            @endif
                         </div>
                     @endforeach
                 </div>
             @endif
         </div>
+
+        {{-- QA-4: every suggested new schedule and what happened to it. --}}
+        @if($scheduleChanges->isNotEmpty())
+            <section class="mt-5 rounded-[24px] border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="schedule-changes-title" data-schedule-changes>
+                <h2 id="schedule-changes-title" class="text-base font-semibold text-slate-900">Schedule changes</h2>
+                <ol class="mt-3 space-y-3">
+                    @foreach($scheduleChanges as $change)
+                        @php
+                            $changeOutcome = match ($change->status) {
+                                'pending' => ['Waiting for response', 'bg-sky-50 text-sky-800 ring-sky-200'],
+                                'accepted', 'approved' => ['Accepted', 'bg-emerald-50 text-emerald-800 ring-emerald-200'],
+                                'rejected', 'declined' => ['Declined', 'bg-amber-50 text-amber-800 ring-amber-200'],
+                                'expired' => ['Expired without a response', 'bg-slate-100 text-slate-700 ring-slate-200'],
+                                default => [ucfirst((string) $change->status), 'bg-slate-100 text-slate-700 ring-slate-200'],
+                            };
+                            $scheduleText = function ($startDate, $endDate, $startTime, $endTime, $venues): string {
+                                $dates = $startDate ? \Carbon\Carbon::parse($startDate)->format('M j, Y') : '—';
+                                if ($endDate && \Carbon\Carbon::parse($endDate)->toDateString() !== \Carbon\Carbon::parse($startDate)->toDateString()) {
+                                    $dates .= ' – ' . \Carbon\Carbon::parse($endDate)->format('M j, Y');
+                                }
+                                $times = $startTime && $endTime
+                                    ? \Carbon\Carbon::parse($startTime)->format('g:i A') . ' – ' . \Carbon\Carbon::parse($endTime)->format('g:i A')
+                                    : '';
+
+                                return trim($dates . ($times ? ', ' . $times : '') . (is_array($venues) && $venues !== [] ? ' · ' . implode(', ', $venues) : ''));
+                            };
+                        @endphp
+                        <li class="rounded-2xl border border-slate-200 p-3 text-sm">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <span class="font-medium text-slate-900">Suggested {{ $change->created_at?->format('M j, Y g:i A') }}{{ $change->revisedBy ? ' by ' . $change->revisedBy->name : '' }}</span>
+                                <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 {{ $changeOutcome[1] }}">{{ $changeOutcome[0] }}</span>
+                            </div>
+                            <p class="mt-2 text-slate-600">From: {{ $scheduleText($change->old_start_date, $change->old_end_date, $change->old_start_time, $change->old_end_time, $change->old_venue) }}</p>
+                            <p class="text-slate-900">To: {{ $scheduleText($change->new_start_date, $change->new_end_date, $change->new_start_time, $change->new_end_time, $change->new_venue) }}</p>
+                            @if($change->revision_reason)
+                                <p class="mt-1 text-xs text-slate-500">Reason: {{ $change->revision_reason }}</p>
+                            @endif
+                        </li>
+                    @endforeach
+                </ol>
+            </section>
+        @endif
 
         @if($hasAdditionalEquipment && $request->status === 'approved')
             <section class="mt-5 rounded-[24px] border border-amber-200 bg-amber-50 p-4 sm:p-5" aria-labelledby="equipment-return-progress-title">
