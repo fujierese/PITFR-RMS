@@ -82,6 +82,20 @@ class NotificationNavigationTest extends TestCase
             ->assertSee('Suggested new schedule');
     }
 
+    public function test_a_reschedule_notification_marked_as_read_still_opens_the_suggestion(): void
+    {
+        $id = $this->rescheduleNotificationId();
+        $this->actingAs($this->requestor)->postJson(route('notifications.read', $id))->assertOk();
+
+        $this->actingAs($this->requestor)->get(route('notifications.index'))
+            ->assertSee(route('notifications.open', $id), false);
+        $this->actingAs($this->requestor)->get(route('notifications.open', $id))
+            ->assertRedirect(route('request.show', $this->request) . '#schedule-proposal');
+        $this->actingAs($this->requestor)->get(route('request.show', $this->request))
+            ->assertSee('id="schedule-proposal"', false)
+            ->assertSee('Suggested new schedule');
+    }
+
     public function test_an_answered_suggestion_says_so(): void
     {
         $this->actingAs($this->requestor)->post(route('request.revision.respond', [$this->request, $this->revision]), ['response' => 'decline']);

@@ -22,7 +22,9 @@ class NotificationController extends Controller
             ? collect()
             : FacilityRequest::with('requester')->whereIn('id', $requestIds)->get()->keyBy('id');
 
-        return view('notifications.index', compact('notifications', 'requestDetails'));
+        $unreadCount = $user->unreadNotifications()->count();
+
+        return view('notifications.index', compact('notifications', 'requestDetails', 'unreadCount'));
     }
 
     /**
@@ -95,19 +97,54 @@ class NotificationController extends Controller
         return redirect()->to($destination);
     }
 
-    public function markAsRead(Request $request, $id)
+    /**
+     * QA 11-21 #13: Mark as Read. Only the signed-in user's own notification can be
+     * changed (another user's ID is "not found"). The update is a single conditional
+     * write, so repeated or simultaneous clicks are harmless. The notification stays
+     * in the list and still opens its request (and any suggested schedule).
+     */
+    public function markAsRead(Request $request, string $id)
     {
-        $notification = Auth::user()->notifications()->where('id', $id)->firstOrFail();
+        $user = Auth::user();
+        $notification = $user->notifications()->where('id', $id)->first();
 
-        if (!$notification->read_at) {
-            $notification->markAsRead();
+        if (! $notification) {
+            return $this->readResponse($request, false, 'That notification could not be found. It may have been removed.', 404);
         }
 
+        $user->notifications()->where('id', $id)->whereNull('read_at')->update(['read_at' => now()]);
+
+        return $this->readResponse($request, true, 'Notification marked as read.', 200, [
+            'id' => $notification->id,
+            'status' => 'read',
+        ]);
+    }
+
+    /** QA 11-21 #13: Mark All as Read, for the signed-in user only. */
+    public function markAllAsRead(Request $request)
+    {
+        $marked = Auth::user()->unreadNotifications()->update(['read_at' => now()]);
+
+        $message = $marked > 0
+            ? ($marked === 1 ? '1 notification marked as read.' : "{$marked} notifications marked as read.")
+            : 'All notifications are already read.';
+
+        return $this->readResponse($request, true, $message, 200, ['marked' => $marked]);
+    }
+
+    private function readResponse(Request $request, bool $success, string $message, int $status, array $extra = [])
+    {
         $unreadCount = Auth::user()->unreadNotifications()->count();
 
-        return response()->json([
-            'success' => true,
-            'unread_count' => $unreadCount,
-        ]);
+        if ($request->expectsJson()) {
+            return response()->json(array_merge([
+                'success' => $success,
+                'message' => $message,
+                'unread_count' => $unreadCount,
+            ], $extra), $status);
+        }
+
+        return redirect()->back(fallback: route('notifications.index'))
+            ->with($success ? 'success' : 'warning', $message);
     }
 }

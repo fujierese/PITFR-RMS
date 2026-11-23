@@ -237,6 +237,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/history', [ReservationHistoryController::class, 'index'])->name('history.index');
     Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])
          ->name('notifications.index');
+    Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead'])
+         ->name('notifications.read-all');
     Route::post('/notifications/{id}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead'])
          ->name('notifications.read');
     // QA-3: open a notification: mark it read and go to the request (or explain why not).

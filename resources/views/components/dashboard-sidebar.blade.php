@@ -598,7 +598,7 @@
                         </span>
                         <span>{{ $item['label'] }}</span>
                         @if($item['key'] === 'notifications' && $notificationCount > 0)
-                            <span class="ml-auto rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">{{ $notificationCount }}</span>
+                            <span class="ml-auto rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white" data-unread-badge>{{ $notificationCount }}</span>
                         @elseif($item['key'] === 'verifications' && !empty($item['badge']))
                             <span class="ml-auto rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white">{{ $item['badge'] }}</span>
                         @endif

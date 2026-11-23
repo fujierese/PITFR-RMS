@@ -3,14 +3,24 @@
 
 @section('content')
 <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-    <div class="p-5 border-b border-gray-100">
+    <div class="p-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+        <div>
         <h2 class="flex items-center gap-2 text-lg font-bold text-gray-800">
             <svg class="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.857 17H9.143m10.286 0H4.571c1.14-1.18 1.715-2.65 1.715-4.414V10a5.714 5.714 0 0111.428 0v2.586c0 1.764.572 3.234 1.715 4.414ZM9 20h6"/>
             </svg>
             Notifications
         </h2>
-        <p class="text-xs text-gray-400 mt-0.5">All your request status updates</p>
+        <p class="text-xs text-gray-500 mt-0.5" data-unread-summary aria-live="polite">{{ $unreadCount > 0 ? $unreadCount . ' unread' : 'No unread notifications' }}</p>
+        </div>
+        <form method="POST" action="{{ route('notifications.read-all') }}" data-mark-all-form>
+            @csrf
+            <button type="submit" data-mark-all-button @disabled($unreadCount === 0)
+                class="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3.5 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m4 12 4 4L18 6m-4 10 2 2 6-8"/></svg>
+                Mark All as Read
+            </button>
+        </form>
     </div>
 
     <div class="divide-y divide-gray-50">
@@ -82,7 +92,8 @@
                 default => 'bg-slate-100 text-slate-600',
             };
         @endphp
-        <a href="{{ route('notifications.open', $notification->id) }}" class="block p-4 flex items-start gap-4 {{ $notification->read_at ? 'bg-white' : 'bg-blue-50' }} hover:bg-gray-50 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500">
+        <div class="flex flex-col sm:flex-row sm:items-start {{ $notification->read_at ? 'bg-white' : 'bg-blue-50/70 border-l-4 border-blue-500' }}" data-notification="{{ $notification->id }}" data-state="{{ $notification->read_at ? 'read' : 'unread' }}">
+        <a href="{{ route('notifications.open', $notification->id) }}" class="flex-1 min-w-0 p-4 flex items-start gap-4 hover:bg-gray-50/70 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500">
             <div class="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl {{ $notificationIconColor }}" data-notification-icon="{{ $notificationIcon }}" aria-hidden="true">
                 @if($notificationIcon === 'venue')
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -140,8 +151,13 @@
             </div>
             <div class="flex-1">
                 <p class="mb-1 text-xs text-gray-500">{{ $notification->created_at->format('M j, Y g:i A') }} <span aria-hidden="true">·</span> {{ $notification->created_at->diffForHumans() }}</p>
-                <p class="text-sm font-semibold text-gray-800">
-                    {{ $title }}
+                <p class="flex flex-wrap items-center gap-2 text-sm {{ $notification->read_at ? 'font-medium text-gray-700' : 'font-semibold text-gray-900' }}" data-notification-title>
+                    <span>{{ $title }}</span>
+                    @if($notification->read_at)
+                        <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500" data-read-label>Read</span>
+                    @else
+                        <span class="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white" data-read-label>Unread</span>
+                    @endif
                 </p>
                 <p class="mt-1 text-sm text-gray-600">
                     {{ $notificationMessage }}
@@ -163,11 +179,17 @@
                     <p class="text-xs text-gray-400 mt-1 italic">Note: {{ $data['notes'] }}</p>
                 @endif
             </div>
-            @if(!$notification->read_at)
-                <span class="shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></span>
-            @endif
-            <span class="hidden mt-2 text-sm text-red-700" data-read-error role="alert">Unable to mark this notification as read. Please try again.</span>
         </a>
+        @unless($notification->read_at)
+            <form method="POST" action="{{ route('notifications.read', $notification->id) }}" class="px-4 pb-4 sm:p-4 sm:pl-0 shrink-0" data-mark-read-form>
+                @csrf
+                <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60">
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="m5 12 5 5L20 7"/></svg>
+                    Mark as Read
+                </button>
+            </form>
+        @endunless
+        </div>
         @empty
         <div class="py-16 text-center">
             <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
@@ -188,31 +210,89 @@
     @endif
 </div>
 <script>
-    document.querySelectorAll('[data-read-url]').forEach((notificationLink) => {
-        notificationLink.addEventListener('click', (event) => {
-            event.preventDefault();
-            const destination = notificationLink.href;
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+(() => {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const markAllButton = document.querySelector('[data-mark-all-button]');
+    const summary = document.querySelector('[data-unread-summary]');
 
-            fetch(notificationLink.dataset.readUrl, {
+    const toast = (icon, text) => {
+        if (window.Swal && typeof window.Swal.fire === 'function') {
+            window.Swal.fire({ toast: true, position: 'top-end', icon, title: text, showConfirmButton: false, showCloseButton: true, timer: icon === 'success' ? 3000 : 6000, timerProgressBar: true, customClass: { popup: 'pitfr-toast' } });
+        } else if (icon !== 'success') {
+            alert(text);
+        }
+    };
+
+    const showUnreadCount = (count) => {
+        count = Math.max(0, parseInt(count, 10) || 0);
+        if (summary) summary.textContent = count > 0 ? count + ' unread' : 'No unread notifications';
+        if (markAllButton) markAllButton.disabled = count === 0;
+        document.querySelectorAll('[data-unread-badge]').forEach((badge) => {
+            badge.textContent = count;
+            badge.hidden = count === 0;
+        });
+    };
+
+    const showAsRead = (row) => {
+        if (!row || row.dataset.state === 'read') return;
+        row.dataset.state = 'read';
+        row.classList.remove('bg-blue-50/70', 'border-l-4', 'border-blue-500');
+        row.classList.add('bg-white');
+        const title = row.querySelector('[data-notification-title]');
+        if (title) {
+            title.classList.remove('font-semibold', 'text-gray-900');
+            title.classList.add('font-medium', 'text-gray-700');
+        }
+        const label = row.querySelector('[data-read-label]');
+        if (label) {
+            label.textContent = 'Read';
+            label.className = 'rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500';
+        }
+        row.querySelector('[data-mark-read-form]')?.remove();
+    };
+
+    const send = async (form) => {
+        const button = form.querySelector('button[type="submit"]');
+        if (button?.disabled) return null;
+        if (button) button.disabled = true;
+        try {
+            const response = await fetch(form.action, {
                 method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': csrfToken || '',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    Accept: 'application/json'
-                }
-            }).then((response) => {
-                if (!response.ok) {
-                    throw new Error('Unable to mark notification as read.');
-                }
-                window.location.href = destination;
-            }).catch(() => {
-                const error = notificationLink.querySelector('[data-read-error]');
-                if (error) {
-                    error.hidden = false;
-                }
+                headers: { 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+                credentials: 'same-origin',
             });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Could not update the notification. Please try again.');
+            }
+            return data;
+        } catch (error) {
+            if (button) button.disabled = false;
+            toast('error', error.message || 'Could not update the notification. Please try again.');
+            return null;
+        }
+    };
+
+    document.querySelectorAll('[data-mark-read-form]').forEach((form) => {
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const row = form.closest('[data-notification]');
+            const data = await send(form);
+            if (!data) return;
+            showAsRead(row);
+            showUnreadCount(data.unread_count);
+            toast('success', data.message);
         });
     });
+
+    document.querySelector('[data-mark-all-form]')?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const data = await send(event.currentTarget);
+        if (!data) return;
+        document.querySelectorAll('[data-notification]').forEach(showAsRead);
+        showUnreadCount(data.unread_count);
+        toast('success', data.message);
+    });
+})();
 </script>
 @endsection
