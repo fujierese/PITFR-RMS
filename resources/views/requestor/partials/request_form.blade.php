@@ -1590,17 +1590,46 @@
         let venueAvailabilityState = null;
         let venueAvailabilitySequence = 0;
         let venueAvailabilityTimer = null;
-        const renderVenueAvailability = (state, message, results = []) => {
+        // QA-5: one status per selected venue (Available, Pending schedule conflict or
+        // Unavailable), shown the same way on the venue and in this summary.
+        const venueStatusOf = (result) => result.status || (!result.available ? 'unavailable' : (result.pending_notice ? 'pending_conflict' : 'available'));
+        const venueStatusLabels = { available: 'Available', pending_conflict: 'Pending schedule conflict', unavailable: 'Unavailable' };
+        const describeSchedule = (schedule) => {
+            if (!schedule || !schedule.startDate) return '';
+            const date = (value) => {
+                const [year, month, day] = String(value).split('-').map(Number);
+                return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            };
+            const time = (value) => {
+                const [hours, minutes] = String(value).split(':').map(Number);
+                const reference = new Date(2000, 0, 1, hours, minutes);
+                return reference.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            };
+            const dates = schedule.endDate && schedule.endDate !== schedule.startDate ? `${date(schedule.startDate)} – ${date(schedule.endDate)}` : date(schedule.startDate);
+            const times = schedule.duration === 'whole_day' ? 'whole day (8:00 AM – 5:00 PM)' : `${time(schedule.startTime)} – ${time(schedule.endTime)}`;
+            return `${dates}, ${times}`;
+        };
+        const venueStatusDetail = (result) => {
+            const status = venueStatusOf(result);
+            if (status === 'unavailable') return `${result.message || 'It is not available for this schedule.'} Choose another date, time or venue.`;
+            if (status === 'pending_conflict') return result.pending_notice || 'Another request for the same venue and time is waiting for review. You can still submit; the Supply Office will confirm only one of them.';
+            return 'No other booking or pending request at this time. Waiting for Supply Office confirmation.';
+        };
+
+        const renderVenueAvailability = (state, message, results = [], tone = null) => {
             venueAvailabilityState = state;
             if (!venueAvailabilityContainer) return;
             venueAvailabilityContainer.replaceChildren();
 
+            const noticeTone = tone || (state === true ? 'green' : (state === false ? 'amber' : 'slate'));
             const notice = document.createElement('div');
-            notice.className = state === true
+            notice.className = noticeTone === 'green'
                 ? 'rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800'
-                : state === false
-                    ? 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900'
-                    : 'rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600';
+                : noticeTone === 'red'
+                    ? 'rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800'
+                    : noticeTone === 'amber'
+                        ? 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900'
+                        : 'rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600';
             notice.setAttribute('role', 'status');
             notice.setAttribute('aria-live', 'polite');
             notice.textContent = message;
@@ -1611,7 +1640,9 @@
                 list.className = 'mt-2 space-y-1';
                 results.forEach((result) => {
                     const item = document.createElement('li');
-                    item.textContent = `${result.venue}: ${result.available ? 'available' : (result.message || 'unavailable')}`;
+                    const schedule = describeSchedule(result.schedule);
+                    item.textContent = `${result.venue}${schedule ? ` (${schedule})` : ''}: ${venueStatusLabels[venueStatusOf(result)]}`;
+                    item.dataset.venueStatus = venueStatusOf(result);
                     list.appendChild(item);
                 });
                 notice.appendChild(list);
@@ -1685,27 +1716,30 @@
                         });
                         if (!response.ok) throw new Error('Availability check failed.');
                         const payload = await response.json();
-                        return { group: schedule.group, ...(payload.venues?.[0] || { venue: schedule.venue, available: false }) };
+                        return { group: schedule.group, schedule, ...(payload.venues?.[0] || { venue: schedule.venue, available: false }) };
                     }));
                     if (sequence !== venueAvailabilitySequence) return;
                     results.forEach((result) => {
                         const status = result.group.querySelector('.venue-availability');
                         if (status) {
-                            status.textContent = result.available
-                                ? (result.pending_notice
-                                    ? `${result.venue} is open for this schedule. ${result.pending_notice}`
-                                    : `${result.venue} is available for this schedule. Supply Office confirmation is still required.`)
-                                : `${result.venue} is unavailable for this schedule. ${result.message || ''}`;
-                            status.className = `venue-availability mt-3 text-xs ${result.available && !result.pending_notice ? 'text-emerald-700' : 'text-amber-800'}`;
+                            const venueStatus = venueStatusOf(result);
+                            const schedule = describeSchedule(result.schedule);
+                            status.textContent = `${venueStatusLabels[venueStatus]}: ${result.venue}${schedule ? `, ${schedule}` : ''}. ${venueStatusDetail(result)}`;
+                            status.dataset.venueStatus = venueStatus;
+                            status.className = `venue-availability mt-3 text-xs ${venueStatus === 'available' ? 'text-emerald-700' : (venueStatus === 'unavailable' ? 'text-red-700' : 'text-amber-800')}`;
                         }
                     });
-                    const isAvailable = results.every((result) => result.available);
+                    const unavailableCount = results.filter((result) => venueStatusOf(result) === 'unavailable').length;
+                    const pendingCount = results.filter((result) => venueStatusOf(result) === 'pending_conflict').length;
                     renderVenueAvailability(
-                        isAvailable,
-                        isAvailable
-                            ? 'All selected venues are available for their individual schedules. Supply Office confirmation is still required.'
-                            : 'One or more selected venues are unavailable for their selected schedule.',
+                        unavailableCount === 0,
+                        unavailableCount > 0
+                            ? 'One or more selected venues are unavailable for their schedule. Choose another date, time or venue before submitting.'
+                            : (pendingCount > 0
+                                ? `${pendingCount === 1 ? 'One selected venue has' : `${pendingCount} selected venues have`} a pending schedule conflict. You can still submit; the Supply Office will confirm only one of the competing requests. All selected venues are waiting for Supply Office confirmation.`
+                                : 'All selected venues are available for their schedules. They are waiting for Supply Office confirmation.'),
                         results,
+                        unavailableCount > 0 ? 'red' : (pendingCount > 0 ? 'amber' : 'green'),
                     );
                 } catch {
                     if (sequence !== venueAvailabilitySequence) return;

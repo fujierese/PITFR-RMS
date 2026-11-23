@@ -9,12 +9,7 @@
         <p class="mt-2 text-sm" style="color: #ecfdf5;">Add venues and assign each one to a Venue Custodian.</p>
     </div>
 
-    @if(session('success'))
-        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{{ session('success') }}</div>
-    @endif
-    @if($errors->any())
-        <div class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{{ $errors->first() }}</div>
-    @endif
+    {{-- Messages are shown as toasts by the main layout. --}}
 
     <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/50">
         <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

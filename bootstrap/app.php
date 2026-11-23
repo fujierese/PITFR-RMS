@@ -19,6 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\HandleCors::class,
             \App\Http\Middleware\EnsureActiveAccount::class,
             \App\Http\Middleware\SecurityHeaders::class,
+            // Background checks leave page messages for the next full page.
+            \App\Http\Middleware\KeepFlashForBackgroundRequests::class,
         ]);
         $middleware->api(append: [
             \App\Http\Middleware\SecurityHeaders::class,

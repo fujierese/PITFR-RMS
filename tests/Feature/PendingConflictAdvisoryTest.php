@@ -60,14 +60,17 @@ class PendingConflictAdvisoryTest extends TestCase
 
         $this->check()
             ->assertJsonPath('venues.0.available', true)
-            ->assertJsonPath('venues.0.pending_notice', 'Another request for this venue and time is still awaiting review. You can still submit; the Supply Office will confirm only one of them.');
+            ->assertJsonPath('venues.0.status', 'pending_conflict')
+            ->assertJsonPath('venues.0.status_label', 'Pending schedule conflict')
+            ->assertJsonPath('venues.0.can_submit', true)
+            ->assertJsonPath('venues.0.pending_notice', 'Another request for the same venue and time is waiting for review. You can still submit; the Supply Office will confirm only one of them.');
     }
 
     public function test_free_slot_has_no_notice_and_approved_overlap_blocks(): void
     {
-        $this->check()->assertJsonPath('venues.0.available', true)->assertJsonPath('venues.0.pending_notice', null);
+        $this->check()->assertJsonPath('venues.0.available', true)->assertJsonPath('venues.0.status', 'available')->assertJsonPath('venues.0.pending_notice', null);
 
         $this->booking('approved', 'Approved booking');
-        $this->check()->assertJsonPath('venues.0.available', false)->assertJsonPath('venues.0.pending_notice', null);
+        $this->check()->assertJsonPath('venues.0.available', false)->assertJsonPath('venues.0.status', 'unavailable')->assertJsonPath('venues.0.can_submit', false)->assertJsonPath('venues.0.pending_notice', null);
     }
 }

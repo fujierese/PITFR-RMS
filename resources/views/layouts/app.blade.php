@@ -38,8 +38,55 @@
 
     <main class="min-h-screen overflow-x-hidden px-3 py-3 {{ auth()->check() ? 'pt-16 lg:ml-80' : 'pt-6' }} sm:px-4 sm:py-4 sm:pt-6 md:px-6 lg:min-h-screen lg:overflow-y-auto lg:px-8 lg:py-6 lg:pt-8">
         <div class="mx-auto w-full max-w-none lg:max-w-7xl">
+            {{-- Messages appear as toasts (SweetAlert2, already on every page). Screen readers
+                 hear them from the live region; the banners below show only if toasts cannot. --}}
+            @php
+                $flashToasts = array_values(array_filter([
+                    session('success') ? ['icon' => 'success', 'text' => (string) session('success')] : null,
+                    session('info') ? ['icon' => 'info', 'text' => (string) session('info')] : null,
+                    session('warning') ? ['icon' => 'warning', 'text' => (string) session('warning')] : null,
+                    session('error') ? ['icon' => 'error', 'text' => (string) session('error')] : null,
+                    isset($errors) && $errors->any() ? ['icon' => 'error', 'text' => (string) $errors->first()] : null,
+                ]));
+            @endphp
+            @if($flashToasts !== [])
+                <div class="sr-only" role="status" aria-live="polite" data-flash-messages>@foreach($flashToasts as $flashToast){{ $flashToast['text'] }} @endforeach</div>
+                <script>
+                    (function () {
+                    const showFlashToasts = async function () {
+                        const messages = @json($flashToasts);
+                        if (!window.Swal || typeof window.Swal.mixin !== 'function') {
+                            document.querySelectorAll('[data-flash-fallback]').forEach(function (banner) { banner.hidden = false; });
+                            return;
+                        }
+                        const Toast = window.Swal.mixin({
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            showCloseButton: true,
+                            timerProgressBar: true,
+                            customClass: { popup: 'pitfr-toast' },
+                            didOpen: function (toast) {
+                                toast.addEventListener('mouseenter', window.Swal.stopTimer);
+                                toast.addEventListener('mouseleave', window.Swal.resumeTimer);
+                            },
+                        });
+                        for (const message of messages) {
+                            await Toast.fire({ icon: message.icon, title: message.text, timer: message.icon === 'success' || message.icon === 'info' ? 4000 : 8000 });
+                        }
+                    };
+                    // Show right away: SweetAlert2 is loaded in <head> and the page body exists
+                    // here, so the message does not wait for the rest of the page to load.
+                    showFlashToasts();
+                    })();
+                </script>
+                <style>
+                    .pitfr-toast { max-width: min(28rem, calc(100vw - 2rem)); }
+                    .pitfr-toast .swal2-title { font-size: 0.9rem !important; font-weight: 500 !important; line-height: 1.4 !important; text-align: left !important; }
+                </style>
+            @endif
             @if(session('success'))
-                <div role="status" aria-live="polite" aria-label="Success" class="mb-6 rounded-3xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-sm">
+                <div data-flash-fallback hidden class="mb-6 rounded-3xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-sm">
                     <div class="flex items-center gap-3">
                         <svg class="w-5 h-5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
@@ -49,7 +96,7 @@
                 </div>
             @endif
             @if(session('warning'))
-                <div role="alert" aria-live="polite" aria-label="Warning" class="mb-6 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 shadow-sm">
+                <div data-flash-fallback hidden class="mb-6 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 shadow-sm">
                     <div class="flex items-center gap-3">
                         <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -59,7 +106,7 @@
                 </div>
             @endif
             @if(isset($errors) && $errors->any())
-                <div role="alert" aria-live="assertive" aria-label="Error" class="mb-6 rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-800 shadow-sm">
+                <div data-flash-fallback hidden class="mb-6 rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-800 shadow-sm">
                     <div class="flex items-center gap-3">
                         <svg class="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>

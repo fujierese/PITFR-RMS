@@ -2769,11 +2769,17 @@ class RequestorController extends Controller
             // the Supply Office is blocked from confirming both.
             $pendingNotice = null;
             if ($availability['available'] && $this->availabilityService->checkVenueTimeRangeForReview($venueName, $range['start'], $range['end']) !== null) {
-                $pendingNotice = 'Another request for this venue and time is still awaiting review. You can still submit; the Supply Office will confirm only one of them.';
+                $pendingNotice = 'Another request for the same venue and time is waiting for review. You can still submit; the Supply Office will confirm only one of them.';
             }
+            // QA-5: one status per venue, used the same way everywhere on the form.
+            $status = ! $availability['available'] ? 'unavailable' : ($pendingNotice !== null ? 'pending_conflict' : 'available');
             $results[] = [
                 'venue' => $venueName,
                 'available' => $availability['available'],
+                'status' => $status,
+                'status_label' => ['available' => 'Available', 'pending_conflict' => 'Pending schedule conflict', 'unavailable' => 'Unavailable'][$status],
+                'can_submit' => $status !== 'unavailable',
+                'awaiting_supply_office' => $status !== 'unavailable',
                 'message' => $availability['message'] ?? null,
                 'pending_notice' => $pendingNotice,
             ];
