@@ -40,7 +40,8 @@
                 : ($isNewRequest
                 ? ($data['title'] ?? 'New Request Submitted')
                 : ($status !== '' ? 'Request ' . $statusTitle : ($data['title'] ?? 'Request Update')));
-            $linkedRequest = !empty($data['request_id']) ? $requestDetails->get($data['request_id']) : null;
+            $linkedRequestId = $data['request_id'] ?? $data['facility_request_id'] ?? null;
+            $linkedRequest = !empty($linkedRequestId) ? $requestDetails->get($linkedRequestId) : null;
             $requestorName = $data['requestor_name'] ?? $linkedRequest?->requester?->name ?? $linkedRequest?->requested_by;
             $activityName = $data['activity'] ?? $linkedRequest?->name_of_activity;
             $controlNumber = $data['control_number'] ?? $linkedRequest?->control_number;
@@ -81,7 +82,7 @@
                 default => 'bg-slate-100 text-slate-600',
             };
         @endphp
-        <a href="{{ !empty($data['request_id']) ? route('request.show', $data['request_id']) : route('notifications.index') }}" data-read-url="{{ route('notifications.read', $notification->id) }}" class="block p-4 flex items-start gap-4 {{ $notification->read_at ? 'bg-white' : 'bg-blue-50' }} hover:bg-gray-50 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500">
+        <a href="{{ route('notifications.open', $notification->id) }}" class="block p-4 flex items-start gap-4 {{ $notification->read_at ? 'bg-white' : 'bg-blue-50' }} hover:bg-gray-50 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500">
             <div class="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl {{ $notificationIconColor }}" data-notification-icon="{{ $notificationIcon }}" aria-hidden="true">
                 @if($notificationIcon === 'venue')
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

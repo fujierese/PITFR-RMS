@@ -239,6 +239,9 @@ Route::middleware('auth')->group(function () {
          ->name('notifications.index');
     Route::post('/notifications/{id}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead'])
          ->name('notifications.read');
+    // QA-3: open a notification: mark it read and go to the request (or explain why not).
+    Route::get('/notifications/{id}/open', [\App\Http\Controllers\NotificationController::class, 'open'])
+         ->name('notifications.open');
     Route::get('/user/{user}/signature', [RequestorController::class, 'accountSignature'])->name('user.signature');
     Route::get('/request/{id}', [RequestorController::class, 'show'])->name('request.show');
     Route::get('/request/{id}/print', [RequestorController::class, 'print'])->name('request.print');

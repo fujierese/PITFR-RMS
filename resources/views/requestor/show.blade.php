@@ -633,7 +633,7 @@
                     ->pluck('name')
                 : collect();
         @endphp
-        <section style="margin-bottom: 24px !important;" class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm" aria-labelledby="schedule-proposal-title">
+        <section id="schedule-proposal" style="margin-bottom: 24px !important; scroll-margin-top: 96px;" class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm" aria-labelledby="schedule-proposal-title">
             <div class="flex items-start gap-3">
                 <div class="min-w-0 flex-1">
                     <h2 id="schedule-proposal-title" class="text-lg font-semibold text-amber-950">Schedule change proposed</h2>
