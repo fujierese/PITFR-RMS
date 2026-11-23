@@ -158,7 +158,7 @@
                             <div class="space-y-3">
                                 <label for="additional_remarks" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Additional remarks <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
                                 <textarea id="additional_remarks" name="additional_remarks" rows="3" maxlength="2000" class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">{{ old('additional_remarks') }}</textarea>
-                                <p class="text-xs text-slate-500">Your inquiry goes to IGP first, then the venue custodian and the Supply Office. If approved, IGP will tell you the payment and other requirements; payment is made through the institution's official procedure, not through PITFR.</p>
+                                <p class="text-xs text-slate-500">IGP reviews your inquiry first. If it is approved, IGP tells you the payment requirements.</p>
                             </div>
                         @elseif ($isStudent)
                             <div class="space-y-3">
@@ -202,7 +202,7 @@
                                     @enderror
                                 </div>
                                 <div class="space-y-3">
-                                    <label for="department_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Department / Requisitioning Office <span class="required-asterisk">*</span></label>
+                                    <label for="department_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Department / Requesting Office <span class="required-asterisk">*</span></label>
                                     <select id="department_id" name="department_id" required data-selected="{{ $selectedDepartmentId }}" class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">
                                         @foreach ($colleges as $collegeOption)
                                             @foreach ($collegeOption->departments as $departmentOption)
@@ -233,7 +233,7 @@
                                     @enderror
                                 </div>
                                 <div class="space-y-3">
-                                    <label for="department_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Department / Requisitioning Office <span class="required-asterisk">*</span></label>
+                                    <label for="department_id" class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Department / Requesting Office <span class="required-asterisk">*</span></label>
                                     <select id="department_id" name="department_id" required data-selected="{{ $selectedDepartmentId }}" class="w-full rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500">
                                         @foreach ($colleges as $collegeOption)
                                             @foreach ($collegeOption->departments as $departmentOption)
@@ -258,7 +258,7 @@
                                 @enderror
                             </div>
                             <div class="space-y-3">
-                                <p class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Department / Requisitioning Office</p>
+                                <p class="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Department / Requesting Office</p>
                                 <div class="rounded-3xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm text-slate-600" aria-readonly="true">{{ $profileDepartment?->name ?? $currentUser?->department ?? 'Department not provided' }}</div>
                                 <input type="hidden" name="department_id" value="{{ $profileDepartmentId }}">
                                 @error('department_id')
@@ -735,7 +735,7 @@
                                 <label for="igp_receipt_file" class="mb-3 block text-sm font-semibold text-slate-700">
                                     Receipt document <span class="text-xs font-normal text-slate-500">(optional)</span>
                                 </label>
-                                <p class="mb-3 text-xs text-slate-500">Do not pay before the Supply Office confirms availability. The IGP will record the official receipt number after availability is confirmed. You may add a receipt document later if requested.</p>
+                                <p class="mb-3 text-xs text-slate-500">Do not pay until the Supply Office confirms availability.</p>
                                 <div data-upload-box class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition duration-200 hover:border-emerald-400">
                                     <div class="space-y-3 text-center">
                                         <svg class="mx-auto h-14 w-14 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">

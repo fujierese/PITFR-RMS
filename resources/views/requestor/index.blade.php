@@ -134,7 +134,7 @@
             <div class="max-w-3xl">
                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-700">What happens next</p>
                 <h2 id="request-workflow-heading" class="mt-2 text-lg font-semibold text-slate-950">Your request moves through two review steps</h2>
-                <p class="mt-2 text-sm leading-6 text-slate-700">After you submit, the assigned custodians verify the venue and equipment. The Supply Office then gives final approval, requests a reschedule, or rejects the request. Check My Requests and your notifications for updates.</p>
+                <p class="mt-2 text-sm leading-6 text-slate-700">After you submit, custodians check the venue and equipment, then the Supply Office decides. Updates appear in My Requests and Notifications.</p>
             </div>
         </section>
     @endif

@@ -159,7 +159,7 @@ class ScheduleProposalFormTest extends TestCase
             ->assertSee('Availability of each proposed venue')
             ->assertSee('Available')
             ->assertSee('Not available')
-            ->assertSee('Check proposed schedule')
+            ->assertSee('Check suggested schedule')
             ->assertSee('1:00 PM');
     }
 

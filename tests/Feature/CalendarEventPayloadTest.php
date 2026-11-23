@@ -684,7 +684,7 @@ class CalendarEventPayloadTest extends TestCase
         $this->get(route('calendar.index'))
             ->assertOk()
             ->assertSee('Approved booking', false)
-            ->assertSee('Pending review', false)
+            ->assertSee('Waiting for review', false)
             ->assertSee('Rejected / conflict', false)
             ->assertSee('Maintenance / closure', false)
             ->assertSee('Requested schedule', false)

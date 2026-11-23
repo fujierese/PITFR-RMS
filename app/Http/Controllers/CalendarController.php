@@ -608,7 +608,7 @@ class CalendarController extends Controller
                 if ($pendingRevision && ! $isRevisionVenueReview) {
                     return response()->json([
                         'available' => false,
-                        'message' => 'A schedule proposal is awaiting responses. Availability review is paused.',
+                        'message' => 'A suggested schedule is awaiting responses. Availability review is paused.',
                     ], 409);
                 }
 

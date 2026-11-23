@@ -65,7 +65,7 @@
         </div>
         <div class="field-grid">
             <div class="field">
-                <label>Department / Requisitioning Office</label>
+                <label>Department / Requesting Office</label>
                 <div class="value">{{ $request->department ?? 'N/A' }}</div>
             </div>
             <div class="field">

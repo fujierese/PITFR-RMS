@@ -248,7 +248,7 @@ class RequestActionController extends Controller
 
             if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
                 DB::rollBack();
-                return redirect()->back()->withErrors('A schedule proposal is awaiting responses. Custodian actions are paused until it is answered.');
+                return redirect()->back()->withErrors('A suggested schedule is awaiting responses. Custodian actions are paused until it is answered.');
             }
 
             $isVenueConfirmation = $user->isCustodianVenue()
@@ -462,7 +462,7 @@ class RequestActionController extends Controller
             }
             if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
                 DB::rollBack();
-                return redirect()->back()->withErrors('A schedule proposal is awaiting responses. Custodian actions are paused until it is answered.');
+                return redirect()->back()->withErrors('A suggested schedule is awaiting responses. Custodian actions are paused until it is answered.');
             }
 
             $statusField = $isVenueAction ? 'venue_status' : 'equipment_status';
@@ -593,9 +593,9 @@ class RequestActionController extends Controller
             if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
                 DB::rollBack();
                 if ($request->expectsJson()) {
-                    return response()->json(['message' => 'A schedule proposal is awaiting responses.'], 409);
+                    return response()->json(['message' => 'A suggested schedule is awaiting responses.'], 409);
                 }
-                return redirect()->back()->withErrors('A schedule proposal is awaiting responses. Final approval is paused until it is answered.');
+                return redirect()->back()->withErrors('A suggested schedule is awaiting responses. Final approval is paused until it is answered.');
             }
 
             if ($facilityRequest->hasCustodianApprovalBy($user)) {

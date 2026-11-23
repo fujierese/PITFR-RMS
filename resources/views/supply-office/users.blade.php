@@ -42,7 +42,7 @@
                     <a href="{{ route('admin.users') }}" class="rounded-xl p-2 text-2xl leading-none text-white/90 transition hover:bg-emerald-700 hover:text-white" aria-label="Close create user dialog">&times;</a>
                 </div>
                 <div class="overflow-y-auto p-4 sm:p-6">
-            <p class="mb-4 rounded-xl border border-emerald-200 bg-white/80 px-3 py-2 text-sm text-emerald-800">Admin-created accounts are verified immediately, but cannot sign in until the user completes password setup using the secure link sent to their registered email.</p>
+            <p class="mb-4 rounded-xl border border-emerald-200 bg-white/80 px-3 py-2 text-sm text-emerald-800">Accounts created here are verified right away. The user signs in after setting a password from the link sent to their email.</p>
             @if($errors->any())
                 <div class="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{{ $errors->first() }}</div>
             @endif

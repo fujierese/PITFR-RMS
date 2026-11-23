@@ -317,7 +317,7 @@ class RequestFormFeedbackTest extends TestCase
 
         $this->assertStringContainsString('Student Organization', $html);
         $this->assertStringContainsString('BITS Student Council', $html);
-        $this->assertStringNotContainsString('Department / Requisitioning Office', $html);
+        $this->assertStringNotContainsString('Department / Requesting Office', $html);
         $this->assertStringContainsString('data-upload-status class="hidden text-xs font-medium text-slate-700"', $html);
         $this->assertStringContainsString('data-upload-filename class="truncate text-sm font-semibold text-slate-900"', $html);
     }

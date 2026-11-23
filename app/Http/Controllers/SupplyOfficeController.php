@@ -852,7 +852,7 @@ class SupplyOfficeController extends Controller
         }
 
         if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
-            return $this->revisionFailure($request, 'A schedule change proposal is already waiting for the requestor to respond.', 'revision', 409);
+            return $this->revisionFailure($request, 'A suggested new schedule is already waiting for the requestor to respond.', 'revision', 409);
         }
 
         // Capture old state
@@ -973,7 +973,7 @@ class SupplyOfficeController extends Controller
             ): \App\Models\RevisionHistory {
                 $lockedRequest = FacilityRequest::query()->lockForUpdate()->findOrFail($facilityRequest->id);
                 if ($lockedRequest->revisionHistories()->where('status', 'pending')->exists()) {
-                    throw new \RuntimeException('A schedule change proposal is already waiting for the requestor to respond.');
+                    throw new \RuntimeException('A suggested new schedule is already waiting for the requestor to respond.');
                 }
 
                 return $lockedRequest->revisionHistories()->create([
@@ -1016,7 +1016,7 @@ class SupplyOfficeController extends Controller
 
             if ($request->expectsJson()) {
                 return response()->json([
-                    'message' => 'Schedule change proposal sent to the requestor for approval.',
+                    'message' => 'Suggested new schedule sent to the requestor for approval.',
                 ]);
             }
 
@@ -1024,7 +1024,7 @@ class SupplyOfficeController extends Controller
                 ? redirect()->route('request.show', $facilityRequest)
                 : redirect()->route('supply-office.index');
 
-            return $successRedirect->with('success', 'Schedule change proposal sent to the requestor and affected custodians.');
+            return $successRedirect->with('success', 'Suggested new schedule sent to the requestor and affected custodians.');
         } catch (\RuntimeException $e) {
             if (str_contains($e->getMessage(), 'already waiting')) {
                 if ($request->expectsJson()) {
@@ -1035,18 +1035,18 @@ class SupplyOfficeController extends Controller
             }
 
             Log::error('Revision proposal failed', ['error' => $e->getMessage()]);
-            return redirect()->back()->withInput()->withErrors(['revision' => 'Failed to send the schedule proposal. Please try again.']);
+            return redirect()->back()->withInput()->withErrors(['revision' => 'Failed to send the suggested schedule. Please try again.']);
         } catch (\Exception $e) {
             Log::error('Revision proposal failed', ['error' => $e->getMessage()]);
             if ($request->expectsJson()) {
                 return response()->json([
-                    'message' => 'Failed to send the schedule proposal. Please try again.',
+                    'message' => 'Failed to send the suggested schedule. Please try again.',
                 ], 422);
             }
 
             return redirect()->back()
                 ->withInput()
-                ->withErrors(['revision' => 'Failed to send the schedule proposal. Please try again.']);
+                ->withErrors(['revision' => 'Failed to send the suggested schedule. Please try again.']);
         }
     }
 
@@ -1480,7 +1480,7 @@ class SupplyOfficeController extends Controller
                     throw new \RuntimeException('The approved reservation changed before the transfer proposal was created.');
                 }
                 if ($lockedConflict->revisionHistories()->where('status', 'pending')->exists()) {
-                    throw new \RuntimeException('A schedule proposal is already pending for this approved reservation.');
+                    throw new \RuntimeException('A suggested schedule is already pending for this approved reservation.');
                 }
 
                 $oldState = $lockedConflict->getCurrentState();

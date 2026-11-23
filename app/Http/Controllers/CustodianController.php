@@ -356,7 +356,7 @@ class CustodianController extends Controller
             // ─── APPROVE / REJECT ACTION ─────────────────────────────────────
             if ($fr->revisionHistories()->where('status', 'pending')->exists()) {
                 DB::rollBack();
-                return back()->withErrors(['action' => 'A schedule proposal is awaiting responses. Custodian availability actions are paused until it is answered.']);
+                return back()->withErrors(['action' => 'A suggested schedule is awaiting responses. Custodian availability actions are paused until it is answered.']);
             }
             if ($custodianType === 'equipment' && $fr->supply_office_review_status !== 'confirmed') {
                 DB::rollBack();

@@ -7,9 +7,7 @@
     <div class="mx-auto max-w-6xl space-y-6">
         <div>
             <h1 class="text-2xl font-bold text-gray-800">Account Verification</h1>
-            <p class="mt-1 text-sm text-gray-600">
-                Check each uploaded ID against the account name and category. The ID image is deleted as soon as you approve or reject it; only the ID type and your decision are kept.
-            </p>
+            <p class="mt-1 text-sm text-gray-600">Check each ID against the account name and category. The image is deleted after your decision.</p>
         </div>
 
         @foreach (['success' => 'border-emerald-200 bg-emerald-50 text-emerald-800', 'info' => 'border-blue-200 bg-blue-50 text-blue-800'] as $key => $classes)

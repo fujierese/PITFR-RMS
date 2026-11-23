@@ -51,7 +51,7 @@
         $venueStatus === 'pending' && $equipmentStatus === 'pending' => 'Awaiting venue & equipment review',
         $venueStatus === 'pending' => 'Awaiting venue review',
         $equipmentStatus === 'pending' => 'Awaiting equipment review',
-        default => 'Pending review',
+        default => 'Waiting for review',
     };
 
     $badgeStatus = match ($overallStatus) {

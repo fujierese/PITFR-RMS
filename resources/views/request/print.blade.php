@@ -1149,7 +1149,7 @@
 
                         <div class="label-row request-meta-row">
                             <div>
-                                <span class="field-label">Dept. / Requisitioning Office:</span>
+                                <span class="field-label">Dept. / Requesting Office:</span>
                                 <span class="field-value">{{ $request->department ?: 'N/A' }}</span>
                             </div>
                             <div>

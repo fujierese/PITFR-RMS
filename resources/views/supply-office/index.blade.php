@@ -15,7 +15,7 @@
             </div>
             <div class="flex items-center gap-3">
                 <div class="rounded-2xl border border-white/20 bg-white/10 px-3 py-2 text-left">
-                    <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-100">Pending review</p>
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-100">Waiting for review</p>
                     <p class="mt-1 text-lg font-semibold text-white">{{ $pendingFinalApprovalCount }}</p>
                 </div>
             </div>
@@ -45,13 +45,13 @@
             <div>
                 @if(auth()->user()->isFinalApprover())
                     <h2 id="supply-office-workflow-heading" class="text-sm font-semibold text-slate-950">Final approval guide</h2>
-                    <p class="mt-1 text-sm leading-6 text-slate-700">Review requests after all required custodians and Supply Office staff have completed their checks. Final approval and rejection are restricted to the designated Admin account.</p>
+                    <p class="mt-1 text-sm leading-6 text-slate-700">Review requests after all custodians and Supply Office staff have completed their checks.</p>
                 @elseif(auth()->user()->isSystemAdmin())
                     <h2 id="supply-office-workflow-heading" class="text-sm font-semibold text-slate-950">Final approval assignment</h2>
-                    <p class="mt-1 text-sm leading-6 text-slate-700">Final approval is assigned to the configured Admin account. Supply Office staff continue to handle availability checks.</p>
+                    <p class="mt-1 text-sm leading-6 text-slate-700">Final approval is handled by the designated final approver. Supply Office staff handle availability checks.</p>
                 @else
                     <h2 id="supply-office-workflow-heading" class="text-sm font-semibold text-slate-950">Availability review</h2>
-                    <p class="mt-1 text-sm leading-6 text-slate-700">Confirm availability after the venue custodian review, or mark the request unavailable when a conflict requires rescheduling. Final approval is handled separately by the system administrator.</p>
+                    <p class="mt-1 text-sm leading-6 text-slate-700">Confirm availability after the venue custodian, or mark the request unavailable if it conflicts.</p>
                 @endif
             </div>
         </div>
@@ -86,7 +86,7 @@
         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h2 class="text-xl font-semibold text-slate-900">Availability Review Required</h2>
-                <p class="mt-1 text-sm text-slate-600">The venue custodian has confirmed the venue. Check every requested venue, review the current calendar, and confirm or mark unavailable. Equipment custodians will review their assigned items only after this step.</p>
+                <p class="mt-1 text-sm text-slate-600">The venue is confirmed. Check each venue on the calendar, then confirm or mark unavailable.</p>
             </div>
             <span class="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-800">{{ $availabilityReviewQueue->total() }} waiting</span>
         </div>
@@ -173,7 +173,7 @@
         <section class="rounded-3xl border border-amber-200 bg-white p-6 shadow-sm" aria-labelledby="venue-reschedule-heading">
             <div class="mb-4">
                 <h2 id="venue-reschedule-heading" class="text-xl font-semibold text-slate-900">Venue Unavailable — Schedule Coordination Needed</h2>
-                <p class="mt-1 text-sm text-slate-600">The venue custodian could not confirm the requested slot. Contact the requestor and propose an available schedule from the request details page. The request will restart availability review after the proposal is accepted.</p>
+                <p class="mt-1 text-sm text-slate-600">The venue custodian could not confirm this slot. Suggest a new schedule from the request page.</p>
             </div>
             <div class="space-y-3">
                 @foreach($venueRescheduleQueue as $venueIssue)

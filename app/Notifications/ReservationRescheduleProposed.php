@@ -29,10 +29,10 @@ class ReservationRescheduleProposed extends Notification implements ShouldQueueA
         $proposer = $this->revision->revisedBy;
 
         return (new MailMessage)
-            ->subject('Schedule change proposal: ' . $request->control_number)
+            ->subject('Suggested new schedule: ' . $request->control_number)
             ->greeting('Hello ' . ($notifiable->name ?? 'there') . '!')
             ->line(($proposer?->name ?? 'A staff member') . ' proposed a schedule change for reservation ' . $request->control_number . '.')
-            ->line('Proposed schedule: ' . $this->formatSchedule())
+            ->line('Suggested schedule: ' . $this->formatSchedule())
             ->line('Reason: ' . $this->revision->revision_reason)
             ->line('Your current reservation will remain unchanged until you respond.')
             ->action('Review proposal', route('request.show', $request));
@@ -46,7 +46,7 @@ class ReservationRescheduleProposed extends Notification implements ShouldQueueA
             'facility_request_id' => $this->revision->facility_request_id,
             'revision_id' => $this->revision->id,
             'control_number' => $this->revision->facilityRequest->control_number,
-            'title' => 'Schedule change proposed',
+            'title' => 'Suggested new schedule',
             'message' => ($proposer?->name ?? 'A staff member') . ' proposed a new schedule. Review it and accept or decline the change.',
             'proposed_schedule' => $this->formatSchedule(),
             'revision_reason' => $this->revision->revision_reason,

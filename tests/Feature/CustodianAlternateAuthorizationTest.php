@@ -89,7 +89,7 @@ class CustodianAlternateAuthorizationTest extends TestCase
             ->assertViewIs('custodian.dashboard')
             ->assertSee('Custodian Workspace')
             ->assertSee('Welcome, ' . ($custodian->first_name ?: $custodian->name))
-            ->assertSee('Pending Review')
+            ->assertSee('Waiting for Review')
             ->assertDontSee('Search requests, venues, equipment')
             ->assertDontSee('name="search"', false)
             ->assertSee('data-calendar-today-link', false)
@@ -151,6 +151,8 @@ class CustodianAlternateAuthorizationTest extends TestCase
 
     public function test_custodian_dashboard_groups_equipment_by_venue_and_orders_schedules_by_start_time(): void
     {
+        // A date in the future, so the request stays on the dashboard.
+        $scheduleDate = now()->addDays(7)->toDateString();
         $custodian = User::factory()->create(['role' => 'custodian-venue']);
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         $chic = Venue::create([
@@ -165,8 +167,8 @@ class CustodianAlternateAuthorizationTest extends TestCase
             'requested_by_id' => $requester->id,
             'venue' => [$chic->name, $court->name],
             'equipment' => ['Wireless Microphone', 'Sound System'],
-            'start_date' => '2026-11-23',
-            'end_date' => '2026-11-23',
+            'start_date' => $scheduleDate,
+            'end_date' => $scheduleDate,
             'start_time' => '08:00',
             'end_time' => '17:00',
             'reservation_duration' => 'specific_time',
@@ -178,8 +180,8 @@ class CustodianAlternateAuthorizationTest extends TestCase
         $chicSchedule = $request->requestVenues()->create([
             'venue_id' => $chic->id,
             'name' => $chic->name,
-            'start_date' => '2026-11-23',
-            'end_date' => '2026-11-23',
+            'start_date' => $scheduleDate,
+            'end_date' => $scheduleDate,
             'start_time' => '12:00',
             'end_time' => '17:00',
             'reservation_duration' => 'specific_time',
@@ -187,8 +189,8 @@ class CustodianAlternateAuthorizationTest extends TestCase
         $courtSchedule = $request->requestVenues()->create([
             'venue_id' => $court->id,
             'name' => $court->name,
-            'start_date' => '2026-11-23',
-            'end_date' => '2026-11-23',
+            'start_date' => $scheduleDate,
+            'end_date' => $scheduleDate,
             'start_time' => '08:00',
             'end_time' => '12:00',
             'reservation_duration' => 'specific_time',

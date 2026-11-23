@@ -7,7 +7,7 @@
     <header class="rounded-3xl bg-slate-900 p-6 text-white shadow-lg">
         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Records</p>
         <h1 class="mt-2 text-3xl font-bold">Reservation History</h1>
-        <p class="mt-2 max-w-3xl text-sm text-slate-300">Completed reservations appear here after their scheduled end time and, when requested, after borrowed equipment has been accounted for. Request details and documents remain protected by role-based access.</p>
+        <p class="mt-2 max-w-3xl text-sm text-slate-300">Completed reservations appear here after they end and any borrowed equipment is returned.</p>
     </header>
 
     <form method="GET" action="{{ route('history.index') }}" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

@@ -209,7 +209,7 @@
         $request->status === 'cancelled' => 'No further workflow action is required.',
         $request->status === 'rejected' => 'The workflow has ended because this request was rejected.',
         in_array($request->status, ['approved', 'completed'], true) => 'The approval workflow is complete.',
-        $pendingRevision && ! in_array($pendingRevisionRequesterResponse, ['accepted', 'not_required'], true) => 'The requestor needs to review the proposed schedule.',
+        $pendingRevision && ! in_array($pendingRevisionRequesterResponse, ['accepted', 'not_required'], true) => 'The requestor needs to review the suggested schedule.',
         $pendingRevision && $pendingRevisionResponderNames !== '' => 'Waiting for proposal confirmation from: ' . $pendingRevisionResponderNames . '.',
         $pendingRevision => 'Proposal responses are complete; the schedule review will continue.',
         $request->status === 'needs_reschedule' => 'The requestor needs to update the schedule and resubmit for venue review.',
@@ -617,7 +617,7 @@
         @if($hasAdditionalEquipment && $request->status === 'approved')
             <section class="mt-5 rounded-[24px] border border-amber-200 bg-amber-50 p-4 sm:p-5" aria-labelledby="equipment-return-progress-title">
                 <h2 id="equipment-return-progress-title" class="text-base font-semibold text-amber-950">Equipment return progress</h2>
-                <p class="mt-1 text-sm text-amber-900">Returned and missing quantities are both recorded as accounted for. Damaged items count as returned but are excluded from available inventory.</p>
+                <p class="mt-1 text-sm text-amber-900">Returned and missing items count as accounted for. Damaged items count as returned but are not lent out again.</p>
                 <ul class="mt-3 space-y-2 text-sm text-slate-800">
                     @foreach($additionalEquipmentQuantities as $itemName => $quantity)
                         @php $outstanding = (int) ($returnOutstandingQuantities[$itemName] ?? 0); @endphp
@@ -712,10 +712,10 @@
         <section id="schedule-proposal" style="margin-bottom: 24px !important; scroll-margin-top: 96px;" class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm" aria-labelledby="schedule-proposal-title">
             <div class="flex items-start gap-3">
                 <div class="min-w-0 flex-1">
-                    <h2 id="schedule-proposal-title" class="text-lg font-semibold text-amber-950">Schedule change proposed</h2>
+                    <h2 id="schedule-proposal-title" class="text-lg font-semibold text-amber-950">Suggested new schedule</h2>
                     <p class="mt-1 text-sm text-amber-900">
                         @if($proposalAuthor)
-                            Proposed by {{ $proposalAuthor->name }} ({{ $proposalAuthor->role_label }}).
+                            Suggested by {{ $proposalAuthor->name }} ({{ $proposalAuthor->role_label }}).
                         @else
                             A reservation change was proposed.
                         @endif
@@ -775,7 +775,7 @@
                                         :end-time="substr((string) $pendingRevision->new_end_time, 0, 5)"
                                         :facility-request="$request"
                                         :use-provided-schedule="true"
-                                        label="Check proposed schedule"
+                                        label="Check suggested schedule"
                                     />
                                 @endif
                             </li>
@@ -788,11 +788,11 @@
                 <p class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">This transfer is required by a memorandum. You are being informed of the destination and reason; requestor consent is not required.</p>
             @endif
             @if($currentUserMustRespond && !$requestorHasResponded && (int) $currentUser->id !== (int) $request->requested_by_id)
-                <p class="mt-3 text-sm text-slate-600">The requestor must accept the proposed schedule before custodians can review it.</p>
+                <p class="mt-3 text-sm text-slate-600">The requestor must accept the suggested schedule before custodians can review it.</p>
             @endif
             @if($requestorHasResponded && $proposedVenuesForCustodian->isNotEmpty() && $currentRevisionResponse === 'pending')
                 <div class="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3">
-                    <p class="text-sm font-semibold text-sky-950">Review the proposed venue schedule</p>
+                    <p class="text-sm font-semibold text-sky-950">Review the suggested venue schedule</p>
                     <p class="mt-1 text-sm text-sky-900">Check the proposed date and time in the venue calendar. Availability will be checked again when you confirm.</p>
                     <div class="mt-2 flex flex-wrap gap-2">
                         @foreach($proposedVenuesForCustodian as $venueName)
@@ -806,7 +806,7 @@
                                 :use-provided-schedule="true"
                                 :availability-check-url="route('calendar.request-availability-check', $request)"
                                 :availability-group="'revision-' . $pendingRevision->id . '-' . $currentUser->id"
-                                label="Check proposed schedule"
+                                label="Check suggested schedule"
                             />
                         @endforeach
                     </div>
@@ -814,18 +814,18 @@
             @endif
             @if($currentUserCanRespond)
             @if($pendingRevision->conflict_detected && $pendingRevision->override_conflict)
-                <p class="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">The proposed schedule has a resource conflict that the Supply Office chose to override. Please consider this before accepting.</p>
+                <p class="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">The suggested schedule has a resource conflict that the Supply Office chose to override. Please consider this before accepting.</p>
             @endif
             <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <form method="POST" action="{{ route('request.revision.respond', [$request, $pendingRevision]) }}" data-swal-confirm data-swal-title="Decline this schedule proposal?" data-swal-text="Your existing reservation schedule will remain unchanged." data-swal-confirm-text="Yes, decline" data-swal-confirm-color="#dc2626">
+                <form method="POST" action="{{ route('request.revision.respond', [$request, $pendingRevision]) }}" data-swal-confirm data-swal-title="Decline this suggested schedule?" data-swal-text="Your existing reservation schedule will remain unchanged." data-swal-confirm-text="Yes, decline" data-swal-confirm-color="#dc2626">
                     @csrf
                     <input type="hidden" name="response" value="decline">
                     <button type="submit" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:w-auto">{{ $currentUser->isCustodian() && (int) $currentUser->id !== (int) $request->requested_by_id ? 'Reject proposal' : 'Decline proposal' }}</button>
                 </form>
-                <form method="POST" action="{{ route('request.revision.respond', [$request, $pendingRevision]) }}" data-swal-confirm data-swal-title="Confirm this schedule proposal?" data-swal-text="Your confirmation will be recorded. The booking changes only after all required responses." data-swal-confirm-text="Confirm schedule" data-swal-confirm-color="#059669">
+                <form method="POST" action="{{ route('request.revision.respond', [$request, $pendingRevision]) }}" data-swal-confirm data-swal-title="Accept this suggested schedule?" data-swal-text="Your confirmation will be recorded. The booking changes only after all required responses." data-swal-confirm-text="Confirm schedule" data-swal-confirm-color="#059669">
                     @csrf
                     <input type="hidden" name="response" value="accept">
-                    <button type="submit" class="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 sm:w-auto">{{ $currentUser->isCustodian() && (int) $currentUser->id !== (int) $request->requested_by_id ? 'Confirm as custodian' : 'Confirm proposed schedule' }}</button>
+                    <button type="submit" class="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 sm:w-auto">{{ $currentUser->isCustodian() && (int) $currentUser->id !== (int) $request->requested_by_id ? 'Confirm as custodian' : 'Accept suggested schedule' }}</button>
                 </form>
             </div>
             @else
@@ -861,10 +861,10 @@
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900">Request Change</h2>
-                        <p class="text-sm text-slate-600">A custodian has already approved part of this request. Submit a change request before editing; direct editing is locked until a reviewer allows revision.</p>
+                        <p class="text-sm text-slate-600">Part of this request is already approved. Submit a change request to edit it.</p>
                     </div>
                     @if($pendingChangeRequest)
-                        <span class="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Change Pending Review</span>
+                        <span class="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Change Waiting for Review</span>
                     @endif
                 </div>
                 @if($pendingChangeRequest)
@@ -907,7 +907,7 @@
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900">Reschedule Needed</h2>
-                        <p class="text-sm text-slate-600">The proposed schedule was not accepted or the venue is unavailable. Choose another venue, date, or time; the request will return to venue review.</p>
+                        <p class="text-sm text-slate-600">Choose another venue, date or time. The request then returns to venue review.</p>
                     </div>
                     <a href="{{ route('requestor.edit', $request->id) }}" class="inline-flex items-center gap-2 rounded-2xl bg-amber-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-700">
                         Reschedule Request
@@ -960,7 +960,7 @@
                 @endphp
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3">
                     <div>
-                        <p class="text-sm text-slate-600">Review each assigned venue schedule. Confirm that it is available, or suggest a new schedule if it is not. We’ll check availability again before you confirm.</p>
+                        <p class="text-sm text-slate-600">Check each venue's schedule, then confirm it or suggest a new schedule.</p>
                         <div class="mt-2 flex flex-wrap gap-2">
                             @foreach($request->getVenueNames() as $venueName)
                                 @if($assignedVenueNames->contains(mb_strtolower(trim($venueName))))
@@ -999,12 +999,12 @@
                 </div>
             @elseif($pendingRevision)
                 <div class="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-                    <h2 class="font-semibold">Schedule proposal awaiting confirmation</h2>
+                    <h2 class="font-semibold">Suggested schedule awaiting confirmation</h2>
                     <p class="mt-1">
                         @if(in_array(($pendingRevisionResponses[(string) $request->requested_by_id] ?? 'pending'), ['accepted', 'not_required'], true))
-                            The requestor has responded. The assigned venue custodian must confirm the proposed schedule before the request can continue.
+                            The requestor has responded. The assigned venue custodian must confirm the suggested schedule before the request can continue.
                         @else
-                            Venue availability review will begin after the requestor responds to the proposed schedule.
+                            Venue availability review will begin after the requestor responds to the suggested schedule.
                         @endif
                     </p>
                 </div>
@@ -1071,7 +1071,7 @@
                                 @endforeach
                                 <div>
                                     <h3 class="font-semibold text-amber-950">Propose another schedule</h3>
-                                    <p class="mt-1 text-sm text-amber-900">Change any date, time, or venue field to suggest an alternative. The proposal can be sent even if availability still needs review; the venue custodian will check again before confirming it.</p>
+                                    <p class="mt-1 text-sm text-amber-900">Change the date, time or venue. The venue custodian checks availability again before confirming.</p>
                                 </div>
                                 <div class="grid gap-3 sm:grid-cols-2">
                                     <label class="text-sm font-medium text-slate-700">New start date
@@ -1098,7 +1098,7 @@
                                 </label>
                                 <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
                                     <button type="button" id="cancel-venue-reschedule-form" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
-                                    <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Send reschedule proposal</button>
+                                    <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Send Suggested Schedule</button>
                                 </div>
                                 <p id="venue-reschedule-feedback" class="hidden rounded-xl px-3 py-2 text-sm" role="status" aria-live="polite"></p>
                             </form>
@@ -1185,8 +1185,8 @@
                             <h2 class="text-lg font-semibold text-slate-900">Final Approval</h2>
                             <p class="text-sm text-slate-500">All required venue, Supply Office, and equipment stages are complete.</p>
                         @elseif($adminFinalReady)
-                            <h2 class="text-lg font-semibold text-slate-900">Awaiting Admin Final Approval</h2>
-                            <p class="text-sm text-slate-500">Supply Office review is complete. The designated Admin account must finalize this request.</p>
+                            <h2 class="text-lg font-semibold text-slate-900">Awaiting Final Approval</h2>
+                            <p class="text-sm text-slate-500">Supply Office review is complete. The designated final approver will decide.</p>
                         @elseif($request->status === 'approved')
                             <h2 class="text-lg font-semibold text-slate-900">Reservation Approved</h2>
                             <p class="text-sm text-emerald-600 font-medium">✓ Request has been approved and finalized.</p>
@@ -1315,7 +1315,7 @@
                             @if(($request->status === 'pending' || $request->status === 'approved') && ($scheduleChangeReason ?? null))
                                 <p class="sm:col-span-2 lg:col-span-3 text-xs font-medium text-amber-800">Schedule change available: {{ $scheduleChangeReason }}</p>
                                 <button type="button" id="open-reschedule-form" class="sm:col-span-2 lg:col-span-1 w-full inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-100">
-                                    {{ $request->status === 'approved' ? 'Propose Approved-Booking Change' : 'Reschedule Reservation' }}
+                                    {{ $request->status === 'approved' ? 'Suggest a New Schedule' : 'Suggest a New Schedule' }}
                                 </button>
                             @endif
                         </div>
@@ -1323,7 +1323,7 @@
                         <form id="reschedule-form" method="POST" action="{{ route('supply-office.requests.revise') }}" data-request-control-number="{{ $request->control_number }}" class="hidden rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-4">
                             @csrf
                             <div>
-                                <h3 class="font-semibold text-amber-950">Propose a schedule change</h3>
+                                <h3 class="font-semibold text-amber-950">Suggest a new schedule</h3>
                                 <p class="mt-1 text-sm text-amber-900">The existing booking remains active until all affected custodians and users confirm. Proposals expire after 24 hours if unanswered.</p>
                             </div>
                             <input type="hidden" name="facility_request_id" value="{{ $request->id }}">
@@ -1341,7 +1341,7 @@
                                     @if($unavailableRequestedVenues->isNotEmpty())
                                         <span class="mt-1 block text-xs text-amber-700">Requested but no longer bookable: {{ $unavailableRequestedVenues->implode(', ') }}. Choose another venue.</span>
                                     @endif
-                                    <span class="mt-1 block text-xs text-slate-500">Tick every venue that should be part of the new schedule. Each venue is checked on its own.</span>
+                                    <span class="mt-1 block text-xs text-slate-500">Select every venue that should be part of the new schedule. Each venue is checked on its own.</span>
                                 </fieldset>
                             @foreach($equipmentItems as $equipmentItem)
                                 <input type="hidden" name="equipment[]" value="{{ $equipmentItem }}">
@@ -1385,7 +1385,7 @@
                             </div>
                             <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
                                 <button type="button" id="cancel-reschedule-form" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
-                                <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Send schedule proposal</button>
+                                <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Send Suggested Schedule</button>
                             </div>
                             <p id="reschedule-feedback" class="hidden rounded-xl px-3 py-2 text-sm" role="status" aria-live="polite"></p>
                         </form>
@@ -1831,7 +1831,7 @@
             if (venues.length === 0) {
                 const note = document.createElement('span');
                 note.className = 'text-xs text-slate-500';
-                note.textContent = 'Tick a venue to check its calendar.';
+                note.textContent = 'Select a venue to check its calendar.';
                 container.appendChild(note);
                 return;
             }
@@ -1940,12 +1940,12 @@
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) {
                 const validationMessage = Object.values(payload.errors || {}).flat()[0];
-                throw new Error(validationMessage || payload.message || 'Unable to send the schedule proposal. Please review the details and try again.');
+                throw new Error(validationMessage || payload.message || 'Unable to send the suggested schedule. Please review the details and try again.');
             }
 
-            const successMessage = payload.message || 'The schedule proposal has been sent to the requestor and affected custodians.';
+            const successMessage = payload.message || 'The suggested schedule has been sent to the requestor and affected custodians.';
             await Swal.fire({
-                title: 'Proposal sent',
+                title: 'Suggested schedule sent',
                 text: successMessage,
                 icon: 'success',
                 confirmButtonText: 'View updated request',
@@ -1955,10 +1955,10 @@
             });
             window.location.reload();
         } catch (error) {
-            venueRescheduleFeedback.textContent = error instanceof Error ? error.message : 'Unable to send the schedule proposal. Please try again.';
+            venueRescheduleFeedback.textContent = error instanceof Error ? error.message : 'Unable to send the suggested schedule. Please try again.';
             venueRescheduleFeedback.className = 'rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800';
             submitButton.disabled = false;
-            submitButton.textContent = 'Send reschedule proposal';
+            submitButton.textContent = 'Send Suggested Schedule';
             venueRescheduleForm.dataset.submitting = '0';
             venueRescheduleFeedback.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -1977,7 +1977,7 @@
         const selectedVenues = Array.from(rescheduleForm.querySelectorAll('[data-revision-venue]:checked'))
             .map((input) => input.value.trim());
         const confirmation = await Swal.fire({
-            title: 'Send this schedule proposal?',
+            title: 'Send this suggested schedule?',
             text: [
                 `Request: ${rescheduleForm.dataset.requestControlNumber}`,
                 `Venue${selectedVenues.length === 1 ? '' : 's'}: ${selectedVenues.join(', ')}`,
@@ -2014,13 +2014,13 @@
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) {
                 const validationMessage = Object.values(payload.errors || {}).flat()[0];
-                throw new Error(validationMessage || payload.message || 'Unable to send the schedule proposal. Please review the details and try again.');
+                throw new Error(validationMessage || payload.message || 'Unable to send the suggested schedule. Please review the details and try again.');
             }
 
-            const successMessage = payload.message || 'The schedule proposal has been sent to the requestor and affected custodians.';
-            submitButton.textContent = 'Proposal sent';
+            const successMessage = payload.message || 'The suggested schedule has been sent to the requestor and affected custodians.';
+            submitButton.textContent = 'Suggested schedule sent';
             await Swal.fire({
-                title: 'Proposal sent',
+                title: 'Suggested schedule sent',
                 text: successMessage,
                 icon: 'success',
                 confirmButtonText: 'View updated request',
@@ -2030,10 +2030,10 @@
             });
             window.location.reload();
         } catch (error) {
-            rescheduleFeedback.textContent = error instanceof Error ? error.message : 'Unable to send the schedule proposal. Please try again.';
+            rescheduleFeedback.textContent = error instanceof Error ? error.message : 'Unable to send the suggested schedule. Please try again.';
             rescheduleFeedback.className = 'rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800';
             submitButton.disabled = false;
-            submitButton.textContent = 'Send schedule proposal';
+            submitButton.textContent = 'Send Suggested Schedule';
             rescheduleForm.dataset.submitting = '0';
             rescheduleFeedback.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }

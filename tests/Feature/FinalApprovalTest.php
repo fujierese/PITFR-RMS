@@ -283,7 +283,7 @@ class FinalApprovalTest extends TestCase
         $this->actingAs($admin)
             ->get(route('request.show', $request))
             ->assertOk()
-            ->assertSee('Awaiting Admin Final Approval')
+            ->assertSee('Awaiting Final Approval')
             ->assertDontSee(route('request.supply.final-approval', $request), false);
 
         $this->post(route('request.supply.final-approval', $request))->assertForbidden();

@@ -30,8 +30,8 @@ class ReservationRescheduleReviewRequired extends Notification implements Should
         return (new MailMessage)
             ->subject('Custodian review needed: ' . $this->revision->facilityRequest->control_number)
             ->greeting('Hello ' . ($notifiable->name ?? 'there') . '!')
-            ->line($this->acceptedByName . ' accepted the proposed schedule change.')
-            ->line('Please review the proposed schedule and confirm whether your assigned venue or equipment is available.')
+            ->line($this->acceptedByName . ' accepted the suggested new schedule.')
+            ->line('Please review the suggested schedule and confirm whether your assigned venue or equipment is available.')
             ->line('The current reservation remains unchanged until all required responses are received.')
             ->action('Review proposal', route('request.show', $this->revision->facilityRequest));
     }
@@ -45,7 +45,7 @@ class ReservationRescheduleReviewRequired extends Notification implements Should
             'revision_id' => $this->revision->id,
             'control_number' => $request->control_number,
             'title' => 'Custodian review needed',
-            'message' => $this->acceptedByName . ' accepted the proposed schedule. Review availability and respond.',
+            'message' => $this->acceptedByName . ' accepted the suggested schedule. Review availability and respond.',
             'proposed_schedule' => $this->formatSchedule(),
             'status' => 'reschedule_review_required',
             'route' => route('request.show', $request),

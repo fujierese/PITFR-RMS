@@ -294,7 +294,7 @@
     {{-- CTA --}}
     <div class="rounded-3xl bg-gradient-to-r from-emerald-700 to-emerald-600 p-6 text-center text-white shadow-xl sm:p-8 lg:p-12">
         <h2 class="text-3xl font-bold mb-3">Ready to Get Started?</h2>
-        <p class="text-emerald-100 mb-8 max-w-md mx-auto">New Outsider users can create an account here. Students, staff, and faculty accounts are created by the Admin.</p>
+        <p class="text-emerald-100 mb-8 max-w-md mx-auto">PIT students, faculty, staff and guests can create an account.</p>
         <a href="{{ route('login') }}"
            class="inline-flex items-center gap-2 bg-white text-emerald-700 hover:bg-slate-100 font-bold px-8 py-3 rounded-xl transition shadow-lg">
             Sign In Now →

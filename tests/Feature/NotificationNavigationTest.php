@@ -79,7 +79,7 @@ class NotificationNavigationTest extends TestCase
         $this->actingAs($this->requestor)->get(route('request.show', $this->request))
             ->assertOk()
             ->assertSee('id="schedule-proposal"', false)
-            ->assertSee('Schedule change proposed');
+            ->assertSee('Suggested new schedule');
     }
 
     public function test_an_answered_suggestion_says_so(): void

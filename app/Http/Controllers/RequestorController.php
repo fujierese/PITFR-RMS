@@ -52,7 +52,7 @@ class RequestorController extends Controller
         ]);
 
         if ($revision->status !== 'pending') {
-            return back()->withErrors(['revision' => 'This schedule proposal has already been answered.']);
+            return back()->withErrors(['revision' => 'This suggested schedule has already been answered.']);
         }
 
         $affectedUserIds = array_map('intval', $revision->affected_user_ids ?? [$facilityRequest->requested_by_id]);
@@ -67,12 +67,12 @@ class RequestorController extends Controller
         $requestorResponse = $revisionResponses[(string) $facilityRequest->requested_by_id] ?? 'pending';
         $isRequestor = (int) $user->id === (int) $facilityRequest->requested_by_id;
         if ($validated['response'] === 'accept' && ! $isRequestor && $requestorResponse === 'pending') {
-            return back()->withErrors(['revision' => 'The requestor must accept the proposed schedule before custodians can review it.']);
+            return back()->withErrors(['revision' => 'The requestor must accept the suggested schedule before custodians can review it.']);
         }
 
         if ($revision->response_deadline_at && $revision->response_deadline_at->isPast()) {
             $revision->update(['status' => 'expired', 'responded_at' => now()]);
-            $facilityRequest->addHistory('revision_expired', 'Schedule proposal expired without changing the approved reservation.', $user->id);
+            $facilityRequest->addHistory('revision_expired', 'Suggested schedule expired without changing the approved reservation.', $user->id);
             Notification::send(
                 User::query()->whereIn('id', $affectedUserIds)->get(),
                 new \App\Notifications\RequestStatusChanged($facilityRequest, 'revision_expired', 'The change proposal expired. The approved reservation remains unchanged.')
@@ -104,14 +104,14 @@ class RequestorController extends Controller
                 $lockedRequest->addHistory(
                     'revision_declined',
                     $isRequestor && $lockedRequest->status !== 'approved'
-                        ? $user->name . ' declined the proposed schedule and may edit the request for another venue or schedule.'
-                        : $user->name . ' declined the proposed schedule change. The current reservation remains unchanged.',
+                        ? $user->name . ' declined the suggested schedule and may edit the request for another venue or schedule.'
+                        : $user->name . ' declined the suggested new schedule. The current reservation remains unchanged.',
                     $user->id,
                 );
                 return true;
             });
             if (!$declined) {
-                return back()->withErrors(['revision' => 'This schedule proposal has already been answered.']);
+                return back()->withErrors(['revision' => 'This suggested schedule has already been answered.']);
             }
 
             $revision->refresh();
@@ -123,8 +123,8 @@ class RequestorController extends Controller
 
             return redirect()->route('request.show', $facilityRequest)
                 ->with('success', $isRequestor && $facilityRequest->status !== 'approved'
-                    ? 'You declined the proposed schedule. Edit your request to choose another venue, date, or time; it will return to venue review.'
-                    : 'You declined the schedule proposal. The current reservation remains unchanged.');
+                    ? 'You declined the suggested schedule. Edit your request to choose another venue, date, or time; it will return to venue review.'
+                    : 'You declined the suggested schedule. The current reservation remains unchanged.');
         }
 
         if ($user->isCustodian()) {
@@ -146,7 +146,7 @@ class RequestorController extends Controller
             }
             if ($lockedRevision->response_deadline_at && $lockedRevision->response_deadline_at->isPast()) {
                 $lockedRevision->update(['status' => 'expired', 'responded_at' => now()]);
-                $lockedRequest->addHistory('revision_expired', 'Schedule proposal expired without changing the approved reservation.', $user->id);
+                $lockedRequest->addHistory('revision_expired', 'Suggested schedule expired without changing the approved reservation.', $user->id);
                 return null;
             }
 
@@ -157,11 +157,11 @@ class RequestorController extends Controller
             $responses[(string) $user->id] = 'accepted';
             $lockedRevision->responses = $responses;
             $lockedRevision->save();
-            $responseDetail = $user->name . ' accepted the proposed schedule change.';
+            $responseDetail = $user->name . ' accepted the suggested new schedule.';
             if ($user->isCustodianVenue()) {
-                $responseDetail .= ' Venue availability was rechecked against the proposed schedule.';
+                $responseDetail .= ' Venue availability was rechecked against the suggested schedule.';
             } elseif ($user->isCustodianEquipment()) {
-                $responseDetail .= ' Assigned equipment availability was rechecked for the proposed schedule.';
+                $responseDetail .= ' Assigned equipment availability was rechecked for the suggested schedule.';
             }
             $lockedRequest->addHistory('revision_response_received', $responseDetail, $user->id);
 
@@ -196,7 +196,7 @@ class RequestorController extends Controller
             }
 
             return redirect()->route('request.show', $facilityRequest)
-                ->with('success', 'Your acceptance was recorded. The reservation remains unchanged while affected custodians review the proposed schedule.');
+                ->with('success', 'Your acceptance was recorded. The reservation remains unchanged while affected custodians review the suggested schedule.');
         }
 
         if (!$facilityRequest->canBeRevised()) {
@@ -217,7 +217,7 @@ class RequestorController extends Controller
         ];
         if ($newState['start_time'] <= '05:00' || $newState['end_time'] <= '05:00') {
             return back()->withErrors([
-                'revision' => 'This proposed schedule is not allowed because reservations cannot start or end between 12:00 AM and 5:00 AM. Contact the Supply Office for a revised schedule.',
+                'revision' => 'This suggested schedule is not allowed because reservations cannot start or end between 12:00 AM and 5:00 AM. Contact the Supply Office for a revised schedule.',
             ]);
         }
         $range = FacilityRequest::normalizeScheduleRange(
@@ -229,7 +229,7 @@ class RequestorController extends Controller
         // REQ-16: never accept a proposal whose end is not after its start.
         if (! $range['start'] || ! $range['end'] || $range['end']->lte($range['start'])) {
             return back()->withErrors([
-                'revision' => 'This proposed schedule ends before it starts. Contact the Supply Office for a revised schedule.',
+                'revision' => 'This suggested schedule ends before it starts. Contact the Supply Office for a revised schedule.',
             ]);
         }
         $availabilityService = $this->availabilityService;
@@ -262,7 +262,7 @@ class RequestorController extends Controller
 
         if (($venueConflict || $equipmentConflict) && !$revision->override_conflict) {
             return back()->withErrors([
-                'revision' => 'The proposed schedule is no longer available. Contact the Supply Office for an updated proposal.',
+                'revision' => 'The suggested schedule is no longer available. Contact the Supply Office for an updated schedule.',
             ]);
         }
 
@@ -405,7 +405,7 @@ class RequestorController extends Controller
                     $lockedRequest->recordApprovalSignature('venue', $venueApprover);
                     $lockedRequest->addHistory(
                         'custodian_endorsed',
-                        'Venue availability for the proposed schedule confirmed by ' . $venueApprover->name . '.',
+                        'Venue availability for the suggested schedule confirmed by ' . $venueApprover->name . '.',
                         $venueApprover->id,
                     );
                 }
@@ -429,7 +429,7 @@ class RequestorController extends Controller
             ]);
             $lockedRequest->addHistory(
                 'revision_applied',
-                "Requestor accepted the proposed schedule change. {$lockedRevision->getSummary()}",
+                "Requestor accepted the suggested new schedule. {$lockedRevision->getSummary()}",
                 $user->id
             );
             if ($wasApproved) {
@@ -442,7 +442,7 @@ class RequestorController extends Controller
         });
         if (!$accepted) {
             return back()->withErrors([
-                'revision' => 'This proposal has already been answered, the reservation has changed or is locked, or the proposed schedule is no longer available. Contact the Supply Office.',
+                'revision' => 'This suggestion has already been answered, the reservation has changed or is locked, or the suggested schedule is no longer available. Contact the Supply Office.',
             ]);
         }
 

@@ -506,7 +506,7 @@ class Phase1RevisionWorkflowTest extends TestCase
         $this->actingAs($custodian)
             ->get(route('request.show', $request))
             ->assertOk()
-            ->assertSee('Check proposed schedule')
+            ->assertSee('Check suggested schedule')
             // REQ-08: the proposal shows readable times.
             ->assertSee('8:00 AM')
             ->assertSee('4:00 PM');
@@ -653,7 +653,7 @@ class Phase1RevisionWorkflowTest extends TestCase
         $this->actingAs($requester)
             ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'decline'])
             ->assertRedirect(route('request.show', $request))
-            ->assertSessionHas('success', 'You declined the proposed schedule. Edit your request to choose another venue, date, or time; it will return to venue review.');
+            ->assertSessionHas('success', 'You declined the suggested schedule. Edit your request to choose another venue, date, or time; it will return to venue review.');
 
         $request->refresh();
         $this->assertSame('needs_reschedule', $request->status);
@@ -823,8 +823,8 @@ class Phase1RevisionWorkflowTest extends TestCase
             ->get(route('request.show', $request))
             ->assertOk()
             ->assertViewHas('pendingRevision', fn ($pendingRevision) => $pendingRevision?->id === $revision->id)
-            ->assertSee('Schedule change proposed')
-            ->assertSee('Confirm proposed schedule')
+            ->assertSee('Suggested new schedule')
+            ->assertSee('Accept suggested schedule')
             ->assertSee('Decline proposal')
             ->assertSee($proposal['revision_reason']);
 

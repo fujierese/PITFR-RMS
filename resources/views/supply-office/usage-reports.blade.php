@@ -29,7 +29,7 @@
 
             <div class="mb-6 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
                 <p class="font-semibold">How to read this report</p>
-                <p class="mt-1">Only approved reservations whose scheduled start falls within this date range are included. Equipment units are the approved quantities requested (not a count of returned or consumed items). Venue bookings count each venue-reservation pairing; participant totals add the expected participants for each request.</p>
+                <p class="mt-1">Includes approved reservations that start in this date range. Equipment units are approved quantities; participants are expected attendance.</p>
             </div>
 
             <div class="mb-4 flex flex-wrap gap-2 print:hidden" aria-label="Quick date ranges">

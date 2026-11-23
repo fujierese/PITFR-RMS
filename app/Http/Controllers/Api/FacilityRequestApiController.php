@@ -511,7 +511,7 @@ class FacilityRequestApiController extends Controller
         if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
             return response()->json([
                 'success' => false,
-                'error' => 'A schedule proposal is awaiting responses. Custodian actions are paused until it is answered.',
+                'error' => 'A suggested schedule is awaiting responses. Custodian actions are paused until it is answered.',
             ], 409);
         }
         $approvalType = $request->validate([
@@ -627,7 +627,7 @@ class FacilityRequestApiController extends Controller
         if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
             return response()->json([
                 'success' => false,
-                'error' => 'A schedule proposal is awaiting responses. Custodian actions are paused until it is answered.',
+                'error' => 'A suggested schedule is awaiting responses. Custodian actions are paused until it is answered.',
             ], 409);
         }
         $reason = $request->input('reason', '');

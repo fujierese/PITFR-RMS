@@ -42,7 +42,7 @@ class ExampleTest extends TestCase
             ->assertSee('Custodian Validates Request')
             ->assertSee('Supply Office Reviews Request')
             ->assertSee('hours, days, or months depending on the queue')
-            ->assertSee('New Outsider users can create an account here.')
+            ->assertSee('PIT students, faculty, staff and guests can create an account.')
             ->assertDontSee('Smart Scheduling')
             ->assertDontSee('Role-Based Access')
             ->assertDontSee('>PITFR</a>', false)

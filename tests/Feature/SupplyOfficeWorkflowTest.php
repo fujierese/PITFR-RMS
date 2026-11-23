@@ -261,7 +261,7 @@ class SupplyOfficeWorkflowTest extends TestCase
             ->assertOk()
             ->assertDontSee(route('supply-office.requests.final-approval'), false)
             ->assertSee('Availability review')
-            ->assertSee('Final approval is handled separately by the system administrator.');
+            ->assertSee('Confirm availability after the venue custodian, or mark the request unavailable if it conflicts.');
     }
 
     public function test_supply_office_availability_button_uses_confirmation_loading_label(): void
@@ -553,9 +553,9 @@ class SupplyOfficeWorkflowTest extends TestCase
             ->assertDontSee('Mark Venue Unavailable')
             ->assertDontSee('request.custodian.reject', false)
             ->assertSee('data-availability-actions="custodian-venue-' . $request->id . '"', false)
-            ->assertSee('Change any date, time, or venue field to suggest an alternative.')
+            ->assertSee('Change the date, time or venue. The venue custodian checks availability again before confirming.')
             ->assertSee('id="venue-reschedule-feedback"', false)
-            ->assertSee('title: \'Proposal sent\'', false)
+            ->assertSee('title: \'Suggested schedule sent\'', false)
             ->assertSee('The requestor and affected custodians will be notified.')
             ->assertSee('Covered Court');
 
@@ -578,7 +578,7 @@ class SupplyOfficeWorkflowTest extends TestCase
             ])
             ->assertRedirect(route('request.show', $request))
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('success', 'Schedule change proposal sent to the requestor and affected custodians.');
+            ->assertSessionHas('success', 'Suggested new schedule sent to the requestor and affected custodians.');
 
         $revision = $request->revisionHistories()->where('status', 'pending')->firstOrFail();
         $this->assertSame($custodian->id, $revision->revised_by_id);
@@ -590,7 +590,7 @@ class SupplyOfficeWorkflowTest extends TestCase
         $this->actingAs($custodian)
             ->get(route('request.show', $request))
             ->assertOk()
-            ->assertSee('Proposed by ' . $custodian->name . ' (Venue Custodian).')
+            ->assertSee('Suggested by ' . $custodian->name . ' (Venue Custodian).')
             ->assertSee('The current request schedule remains unchanged until required responses are received.')
             ->assertSee('Reason from Venue Custodian')
             ->assertSee('Your response needed')
@@ -613,7 +613,7 @@ class SupplyOfficeWorkflowTest extends TestCase
             ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
             ->assertRedirect(route('request.show', $request))
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('success', 'Your acceptance was recorded. The reservation remains unchanged while affected custodians review the proposed schedule.');
+            ->assertSessionHas('success', 'Your acceptance was recorded. The reservation remains unchanged while affected custodians review the suggested schedule.');
 
         $request->refresh();
         $revision->refresh();
@@ -630,8 +630,8 @@ class SupplyOfficeWorkflowTest extends TestCase
         $this->actingAs($custodian)
             ->get(route('request.show', $request))
             ->assertOk()
-            ->assertSee('Review the proposed venue schedule')
-            ->assertSee('Check proposed schedule');
+            ->assertSee('Review the suggested venue schedule')
+            ->assertSee('Check suggested schedule');
 
         $this->actingAs($custodian)
             ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
@@ -693,7 +693,7 @@ class SupplyOfficeWorkflowTest extends TestCase
             ])
             ->assertRedirect(route('request.show', $request))
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('success', 'Schedule change proposal sent to the requestor and affected custodians.');
+            ->assertSessionHas('success', 'Suggested new schedule sent to the requestor and affected custodians.');
 
         $revision = $request->revisionHistories()->where('status', 'pending')->firstOrFail();
         $this->assertSame('09:00', $revision->old_start_time);
@@ -773,9 +773,9 @@ class SupplyOfficeWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->get(route('request.show', $request))
             ->assertOk()
-            ->assertSee('Send this schedule proposal?', false)
+            ->assertSee('Send this suggested schedule?', false)
             ->assertSee('Yes, send proposal', false)
-            ->assertSee('Proposal sent', false)
+            ->assertSee('Suggested schedule sent', false)
             ->assertSee('View updated request', false);
     }
 
