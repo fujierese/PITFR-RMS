@@ -360,9 +360,6 @@
                 </div>
             @endif
         </div>
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 mb-6">
-            <p class="text-sm text-slate-600">Admin dashboards are for oversight only. Approve/reject actions are intentionally hidden from this view to maintain separation of duties.</p>
-        </div>
     @endif
 
     {{-- Calendar in a Google Calendar-style layout: legend sidebar, clean grid, colored event chips. --}}
@@ -401,7 +398,7 @@
                         <h3 class="gcal-side-heading">Status</h3>
                         <ul class="gcal-legend-list">
                             <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="approved" aria-pressed="true"><span class="gcal-sample gcal-sample--solid"></span><span>Approved booking</span></button></li>
-                            <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="pending" aria-pressed="true"><span class="gcal-sample gcal-sample--tentative"></span><span>Pending review</span></button></li>
+                            <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="pending" aria-pressed="true"><span class="gcal-sample gcal-sample--tentative"></span><span>Waiting for review</span></button></li>
                             <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="declined" aria-pressed="true"><span class="gcal-sample gcal-sample--declined"></span><span>Rejected / conflict</span></button></li>
                             <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="maintenance" aria-pressed="true"><span class="gcal-sample gcal-sample--maintenance"></span><span>Maintenance / closure</span></button></li>
                             <li><button type="button" class="gcal-side-item gcal-filter" data-filter-group="status" data-filter-key="requested" aria-pressed="true"><span class="gcal-sample gcal-sample--requested"></span><span>Requested schedule</span></button></li>
@@ -1921,6 +1918,21 @@
 .gcal-event--chip .gcal-time { color: var(--gcal-muted); opacity: 1; }
 .gcal-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .gcal-event--block .gcal-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* QA 11-21 #12: long one-line titles scroll so the whole name can be read. */
+.gcal-title.is-scrolling { text-overflow: clip; }
+.gcal-title .gcal-scroll-text { display: inline-block; white-space: nowrap; }
+.gcal-title.is-scrolling .gcal-scroll-text {
+    padding-right: 1.5rem;
+    animation: event-label-marquee var(--event-marquee-duration, 9s) linear infinite alternate;
+    will-change: transform;
+}
+.fc-event:hover .gcal-title.is-scrolling .gcal-scroll-text,
+.fc-event:focus .gcal-title.is-scrolling .gcal-scroll-text,
+.fc-event:focus-within .gcal-title.is-scrolling .gcal-scroll-text { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+    .gcal-title.is-scrolling { text-overflow: ellipsis; }
+    .gcal-title.is-scrolling .gcal-scroll-text { animation: none; transform: none; display: inline; padding-right: 0; }
+}
 .gcal-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: 0.9; }
 .gcal-status { font-style: italic; }
 
@@ -2284,6 +2296,27 @@ document.addEventListener('DOMContentLoaded', function() {
                                 activityName.style.removeProperty('--event-marquee-duration');
                             }
                         }
+
+                        eventElement.querySelectorAll('.gcal-title').forEach(function(titleEl) {
+                            if (titleEl.closest('.gcal-event--block')) return;
+                            var text = titleEl.querySelector('.gcal-scroll-text');
+                            if (!text) {
+                                text = document.createElement('span');
+                                text.className = 'gcal-scroll-text';
+                                while (titleEl.firstChild) text.appendChild(titleEl.firstChild);
+                                titleEl.appendChild(text);
+                            }
+                            titleEl.classList.remove('is-scrolling');
+                            var overflow = text.scrollWidth - titleEl.clientWidth;
+                            if (titleEl.clientWidth > 0 && overflow > 4) {
+                                titleEl.classList.add('is-scrolling');
+                                text.style.setProperty('--event-scroll-distance', '-' + (overflow + 24) + 'px');
+                                text.style.setProperty('--event-marquee-duration', Math.max(4, Math.min(16, 3 + (overflow / 20))) + 's');
+                            } else {
+                                text.style.removeProperty('--event-scroll-distance');
+                                text.style.removeProperty('--event-marquee-duration');
+                            }
+                        });
 
                         eventElement.querySelectorAll('.venue-marquee-viewport').forEach(function(viewport) {
                             var venueName = viewport.querySelector('.venue-name');
@@ -3177,9 +3210,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (info.event.extendedProps.requestUrl) {
                     info.el.style.cursor = 'pointer';
                 }
-                info.el.title = info.event.extendedProps.awaitingVenueConfirmation
-                    ? 'Awaiting venue confirmation. Select to review this request.'
-                    : 'Select to review request details.';
+                info.el.title = (info.event.title ? info.event.title + '\n' : '')
+                    + (info.event.extendedProps.awaitingVenueConfirmation
+                        ? 'Awaiting venue confirmation. Select to review this request.'
+                        : 'Select to review request details.');
 
                 refreshEventMarquees(info.el);
             }
