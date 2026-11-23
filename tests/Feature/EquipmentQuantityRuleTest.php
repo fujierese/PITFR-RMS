@@ -211,20 +211,22 @@ class EquipmentQuantityRuleTest extends TestCase
     {
         $request = $this->editableRequest();
 
+        // QA-7: editing applies the request form's rules.
         $this->edit($request, ['Tables'], ['Tables' => '2.5'])->assertSessionHasErrors('equipment_quantities.Tables');
-        $this->edit($request, ['Tables', 'tables'], ['Tables' => 2])->assertSessionHasErrors('equipment.1');
         $this->edit($request, ['Laser Projector'], ['Laser Projector' => 1])->assertSessionHasErrors('equipment');
 
         $this->assertSame(['Tables' => 2], $request->fresh()->getEquipmentQuantities());
     }
 
-    public function test_editing_ignores_the_quantity_of_an_unticked_item(): void
+    public function test_editing_follows_the_form_rule_for_quantities_of_unticked_items(): void
     {
         $request = $this->editableRequest();
 
-        // Tables unticked (its quantity box is still sent); Sound System added.
-        $this->edit($request, ['Sound System'], ['Tables' => 2, 'Sound System' => 1])->assertSessionHasNoErrors();
+        // QA-7: the edit page is the request form, which clears the box of an unticked
+        // item; a quantity sent for an item that is not selected is refused, as on the form.
+        $this->edit($request, ['Sound System'], ['Tables' => 2, 'Sound System' => 1])->assertSessionHasErrors('equipment');
 
+        $this->edit($request, ['Sound System'], ['Sound System' => 1])->assertSessionHasNoErrors();
         $quantities = $request->fresh()->getEquipmentQuantities();
         $this->assertArrayNotHasKey('Tables', $quantities);
         $this->assertSame(1, $quantities['Sound System'] ?? null);

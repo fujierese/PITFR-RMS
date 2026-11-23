@@ -2383,6 +2383,9 @@ const initializeRequestForm = function () {
             e.preventDefault();
             return false;
         }
+        // QA-8: the form is being sent on purpose, so leaving the page must not ask
+        // "Reload site? Changes you made may not be saved."
+        window.requestFormDraftNavigation = true;
 
         if (clickedButton && !form.hasAttribute('data-swal-confirm')) {
             clickedButton.setAttribute('data-loading', '1');

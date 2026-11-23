@@ -105,7 +105,9 @@ class NeedsRescheduleWorkflowTest extends TestCase
 
         $this->assertSame('pending', $request->status);
         $this->assertSame('pending', $request->venue_status);
-        $this->assertSame('pending', $request->equipment_status);
+        // QA-7: editing follows the request form: the Sound System comes with the CHIC
+        // (REQ-09), so no equipment custodian review is needed.
+        $this->assertSame('approved', $request->equipment_status);
         $this->assertSame('Original Activity', $request->name_of_activity);
         $this->assertSame('IT Department', $request->department);
         $this->assertDatabaseHas('request_histories', [
@@ -129,7 +131,7 @@ class NeedsRescheduleWorkflowTest extends TestCase
                 'equipment' => ['Sound System'],
                 'equipment_quantities' => ['Sound System' => 1],
             ])
-            ->assertSessionHasErrors('start_time');
+            ->assertSessionHasErrors('venue_schedules.Conference Hall & Interaction Center (CHIC).start_time');
 
         $this->assertSame('09:00', $request->fresh()->start_time);
         $this->assertSame('12:00', $request->fresh()->end_time);
@@ -155,7 +157,7 @@ class NeedsRescheduleWorkflowTest extends TestCase
 
         $this->assertSame('pending', $request->status);
         $this->assertSame('pending', $request->venue_status);
-        $this->assertSame('pending', $request->equipment_status);
+        $this->assertSame('approved', $request->equipment_status, 'The Sound System comes with the CHIC (REQ-09).');
         $this->assertNull($request->approved_by);
         $this->assertNull($request->approved_date);
     }

@@ -184,7 +184,8 @@ class RequestResourceRuleTest extends TestCase
                     'venue' => $venue,
                     'other_venue' => $venue === 'Others (specify)' ? 'Somewhere' : null,
                 ]))
-                ->assertSessionHasErrors('venue');
+                ->assertSessionHas('errors', fn ($errors): bool => collect($errors->keys())
+                    ->contains(fn (string $key): bool => $key === 'venue' || str_starts_with($key, 'venue.') || $key === 'other_venue'));
         }
 
         $this->assertSame([self::VENUE], $request->fresh()->getVenueNames());

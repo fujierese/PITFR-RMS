@@ -185,7 +185,7 @@
                                 <td class="px-4 py-3">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <a href="{{ route('request.show', $request->id) }}" class="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">View</a>
-                                        @if($request->status === 'pending' && $request->isEditableWithSingleVenueForm())
+                                        @if($request->isEditableByRequestor())
                                             <a href="{{ route('requestor.edit', $request->id) }}" class="inline-flex items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">Edit</a>
                                             <form method="POST" action="{{ route('requestor.destroy') }}" class="inline-flex" data-swal-confirm data-swal-title="Delete this pending request?" data-swal-text="This action will permanently remove the pending request record." data-swal-confirm-text="Yes, delete it" data-swal-confirm-color="#dc2626">
                                                 @csrf

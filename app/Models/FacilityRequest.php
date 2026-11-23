@@ -1502,9 +1502,30 @@ class FacilityRequest extends Model
      * books several venues would lose the others when saved there, so it is changed
      * through a cancellation and new request, or a Supply Office schedule change.
      */
+    /**
+     * QA-7: the requestor may edit while the request needs rescheduling, or while it is
+     * pending and no one has reviewed it yet. A request without additional equipment has
+     * its equipment step approved automatically, which used to block editing entirely.
+     */
+    public function isEditableByRequestor(): bool
+    {
+        if ($this->status === 'needs_reschedule' || $this->venue_status === 'needs_reschedule' || $this->equipment_status === 'needs_reschedule') {
+            return true;
+        }
+
+        $equipmentNotReviewed = $this->equipment_status === 'pending'
+            || ($this->equipment_status === 'approved' && $this->getAdditionalEquipmentQuantities() === []);
+
+        return $this->status === 'pending'
+            && $this->venue_status === 'pending'
+            && in_array($this->supply_office_review_status, [null, 'pending'], true)
+            && $equipmentNotReviewed;
+    }
+
     public function isEditableWithSingleVenueForm(): bool
     {
-        return count($this->getVenueNames()) <= 1;
+        // QA-7: the edit page now uses the full request form, which keeps every venue.
+        return true;
     }
 
     public function getVenueSchedule(string $venueName): array

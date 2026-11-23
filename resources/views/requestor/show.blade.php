@@ -915,6 +915,16 @@
                 </div>
             </div>
         @endif
+        {{-- QA-7: a pending request nobody has reviewed yet can be edited in full. --}}
+        @if(auth()->check() && auth()->user()->isRequestee() && auth()->id() === $request->requested_by_id && $request->status === 'pending' && $request->venue_status !== 'needs_reschedule' && $request->equipment_status !== 'needs_reschedule' && $request->isEditableByRequestor())
+            <div class="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900">Need to change something?</h2>
+                    <p class="text-sm text-slate-600">You can edit this request until a custodian or the Supply Office starts reviewing it. Saving sends it back for review.</p>
+                </div>
+                <a href="{{ route('requestor.edit', $request->id) }}" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Edit Request</a>
+            </div>
+        @endif
 
         @if(auth()->check() && auth()->user()->isRequestee() && auth()->id() === $request->requested_by_id && in_array($request->status, ['pending', 'approved'], true) && $request->start_date?->toDateString() > now()->toDateString())
             <div class="bg-white border border-emerald-200 rounded-3xl p-5 shadow-sm">

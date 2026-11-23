@@ -182,21 +182,31 @@ class LegacyRequestDataTest extends TestCase
         $this->artisan('requests:reconcile')->expectsOutputToContain('All requests agree')->assertSuccessful();
     }
 
-    public function test_a_multi_venue_request_cannot_be_collapsed_by_the_edit_form(): void
+    public function test_a_multi_venue_request_is_edited_with_every_venue_kept(): void
     {
-        $request = $this->request(['status' => 'pending', 'venue_status' => 'pending', 'equipment_status' => 'pending']);
+        // QA-7: the edit page is the full request form, so a multi-venue request keeps
+        // every venue and its own schedule when edited.
+        $request = $this->request(['status' => 'pending', 'venue_status' => 'pending', 'equipment_status' => 'pending', 'equipment' => [], 'equipment_quantities' => []]);
+        $html = $this->actingAs($this->requestor)->get(route('requestor.edit', $request))->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/name="venue\[\]" value="Gymnasium"\s+checked/', $html);
+        $this->assertMatchesRegularExpression('/name="venue\[\]" value="CHIC"\s+checked/', $html);
 
-        $this->actingAs($this->requestor)->get(route('requestor.edit', $request))
-            ->assertRedirect(route('request.show', $request))
-            ->assertSessionHasErrors('edit');
-
+        $later = now()->addDays(11)->toDateString();
         $this->actingAs($this->requestor)->put(route('requestor.update', $request), [
-            'department' => 'IT', 'name_of_activity' => 'Changed', 'expected_participants' => 10,
-            'start_date' => $this->date, 'end_date' => $this->date, 'start_time' => '09:00', 'end_time' => '11:00',
-            'venue' => 'Gymnasium',
-        ])->assertRedirect(route('request.show', $request));
+            'form_version' => \App\Http\Controllers\RequestorController::editFormVersion($request->fresh()),
+            'department' => 'IT', 'request_context' => 'personal', 'name_of_activity' => 'Changed', 'purpose' => 'Changed', 'expected_participants' => 10,
+            'venue' => ['Gymnasium', 'CHIC'],
+            'venue_schedules' => [
+                'Gymnasium' => ['start_date' => $this->date, 'end_date' => $this->date, 'start_time' => '09:00', 'end_time' => '11:00', 'reservation_duration' => 'specific_time', 'activity_type' => 'seminar'],
+                'CHIC' => ['start_date' => $later, 'end_date' => $later, 'start_time' => '13:00', 'end_time' => '15:00', 'reservation_duration' => 'specific_time'],
+            ],
+        ])->assertSessionHasNoErrors()->assertRedirect(route('request.show', $request));
 
-        $this->assertEqualsCanonicalizing(['Gymnasium', 'CHIC'], FacilityRequest::find($request->id)->getVenueNames());
-        $this->assertSame('Legacy data', FacilityRequest::find($request->id)->name_of_activity);
+        $fresh = FacilityRequest::find($request->id);
+        $this->assertEqualsCanonicalizing(['Gymnasium', 'CHIC'], $fresh->getVenueNames());
+        $this->assertSame('Changed', $fresh->name_of_activity);
+        $this->assertSame($later, $fresh->getVenueSchedule('CHIC')['start_date']);
+        $this->assertSame('13:00', substr($fresh->getVenueSchedule('CHIC')['start_time'], 0, 5));
+        $this->assertSame('FER-2026-' . substr($request->control_number, 9), $fresh->control_number, 'The control number stays.');
     }
 }

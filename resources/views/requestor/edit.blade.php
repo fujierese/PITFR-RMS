@@ -3,262 +3,45 @@
 
 @section('content')
 @php
-    $startTimeValue = old('start_time', $request->start_time);
-    $endTimeValue = old('end_time', $request->end_time);
-    $isWholeDay = old('reservation_duration', $request->reservation_duration) === 'whole_day'
-        || (($startTimeValue === '00:00' || $startTimeValue === '00:00:00') && ($endTimeValue === '23:59' || $endTimeValue === '23:59:00'));
+    // QA-7: editing uses the same form as a new request, pre-filled from this request.
     $isNeedsReschedule = $request->status === 'needs_reschedule'
         || $request->venue_status === 'needs_reschedule'
         || $request->equipment_status === 'needs_reschedule';
-
-    if (!empty($startTimeValue)) {
-        try {
-            $startTimeValue = \Carbon\Carbon::parse($startTimeValue)->format('H:i');
-        } catch (\Exception $e) {
-            $startTimeValue = (string) $startTimeValue;
-        }
-    }
-
-    if (!empty($endTimeValue)) {
-        try {
-            $endTimeValue = \Carbon\Carbon::parse($endTimeValue)->format('H:i');
-        } catch (\Exception $e) {
-            $endTimeValue = (string) $endTimeValue;
-        }
-    }
 @endphp
-<div class="mx-auto w-full max-w-none px-3 py-4 sm:px-4 sm:py-6 lg:max-w-5xl lg:px-6 lg:py-8">
-    <div class="overflow-hidden rounded-[24px] bg-white shadow-xl ring-1 ring-slate-200/60 md:rounded-3xl">
-        <div class="border-b border-slate-200 bg-slate-50 px-4 py-4 sm:px-6 sm:py-5">
-            <h1 class="text-xl font-semibold text-slate-900 sm:text-2xl">{{ $isNeedsReschedule ? 'Reschedule Request' : 'Edit Pending Request' }}</h1>
-            <p class="mt-2 text-sm text-slate-600">{{ $isNeedsReschedule ? 'Update the scheduling details so the request can re-enter the approval workflow.' : 'Update the request details while the status is still pending.' }}</p>
+<div class="mx-auto w-full max-w-none space-y-4 px-1 py-2 sm:px-2 lg:max-w-6xl">
+    <div class="rounded-[24px] border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ $request->control_number }}</p>
+                <h1 class="mt-1 text-xl font-semibold text-slate-900 sm:text-2xl">{{ $isNeedsReschedule ? 'Reschedule Request' : 'Edit Request' }}</h1>
+                <p class="mt-2 text-sm text-slate-600">
+                    {{ $isNeedsReschedule
+                        ? 'Choose another venue, date or time. Saving sends the request back for venue review.'
+                        : 'Change any details below. Saving sends the request back for review from the start.' }}
+                </p>
+            </div>
+            <a href="{{ route('request.show', $request) }}" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to request</a>
         </div>
-
-        <form id="request-form" method="POST" action="{{ route('requestor.update', $request->id) }}" class="space-y-4 p-3 sm:space-y-6 sm:p-6" enctype="multipart/form-data" data-equipment-availability-url="{{ route('equipment.availability') }}" data-conflict-check-url="{{ route('calendar.check-conflicts') }}" data-is-student="{{ ($user->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-exclude-request-id="{{ $request->id }}" data-is-needs-reschedule="{{ $isNeedsReschedule ? '1' : '0' }}" data-venue-capacities="{{ htmlspecialchars(json_encode($venueCapacityMap ?? []), ENT_QUOTES, 'UTF-8') }}">
-            @csrf
-            @method('PUT')
-            <input type="hidden" name="form_version" value="{{ \App\Http\Controllers\RequestorController::editFormVersion($request) }}">
-            @error('form_version')
-                <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">{{ $message }}</div>
-            @enderror
-
-            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                <h2 class="text-lg font-semibold text-slate-900">Request Information</h2>
-                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label class="text-sm font-medium text-slate-700">Activity Title</label>
-                        <input type="text" name="name_of_activity" maxlength="200" value="{{ old('name_of_activity', $request->name_of_activity) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" {{ $isNeedsReschedule ? 'readonly' : 'required' }}>
-                    </div>
-                    <div>
-                        <label class="text-sm font-medium text-slate-700">Department</label>
-                        <input type="text" name="department" maxlength="100" value="{{ old('department', $request->department) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" {{ $isNeedsReschedule ? 'readonly' : 'required' }}>
-                    </div>
-                    <div>
-                        <label class="text-sm font-medium text-slate-700">Start Date</label>
-                        <input type="date" name="start_date" value="{{ old('start_date', $request->start_date?->format('Y-m-d')) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" required>
-                    </div>
-                    <div>
-                        <label class="text-sm font-medium text-slate-700">End Date</label>
-                        <input type="date" name="end_date" value="{{ old('end_date', $request->end_date?->format('Y-m-d')) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="text-sm font-medium text-slate-700">Expected Participants</label>
-                        <input type="number" name="expected_participants" min="1" max="100000" value="{{ old('expected_participants', $request->expected_participants) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" required>
-                        <div id="capacity-warning-banner" role="status" aria-live="polite" class="mt-3 hidden rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900"></div>
-                    </div>
-                    <div class="reservation-duration-group md:col-span-2">
-                        <label class="text-sm font-medium text-slate-700">Reservation Duration</label>
-                        <div class="mt-2 flex flex-col gap-3 sm:flex-row">
-                            <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-emerald-500 bg-emerald-50 px-3 py-2 text-sm font-medium text-slate-900 shadow-sm">
-                                <input type="radio" name="reservation_duration" value="specific_time" @checked(!$isWholeDay)>
-                                <span>Specific Time</span>
-                            </label>
-                            <label class="reservation-duration-option flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                                <input type="radio" name="reservation_duration" value="whole_day" @checked($isWholeDay)>
-                                <span>Whole Day</span>
-                                <span class="text-xs text-slate-500">8:00 AM – 5:00 PM</span>
-                            </label>
-                        </div>
-                        <p class="reservation-duration-helper mt-3 text-xs text-emerald-700" aria-live="polite">Whole Day uses 8:00 AM–5:00 PM for each selected date.</p>
-                    </div>
-                    <div>
-                        <label class="text-sm font-medium text-slate-700">Start Time</label>
-                        <input type="time" name="start_time" value="{{ old('start_time', $startTimeValue) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" required>
-                    </div>
-                    <div>
-                        <label class="text-sm font-medium text-slate-700">End Time</label>
-                        <input type="time" name="end_time" value="{{ old('end_time', $endTimeValue) }}" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" required>
-                    </div>
-                </div>
-            </div>
-
-            <div class="rounded-[24px] border border-slate-200 bg-white p-4 sm:rounded-3xl sm:p-5">
-                <h2 class="text-lg font-semibold text-slate-900">Venue and Equipment</h2>
-                <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <div>
-                        <label class="text-sm font-medium text-slate-700">Venue</label>
-                        @php
-                            // CHG-02: start from the venue this request asked for, matched by name
-                            // (case and the "Balay Alumni Hall" alias ignored).
-                            $requestedVenueName = $request->getVenueNames()[0] ?? '';
-                            $selectedEditVenue = old('venue', \App\Models\FacilityRequest::matchVenueOption($requestedVenueName, $venueOptions) ?? '');
-                        @endphp
-                        <select name="venue" class="mt-1 min-h-[3rem] w-full rounded-2xl border border-slate-200 px-3 py-2" required data-edit-venue data-activity-venues='@json($venueActivityRequired ?? [])'>
-                            <option value="" disabled {{ $selectedEditVenue === '' ? 'selected' : '' }}>Choose a venue</option>
-                            @foreach($venueOptions as $venue)
-                                <option value="{{ $venue }}" {{ $selectedEditVenue === $venue ? 'selected' : '' }}>{{ $venue }}</option>
-                            @endforeach
-                        </select>
-                        @if($requestedVenueName !== '' && \App\Models\FacilityRequest::matchVenueOption($requestedVenueName, $venueOptions) === null)
-                            <p class="mt-2 text-sm text-amber-700">You asked for {{ $requestedVenueName }}, which can no longer be booked. Choose another venue.</p>
-                        @endif
-                        {{-- REQ-19: venues that ask for the type of school activity (the Gym). --}}
-                        @php $editActivity = old('activity_type', $currentActivity['activity_type'] ?? ''); @endphp
-                        <div class="mt-3 hidden" data-edit-activity>
-                            <label for="edit_activity_type" class="text-sm font-medium text-slate-700">Type of school activity <span class="text-red-600">*</span></label>
-                            <select id="edit_activity_type" name="activity_type" class="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2" data-edit-activity-type>
-                                <option value="">Choose the activity</option>
-                                @foreach (\App\Support\VenueRules::ACTIVITY_TYPES as $activityKey => $activityLabel)
-                                    <option value="{{ $activityKey }}" @selected($editActivity === $activityKey)>{{ $activityLabel }}</option>
-                                @endforeach
-                            </select>
-                            <input type="text" name="activity_type_detail" maxlength="200" value="{{ old('activity_type_detail', $currentActivity['activity_type_detail'] ?? '') }}" placeholder="Describe the school activity" aria-label="Describe the school activity" data-edit-activity-detail class="mt-2 hidden w-full rounded-2xl border border-slate-200 px-3 py-2">
-                            @error('activity_type')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
-                        </div>
-                        <div id="venue-conflict-alert-wrap" class="mt-3"></div>
-                    </div>
-                    <div>
-                        <div class="flex items-center justify-between gap-4">
-                            <div>
-                                <label class="text-sm font-medium text-slate-700">Equipment</label>
-                                <p class="mt-1 text-sm text-slate-500">Select the equipment you need and enter the quantity.</p>
-                            </div>
-                            <p class="text-xs text-slate-500">Real-time availability</p>
-                        </div>
-                        <div class="mt-4 space-y-3">
-                            @php
-                                $equipmentList = $equipment instanceof \Illuminate\Support\Collection ? $equipment->all() : $equipment;
-                                $equipmentItems = [];
-                                if (!empty($equipmentList)) {
-                                    foreach ($equipmentList as $eq) {
-                                        $equipmentItems[] = $eq;
-                                    }
-                                } else {
-                                    $equipmentItems = collect([
-                                        ['name' => 'Sound System', 'quantity' => 1, 'quantity_available' => 1],
-                                        ['name' => 'Wireless Microphones', 'quantity' => 3, 'quantity_available' => 3],
-                                        ['name' => 'Non-Wireless Microphones', 'quantity' => 3, 'quantity_available' => 3],
-                                        ['name' => 'Canopies', 'quantity' => 10, 'quantity_available' => 10],
-                                        ['name' => 'Industrial Fans', 'quantity' => 6, 'quantity_available' => 6],
-                                        ['name' => 'Iwata Cooler Fans', 'quantity' => 4, 'quantity_available' => 4],
-                                        ['name' => 'Tables', 'quantity' => 10, 'quantity_available' => 10],
-                                        ['name' => 'Chairs', 'quantity' => 50, 'quantity_available' => 50],
-                                        ['name' => 'Monobloc Chairs', 'quantity' => 600, 'quantity_available' => 600],
-                                        ['name' => 'Lights', 'quantity' => 1, 'quantity_available' => 1],
-                                        ['name' => 'Podium', 'quantity' => 1, 'quantity_available' => 1],
-                                        ['name' => 'Television (CHIC)', 'quantity' => 1, 'quantity_available' => 1],
-                                        ['name' => 'HDMI', 'quantity' => 1, 'quantity_available' => 1],
-                                    ]);
-                                }
-                            @endphp
-                            @foreach($equipmentItems as $eq)
-                                @php
-                                    $itemName = is_object($eq) ? $eq->name : ($eq['name'] ?? '');
-                                    $itemQty = is_object($eq) ? ($eq->quantity ?? 0) : ($eq['quantity'] ?? 0);
-                                    $itemAvailable = max(0, (int) (is_object($eq) ? ($eq->quantity_available ?? $itemQty) : ($eq['quantity_available'] ?? $itemQty)));
-                                    $badgeClass = $itemAvailable <= 0 ? 'bg-red-100 text-red-700' : ($itemAvailable == $itemQty ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700');
-                                    $selected = in_array($itemName, old('equipment', $request->getEquipmentItems()), true);
-                                    $savedQuantity = (int) old('equipment_quantities.' . $itemName, $request->getEquipmentQuantities()[$itemName] ?? 1);
-                                    $maxAllowed = (int) ($equipmentQuantityLimits[$itemName] ?? $itemAvailable);
-                                @endphp
-                                <div class="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between equipment-row {{ $itemAvailable > 0 ? 'hover:border-purple-400 hover:bg-purple-50/70' : 'border-red-100 bg-red-50/70 opacity-70' }}" data-available="{{ $itemAvailable }}" data-total="{{ $itemQty }}" data-name="{{ $itemName }}" data-index="{{ $loop->index }}" data-max-quantity="{{ $maxAllowed }}">
-                                    <label class="flex items-center gap-3 cursor-pointer sm:flex-1">
-                                        <input type="checkbox" name="equipment[]" value="{{ $itemName }}" {{ $itemAvailable <= 0 ? 'disabled' : '' }} {{ $selected ? 'checked' : '' }} class="h-4 w-4 rounded border-slate-300 text-purple-600 equipment-checkbox" data-equipment="{{ $itemName }}">
-                                        <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
-                                    </label>
-                                    <div class="flex flex-col items-start gap-2 sm:items-end sm:text-right">
-                                        <span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">{{ $itemAvailable <= 0 ? 'No units available.' : ($itemAvailable . ' / ' . $itemQty . ' available') }}</span>
-                                        @if($selected)
-                                            <div class="quantity-input-wrap" id="qty-wrap-{{ $loop->index }}" style="display:block;">
-                                                <input type="number" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $maxAllowed }}" value="{{ $savedQuantity }}" class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-20">
-                                            </div>
-                                        @else
-                                            <div class="quantity-input-wrap" id="qty-wrap-{{ $loop->index }}" style="display:none;">
-                                                <input type="number" name="equipment_quantities[{{ $itemName }}]" min="1" max="{{ $maxAllowed }}" value="{{ $savedQuantity }}" disabled class="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-20">
-                                            </div>
-                                        @endif
-                                    </div>
-                                </div>
-                            @endforeach
-                            <script>
-                                // REQ-12: show and send a quantity only for ticked equipment.
-                                document.querySelectorAll('.equipment-row').forEach(function (row) {
-                                    var checkbox = row.querySelector('.equipment-checkbox');
-                                    var wrap = row.querySelector('.quantity-input-wrap');
-                                    var input = wrap ? wrap.querySelector('input[type="number"]') : null;
-                                    if (!checkbox || !input) { return; }
-                                    var sync = function () {
-                                        var on = checkbox.checked && !checkbox.disabled;
-                                        wrap.style.display = on ? 'block' : 'none';
-                                        input.disabled = !on;
-                                        input.required = on;
-                                        if (on && (!input.value || Number(input.value) < 1)) { input.value = 1; }
-                                    };
-                                    checkbox.addEventListener('change', sync);
-                                    sync();
-                                });
-                            </script>
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-4 hidden">
-                    <div id="summary-venue"></div>
-                    <div id="summary-equipment"></div>
-                </div>
-            </div>
-
-            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                <h2 class="text-lg font-semibold text-slate-900">Requester Information</h2>
-                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label class="text-sm font-medium text-slate-700">Requested By</label>
-                        <input type="text" value="{{ $user->name }}" class="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2" disabled>
-                    </div>
-                    <div>
-                        <label class="text-sm font-medium text-slate-700">Position</label>
-                        <input id="saved-position-field" type="text" value="{{ old('position', $request->requester?->position ?? '') }}" class="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700" readonly>
-                        <input type="hidden" name="position" id="position-input" value="{{ old('position', $request->requester?->position ?? '') }}">
-                    </div>
-                </div>
-            </div>
-
-            <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <a href="{{ route('request.show', $request->id) }}" data-inline-cancel class="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 sm:w-auto">Cancel</a>
-                <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white sm:w-auto">Save Changes</button>
-            </div>
-        </form>
+        <ul class="mt-4 space-y-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600" aria-label="What cannot be changed">
+            <li>The control number, date requested and your account details (name, college, department, position) cannot be changed here.</li>
+            <li>Documents you already uploaded are kept unless you upload a replacement.</li>
+            @if($request->status === 'needs_reschedule')
+                <li>After a priority transfer only the venue and schedule can change; the activity name and department stay as they are.</li>
+            @endif
+        </ul>
+        @php
+            // CHG-02: say when a venue this request asked for can no longer be booked.
+            $unbookableVenues = collect($request->getVenueNames())
+                ->filter(fn ($name) => \App\Models\FacilityRequest::matchVenueOption($name, $venueOptions ?? []) === null);
+        @endphp
+        @foreach($unbookableVenues as $unbookableVenue)
+            <p class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">You asked for {{ $unbookableVenue }}, which can no longer be booked. Choose another venue.</p>
+        @endforeach
+        @error('form_version')
+            <div class="mt-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">{{ $message }}</div>
+        @enderror
     </div>
+
+    @include('requestor.partials.request_form', ['editingRequest' => $request])
 </div>
-<script>
-    // REQ-19: show and require the activity type only for venues that ask for it.
-    document.addEventListener('DOMContentLoaded', function () {
-        var venue = document.querySelector('[data-edit-venue]');
-        var box = document.querySelector('[data-edit-activity]');
-        if (!venue || !box) return;
-        var venues = JSON.parse(venue.dataset.activityVenues || '[]');
-        var select = box.querySelector('[data-edit-activity-type]');
-        var detail = box.querySelector('[data-edit-activity-detail]');
-        var sync = function () {
-            var needed = venues.indexOf(venue.value) !== -1;
-            var other = select.value === 'other';
-            box.classList.toggle('hidden', !needed);
-            select.required = needed;
-            detail.classList.toggle('hidden', !(needed && other));
-            detail.required = needed && other;
-        };
-        venue.addEventListener('change', sync);
-        select.addEventListener('change', sync);
-        sync();
-    });
-</script>
 @endsection

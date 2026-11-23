@@ -1,4 +1,5 @@
 @php
+    $editingRequest = $editingRequest ?? null;
     $currentUser = Auth::user();
     $colleges = $colleges ?? collect();
     $departments = $departments ?? collect();
@@ -64,10 +65,16 @@
     }
 </style>
 
-<form method="POST" action="{{ route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="Submit this request?" data-swal-text="Please confirm that the request details are complete and correct." data-swal-icon="question" data-swal-confirm-text="Yes, submit request" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-venue-availability-url="{{ route('requestor.venue.availability') }}" data-draft-owner-id="{{ $currentUser?->id ?? '' }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-can-request-urgent="{{ $isExternal ? '0' : '1' }}" data-urgent-timezone="{{ config('app.timezone') }}" data-venue-capacities="{{ json_encode($venueCapacityMap ?? []) }}" data-venue-default-equipment="{{ json_encode($venueDefaultEquipmentMap ?? []) }}">
+<form method="POST" action="{{ $editingRequest ? route('requestor.update', $editingRequest) : route('requestor.store') }}" id="request-form" enctype="multipart/form-data" data-swal-confirm data-swal-title="{{ $editingRequest ? 'Save these changes?' : 'Submit this request?' }}" data-swal-text="{{ $editingRequest ? 'The request goes back to review with the new details.' : 'Please confirm that the request details are complete and correct.' }}" data-swal-icon="question" data-swal-confirm-text="{{ $editingRequest ? 'Yes, save changes' : 'Yes, submit request' }}" data-swal-confirm-color="#059669" data-equipment-availability-url="{{ route('equipment.availability') }}" data-venue-availability-url="{{ route('requestor.venue.availability') }}" data-draft-owner-id="{{ $editingRequest ? '' : ($currentUser?->id ?? '') }}" data-is-student="{{ ($currentUser->requestor_type ?? null) === 'student' ? '1' : '0' }}" data-requestor-type="{{ $currentUser->requestor_type ?? '' }}" data-can-request-urgent="{{ $isExternal ? '0' : '1' }}" data-urgent-timezone="{{ config('app.timezone') }}" data-venue-capacities="{{ json_encode($venueCapacityMap ?? []) }}" data-venue-default-equipment="{{ json_encode($venueDefaultEquipmentMap ?? []) }}">
     @csrf
-    {{-- REQ-14: one token per form, so sending it twice makes one request. --}}
-    <input type="hidden" name="submission_token" value="{{ old('submission_token', (string) \Illuminate\Support\Str::uuid()) }}">
+    @if($editingRequest)
+        {{-- QA-7: editing an existing request; REQ-13 refuses saving over newer changes. --}}
+        @method('PUT')
+        <input type="hidden" name="form_version" value="{{ \App\Http\Controllers\RequestorController::editFormVersion($editingRequest) }}">
+    @else
+        {{-- REQ-14: one token per form, so sending it twice makes one request. --}}
+        <input type="hidden" name="submission_token" value="{{ old('submission_token', (string) \Illuminate\Support\Str::uuid()) }}">
+    @endif
 
 <div class="mx-auto w-full max-w-none overflow-hidden rounded-none border-0 bg-slate-950/90 shadow-none backdrop-blur-xl md:mx-auto md:max-w-7xl md:rounded-[40px] md:border md:border-white/10 md:shadow-[0_60px_120px_rgba(15,23,42,0.55)]">
     <section class="bg-white p-4 sm:p-6 lg:p-8">
@@ -732,11 +739,14 @@
                                         <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
                                             <label for="activity_proposal_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
                                                 <span data-upload-action-label>Upload a file</span>
-                                                <input id="activity_proposal_file" name="activity_proposal_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only" @if($errors->any() && session('staged_uploads.activity_proposal_file')) data-kept="1" @endif>
+                                                <input id="activity_proposal_file" name="activity_proposal_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only" @if(($errors->any() && session('staged_uploads.activity_proposal_file')) || ($editingRequest?->activity_proposal_file || $editingRequest?->proposal_file)) data-kept="1" @endif>
                                             </label>
                                             <span>or drag and drop</span>
                                         </div>
                                         <p class="text-xs text-slate-500">PDF, JPEG, PNG up to 10MB</p>
+                                        @if($editingRequest && ($editingRequest->activity_proposal_file || $editingRequest->proposal_file))
+                                            <p class="text-xs font-medium text-emerald-700" data-current-document="activity_proposal">Current file: {{ data_get($editingRequest->document_metadata, 'activity_proposal.original_name') ?? data_get($editingRequest->document_metadata, 'proposal_file.original_name') ?? 'the uploaded file' }}. It is kept unless you upload a replacement.</p>
+                                        @endif
                                         <div data-upload-progress class="mt-3 hidden">
                                             <div class="mb-2 flex items-center justify-between gap-4 text-xs text-slate-600">
                                                 <span data-upload-file-name class="truncate max-w-[220px] text-left">activity-proposal.pdf</span>
@@ -809,11 +819,14 @@
                                         <div class="flex flex-col items-center gap-1 text-sm text-slate-600 sm:flex-row sm:justify-center">
                                             <label for="igp_receipt_file" class="relative cursor-pointer rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-600 shadow-sm hover:text-emerald-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500">
                                                 <span data-upload-action-label>Upload a file</span>
-                                                <input id="igp_receipt_file" name="igp_receipt_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only" @if($errors->any() && session('staged_uploads.igp_receipt_file')) data-kept="1" @endif>
+                                                <input id="igp_receipt_file" name="igp_receipt_file" type="file" accept=".pdf,.jpeg,.jpg,.png" class="sr-only" @if(($errors->any() && session('staged_uploads.igp_receipt_file')) || $editingRequest?->igp_receipt_file) data-kept="1" @endif>
                                             </label>
                                             <span>or drag and drop</span>
                                         </div>
                                         <p class="text-xs text-slate-500">PDF, JPEG, PNG up to 10MB</p>
+                                        @if($editingRequest && $editingRequest->igp_receipt_file)
+                                            <p class="text-xs font-medium text-emerald-700" data-current-document="igp_receipt">Current file: {{ data_get($editingRequest->document_metadata, 'igp_receipt.original_name') ?? 'the uploaded file' }}. It is kept unless you upload a replacement.</p>
+                                        @endif
                                         <div data-upload-progress class="mt-3 hidden">
                                             <div class="mb-2 flex items-center justify-between gap-4 text-xs text-slate-600">
                                                 <span data-upload-file-name class="truncate max-w-[220px] text-left">igp-receipt.pdf</span>
@@ -920,7 +933,7 @@
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Submit Request
+                        {{ $editingRequest ? 'Save Changes' : 'Submit Request' }}
                     </button>
                 </div>
                 </div>

@@ -75,7 +75,7 @@ class ProposalPrefillTest extends TestCase
 
         $this->actingAs($this->requestor)->get(route('requestor.edit', $request))
             ->assertOk()
-            ->assertSee('<option value="Balay Alumni" selected>Balay Alumni</option>', false)
+            ->assertSeeInOrder(['name="venue[]" value="Balay Alumni"', 'checked'], false)
             ->assertSee('value="' . $this->date . '"', false)
             ->assertSee('value="13:00"', false);
     }

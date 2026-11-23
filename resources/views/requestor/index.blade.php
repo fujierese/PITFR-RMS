@@ -267,13 +267,7 @@
                                         $venueLabel = implode(', ', $requestItem->getVenueNames()) ?: '-';
                                         $equipmentGroups = $equipmentGroupsFor($requestItem);
                                         $venueScheduleSummaries = $requestItem->getVenueScheduleSummaries();
-                                        $canEdit = $statusKey === 'needs_reschedule'
-                                            || $requestItem->venue_status === 'needs_reschedule'
-                                            || $requestItem->equipment_status === 'needs_reschedule'
-                                            || ($statusKey === 'pending'
-                                                && $requestItem->venue_status === 'pending'
-                                                && $requestItem->equipment_status === 'pending');
-                                        $canEdit = $canEdit && $requestItem->isEditableWithSingleVenueForm();
+                                        $canEdit = $requestItem->isEditableByRequestor();
                                         $canCancel = in_array($statusKey, ['pending', 'approved'], true)
                                             && $requestItem->cancellation_status !== 'pending'
                                             && $requestItem->start_date?->toDateString() > now()->toDateString();
@@ -401,13 +395,7 @@
                             $venueLabel = implode(', ', $requestItem->getVenueNames()) ?: '-';
                             $equipmentGroups = $equipmentGroupsFor($requestItem);
                             $venueScheduleSummaries = $requestItem->getVenueScheduleSummaries();
-                            $canEdit = $statusKey === 'needs_reschedule'
-                                || $requestItem->venue_status === 'needs_reschedule'
-                                || $requestItem->equipment_status === 'needs_reschedule'
-                                || ($statusKey === 'pending'
-                                    && $requestItem->venue_status === 'pending'
-                                    && $requestItem->equipment_status === 'pending');
-                            $canEdit = $canEdit && $requestItem->isEditableWithSingleVenueForm();
+                            $canEdit = $requestItem->isEditableByRequestor();
                             $canCancel = in_array($statusKey, ['pending', 'approved'], true)
                                 && $requestItem->cancellation_status !== 'pending'
                                 && $requestItem->start_date?->toDateString() > now()->toDateString();
