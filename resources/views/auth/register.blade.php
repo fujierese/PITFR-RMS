@@ -21,10 +21,10 @@
         .reg-required { color: rgb(220 38 38); }
     </style>
 </head>
-<body class="min-h-screen bg-slate-100 text-slate-900">
-    <div class="min-h-screen w-full lg:grid lg:grid-cols-[0.8fr_1.2fr]">
+<body class="min-h-screen bg-slate-100 text-slate-900 lg:h-screen lg:overflow-hidden">
+    <div class="min-h-screen w-full lg:grid lg:h-screen lg:grid-cols-[0.8fr_1.2fr]">
         {{-- Brand panel (large screens only) --}}
-        <section class="relative hidden bg-white lg:flex lg:flex-col lg:justify-center lg:px-10 xl:px-14">
+        <section class="relative hidden bg-white lg:flex lg:h-screen lg:flex-col lg:justify-center lg:overflow-hidden lg:px-10 xl:px-14">
             <div class="flex items-center gap-3">
                 <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-12 w-12 rounded-full border border-slate-200 object-cover">
                 <div class="leading-tight">
@@ -37,7 +37,7 @@
         </section>
 
         {{-- Sign-up form --}}
-        <section class="flex justify-center px-4 py-8 sm:px-8 lg:items-start lg:overflow-y-auto lg:py-12">
+        <section class="flex justify-center px-4 py-8 sm:px-8 lg:h-screen lg:items-start lg:overflow-y-auto lg:overscroll-contain lg:py-12">
             <div class="w-full max-w-[640px] rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:p-8">
                 <div class="mb-6 flex items-center gap-3 lg:hidden">
                     <img src="{{ asset('images/PIT-LOGO.png') }}" alt="PIT Logo" class="h-10 w-10 rounded-full border border-slate-200 object-cover">
