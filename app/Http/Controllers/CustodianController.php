@@ -811,19 +811,13 @@ class CustodianController extends Controller
         return redirect()->route('custodian.venue')->with('success', 'Venue updated successfully.');
     }
 
+    /**
+     * QA-2: only the Supply Office enables or disables venues (Venue Management). A
+     * custodian sees the status but cannot change it, here or by sending the request.
+     */
     public function toggleVenue(Venue $venue)
     {
-        $user = Auth::user();
-        abort_unless($user->isCustodianVenue() && $venue->custodian_id === $user->id, 403);
-        
-        $wasActive = $venue->is_active;
-        $bookings = \App\Support\VenueLifecycle::liveBookings($venue);
-        // REQ-20: the venue model notes the change on each booking and notifies the
-        // requestors and the Supply Office.
-        $venue->update(['is_active' => ! $venue->is_active]);
-        $warning = $wasActive ? \App\Support\VenueLifecycle::warningFor($venue, $bookings, 'deactivated') : null;
-
-        return redirect()->route('custodian.venue')->with('success', 'Venue availability updated.')->with('warning', $warning);
+        abort(403, 'Only the Supply Office can enable or disable venues.');
     }
 
     public function storeEquipment(Request $request)

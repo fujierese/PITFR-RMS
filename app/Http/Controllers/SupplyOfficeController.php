@@ -1151,7 +1151,7 @@ class SupplyOfficeController extends Controller
         return back()->with('success', 'Venue deleted successfully.');
     }
 
-    /** REQ-20: deactivate or reactivate a venue; its bookings are kept and noted. */
+    /** REQ-20 / QA-2: disable or re-enable a venue (Supply Office only); its bookings are kept and noted. */
     public function toggleVenue(Request $request, Venue $venue)
     {
         $this->ensureAdminAccess();
@@ -1161,7 +1161,7 @@ class SupplyOfficeController extends Controller
         $venue->update(['is_active' => ! $wasActive]);
 
         return back()
-            ->with('success', $wasActive ? "{$venue->name} was deactivated. It can no longer be booked." : "{$venue->name} is available for booking again.")
+            ->with('success', $wasActive ? "{$venue->name} was disabled. It can no longer be booked." : "{$venue->name} was re-enabled and can be booked again.")
             ->with('warning', $wasActive ? \App\Support\VenueLifecycle::warningFor($venue, $bookings, 'deactivated') : null);
     }
 

@@ -32,6 +32,7 @@ class Venue extends Model
             // Office are told (whoever made the change: custodian or Supply Office).
             if ($venue->wasChanged('is_active')) {
                 \App\Support\VenueLifecycle::activeChanged($venue);
+                \App\Support\ResourceAudit::statusChanged('venue', $venue->name, (bool) $venue->is_active);
             }
 
             // REQ-02: lowering capacity below existing bookings is recorded on each affected request.

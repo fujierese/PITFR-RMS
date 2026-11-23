@@ -51,7 +51,7 @@ final class VenueLifecycle
 
         return match ($change) {
             'deactivated' => "{$venue->name} has {$bookings->count()} pending or upcoming booking(s) (" . self::controlNumberList($bookings) . '). '
-                . 'They were kept and noted; pending ones cannot be approved while it is inactive'
+                . 'They were kept and noted; pending ones cannot be approved while it is disabled'
                 . ($approved ? ", and {$approved} approved booking(s) need the Supply Office to confirm or reschedule them." : '.'),
             'reassigned' => "{$venue->name} has {$bookings->count()} pending or upcoming booking(s) (" . self::controlNumberList($bookings) . '). '
                 . 'The new custodian was told; venue confirmations given by the previous custodian were reopened.',
@@ -72,11 +72,11 @@ final class VenueLifecycle
             $booking->addHistory(
                 $venue->is_active ? 'venue_reactivated' : 'venue_deactivated',
                 $venue->is_active
-                    ? "{$venue->name} was made available again{$by}."
-                    : "{$venue->name} was deactivated{$by}. This booking was kept. "
+                    ? "{$venue->name} was re-enabled{$by}."
+                    : "{$venue->name} was disabled{$by}. This booking was kept. "
                         . ($booking->status === 'approved'
                             ? 'The Supply Office should confirm it or propose another venue or schedule.'
-                            : 'It cannot be approved while the venue is inactive.'),
+                            : 'It cannot be approved while the venue is disabled.'),
                 $actor?->id,
             );
         }
@@ -125,11 +125,11 @@ final class VenueLifecycle
         $live = self::liveBookings($venue);
         if ($live->isNotEmpty()) {
             return "{$venue->name} can't be deleted while it has pending or upcoming bookings (" . self::controlNumberList($live) . '). '
-                . 'Deactivate it instead; the bookings are kept.';
+                . 'Disable it instead; the bookings are kept.';
         }
 
         return "{$venue->name} can't be deleted because {$count} past request(s) refer to it, and deleting it would remove it from their history and reports. "
-            . 'Deactivate it instead so it can no longer be booked.';
+            . 'Disable it instead so it can no longer be booked.';
     }
 
     private static function notify(Venue $venue, Collection $bookings, $notification): void

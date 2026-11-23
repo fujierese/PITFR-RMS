@@ -23,6 +23,10 @@ class Equipment extends Model
             if ($equipment->wasChanged('custodian_id') || $equipment->wasChanged('authorized_custodian_ids')) {
                 FacilityRequest::reopenEquipmentEndorsementsAfterReassignment($equipment, $equipment->getOriginal('name'));
             }
+            // QA-2: every enable and disable is recorded in the audit history.
+            if ($equipment->wasChanged('is_active')) {
+                \App\Support\ResourceAudit::statusChanged('equipment', $equipment->name, (bool) $equipment->is_active);
+            }
         });
     }
 

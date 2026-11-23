@@ -104,18 +104,8 @@
                                                 </div>
                                                 </form>
 
-                                                <!-- Toggle Status Form -->
-                                                <form method="POST" action="{{ route('custodian.venues.toggle', $venue) }}" class="inline" @if($venue->is_active) data-swal-confirm data-swal-title="Disable this venue?" data-swal-text="This venue will no longer be available for new facility requests." data-swal-confirm-text="Yes, disable it" data-swal-confirm-color="#dc2626" @endif>
-                                                    @csrf
-                                                    @method('PATCH')
-                                                    <button type="submit" class="rounded-lg px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 @if($venue->is_active) bg-red-50 text-red-700 hover:bg-red-100 focus:ring-red-500 @else bg-green-50 text-green-700 hover:bg-green-100 focus:ring-green-500 @endif">
-                                                        @if($venue->is_active)
-                                                            Disable
-                                                        @else
-                                                            Enable
-                                                        @endif
-                                                    </button>
-                                                </form>
+                                                {{-- QA-2: only the Supply Office enables or disables venues. --}}
+                                                <span class="text-xs text-slate-500">{{ $venue->is_active ? 'Enabled' : 'Disabled by the Supply Office' }} &middot; Only the Supply Office can enable or disable it.</span>
                                             </div>
                                         </td>
                                     </tr>

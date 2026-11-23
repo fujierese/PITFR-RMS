@@ -73,20 +73,20 @@
                                     <span class="ml-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">Activity type asked</span>
                                 @endif
                                 @unless($venue->is_active)
-                                    <span class="ml-1 inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-200">Inactive</span>
+                                    <span class="ml-1 inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-200">Disabled</span>
                                 @endunless
                             </td>
                             <td class="px-4 py-4">{{ $venue->capacity ?? '—' }}</td>
                             <td class="px-4 py-4">{{ $venue->custodian?->name ?? '—' }}</td>
                             <td class="px-4 py-4 text-right">
                                 <a href="{{ route('supply-office.venues.index', ['edit_venue' => $venue->id]) }}" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</a>
-                                {{-- REQ-20: deactivating keeps every booking; deleting is only for a venue no request refers to. --}}
-                                <form method="POST" action="{{ route('supply-office.venues.toggle', $venue) }}" class="inline-block" data-swal-confirm data-swal-title="{{ $venue->is_active ? 'Deactivate this venue?' : 'Make this venue available again?' }}" data-swal-text="{{ $venue->is_active ? 'It can no longer be booked. Existing bookings are kept, noted and their requestors are told.' : 'It can be booked again.' }}" data-swal-confirm-text="{{ $venue->is_active ? 'Yes, deactivate' : 'Yes, make available' }}">
+                                {{-- REQ-20 / QA-2: disabling keeps every booking; deleting is only for a venue no request refers to. --}}
+                                <form method="POST" action="{{ route('supply-office.venues.toggle', $venue) }}" class="inline-block" data-swal-confirm data-swal-title="{{ $venue->is_active ? 'Disable this venue?' : 'Re-enable this venue?' }}" data-swal-text="{{ $venue->is_active ? 'It can no longer be booked. Existing bookings are kept, noted and their requestors are told.' : 'It can be booked again.' }}" data-swal-confirm-text="{{ $venue->is_active ? 'Yes, disable it' : 'Yes, re-enable it' }}">
                                     @csrf
                                     @method('PATCH')
-                                    <button type="submit" class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100">{{ $venue->is_active ? 'Deactivate' : 'Reactivate' }}</button>
+                                    <button type="submit" class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100">{{ $venue->is_active ? 'Disable' : 'Re-enable' }}</button>
                                 </form>
-                                <form method="POST" action="{{ route('supply-office.venues.destroy', $venue) }}" class="inline-block" data-swal-confirm data-swal-title="Delete this venue?" data-swal-text="Only a venue no request has ever used can be deleted. Otherwise, deactivate it." data-swal-confirm-text="Yes, delete it" data-swal-confirm-color="#dc2626">
+                                <form method="POST" action="{{ route('supply-office.venues.destroy', $venue) }}" class="inline-block" data-swal-confirm data-swal-title="Delete this venue?" data-swal-text="Only a venue no request has ever used can be deleted. Otherwise, disable it." data-swal-confirm-text="Yes, delete it" data-swal-confirm-color="#dc2626">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Delete</button>

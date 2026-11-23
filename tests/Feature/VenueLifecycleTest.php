@@ -64,7 +64,7 @@ class VenueLifecycleTest extends TestCase
         $past = $this->booking('approved', -8, 'FER-2026-403');
 
         $this->actingAs($this->admin)->patch(route('supply-office.venues.toggle', $this->venue))
-            ->assertSessionHas('success', 'Covered Court was deactivated. It can no longer be booked.')
+            ->assertSessionHas('success', 'Covered Court was disabled. It can no longer be booked.')
             ->assertSessionHas('warning', fn (string $warning): bool => str_contains($warning, 'FER-2026-401, FER-2026-402')
                 && str_contains($warning, '1 approved booking(s) need the Supply Office to confirm or reschedule them'));
 
@@ -77,20 +77,43 @@ class VenueLifecycleTest extends TestCase
         Notification::assertSentTo($this->admin, ResourceStatusChanged::class);
 
         $this->actingAs($this->admin)->patch(route('supply-office.venues.toggle', $this->venue))
-            ->assertSessionHas('success', 'Covered Court is available for booking again.');
+            ->assertSessionHas('success', 'Covered Court was re-enabled and can be booked again.');
         $this->assertTrue($this->venue->fresh()->is_active);
         $this->assertTrue($pending->histories()->where('action', 'venue_reactivated')->exists());
     }
 
-    public function test_the_custodian_toggle_follows_the_same_rule(): void
+    public function test_only_the_supply_office_can_enable_or_disable_a_venue(): void
     {
-        $pending = $this->booking('pending', 5, 'FER-2026-411');
+        // QA-2: the custodian cannot disable it...
+        $this->actingAs($this->custodian)->patch(route('custodian.venues.toggle', $this->venue))->assertForbidden();
+        $this->assertTrue($this->venue->fresh()->is_active);
 
-        $this->actingAs($this->custodian)->patch(route('custodian.venues.toggle', $this->venue))
-            ->assertSessionHas('warning', fn (string $warning): bool => str_contains($warning, 'FER-2026-411'));
+        // ...nor re-enable a venue the Supply Office disabled, and sees no button for it.
+        $this->actingAs($this->admin)->patch(route('supply-office.venues.toggle', $this->venue));
+        $this->assertFalse($this->venue->fresh()->is_active);
+        $this->actingAs($this->custodian)->patch(route('custodian.venues.toggle', $this->venue))->assertForbidden();
+        $this->assertFalse($this->venue->fresh()->is_active);
 
-        $this->assertTrue($pending->histories()->where('action', 'venue_deactivated')->exists());
-        Notification::assertSentTo($this->requestor, ResourceStatusChanged::class);
+        $this->actingAs($this->custodian)->get(route('custodian.assignments'))
+            ->assertOk()
+            ->assertSee('Disabled by the Supply Office.')
+            ->assertDontSee(route('custodian.venues.toggle', $this->venue), false);
+    }
+
+    public function test_enabling_and_disabling_is_recorded_in_the_audit_history(): void
+    {
+        $this->actingAs($this->admin)->patch(route('supply-office.venues.toggle', $this->venue));
+        $this->actingAs($this->admin)->patch(route('supply-office.venues.toggle', $this->venue));
+
+        $this->assertSame(
+            ['Venue "Covered Court" was disabled by ' . $this->admin->name . '.', 'Venue "Covered Court" was re-enabled by ' . $this->admin->name . '.'],
+            \App\Models\AuditLog::query()->whereIn('action', ['venue_disabled', 'venue_enabled'])->orderBy('id')->pluck('details')->all()
+        );
+        $this->assertSame([$this->admin->id, $this->admin->id], \App\Models\AuditLog::query()->whereIn('action', ['venue_disabled', 'venue_enabled'])->pluck('actor_id')->all());
+
+        $this->actingAs($this->admin)->get(route('admin.audit-logs'))
+            ->assertOk()
+            ->assertSee('Venue &quot;Covered Court&quot; was disabled', false);
     }
 
     public function test_reassigning_tells_the_new_custodian_and_notes_the_bookings(): void
@@ -116,11 +139,11 @@ class VenueLifecycleTest extends TestCase
     {
         $this->booking('pending', 5, 'FER-2026-431');
         $this->actingAs($this->admin)->delete(route('supply-office.venues.destroy', $this->venue))
-            ->assertSessionHasErrors(['venue' => "Covered Court can't be deleted while it has pending or upcoming bookings (FER-2026-431). Deactivate it instead; the bookings are kept."]);
+            ->assertSessionHasErrors(['venue' => "Covered Court can't be deleted while it has pending or upcoming bookings (FER-2026-431). Disable it instead; the bookings are kept."]);
 
         FacilityRequest::query()->update(['status' => 'approved', 'start_date' => now()->subDays(3)->toDateString(), 'end_date' => now()->subDays(3)->toDateString()]);
         $this->actingAs($this->admin)->delete(route('supply-office.venues.destroy', $this->venue))
-            ->assertSessionHasErrors(['venue' => "Covered Court can't be deleted because 1 past request(s) refer to it, and deleting it would remove it from their history and reports. Deactivate it instead so it can no longer be booked."]);
+            ->assertSessionHasErrors(['venue' => "Covered Court can't be deleted because 1 past request(s) refer to it, and deleting it would remove it from their history and reports. Disable it instead so it can no longer be booked."]);
         $this->assertNotNull($this->venue->fresh());
 
         $unused = Venue::create(['name' => 'Spare Room', 'capacity' => 20, 'custodian_id' => $this->custodian->id, 'is_active' => true]);
@@ -134,7 +157,7 @@ class VenueLifecycleTest extends TestCase
 
         $this->actingAs($this->admin)->get(route('supply-office.venues.index'))
             ->assertOk()
-            ->assertSee('Reactivate')
-            ->assertSee('Inactive');
+            ->assertSee('Re-enable')
+            ->assertSee('Disabled');
     }
 }

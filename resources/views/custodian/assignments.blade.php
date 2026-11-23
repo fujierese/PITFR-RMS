@@ -109,11 +109,8 @@
                                             <p class="mt-4 text-sm leading-6 text-slate-600">{{ $venue->description }}</p>
                                         @endif
                                         <div class="mt-4 flex flex-wrap gap-2">
-                                            <form method="POST" action="{{ route('custodian.venues.toggle', $venue) }}" @if($venue->is_active) data-swal-confirm data-swal-title="Disable this venue?" data-swal-text="This venue will no longer be available for new facility requests." data-swal-confirm-text="Yes, disable it" data-swal-confirm-color="#dc2626" @endif>
-                                                @csrf
-                                                @method('PATCH')
-                                                <button type="submit" class="rounded-full {{ $venue->is_active ? 'border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100' : 'border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700' }}">{{ $venue->is_active ? 'Disable' : 'Enable' }}</button>
-                                            </form>
+                                            {{-- QA-2: only the Supply Office enables or disables venues. --}}
+                                            <p class="text-xs text-slate-500">{{ $venue->is_active ? 'Enabled.' : 'Disabled by the Supply Office.' }} Only the Supply Office can enable or disable this venue.</p>
                                             <form method="POST" action="{{ route('custodian.venues.update', $venue) }}" class="grid w-full grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
                                                 @csrf
                                                 @method('PUT')
