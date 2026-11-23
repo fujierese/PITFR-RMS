@@ -1603,6 +1603,19 @@ const initializeRequestForm = function () {
         });
     };
 
+    // QA-6: what is wrong with an entered equipment quantity, or '' when it is fine.
+    const quantityProblem = function (rawValue, available) {
+        const value = String(rawValue ?? '').trim();
+        if (available <= 0) return 'No units are available for the selected schedule.';
+        if (value === '') return 'Enter a quantity.';
+        const quantity = Number(value);
+        if (!Number.isFinite(quantity)) return 'Enter the quantity as a number.';
+        if (!Number.isInteger(quantity)) return 'Use a whole number (no decimals).';
+        if (quantity < 1) return 'Enter at least 1.';
+        if (quantity > available) return 'Only ' + available + ' unit' + (available === 1 ? ' is' : 's are') + ' available for this schedule.';
+        return '';
+    };
+
     const validateQuantities = function () {
         let valid = true;
 
@@ -1612,17 +1625,14 @@ const initializeRequestForm = function () {
             const errorMessage = row.querySelector('.quantity-error-message');
             if (!checkbox || !qtyInput) return;
             const maxAllowed = parseInt(row.dataset.available, 10) || 0;
-            const qty = Number(qtyInput.value);
+            const problem = checkbox.checked ? quantityProblem(qtyInput.value, maxAllowed) : '';
+            qtyInput.dataset.touched = '1';
 
-            if (checkbox.checked && (!Number.isInteger(qty) || qty < 1 || qty > maxAllowed)) {
+            if (problem) {
                 qtyInput.classList.add('border-red-500');
-                qtyInput.setCustomValidity(maxAllowed > 0
-                    ? `Enter a whole-number quantity from 1 to ${maxAllowed}.`
-                    : 'No units are available for the selected schedule.');
+                qtyInput.setCustomValidity(problem);
                 if (errorMessage) {
-                    errorMessage.textContent = maxAllowed > 0
-                        ? 'Enter a whole-number quantity from 1 to ' + maxAllowed + '.'
-                        : 'No units are available for the selected schedule.';
+                    errorMessage.textContent = problem;
                     errorMessage.classList.remove('hidden');
                 }
                 valid = false;
@@ -1650,8 +1660,9 @@ const initializeRequestForm = function () {
         const requested = Number(qtyInput?.value);
         const hasQuantity = Boolean(qtyInput?.value);
         const hasValidQuantity = Number.isInteger(requested) && requested >= 1 && requested <= available;
-        const remaining = checkbox?.checked && hasQuantity
-            ? Math.max(0, available - (hasValidQuantity ? requested : available))
+        // QA-6: only a valid quantity the requestor entered lowers the remaining count.
+        const remaining = checkbox?.checked && hasValidQuantity
+            ? Math.max(0, available - requested)
             : available;
         const state = getAvailabilityState(remaining, total);
         const tone = checkbox?.checked && hasQuantity && !hasValidQuantity ? 'red' : state.tone;
@@ -1750,19 +1761,32 @@ const initializeRequestForm = function () {
         }
     };
 
-    const fetchAvailabilityAndUpdate = function (row) {
+    // QA-6: each equipment row is checked against the schedule of its own venue.
+    const scheduleForEquipmentRow = function (row) {
+        const venue = row.dataset.venue || '';
+        const group = venue
+            ? Array.from(form.querySelectorAll('[data-venue-schedule]')).find(function (candidate) { return candidate.dataset.venueName === venue; })
+            : null;
+        const read = function (field, fallback) {
+            return (group?.querySelector('[name$="[' + field + ']"]')?.value || fallback?.value || '').trim();
+        };
+        const startDate = read('start_date', startDateInput);
+
+        return {
+            start_date: startDate,
+            end_date: read('end_date', endDateInput) || startDate,
+            start_time: read('start_time', startTimeInput),
+            end_time: read('end_time', endTimeInput),
+        };
+    };
+
+    const fetchAvailabilityAndUpdate = function (row, targets = [row], schedule = scheduleForEquipmentRow(row)) {
         const name = row.dataset.name;
         if (!name || !config.equipmentAvailabilityUrl) {
             return;
         }
 
-        const scheduleParams = new URLSearchParams({
-            name,
-            start_date: startDateInput?.value || '',
-            end_date: endDateInput?.value || startDateInput?.value || '',
-            start_time: startTimeInput?.value || '',
-            end_time: endTimeInput?.value || ''
-        });
+        const scheduleParams = new URLSearchParams(Object.assign({ name: name }, schedule));
 
         fetch(`${config.equipmentAvailabilityUrl}?${scheduleParams.toString()}`, {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -1776,16 +1800,46 @@ const initializeRequestForm = function () {
             // Ensure availability values are always non-negative numbers
             const avail = Math.max(0, Number(data.available || 0));
             const tot = Math.max(0, Number(data.total || 0));
-            row.dataset.available = String(avail);
-            row.dataset.total = String(tot);
-            updateEquipmentRowVisuals(row, avail, tot, data.overlapping_requests || []);
+            targets.forEach(function (target) {
+                target.dataset.available = String(avail);
+                target.dataset.total = String(tot);
+                updateEquipmentRowVisuals(target, avail, tot, data.overlapping_requests || []);
+            });
         })
         .catch(() => {});
     };
 
+    // The form used to ask the server about every equipment row, in every venue group,
+    // on page load and on every change (dozens of requests at once). Now it waits until
+    // changes settle and asks once per item, for the venues that are selected.
+    let equipmentRefreshTimer = null;
     const refreshAllEquipmentAvailability = function () {
-        rows.forEach(fetchAvailabilityAndUpdate);
+        window.clearTimeout(equipmentRefreshTimer);
+        equipmentRefreshTimer = window.setTimeout(function () {
+            const rowsByItem = new Map();
+            rows.forEach(function (row) {
+                const group = row.closest('[data-venue-equipment-group]');
+                if (group && group.classList.contains('hidden')) return;
+                const name = row.dataset.name;
+                if (!name) return;
+                const schedule = scheduleForEquipmentRow(row);
+                const key = name + '|' + Object.values(schedule).join('|');
+                if (!rowsByItem.has(key)) rowsByItem.set(key, { schedule: schedule, rows: [] });
+                rowsByItem.get(key).rows.push(row);
+            });
+            rowsByItem.forEach(function (entry) {
+                fetchAvailabilityAndUpdate(entry.rows[0], entry.rows, entry.schedule);
+            });
+        }, 400);
     };
+    // Recheck when a venue is selected or a venue's schedule changes.
+    form.addEventListener('change', function (event) {
+        const target = event.target;
+        if (target instanceof HTMLInputElement
+            && (target.name === 'venue[]' || target.matches('[data-venue-schedule] input'))) {
+            refreshAllEquipmentAvailability();
+        }
+    });
 
     const checkConflicts = function () {
         const selectedVenueInput = form.querySelector('input[name="venue"]:checked');
@@ -2230,18 +2284,11 @@ const initializeRequestForm = function () {
                 qtyInput.value = '';
             }
 
-            const invalid = isChecked && (!Number.isInteger(quantity) || quantity < 1 || quantity > available);
-            if (invalid) {
-                qtyInput.setCustomValidity(available > 0
-                    ? 'Enter a whole-number quantity from 1 to ' + available + '.'
-                    : 'No units are available for the selected schedule.');
-                errorMessage.textContent = available > 0
-                    ? 'Enter a whole-number quantity from 1 to ' + available + '.'
-                    : 'No units are available for the selected schedule.';
-            } else {
-                qtyInput.setCustomValidity('');
-                errorMessage.textContent = '';
-            }
+            const problem = isChecked ? quantityProblem(qtyInput.value, available) : '';
+            qtyInput.setCustomValidity(problem);
+            // An empty box is not flagged in red until the requestor types in it or submits.
+            const invalid = problem !== '' && (qtyInput.value !== '' || qtyInput.dataset.touched === '1');
+            errorMessage.textContent = invalid ? problem : '';
 
             if (invalid) {
                 qtyInput.classList.add('border-red-500');
@@ -2272,9 +2319,14 @@ const initializeRequestForm = function () {
         qtyInput.addEventListener('input', updateAvailability);
         qtyInput.addEventListener('change', updateAvailability);
 
+        qtyInput.addEventListener('blur', function () {
+            qtyInput.dataset.touched = '1';
+            updateAvailability();
+        });
+
         updateAvailability();
-        fetchAvailabilityAndUpdate(row);
     });
+    refreshAllEquipmentAvailability();
 
     startDateInput?.addEventListener('change', function () {
         autoAdjustedEndDate = false;

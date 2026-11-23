@@ -544,7 +544,8 @@
                                             $isOtherVenueEquipment = in_array($itemName, ['Podium', 'HDMI', 'Television (CHIC)'], true);
                                             $isVisible = !in_array($itemName, $venueIncompatible, true) && ($allowedVenues === [] || in_array($venueName, $allowedVenues, true));
                                             $itemIndex = $loop->parent->index . '-' . $loop->index;
-                                            $itemQuantity = $oldVenueEquipmentQuantities[$venueName][$itemName] ?? ($isSelected ? 1 : '');
+                                            // QA-6: no pre-filled quantity; "1" is only a placeholder until the requestor enters one.
+                                            $itemQuantity = $oldVenueEquipmentQuantities[$venueName][$itemName] ?? '';
                                         @endphp
                                         @if($isVenueRequired)
                                             <div class="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4" data-included-equipment="{{ $itemName }}">
@@ -566,7 +567,7 @@
                                                     <span class="availability-badge rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">{{ $itemAvailable }} / {{ $itemQty }} available</span>
                                                     <div class="quantity-input-wrap {{ $isSelected ? '' : 'hidden' }}" id="qty-wrap-{{ $itemIndex }}">
                                                         <label class="mr-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Qty</label>
-                                                        <input type="number" inputmode="numeric" step="1" name="venue_equipment_quantities[{{ $venueName }}][{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ $itemQuantity }}" {{ $isSelected ? 'required' : 'disabled' }} class="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" placeholder="Enter qty" aria-label="{{ $venueName }} {{ $itemName }} quantity">
+                                                        <input type="number" inputmode="numeric" step="1" name="venue_equipment_quantities[{{ $venueName }}][{{ $itemName }}]" min="1" max="{{ $itemAvailable }}" value="{{ $itemQuantity }}" placeholder="1" aria-label="Quantity of {{ $itemName }} for {{ $venueName }}" {{ $isSelected ? 'required' : 'disabled' }} class="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" placeholder="Enter qty" aria-label="{{ $venueName }} {{ $itemName }} quantity">
                                                     </div>
                                                 </div>
                                             </div>
@@ -1792,7 +1793,6 @@
                     if (quantity) {
                         quantity.disabled = !isSelected;
                         quantity.required = isSelected;
-                        if (isSelected && !quantity.value) quantity.value = '1';
                     }
                     row.classList.toggle('border-emerald-300', isSelected);
                     row.classList.toggle('bg-emerald-50/60', isSelected);

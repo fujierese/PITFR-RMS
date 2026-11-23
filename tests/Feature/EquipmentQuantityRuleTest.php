@@ -65,6 +65,19 @@ class EquipmentQuantityRuleTest extends TestCase
         ]);
     }
 
+    public function test_the_form_shows_empty_quantity_boxes_with_a_placeholder(): void
+    {
+        // QA-6: "1" is only a placeholder; the box stays empty until a quantity is entered.
+        $html = $this->actingAs($this->requestor)->get(route('requestor.index', ['tab' => 'create']))->assertOk()->getContent();
+
+        preg_match_all('/<input type="number"[^>]*name="venue_equipment_quantities\[[^"]*"[^>]*>/', $html, $boxes);
+        $this->assertNotEmpty($boxes[0]);
+        foreach ($boxes[0] as $box) {
+            $this->assertStringContainsString('value=""', $box);
+            $this->assertStringContainsString('placeholder="1"', $box);
+        }
+    }
+
     public function test_form_rejects_decimal_zero_text_and_huge_quantities(): void
     {
         foreach (['1.5', '0', '-2', 'abc', '5000'] as $bad) {
