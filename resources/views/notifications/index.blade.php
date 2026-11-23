@@ -2,16 +2,19 @@
 @section('title', 'Notifications')
 
 @section('content')
-<div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-    <div class="p-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
-        <div>
-        <h2 class="flex items-center gap-2 text-lg font-bold text-gray-800">
-            <svg class="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.857 17H9.143m10.286 0H4.571c1.14-1.18 1.715-2.65 1.715-4.414V10a5.714 5.714 0 0111.428 0v2.586c0 1.764.572 3.234 1.715 4.414ZM9 20h6"/>
-            </svg>
-            Notifications
-        </h2>
-        <p class="text-xs text-gray-500 mt-0.5" data-unread-summary aria-live="polite">{{ $unreadCount > 0 ? $unreadCount . ' unread' : 'No unread notifications' }}</p>
+<div class="mx-auto max-w-4xl bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 overflow-hidden">
+    <div class="px-5 pt-5 pb-0 border-b border-gray-100">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-600" aria-hidden="true">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.857 17H9.143m10.286 0H4.571c1.14-1.18 1.715-2.65 1.715-4.414V10a5.714 5.714 0 0111.428 0v2.586c0 1.764.572 3.234 1.715 4.414ZM9 20h6"/>
+                </svg>
+            </span>
+            <div>
+                <h2 class="text-lg font-bold text-gray-900">Notifications</h2>
+                <p class="text-xs text-gray-500" data-unread-summary aria-live="polite">{{ $unreadCount > 0 ? $unreadCount . ' unread' : 'No unread notifications' }}</p>
+            </div>
         </div>
         <form method="POST" action="{{ route('notifications.read-all') }}" data-mark-all-form>
             @csrf
@@ -22,9 +25,29 @@
             </button>
         </form>
     </div>
+    <nav class="mt-4 flex gap-1" aria-label="Filter notifications">
+        @foreach(['all' => ['All', $totalCount], 'unread' => ['Unread', $unreadCount]] as $key => [$label, $count])
+            <a href="{{ route('notifications.index', $key === 'unread' ? ['filter' => 'unread'] : []) }}"
+               @if($filter === $key) aria-current="page" @endif
+               class="-mb-px inline-flex items-center gap-2 border-b-2 px-3 pb-3 text-sm font-semibold transition {{ $filter === $key ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-gray-500 hover:text-gray-800' }}">
+                {{ $label }}
+                <span class="rounded-full px-2 py-0.5 text-[11px] {{ $filter === $key ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500' }}" @if($key === 'unread') data-unread-tab-count @endif>{{ $count }}</span>
+            </a>
+        @endforeach
+    </nav>
+    </div>
 
-    <div class="divide-y divide-gray-50">
+    <div class="divide-y divide-gray-100">
+        @php $previousGroup = null; @endphp
         @forelse($notifications as $notification)
+        @php
+            $createdAt = $notification->created_at;
+            $group = $createdAt->isToday() ? 'Today' : ($createdAt->isYesterday() ? 'Yesterday' : ($createdAt->isCurrentYear() ? $createdAt->format('l, F j') : $createdAt->format('F j, Y')));
+        @endphp
+        @if($group !== $previousGroup)
+            <h3 class="bg-gray-50/80 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{{ $group }}</h3>
+            @php $previousGroup = $group; @endphp
+        @endif
         @php
             $data = $notification->data;
             $status = strtolower((string) ($data['status'] ?? ''));
@@ -150,7 +173,7 @@
                 @endif
             </div>
             <div class="flex-1">
-                <p class="mb-1 text-xs text-gray-500">{{ $notification->created_at->format('M j, Y g:i A') }} <span aria-hidden="true">·</span> {{ $notification->created_at->diffForHumans() }}</p>
+                <p class="mb-0.5 text-xs text-gray-500"><time datetime="{{ $notification->created_at->toIso8601String() }}" title="{{ $notification->created_at->format('M j, Y g:i A') }}">{{ $notification->created_at->format('g:i A') }} · {{ $notification->created_at->diffForHumans() }}</time></p>
                 <p class="flex flex-wrap items-center gap-2 text-sm {{ $notification->read_at ? 'font-medium text-gray-700' : 'font-semibold text-gray-900' }}" data-notification-title>
                     <span>{{ $title }}</span>
                     @if($notification->read_at)
@@ -162,19 +185,19 @@
                 <p class="mt-1 text-sm text-gray-600">
                     {{ $notificationMessage }}
                 </p>
-                @unless($isSecurityAlert)
-                <p class="mt-1 text-xs text-gray-600">
-                    Requestor: <strong>{{ $requestorName ?: 'Details unavailable' }}</strong>
-                    @if($activityName)
-                        <span class="mx-1" aria-hidden="true">·</span>
-                        Activity: <strong>{{ $activityName }}</strong>
-                    @endif
+                @if(!$isSecurityAlert && ($controlNumber || $activityName || $requestorName))
+                <p class="mt-2 flex flex-wrap gap-1.5 text-[11px] text-gray-600">
                     @if($controlNumber)
-                        <span class="mx-1" aria-hidden="true">·</span>
-                        Control No: <strong>{{ $controlNumber }}</strong>
+                        <span class="rounded-md bg-gray-100 px-2 py-0.5">Control No: <strong>{{ $controlNumber }}</strong></span>
+                    @endif
+                    @if($activityName)
+                        <span class="rounded-md bg-gray-100 px-2 py-0.5">Activity: <strong>{{ $activityName }}</strong></span>
+                    @endif
+                    @if($requestorName)
+                        <span class="rounded-md bg-gray-100 px-2 py-0.5">Requestor: <strong>{{ $requestorName }}</strong></span>
                     @endif
                 </p>
-                @endunless
+                @endif
                 @if(!empty($data['notes']))
                     <p class="text-xs text-gray-400 mt-1 italic">Note: {{ $data['notes'] }}</p>
                 @endif
@@ -197,8 +220,13 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.857 17H9.143m10.286 0H4.571c1.14-1.18 1.715-2.65 1.715-4.414V10a5.714 5.714 0 0111.428 0v2.586c0 1.764.572 3.234 1.715 4.414ZM9 20h6"/>
                 </svg>
             </div>
-            <p class="text-gray-400 font-semibold">No notifications yet</p>
-            <p class="text-gray-300 text-sm mt-1">You'll be notified when your request status changes</p>
+            @if($filter === 'unread' && $totalCount > 0)
+                <p class="text-gray-700 font-semibold">You're all caught up</p>
+                <p class="text-gray-500 text-sm mt-1">No unread notifications. <a href="{{ route('notifications.index') }}" class="font-semibold text-emerald-700 hover:underline">View all</a></p>
+            @else
+                <p class="text-gray-700 font-semibold">No notifications yet</p>
+                <p class="text-gray-500 text-sm mt-1">Updates about your requests will appear here.</p>
+            @endif
         </div>
         @endforelse
     </div>
@@ -227,6 +255,7 @@
         count = Math.max(0, parseInt(count, 10) || 0);
         if (summary) summary.textContent = count > 0 ? count + ' unread' : 'No unread notifications';
         if (markAllButton) markAllButton.disabled = count === 0;
+        document.querySelectorAll('[data-unread-tab-count]').forEach((el) => { el.textContent = count; });
         document.querySelectorAll('[data-unread-badge]').forEach((badge) => {
             badge.textContent = count;
             badge.hidden = count === 0;

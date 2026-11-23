@@ -16,6 +16,13 @@ return [
     'name' => env('APP_NAME', 'Laravel'),
 
     /*
+    | Privacy & Data Protection page. Hidden at the client's request (PIT has no
+    | official privacy policy yet): the page, its links, the sign-up consent box
+    | and the email footer link appear only when PRIVACY_PAGE_ENABLED=true.
+    */
+    'privacy_page' => (bool) env('PRIVACY_PAGE_ENABLED', false),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------

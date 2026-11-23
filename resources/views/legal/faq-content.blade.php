@@ -7,7 +7,6 @@
         ['Can I cancel a request?', 'A requestor can cancel a request while it is pending. Once it is approved or has moved to another final state, contact the Supply Office for help.'],
         ['What documents can I upload?', 'The request form indicates which supporting document is needed for your request type. Accepted uploads are PDF, JPEG, or PNG and must be no larger than 10 MB. Do not upload unrelated sensitive information.'],
         ['What happens to borrowed equipment?', 'The assigned equipment custodian records quantities returned, damaged, or missing. Return equipment according to the instructions from your custodian.'],
-        ['Who can answer a question about my personal information?', 'The privacy contact and official privacy procedures for this draft policy still need confirmation by Palompon Institute of Technology. See the Privacy Policy draft for the fields that must be completed.'],
     ] as [$question, $answer])
         <details class="group rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
             <summary class="cursor-pointer list-none pr-8 text-base font-semibold text-slate-900 marker:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">

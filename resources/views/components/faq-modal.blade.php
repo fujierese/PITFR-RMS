@@ -11,9 +11,11 @@
             <section data-info-modal-panel="faq">
                 @include('legal.faq-content')
             </section>
+            @if(config('app.privacy_page'))
             <section data-info-modal-panel="privacy" class="hidden">
                 @include('legal.privacy-content')
             </section>
+            @endif
         </div>
     </div>
 </dialog>
@@ -27,7 +29,7 @@
         const panels = dialog.querySelectorAll('[data-info-modal-panel]');
         const titles = {
             faq: 'Frequently Asked Questions',
-            privacy: 'Privacy & Data Protection',
+            @if(config('app.privacy_page')) privacy: 'Privacy & Data Protection', @endif
         };
 
         document.querySelectorAll('[data-open-faq-modal], [data-open-info-modal]').forEach((trigger) => {

@@ -127,4 +127,22 @@ class NotificationReadStatusTest extends TestCase
     {
         $this->postJson(route('notifications.read-all'))->assertUnauthorized();
     }
+
+    public function test_the_unread_tab_lists_only_unread(): void
+    {
+        $user = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $unread = $this->notify($user);
+        $read = $this->notify($user);
+        $user->notifications()->where('id', $read)->update(['read_at' => now()]);
+
+        $this->actingAs($user)->get(route('notifications.index', ['filter' => 'unread']))
+            ->assertOk()
+            ->assertSee(route('notifications.open', $unread), false)
+            ->assertDontSee(route('notifications.open', $read), false)
+            ->assertSee('Today');
+
+        $user->unreadNotifications()->update(['read_at' => now()]);
+        $this->actingAs($user)->get(route('notifications.index', ['filter' => 'unread']))
+            ->assertSee("You're all caught up", false);
+    }
 }

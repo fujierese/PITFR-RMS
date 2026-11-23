@@ -121,9 +121,13 @@
     <footer class="border-t border-slate-200 bg-white px-4 py-5 text-center text-sm text-slate-600 {{ auth()->check() ? 'lg:ml-80' : '' }}">
         <nav class="flex flex-wrap justify-center gap-x-5 gap-y-2" aria-label="Help and legal information">
             <button type="button" class="font-medium text-emerald-800 underline-offset-4 hover:underline" data-open-faq-modal aria-haspopup="dialog" aria-controls="faq-modal">FAQ</button>
+            @if(config('app.privacy_page'))
             <a href="{{ route('privacy.data-protection') }}" class="font-medium text-emerald-800 underline-offset-4 hover:underline">Privacy &amp; Data Protection</a>
+            @endif
         </nav>
+        @if(config('app.privacy_page'))
         <p class="mt-2 text-xs text-slate-500">PITFR handles personal information in accordance with RA 10173, the Data Privacy Act of 2012.</p>
+        @endif
     </footer>
     @include('components.venue-calendar-modal')
     @include('components.faq-modal')

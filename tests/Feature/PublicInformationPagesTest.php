@@ -9,27 +9,19 @@ class PublicInformationPagesTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_help_and_privacy_information_pages_are_publicly_accessible(): void
+    public function test_help_is_public_and_the_privacy_page_is_hidden(): void
     {
         $this->get(route('faq'))
             ->assertOk()
             ->assertSee('Frequently Asked Questions')
-            ->assertSee('Does an urgent request skip approval?');
+            ->assertSee('Does an urgent request skip approval?')
+            ->assertDontSee('Privacy Policy draft');
 
-        $this->get(route('privacy.data-protection'))
-            ->assertOk()
-            ->assertSee('Privacy &amp; Data Protection', false)
-            ->assertSee('A. Privacy Notice')
-            ->assertSee('B. Purpose of Data Collection')
-            ->assertSee('C. Data Protection')
-            ->assertSee('D. Data Privacy Rights')
-            ->assertSee('Republic Act No. 10173')
-            ->assertDontSee('Data Protection Officer')
-            ->assertDontSee('To be completed by PIT');
-
-        // The old addresses lead to the same page.
-        $this->get('/privacy-policy')->assertRedirect('/privacy-and-data-protection');
-        $this->get('/data-privacy-act')->assertRedirect('/privacy-and-data-protection#data-privacy-rights');
+        // Hidden at the client's request (no official privacy policy yet).
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('privacy.data-protection'));
+        $this->get('/privacy-and-data-protection')->assertNotFound();
+        $this->get('/privacy-policy')->assertNotFound();
+        $this->get('/data-privacy-act')->assertNotFound();
     }
 
     public function test_faq_navigation_opens_the_faq_modal_on_public_and_authenticated_layouts(): void
@@ -52,17 +44,20 @@ class PublicInformationPagesTest extends TestCase
             ->assertSee('id="faq-modal"', false);
     }
 
-    public function test_privacy_page_is_linked_for_guests_and_every_role(): void
+    public function test_no_privacy_links_for_guests_or_any_role(): void
     {
-        $link = 'href="' . route('privacy.data-protection') . '"';
-        $this->get(route('home'))->assertOk()->assertSee($link, false);
+        $this->get(route('home'))->assertOk()
+            ->assertDontSee('Privacy &amp; Data Protection', false)
+            ->assertDontSee('/privacy-and-data-protection', false);
 
         foreach (['requestor', 'custodian-venue', 'custodian-equipment', 'admin'] as $role) {
             $user = \App\Models\User::factory()->create(['role' => $role]);
             $this->actingAs($user)
                 ->get($user->getDashboardRoute())
                 ->assertOk()
-                ->assertSee($link, false);
+                ->assertDontSee('Privacy &amp; Data Protection', false)
+                ->assertDontSee('/privacy-and-data-protection', false)
+                ->assertDontSee('Data Privacy Act');
         }
     }
 }

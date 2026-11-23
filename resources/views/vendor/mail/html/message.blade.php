@@ -24,7 +24,11 @@
 You received this email because of activity on your PITFR account. It was sent automatically, so please do not reply.<br>
 You can choose which emails you receive in your account settings.
 
+@if(config('app.privacy_page'))
 © {{ date('Y') }} Palompon Institute of Technology · [Privacy & Data Protection]({{ rtrim(config('app.url'), '/') }}/privacy-and-data-protection)
+@else
+© {{ date('Y') }} Palompon Institute of Technology
+@endif
 </x-mail::footer>
 </x-slot:footer>
 </x-mail::layout>

@@ -543,7 +543,7 @@ class SupplyOfficeWorkflowTest extends TestCase
             ->assertDontSee('Open full calendar in a new tab')
             ->assertSee('Confirm venue is available')
             ->assertSee('data-availability-confirm="custodian-venue-' . $request->id . '"', false)
-            ->assertSee('class="hidden"', false)
+            ->assertSee('class="hidden sm:flex-1"', false)
             ->assertSee('data-availability-check-url="' . route('calendar.request-availability-check', $request) . '"', false)
             ->assertSee('data-swal-title="Confirm the venue is available?"', false)
             ->assertSee('Suggest a new schedule')

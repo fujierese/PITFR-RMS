@@ -332,7 +332,9 @@
     <p class="text-xs mt-1">Quality Management System Portal — Facility & Equipment Request System</p>
     <nav class="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 px-4" aria-label="Help and legal information">
         <button type="button" data-open-faq-modal aria-haspopup="dialog" aria-controls="faq-modal" class="text-emerald-300 underline-offset-4 hover:underline">FAQ</button>
+        @if(config('app.privacy_page'))
         <a href="{{ route('privacy.data-protection') }}" class="text-emerald-300 underline-offset-4 hover:underline">Privacy &amp; Data Protection</a>
+        @endif
     </nav>
 </footer>
 @include('components.faq-modal')

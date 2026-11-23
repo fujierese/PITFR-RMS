@@ -65,9 +65,12 @@ Route::get('/calendar/embed', function () {
 })->name('calendar.embed');
 Route::view('/faq', 'legal.faq')->name('faq');
 // Privacy & Data Protection: one public, informational page for every user type.
-Route::view('/privacy-and-data-protection', 'legal.privacy')->name('privacy.data-protection');
-Route::redirect('/privacy-policy', '/privacy-and-data-protection', 301)->name('privacy.policy');
-Route::redirect('/data-privacy-act', '/privacy-and-data-protection#data-privacy-rights', 301)->name('privacy.data-act');
+// Hidden unless PRIVACY_PAGE_ENABLED=true (config app.privacy_page).
+if (config('app.privacy_page')) {
+    Route::view('/privacy-and-data-protection', 'legal.privacy')->name('privacy.data-protection');
+    Route::redirect('/privacy-policy', '/privacy-and-data-protection', 301)->name('privacy.policy');
+    Route::redirect('/data-privacy-act', '/privacy-and-data-protection#data-privacy-rights', 301)->name('privacy.data-act');
+}
 Route::get('/login',   [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login',  [AuthController::class, 'login']);
 Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');

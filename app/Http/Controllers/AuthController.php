@@ -84,7 +84,7 @@ class AuthController extends Controller
             'googleProfile' => $request->session()->get('google_registration_profile'),
             'googleType' => $request->session()->get('google_registration_type', 'student'),
             'verificationEnabled' => User::verificationEnabled(),
-            'privacyConsentEnabled' => \Illuminate\Support\Facades\Schema::hasColumn('users', 'privacy_accepted_at'),
+            'privacyConsentEnabled' => config('app.privacy_page') && \Illuminate\Support\Facades\Schema::hasColumn('users', 'privacy_accepted_at'),
             // D7: suggestions only; the category is a separate, verified field.
             'organizationSuggestions' => collect(AdminController::STAFF_DEPARTMENTS)
                 ->merge(\App\Models\Department::query()->orderBy('name')->pluck('name'))
@@ -345,7 +345,7 @@ class AuthController extends Controller
         ]);
 
         // D6 / REG-06: the Privacy Notice must be accepted; the time is recorded.
-        $privacyConsentEnabled = \Illuminate\Support\Facades\Schema::hasColumn('users', 'privacy_accepted_at');
+        $privacyConsentEnabled = config('app.privacy_page') && \Illuminate\Support\Facades\Schema::hasColumn('users', 'privacy_accepted_at');
         if ($privacyConsentEnabled && ! $request->boolean('privacy_accepted')) {
             return back()
                 ->withErrors(['privacy_accepted' => 'Please confirm that you have read the Privacy Notice.'])

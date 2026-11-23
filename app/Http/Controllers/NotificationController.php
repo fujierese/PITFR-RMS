@@ -12,7 +12,11 @@ class NotificationController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $notifications = $user->notifications()->paginate(20);
+        $filter = request('filter') === 'unread' ? 'unread' : 'all';
+        $notifications = ($filter === 'unread' ? $user->unreadNotifications() : $user->notifications())
+            ->paginate(20)
+            ->withQueryString();
+        $totalCount = $user->notifications()->count();
         $requestIds = $notifications->getCollection()
             ->map(fn ($notification) => $notification->data['request_id'] ?? $notification->data['facility_request_id'] ?? null)
             ->filter(fn ($id) => is_numeric($id))
@@ -24,7 +28,7 @@ class NotificationController extends Controller
 
         $unreadCount = $user->unreadNotifications()->count();
 
-        return view('notifications.index', compact('notifications', 'requestDetails', 'unreadCount'));
+        return view('notifications.index', compact('notifications', 'requestDetails', 'unreadCount', 'filter', 'totalCount'));
     }
 
     /**

@@ -606,11 +606,13 @@
                 @endif
             @endforeach
         </div>
-        {{-- D6 / PRV-01: privacy information on every dashboard. --}}
+        {{-- D6 / PRV-01: privacy information on every dashboard (hidden unless enabled). --}}
+        @if(config('app.privacy_page'))
         <div class="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 text-xs text-slate-700">
             <p class="font-semibold text-emerald-900">Help &amp; Information</p>
             <p class="mt-1">PIT handles your personal information under the Data Privacy Act of 2012.</p>
             <a href="{{ route('privacy.data-protection') }}" class="mt-2 inline-block font-semibold text-emerald-800 underline underline-offset-2">Privacy &amp; Data Protection</a>
         </div>
+        @endif
     </nav>
 </div>
