@@ -68,11 +68,11 @@
                 'change_request_rejected' => 'Change Request Rejected',
             ];
             $statusTitle = $statusLabels[$status] ?? ($status !== '' ? ucfirst(str_replace('_', ' ', $status)) : 'Request Update');
-            $title = $isSecurityAlert
+            $title = ! empty($data['decision']) ? ($data['title'] ?? 'Reservation Update') : ($isSecurityAlert
                 ? ($data['title'] ?? 'Security Alert')
                 : ($isNewRequest
                 ? ($data['title'] ?? 'New Request Submitted')
-                : ($status !== '' ? 'Request ' . $statusTitle : ($data['title'] ?? 'Request Update')));
+                : ($status !== '' ? 'Request ' . $statusTitle : ($data['title'] ?? 'Request Update'))));
             $linkedRequestId = $data['request_id'] ?? $data['facility_request_id'] ?? null;
             $linkedRequest = !empty($linkedRequestId) ? $requestDetails->get($linkedRequestId) : null;
             $requestorName = $data['requestor_name'] ?? $linkedRequest?->requester?->name ?? $linkedRequest?->requested_by;

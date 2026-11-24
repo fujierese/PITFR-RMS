@@ -265,6 +265,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/request/{facilityRequest}/revision/{revision}/respond', [RequestorController::class, 'respondToRevision'])->name('request.revision.respond');
     Route::post('/request/{facilityRequest}/supply/final-approval', [RequestActionController::class, 'supplyFinalApproval'])->name('request.supply.final-approval');
     Route::post('/request/{facilityRequest}/supply/decline', [RequestActionController::class, 'supplyDecline'])->name('request.supply.decline');
+    Route::post('/request/{facilityRequest}/supply/decision', [RequestActionController::class, 'supplyDecision'])->name('request.supply.decision');
 });
 
 // Calendar

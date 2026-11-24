@@ -550,7 +550,15 @@ class RequestActionController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $conflictMessage = $this->checkHybridResources($facilityRequest);
+            // Additional Part 2: an urgent request whose overlap with approved reservations
+            // was reviewed by the Supply Office may be approved. Urgency does not win by
+            // itself: the overlap becomes a conflict the Supply Office resolves by hand.
+            $urgentOverlapReviewed = $facilityRequest->is_emergency
+                && $facilityRequest->histories()->where('action', 'urgent_conflict_acknowledged')->exists()
+                && $this->availabilityService->getApprovedVenueConflicts($facilityRequest)->isNotEmpty();
+            $conflictMessage = $urgentOverlapReviewed
+                ? $this->availabilityService->checkFacilityRequest($facilityRequest, $facilityRequest->id, true)
+                : $this->checkHybridResources($facilityRequest);
             if ($conflictMessage) {
                 DB::rollBack();
                 if ($request->expectsJson()) {
@@ -651,6 +659,9 @@ class RequestActionController extends Controller
 
             $facilityRequest->recordApprovalSignature('final', $user);
             $facilityRequest->addHistory('final_approved', 'Final approval granted by ' . $user->name, $user->getKey());
+            if ($urgentOverlapReviewed) {
+                app(\App\Services\SupplyOfficeDecisions::class)->recordUrgentConflicts($facilityRequest, $user);
+            }
 
             // ✅ Only notify if status actually changed
             if ($originalStatus !== 'approved') {
@@ -690,6 +701,24 @@ class RequestActionController extends Controller
         $user = Auth::user();
         abort_unless($user && $user->isFinalApprover(), 403);
 
+        // Additional Part 2: declining is a final administrative decision; it needs a
+        // reason and a written explanation, shown in full on the request page.
+        $validated = $request->validate([
+            'decline_reason' => ['required', \Illuminate\Validation\Rule::in(array_keys(\App\Services\SupplyOfficeDecisions::DECLINE_REASONS))],
+            'notes' => ['required', 'string', 'min:10', 'max:2000'],
+        ], [
+            'decline_reason.required' => 'Choose the reason for declining.',
+            'notes.required' => 'Write an explanation for the requestor.',
+            'notes.min' => 'Write a short explanation (at least 10 characters).',
+        ]);
+        $declineReason = \App\Services\SupplyOfficeDecisions::DECLINE_REASONS[$validated['decline_reason']];
+        $decisions = app(\App\Services\SupplyOfficeDecisions::class);
+        if ($decisions->openConflicts($facilityRequest)->isNotEmpty() && $facilityRequest->status !== 'rejected') {
+            $decisions->resolve($facilityRequest, 'decline', ['reason' => $declineReason, 'explanation' => $validated['notes']], $user);
+
+            return redirect()->route('request.show', $facilityRequest->id)->with('success', 'Reservation declined. The requestor and custodians were notified.');
+        }
+
         DB::beginTransaction();
 
         try {
@@ -709,14 +738,21 @@ class RequestActionController extends Controller
                 throw new \Exception('Failed to save decline status.');
             }
             
-            $facilityRequest->addHistory('final_rejected', 'Final decline issued by ' . $user->name, $user->getKey());
-            
-            // ✅ Only notify if status actually changed
+            $facilityRequest->addHistory('final_rejected', 'Supply Office decision by ' . $user->name . ': Reservation declined. Reason: ' . $declineReason . '. ' . trim($validated['notes']), $user->getKey());
+            \App\Models\AuditLog::create([
+                'actor_id' => $user->id,
+                'action' => 'supply_office_decline',
+                'details' => "{$facilityRequest->control_number}: reservation declined",
+                'old_values' => ['status' => $originalStatus],
+                'new_values' => ['status' => 'rejected', 'reason' => $declineReason, 'explanation' => trim($validated['notes'])],
+            ]);
+
+            // ✅ Only notify if status actually changed (short notice; the full reason is on the request page)
             if ($originalStatus !== 'rejected') {
                 $this->notifyRequestorForStatusChange(
                     $facilityRequest,
                     'rejected',
-                    $request->input('notes', ''),
+                    '',
                     null,
                     [],
                     $user->name . ' - Supply Office',
@@ -868,6 +904,50 @@ class RequestActionController extends Controller
                 Log::warning('Supply Office notification failed.', ['facility_request_id' => $facilityRequest->id, 'status' => $status, 'exception' => $e->getMessage()]);
             }
         });
+    }
+
+    /**
+     * Additional Part 2: Request Revision, Assign Alternative Venue or Reschedule. Each
+     * is accepted only when it applies to the request (see SupplyOfficeDecisions).
+     */
+    public function supplyDecision($facilityRequest, Request $request)
+    {
+        $facilityRequest = $this->resolveFacilityRequest($facilityRequest);
+        /** @var User|null $user */
+        $user = Auth::user();
+        abort_unless($user && $user->isFinalApprover(), 403);
+
+        $validated = $request->validate([
+            'decision' => ['required', 'in:revision,alternative_venue,reschedule'],
+            'venue' => ['required_if:decision,alternative_venue', 'nullable', 'string', 'max:255'],
+            'start_date' => ['required_if:decision,reschedule', 'nullable', 'date_format:Y-m-d'],
+            'reason' => ['required', 'string', 'min:3', 'max:255'],
+            'explanation' => ['required', 'string', 'min:10', 'max:2000'],
+        ], [
+            'reason.required' => 'Give the reason for this decision.',
+            'explanation.required' => 'Write an explanation for the requestor.',
+            'explanation.min' => 'Write a short explanation (at least 10 characters).',
+            'venue.required_if' => 'Choose the alternative venue.',
+            'start_date.required_if' => 'Choose the new date.',
+        ]);
+
+        $decisions = app(\App\Services\SupplyOfficeDecisions::class);
+        $options = $decisions->actionsFor($facilityRequest);
+        $allowed = match ($validated['decision']) {
+            'revision' => $options['revision'] !== [],
+            'alternative_venue' => $options['alternative_venues'] !== [],
+            'reschedule' => $options['schedules'] !== [],
+        };
+        if (! $allowed) {
+            return back()->withErrors(['decision' => 'This action does not apply to the reservation right now.']);
+        }
+        if ($validated['decision'] !== 'revision' && $facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
+            return back()->withErrors(['decision' => 'A suggested schedule is awaiting responses. Answer or withdraw it first.']);
+        }
+
+        $summary = $decisions->resolve($facilityRequest, $validated['decision'], $validated, $user);
+
+        return redirect()->route('request.show', $facilityRequest->id)->with('success', $summary . ' The requestor and custodians were notified.');
     }
 
     private function resolveFacilityRequest($facilityRequest): FacilityRequest

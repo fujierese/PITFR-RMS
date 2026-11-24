@@ -160,6 +160,21 @@ class SupplyOfficeController extends Controller
                     $availability = app(\App\Services\AvailabilityService::class);
                     $availability->lockResourcesForFacilityRequests($facilityRequest);
                     $conflict = $availability->checkFacilityRequestForReview($facilityRequest);
+                    $approvedOverlaps = $facilityRequest->is_emergency ? $availability->getApprovedVenueConflicts($facilityRequest) : collect();
+                    if ($conflict && $facilityRequest->is_emergency && $approvedOverlaps->isNotEmpty()
+                        && $request->boolean('urgent_conflict_reviewed')
+                        && $availability->checkFacilityRequest($facilityRequest, $facilityRequest->id, true) === null) {
+                        // Additional Part 2: the Supply Office reviewed the overlap and chose to
+                        // continue. Nothing is changed for the other reservation(s) now; after
+                        // final approval the overlap is resolved by hand.
+                        $facilityRequest->addHistory(
+                            'urgent_conflict_acknowledged',
+                            'Supply Office reviewed the overlap with approved reservation(s) ' . $approvedOverlaps->pluck('control_number')->implode(', ')
+                                . ' and continued. After final approval the Supply Office decides how to adjust one of the reservations; nothing changes automatically.',
+                            $user->getKey()
+                        );
+                        $conflict = null;
+                    }
                     if ($conflict) {
                         if ($facilityRequest->is_emergency) {
                             $approvedConflicts = $availability->getApprovedVenueConflicts($facilityRequest);

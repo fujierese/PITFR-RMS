@@ -470,6 +470,13 @@
             ->implode(', ')
         : '';
 
+    // Additional Part 2: only the decisions that apply to this reservation.
+    $supplyDecisions = auth()->check() && auth()->user()->isFinalApprover() && in_array($request->status, ['pending', 'approved', 'needs_reschedule'], true)
+        ? app(\App\Services\SupplyOfficeDecisions::class)->actionsFor($request)
+        : null;
+    $urgentApprovedOverlaps = $request->is_emergency && $request->status === 'pending'
+        ? app(\App\Services\AvailabilityService::class)->getApprovedVenueConflicts($request)
+        : collect();
     $adminVenuePending = $request->status === 'pending' && $request->venue_status === 'pending';
     $adminSupplyPending = $request->status === 'pending'
         && $request->venue_status === 'approved'
@@ -1369,6 +1376,16 @@
                                             <input type="checkbox" name="urgent_document_validated" value="1" required class="rounded border-amber-400">
                                             Urgent memo/proposal reviewed
                                         </label>
+                                        @if($urgentApprovedOverlaps->isNotEmpty())
+                                            <div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                                <p class="font-semibold">Overlaps approved reservation(s): {{ $urgentApprovedOverlaps->pluck('control_number')->implode(', ') }}</p>
+                                                <p class="mt-1 text-xs">Urgency does not decide the venue. Continue only if this activity is better suited to the venue; you will then resolve the other reservation (alternative venue, new schedule or decline). Otherwise suggest a new schedule for this urgent request.</p>
+                                                <label class="mt-2 flex items-center gap-2 font-medium">
+                                                    <input type="checkbox" name="urgent_conflict_reviewed" value="1" class="rounded border-amber-400">
+                                                    I reviewed the overlap and want to continue
+                                                </label>
+                                            </div>
+                                        @endif
                                     @endif
                                     @if($request->venuesWithoutCapacity() !== [])
                                         <p class="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
@@ -1409,15 +1426,6 @@
                                         <span class="mt-1 block">No custodian is assigned to: {{ implode(', ', $request->getEquipmentItemsWithoutCustodian()) }}. Assign one in Equipment management so it can be reviewed.</span>
                                     @endif
                                 </div>
-                                @if($request->equipment_status === 'rejected' && auth()->user()->isFinalApprover())
-                                    <form method="POST" action="{{ route('request.supply.decline', $request->id) }}" class="decline-form">
-                                        @csrf
-                                        <button type="button" onclick="handleDecline(event)"
-                                                class="w-full inline-flex items-center justify-center rounded-2xl bg-red-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-red-700">
-                                            Decline
-                                        </button>
-                                    </form>
-                                @endif
                             @elseif($adminAwaitingPayment)
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Confirmation is disabled until IGP informs the client of the payment and other requirements (For IGP Coordination).</div>
                             @elseif($adminAwaitingVerification)
@@ -1431,32 +1439,32 @@
                                 @else
                                 <form method="POST" action="{{ route('request.supply.final-approval', $request->id) }}" class="approval-form">
                                     @csrf
+                                    @if($urgentApprovedOverlaps->isNotEmpty())
+                                        <p class="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">Overlaps approved reservation(s) {{ $urgentApprovedOverlaps->pluck('control_number')->implode(', ') }}. Approving opens a conflict you resolve next; nothing changes for them automatically.</p>
+                                    @endif
                                     <button type="button" onclick="handleFinalApproval(event)"
                                             class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-emerald-700">
-                                        Final Approval
+                                        Approve Reservation
                                     </button>
                                 </form>
                                 @endif
-                                <form method="POST" action="{{ route('request.supply.decline', $request->id) }}" class="decline-form">
-                                    @csrf
-                                    <button type="button" onclick="handleDecline(event)"
-                                            class="w-full inline-flex items-center justify-center rounded-2xl bg-red-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-red-700">
-                                        Decline
-                                    </button>
-                                </form>
                             @elseif($adminFinalReady)
                                 <div class="sm:col-span-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800">
                                     All reviews are complete. Final approval is restricted to the designated approver.
                                 </div>
                             @endif
                             {{-- CHG-01: only when there is a conflict, an urgent request needs the slot, or the requestor asked. --}}
-                            @if(($request->status === 'pending' || $request->status === 'approved') && ($scheduleChangeReason ?? null))
+                            @if(($request->status === 'pending' || $request->status === 'approved') && ($scheduleChangeReason ?? null)
+                                && ($supplyDecisions === null || ($supplyDecisions['conflicts']->isEmpty() && $supplyDecisions['schedules'] !== [])))
                                 <p class="sm:col-span-2 lg:col-span-3 text-xs font-medium text-amber-800">Schedule change available: {{ $scheduleChangeReason }}</p>
                                 <button type="button" id="open-reschedule-form" class="sm:col-span-2 lg:col-span-1 w-full inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-100">
-                                    {{ $request->status === 'approved' ? 'Suggest a New Schedule' : 'Suggest a New Schedule' }}
+                                    Reschedule
                                 </button>
                             @endif
                         </div>
+                        @if($supplyDecisions)
+                            <div class="mt-3">@include('requestor.partials.supply-decisions', ['supplyDecisions' => $supplyDecisions])</div>
+                        @endif
 
                         <form id="reschedule-form" method="POST" action="{{ route('supply-office.requests.revise') }}" data-request-control-number="{{ $request->control_number }}" class="hidden rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-4">
                             @csrf
@@ -1821,6 +1829,36 @@
             </div>
         </div>
     </div>
+
+    @php
+        $administrativeDecisions = $request->histories()
+            ->whereIn('action', ['reservation_affected', 'alternative_venue_assigned', 'reservation_rescheduled', 'final_rejected', 'revision_requested'])
+            ->orderByDesc('occurred_at')
+            ->get()
+            ->filter(fn ($entry) => $entry->action !== 'revision_requested' || str_starts_with((string) $entry->detail, 'Supply Office decision'));
+    @endphp
+    @if($administrativeDecisions->isNotEmpty())
+        <section id="administrative-decisions" style="margin-bottom: 24px !important;" class="scroll-mt-24 rounded-[28px] border border-sky-200 bg-white p-6 shadow-sm" aria-labelledby="administrative-decisions-title">
+            <h2 id="administrative-decisions-title" class="text-sm font-semibold uppercase tracking-[0.24em] text-sky-800">Administrative decisions</h2>
+            <div class="mt-4 space-y-3">
+                @foreach($administrativeDecisions as $decisionEntry)
+                    <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <p class="text-sm font-semibold text-slate-900">{{ match ($decisionEntry->action) {
+                                'reservation_affected' => 'Reservation affected',
+                                'alternative_venue_assigned' => 'Alternative venue assigned',
+                                'reservation_rescheduled' => 'Reservation rescheduled',
+                                'final_rejected' => 'Reservation declined',
+                                default => 'Revision requested',
+                            } }}</p>
+                            <p class="text-xs text-slate-500">{{ \Carbon\Carbon::parse($decisionEntry->occurred_at)->format('M j, Y g:i A') }}</p>
+                        </div>
+                        <p class="mt-1 whitespace-pre-line text-sm text-slate-700">{{ $decisionEntry->detail }}</p>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+    @endif
 
     <div style="margin-bottom: 24px !important;" class="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">

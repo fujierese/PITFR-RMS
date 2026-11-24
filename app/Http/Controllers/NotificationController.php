@@ -97,6 +97,10 @@ class NotificationController extends Controller
 
             return redirect()->to($destination . '#schedule-proposal');
         }
+        // Additional Part 2: decision notices open the full explanation on the request page.
+        if (! empty($data['anchor']) && preg_match('/^[a-z-]+$/', (string) $data['anchor'])) {
+            return redirect()->to($destination . '#' . $data['anchor']);
+        }
 
         return redirect()->to($destination);
     }
