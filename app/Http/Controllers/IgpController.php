@@ -41,6 +41,13 @@ class IgpController extends Controller
             })
             ->orderBy('start_date')
             ->get();
+        // Additional Enhancements, search: the same rule, limited to outsider requests IGP handles.
+        $search = trim((string) $request->query('search', ''));
+        if ($search !== '') {
+            $outsiderRequests = $outsiderRequests
+                ->filter(fn (FacilityRequest $item): bool => \App\Support\RequestSearch::matches($item, $search))
+                ->values();
+        }
         $inStages = fn (array $stages) => $outsiderRequests
             ->filter(fn (FacilityRequest $item): bool => in_array($item->inferredOutsiderStage(), $stages, true))
             ->values();
@@ -73,7 +80,7 @@ class IgpController extends Controller
             ],
         ];
 
-        return view('igp.index', compact('sections'));
+        return view('igp.index', compact('sections', 'search'));
     }
 
     /** B.2: forward a reviewed inquiry to the designated venue custodian. */

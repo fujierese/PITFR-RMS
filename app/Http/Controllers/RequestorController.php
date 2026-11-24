@@ -611,30 +611,8 @@ class RequestorController extends Controller
                     });
             });
 
-        if ($search !== '') {
-            $searchTerm = '%' . mb_strtolower($search) . '%';
-            $query->where(function ($filterQuery) use ($searchTerm): void {
-                $filterQuery->whereRaw('LOWER(control_number) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(name_of_activity) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(department) LIKE ?', [$searchTerm])
-                    ->orWhereHas('requester', function ($requesterQuery) use ($searchTerm): void {
-                        $requesterQuery->whereRaw('LOWER(office_or_organization) LIKE ?', [$searchTerm]);
-                    })
-                    ->orWhereRaw('LOWER(status) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(start_date) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(end_date) LIKE ?', [$searchTerm])
-                    ->orWhereHas('requestVenues', function ($venueQuery) use ($searchTerm): void {
-                        $venueQuery->whereRaw('LOWER(name) LIKE ?', [$searchTerm]);
-                    })
-                    ->orWhereHas('requestEquipment', function ($equipmentQuery) use ($searchTerm): void {
-                        $equipmentQuery->whereRaw('LOWER(name) LIKE ?', [$searchTerm]);
-                    })
-                    ->orWhere(function ($legacyQuery) use ($searchTerm): void {
-                        $legacyQuery->whereRaw('LOWER(venue) LIKE ?', [$searchTerm])
-                            ->orWhereRaw('LOWER(equipment) LIKE ?', [$searchTerm]);
-                    });
-            });
-        }
+        // Additional Enhancements, search: shared rule (every word must match).
+        \App\Support\RequestSearch::apply($query, $search, true);
 
         if ($statusFilter !== '') {
             if ($statusFilter === 'cancelled') {
@@ -744,6 +722,8 @@ class RequestorController extends Controller
         return view('requestor.index', [
             'user'              => $user,
             'requests'          => $requests,
+            // A search with no match shows "no matching requests", not "no requests yet".
+            'hasAnyRequests'    => FacilityRequest::where('requested_by_id', $user->id)->exists(),
             'upcomingRequests'  => $upcomingRequests,
             'pastRequests'      => $pastRequests,
             'activeRequests'    => $activeRequests,

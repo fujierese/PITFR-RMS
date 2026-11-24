@@ -46,15 +46,7 @@ class SupplyOfficeController extends Controller
             }
         }
 
-        if ($search = $request->get('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('control_number', 'like', '%' . $search . '%')
-                  ->orWhere('name_of_activity', 'like', '%' . $search . '%')
-                  ->orWhereHas('requester', function ($reqQuery) use ($search) {
-                      $reqQuery->where('name', 'like', '%' . $search . '%');
-                  });
-            });
-        }
+        \App\Support\RequestSearch::apply($query, (string) $request->get('search', ''));
 
         $filteredRequests = $query->orderBy('start_date')->orderBy('start_time')->orderBy('created_at')
             ->paginate(15, ['*'], 'requests_page')
@@ -1634,28 +1626,34 @@ class SupplyOfficeController extends Controller
             $query->upcomingReservation();
         }
 
-        $search = trim((string) $request->get('search', ''));
-        if ($search !== '') {
-            $searchTerm = '%' . mb_strtolower($search) . '%';
-            $query->where(function (Builder $filterQuery) use ($searchTerm): void {
-                $filterQuery->whereRaw('LOWER(control_number) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(name_of_activity) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(department) LIKE ?', [$searchTerm])
-                    ->orWhereHas('requester', function (Builder $requesterQuery) use ($searchTerm): void {
-                        $requesterQuery->whereRaw('LOWER(name) LIKE ?', [$searchTerm]);
-                        $requesterQuery->orWhereRaw('LOWER(office_or_organization) LIKE ?', [$searchTerm]);
-                    })
-                    ->orWhereHas('requestVenues', function (Builder $venueQuery) use ($searchTerm): void {
-                        $venueQuery->whereRaw('LOWER(name) LIKE ?', [$searchTerm]);
-                    })
-                    ->orWhereHas('requestEquipment', function (Builder $equipmentQuery) use ($searchTerm): void {
-                        $equipmentQuery->whereRaw('LOWER(name) LIKE ?', [$searchTerm]);
-                    })
-                    ->orWhere(function (Builder $legacyQuery) use ($searchTerm): void {
-                        $legacyQuery->whereRaw('LOWER(venue) LIKE ?', [$searchTerm])
-                            ->orWhereRaw('LOWER(equipment) LIKE ?', [$searchTerm]);
-                    });
+        // Additional Enhancements, search: shared rule (every word must match).
+        \App\Support\RequestSearch::apply($query, (string) $request->get('search', ''));
+
+        $equipmentFilter = trim((string) $request->get('equipment', ''));
+        if ($equipmentFilter !== '') {
+            $equipmentLike = '%' . mb_strtolower($equipmentFilter) . '%';
+            $query->where(function (Builder $equipmentQuery) use ($equipmentLike): void {
+                $equipmentQuery->whereHas('requestEquipment', fn (Builder $items) => $items->whereRaw('LOWER(name) LIKE ?', [$equipmentLike]))
+                    ->orWhereRaw('LOWER(equipment) LIKE ?', [$equipmentLike]);
             });
+        }
+
+        // Review status filter: venue review, equipment review or Supply Office decision.
+        $reviewFilters = [
+            'venue_pending' => ['venue_status', 'pending'],
+            'venue_approved' => ['venue_status', 'approved'],
+            'venue_reschedule' => ['venue_status', 'needs_reschedule'],
+            'supply_pending' => ['supply_office_review_status', 'pending'],
+            'supply_confirmed' => ['supply_office_review_status', 'confirmed'],
+            'supply_unavailable' => ['supply_office_review_status', 'unavailable'],
+            'equipment_pending' => ['equipment_status', 'pending'],
+            'equipment_approved' => ['equipment_status', 'approved'],
+            'equipment_declined' => ['equipment_status', 'rejected'],
+        ];
+        $review = (string) $request->get('review', '');
+        if (isset($reviewFilters[$review])) {
+            [$column, $value] = $reviewFilters[$review];
+            $query->where($column, $value);
         }
 
         $department = trim((string) $request->get('department', ''));

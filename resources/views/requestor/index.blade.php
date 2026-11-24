@@ -218,7 +218,7 @@
             <div id="request-results-panel" data-refresh="requests" class="mt-8">
                 <div id="request-count-info" class="mb-4 text-sm font-medium text-slate-600">Showing {{ $filteredRequests->count() }} of {{ $requests->count() }} requests</div>
 
-                @if ($requests->isEmpty())
+                @if (($hasAnyRequests ?? $requests->isNotEmpty()) === false)
                     <div class="mt-8 rounded-[28px] border border-dashed border-slate-300 bg-slate-50 p-6 text-center shadow-sm sm:p-8 lg:p-10">
                         <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                             <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -233,7 +233,8 @@
                             <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                         </div>
                         <h3 class="mt-6 text-xl font-semibold text-slate-900">No matching requests found.</h3>
-                        <p class="mt-2 text-sm text-slate-600">Try another keyword or adjust the filters.</p>
+                        <p class="mt-2 text-sm text-slate-600">{{ $search !== '' ? 'Nothing matches “' . $search . '”. Try fewer or different words, or adjust the filters.' : 'Try another keyword or adjust the filters.' }}</p>
+                        <a href="{{ route('requestor.index', ['tab' => 'requests']) }}" class="mt-4 inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">Show all requests</a>
                     </div>
                 @else
                     <div class="mt-8 hidden overflow-hidden rounded-[28px] border border-slate-200 shadow-[0_12px_40px_rgba(15,23,42,0.05)] lg:block">

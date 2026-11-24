@@ -64,14 +64,8 @@ class ReservationHistoryController extends Controller
             }
         }
 
-        if ($request->filled('search')) {
-            $term = '%' . mb_strtolower(trim((string) $request->input('search'))) . '%';
-            $query->where(function ($filter) use ($term): void {
-                $filter->whereRaw('LOWER(control_number) LIKE ?', [$term])
-                    ->orWhereRaw('LOWER(name_of_activity) LIKE ?', [$term])
-                    ->orWhereHas('requestVenues', fn ($venues) => $venues->whereRaw('LOWER(name) LIKE ?', [$term]));
-            });
-        }
+        // Additional Enhancements, search: shared rule; the role scope above still applies.
+        \App\Support\RequestSearch::apply($query, (string) $request->input('search', ''));
 
         $completedReservations = $query->get()
             ->filter(fn (FacilityRequest $reservation): bool => $reservation->isReservationComplete())

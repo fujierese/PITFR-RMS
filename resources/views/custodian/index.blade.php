@@ -129,7 +129,13 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="px-4 py-12 text-center text-sm text-slate-500">No {{ $filter }} requests found.</td></tr>
+                    <tr><td colspan="5" class="px-4 py-12 text-center text-sm text-slate-500">
+                        @if($search !== '')
+                            No requests match “{{ $search }}”. <a href="{{ route('custodian.index', ['filter' => $filter]) }}" class="font-semibold text-emerald-700 hover:underline">Clear search</a>
+                        @else
+                            No {{ $filter }} requests found.
+                        @endif
+                    </td></tr>
                 @endforelse
             </tbody>
         </table>

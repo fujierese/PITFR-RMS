@@ -1,5 +1,7 @@
 @php
-    $filtersExpanded = $departmentFilter || $venueFilter || $priorityFilter || $dateFrom || $dateTo;
+    $equipmentFilter = request('equipment', '');
+    $reviewFilter = request('review', '');
+    $filtersExpanded = $departmentFilter || $venueFilter || $priorityFilter || $dateFrom || $dateTo || $equipmentFilter || $reviewFilter;
 @endphp
 
 <form method="GET" action="{{ $action }}" class="mt-6 rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-5 md:mt-8">
@@ -15,7 +17,7 @@
             <details class="relative" {{ $filtersExpanded ? 'open' : '' }}>
                 <summary class="cursor-pointer list-none rounded-full border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Advanced Filters</summary>
                 <div class="absolute right-0 z-10 mt-3 w-[min(720px,calc(100vw-2rem))] rounded-[24px] border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
-                    <div class="grid gap-4 lg:grid-cols-5">
+                    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <div>
                             <label for="supply-department" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Department</label>
                             <input id="supply-department" type="text" name="department" value="{{ $departmentFilter }}" placeholder="Department" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
@@ -23,6 +25,14 @@
                         <div>
                             <label for="supply-venue" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Venue</label>
                             <input id="supply-venue" type="text" name="venue" value="{{ $venueFilter }}" placeholder="Venue" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                        </div>
+                        <div>
+                            <label for="supply-equipment" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Equipment</label>
+                            <input id="supply-equipment" type="text" name="equipment" value="{{ $equipmentFilter }}" placeholder="Equipment" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                        </div>
+                        <div>
+                            <label for="supply-review" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Review status</label>
+                            @include('supply-office.partials.review-filter-options', ['id' => 'supply-review', 'selected' => $reviewFilter, 'class' => 'mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm'])
                         </div>
                         <div>
                             <label for="supply-priority" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Priority</label>

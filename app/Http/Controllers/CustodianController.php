@@ -99,16 +99,8 @@ class CustodianController extends Controller
             ->values();
 
         $requests = $allRequests->filter(function ($requestItem) use ($search, $venueFilter, $dateFrom, $dateTo) {
-            $searchable = collect([
-                $requestItem->control_number,
-                $requestItem->name_of_activity,
-                $requestItem->department,
-                $requestItem->requester?->name,
-                implode(', ', $requestItem->getVenueNames()),
-                implode(', ', $requestItem->getEquipmentItems()),
-            ])->filter()->join(' ');
-
-            if ($search !== '' && stripos($searchable, $search) === false) {
+            // Additional Enhancements, search: shared rule over the custodian's own assigned requests.
+            if (! \App\Support\RequestSearch::matches($requestItem, $search)) {
                 return false;
             }
 

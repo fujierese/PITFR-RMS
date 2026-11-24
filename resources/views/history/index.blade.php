@@ -99,7 +99,7 @@
                     </div>
                 </article>
             @empty
-                <p class="px-5 py-10 text-center text-sm text-slate-500">No past reservations match these filters.</p>
+                <p class="px-5 py-10 text-center text-sm text-slate-500">{{ request()->filled('search') ? 'No past reservations match “' . request('search') . '”.' : 'No past reservations match these filters.' }}</p>
             @endforelse
         </div>
 

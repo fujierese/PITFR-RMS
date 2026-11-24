@@ -130,6 +130,67 @@
         @endif
     </footer>
     @include('components.venue-calendar-modal')
+    <script>
+        // Additional Enhancements, search: every list search box gets a clear button and
+        // searches as you type (server-side, so all records are searched, not one page).
+        (() => {
+            const boxes = document.querySelectorAll('form[method=GET] input[name=search], form[method=get] input[name=search]');
+            boxes.forEach((input) => {
+                const form = input.form;
+                if (!form || input.dataset.searchEnhanced) return;
+                input.dataset.searchEnhanced = '1';
+                input.setAttribute('autocomplete', 'off');
+                if (!input.getAttribute('maxlength')) input.setAttribute('maxlength', '200');
+
+                const wrap = document.createElement('span');
+                wrap.className = 'relative block w-full';
+                input.parentNode.insertBefore(wrap, input);
+                wrap.appendChild(input);
+                input.style.paddingRight = '2.5rem';
+                const clear = document.createElement('button');
+                clear.type = 'button';
+                clear.className = 'absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500';
+                clear.setAttribute('aria-label', 'Clear search');
+                clear.innerHTML = '<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>';
+                wrap.appendChild(clear);
+                const sync = () => { clear.hidden = input.value === ''; };
+                sync();
+
+                const submit = () => {
+                    try { sessionStorage.setItem('pitfr-search-focus', input.name + '|' + location.pathname); } catch (e) {}
+                    const page = form.querySelector('input[name="page"]');
+                    if (page) page.remove();
+                    form.requestSubmit ? form.requestSubmit() : form.submit();
+                };
+                let timer = null;
+                let last = input.value.trim();
+                input.addEventListener('input', () => {
+                    sync();
+                    clearTimeout(timer);
+                    const value = input.value.trim();
+                    if (value === last || (value.length > 0 && value.length < 2)) return;
+                    timer = setTimeout(() => { last = value; submit(); }, 600);
+                });
+                input.addEventListener('search', () => { if (input.value === '' && last !== '') { last = ''; submit(); } });
+                clear.addEventListener('click', () => {
+                    input.value = '';
+                    sync();
+                    input.focus();
+                    if (last !== '') { last = ''; submit(); }
+                });
+
+                // After a search-as-you-type reload, keep typing where you were.
+                try {
+                    if (sessionStorage.getItem('pitfr-search-focus') === input.name + '|' + location.pathname) {
+                        sessionStorage.removeItem('pitfr-search-focus');
+                        input.focus();
+                        const end = input.value.length;
+                        input.setSelectionRange && input.type !== 'search' ? input.setSelectionRange(end, end) : null;
+                    }
+                } catch (e) {}
+            });
+        })();
+    </script>
     @include('components.faq-modal')
 </div>
 

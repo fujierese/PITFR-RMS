@@ -268,6 +268,14 @@
                         <input type="date" name="date_to" value="{{ request('date_to') }}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
                     </label>
                     <label>
+                        <span class="mb-1 block text-xs font-semibold text-slate-600">Equipment</span>
+                        <input type="search" name="equipment" value="{{ request('equipment') }}" placeholder="Any equipment" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                    </label>
+                    <label>
+                        <span class="mb-1 block text-xs font-semibold text-slate-600">Review status</span>
+                        @include('supply-office.partials.review-filter-options', ['id' => null, 'selected' => request('review', ''), 'class' => 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm'])
+                    </label>
+                    <label>
                         <span class="mb-1 block text-xs font-semibold text-slate-600">Priority</span>
                         <select name="priority" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
                             <option value="">Any priority</option>
