@@ -1836,18 +1836,17 @@
                     $historyCardClass = $isEquipmentReturn
                         ? ($isCompletedReturn ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-200 bg-amber-50/60')
                         : 'border-slate-200 bg-slate-50';
-                    $historyIconClass = $isEquipmentReturn
-                        ? ($isCompletedReturn ? 'bg-emerald-500' : 'bg-amber-500')
-                        : (str_contains($history->action, 'approved') || str_contains($history->action, 'custodian_endorsed')
-                            ? 'bg-emerald-500'
-                            : (str_contains($history->action, 'rejected') ? 'bg-rose-500' : 'bg-slate-400'));
+                    // Status icon and colour for this entry (display only).
+                    $historyStatus = \App\Support\ActivityStatus::forAction((string) $history->action, $isEquipmentReturn ? $isCompletedReturn : null);
+                    $historyIconClass = \App\Support\ActivityStatus::TONES[$historyStatus];
                     $historyDetailClass = $isEquipmentReturn
                         ? ($isCompletedReturn ? 'text-emerald-800' : 'text-amber-900')
                         : 'text-slate-600';
                 @endphp
                 <div class="flex gap-4 rounded-[24px] border p-4 {{ $historyCardClass }}">
-                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white {{ $historyIconClass }}">
-                        {{ strtoupper(substr($history->action, 0, 1)) }}
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm {{ $historyIconClass }}" data-activity-status="{{ $historyStatus }}" title="{{ \App\Support\ActivityStatus::LABELS[$historyStatus] }}">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">{!! \App\Support\ActivityStatus::ICONS[$historyStatus] !!}</svg>
+                        <span class="sr-only">{{ \App\Support\ActivityStatus::LABELS[$historyStatus] }}</span>
                     </div>
                     <div class="flex-1">
                         <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
