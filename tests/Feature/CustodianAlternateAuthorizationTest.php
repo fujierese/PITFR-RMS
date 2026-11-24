@@ -425,11 +425,12 @@ class CustodianAlternateAuthorizationTest extends TestCase
         $request = $this->makeRequestForFan('Industrial Fans', $primary, $alternate);
 
         $this->actingAs($primary)
-            ->post(route('request.custodian.reject', $request), ['notes' => 'Equipment unavailable'])
+            ->post(route('request.custodian.reject', $request), ['decline_reason' => 'maintenance', 'notes' => 'Equipment unavailable'])
             ->assertRedirect();
 
         $request->refresh();
-        $this->assertSame('rejected', $request->status);
+        // Declining equipment no longer rejects the reservation (Additional Enhancements, part 1).
+        $this->assertSame('pending', $request->status);
         $this->assertSame('rejected', $request->equipment_status);
         $this->assertSame('rejected', $request->getCustodianEquipmentStatus($primary->id));
 

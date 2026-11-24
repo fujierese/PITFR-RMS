@@ -405,6 +405,12 @@
         $approvalTone = 'amber';
         $currentApprover = 'Supply Office';
         $nextStep = 'Final Approval';
+    } elseif ($request->status === 'pending' && $request->venue_status === 'approved' && $request->supply_office_review_status === 'confirmed' && $request->equipment_status === 'rejected') {
+        $approvalTitle = 'Equipment declined';
+        $approvalBody = 'An equipment custodian declined some of the requested equipment' . ($request->equipment_notes ? ': ' . $request->equipment_notes : '.') . ' The request is not rejected; the Supply Office will decide how to proceed.';
+        $approvalTone = 'amber';
+        $currentApprover = 'Supply Office';
+        $nextStep = 'Supply Office Decision';
     } elseif ($request->venue_status === 'approved' && $request->supply_office_review_status === 'confirmed') {
         $approvalTitle = $hasAdditionalEquipment ? 'Pending Equipment Custodian Approval' : 'Pending Final Approval';
         $approvalBody = $hasAdditionalEquipment
@@ -472,6 +478,7 @@
 @endphp
 
 @section('content')
+@php $errors = $errors ?? new \Illuminate\Support\ViewErrorBag(); @endphp
 
 <div class="request-details-stack">
 
@@ -1013,8 +1020,8 @@
                     <div class="flex flex-col gap-4">
                         <div class="flex items-center justify-between gap-4">
                             <div>
-                                <h2 class="text-lg font-semibold text-slate-900">{{ $canConfirmVenueAvailability || $canVenueCustodianReschedule ? ($request->venue_status === 'needs_reschedule' ? 'Venue Schedule Update' : 'Check Venue Schedule') : 'Equipment Custodian Approval' }}</h2>
-                                <p class="text-sm text-slate-500">{{ $canConfirmVenueAvailability || $canVenueCustodianReschedule ? ($request->venue_status === 'needs_reschedule' ? 'The requested schedule is unavailable. Suggest a new date and time for the requester and affected custodians to review.' : 'Check the venue calendar, then confirm whether the requested schedule is available. The Supply Office will review it next. This does not approve the request.') : 'Review your assigned equipment and approve what you can provide, or reject it with a clear reason.' }}</p>
+                                <h2 class="text-lg font-semibold text-slate-900">{{ $canConfirmVenueAvailability || $canVenueCustodianReschedule ? ($request->venue_status === 'needs_reschedule' ? 'Venue Schedule Update' : 'Check Venue Schedule') : 'Equipment Review' }}</h2>
+                                <p class="text-sm text-slate-500">{{ $canConfirmVenueAvailability || $canVenueCustodianReschedule ? ($request->venue_status === 'needs_reschedule' ? 'The requested schedule is unavailable. Suggest a new date and time for the requester and affected custodians to review.' : 'Check the venue calendar, then confirm whether the requested schedule is available. The Supply Office will review it next. This does not approve the request.') : 'Endorse your assigned equipment if it is available and ready, or decline it with a reason. This does not approve or reject the reservation.' }}</p>
                             </div>
                             <span class="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">
                                 Your Review Is Needed
@@ -1023,20 +1030,17 @@
 
                         <div class="flex flex-col gap-3 sm:flex-row">
                             @if($canConfirmVenueAvailability || $canApproveAssignedEquipment)
-                                <form method="POST" action="{{ route('request.custodian.verify', $request->id) }}" data-availability-actions="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" data-availability-confirm="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" class="{{ $canConfirmVenueAvailability ? 'hidden ' : '' }}sm:flex-1" data-swal-confirm data-swal-title="{{ $canConfirmVenueAvailability ? 'Confirm the venue is available?' : 'Approve assigned equipment?' }}" data-swal-text="{{ $canConfirmVenueAvailability ? 'The Supply Office will review the request next. It is not approved yet.' : 'Your equipment decision will be recorded. Final approval still requires Supply Office review.' }}" data-swal-confirm-text="{{ $canConfirmVenueAvailability ? 'Confirm availability' : 'Approve equipment' }}" data-swal-confirm-color="#059669">
+                                <form method="POST" action="{{ route('request.custodian.verify', $request->id) }}" data-availability-actions="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" data-availability-confirm="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" class="{{ $canConfirmVenueAvailability ? 'hidden ' : '' }}sm:flex-1" data-swal-confirm data-swal-title="{{ $canConfirmVenueAvailability ? 'Confirm the venue is available?' : 'Endorse this equipment?' }}" data-swal-text="{{ $canConfirmVenueAvailability ? 'The Supply Office will review the request next. It is not approved yet.' : 'You confirm the equipment is available, working and ready. Final approval still rests with the Supply Office.' }}" data-swal-confirm-text="{{ $canConfirmVenueAvailability ? 'Confirm availability' : 'Endorse equipment' }}" data-swal-confirm-color="#059669">
                                     @csrf
                                     <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-emerald-700">
-                                        {{ $canConfirmVenueAvailability ? 'Confirm venue is available' : 'Approve assigned equipment' }}
+                                        {{ $canConfirmVenueAvailability ? 'Confirm venue is available' : 'Endorse Equipment' }}
                                     </button>
                                 </form>
                             @endif
                             @if($canApproveAssignedEquipment)
-                                <form method="POST" action="{{ route('request.custodian.reject', $request->id) }}" class="sm:flex-1" data-swal-confirm data-swal-title="Reject this equipment request?" data-swal-text="This will reject the equipment request and notify the requestor." data-swal-confirm-text="Reject request" data-swal-confirm-color="#dc2626">
-                                    @csrf
-                                    <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-red-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-red-700">
-                                        Reject
-                                    </button>
-                                </form>
+                                <button type="button" data-toggle-equipment-decline aria-expanded="{{ $errors->has('decline_reason') || $errors->has('notes') ? 'true' : 'false' }}" aria-controls="equipment-decline-form" class="w-full sm:flex-1 inline-flex items-center justify-center rounded-2xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 shadow-sm transition hover:bg-red-50">
+                                    Decline Equipment
+                                </button>
                             @endif
                             @if($canVenueCustodianReschedule)
                                 <button type="button" id="open-venue-reschedule-form" data-availability-conflict-action="{{ $canConfirmVenueAvailability ? $availabilityGroup : '' }}" class="{{ $canConfirmVenueAvailability ? 'hidden ' : '' }}w-full sm:flex-1 inline-flex items-center justify-center rounded-2xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100">
@@ -1044,6 +1048,43 @@
                                 </button>
                             @endif
                         </div>
+
+                        @if($canApproveAssignedEquipment)
+                            <form id="equipment-decline-form" method="POST" action="{{ route('request.custodian.reject', $request->id) }}" class="{{ $errors->has('decline_reason') || $errors->has('notes') ? '' : 'hidden ' }}rounded-2xl border border-red-200 bg-red-50/50 p-4 space-y-3" data-swal-confirm data-swal-title="Decline this equipment?" data-swal-text="Only your equipment is declined. The reservation is not rejected; the Supply Office decides next." data-swal-confirm-text="Decline equipment" data-swal-confirm-color="#dc2626">
+                                @csrf
+                                <div>
+                                    <h3 class="font-semibold text-red-900">Decline equipment</h3>
+                                    <p class="mt-0.5 text-xs text-red-800">This affects only your assigned equipment, not the reservation.</p>
+                                </div>
+                                <label class="block text-sm font-medium text-slate-700">Reason <span class="text-red-600" aria-hidden="true">*</span>
+                                    <select name="decline_reason" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                                        <option value="">Choose a reason</option>
+                                        @foreach(\App\Support\EquipmentCustodianDecision::DECLINE_REASONS as $reasonKey => $reasonLabel)
+                                            <option value="{{ $reasonKey }}" @selected(old('decline_reason') === $reasonKey)>{{ $reasonLabel }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('decline_reason')<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
+                                </label>
+                                <label class="block text-sm font-medium text-slate-700">Remarks <span class="font-normal text-slate-500">(required for "another operational reason")</span>
+                                    <textarea name="notes" rows="2" maxlength="1000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Add details, e.g. which unit is affected">{{ old('notes') }}</textarea>
+                                    @error('notes')<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
+                                </label>
+                                <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                                    <button type="button" data-toggle-equipment-decline class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+                                    <button type="submit" class="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Decline Equipment</button>
+                                </div>
+                            </form>
+                            <script>
+                                document.querySelectorAll('[data-toggle-equipment-decline]').forEach((button) => {
+                                    button.addEventListener('click', () => {
+                                        const form = document.getElementById('equipment-decline-form');
+                                        const open = form.classList.toggle('hidden') === false;
+                                        document.querySelectorAll('[aria-controls="equipment-decline-form"]').forEach((b) => b.setAttribute('aria-expanded', open ? 'true' : 'false'));
+                                        if (open) form.querySelector('select')?.focus();
+                                    });
+                                });
+                            </script>
+                        @endif
 
                         @if($canVenueCustodianReschedule)
                             <form id="venue-reschedule-form" method="POST" action="{{ route('custodian.requests.revise') }}" class="hidden rounded-2xl border border-amber-200 bg-amber-50/60 p-4 space-y-4">
@@ -1166,6 +1207,51 @@
                     </div>
                 </div>
             @endif
+            @php
+                $issueReportItems = auth()->user()->isCustodianEquipment() && in_array($request->status, ['pending', 'approved'], true)
+                    ? array_keys($request->getAssignedEquipmentForCustodian((int) auth()->user()->id))
+                    : [];
+                $hasIssueErrors = $errors->has('issue_item') || $errors->has('issue_type') || $errors->has('issue_remarks');
+            @endphp
+            @if($issueReportItems !== [])
+                <details class="group bg-white border border-slate-200 rounded-3xl p-5 shadow-sm" @if($hasIssueErrors) open @endif>
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
+                        <span>
+                            <span class="block text-base font-semibold text-slate-900">Report Equipment Issue</span>
+                            <span class="block text-sm text-slate-500">Damage, maintenance, missing parts or safety concerns. The reservation is not changed.</span>
+                        </span>
+                        <span class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 group-open:hidden">Report</span>
+                    </summary>
+                    <form method="POST" action="{{ route('request.custodian.equipment-issue', $request->id) }}" class="mt-4 grid gap-3 sm:grid-cols-2" data-swal-confirm data-swal-title="Send this issue report?" data-swal-text="The Supply Office will be notified. The reservation is not changed." data-swal-confirm-text="Send report" data-swal-confirm-color="#d97706">
+                        @csrf
+                        <label class="text-sm font-medium text-slate-700">Equipment
+                            <select name="issue_item" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                                @if(count($issueReportItems) > 1)<option value="">Choose equipment</option>@endif
+                                @foreach($issueReportItems as $issueItem)
+                                    <option value="{{ $issueItem }}" @selected(old('issue_item') === (string) $issueItem)>{{ $issueItem }}</option>
+                                @endforeach
+                            </select>
+                            @error('issue_item')<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
+                        </label>
+                        <label class="text-sm font-medium text-slate-700">Issue
+                            <select name="issue_type" required class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                                <option value="">Choose the issue</option>
+                                @foreach(\App\Support\EquipmentCustodianDecision::ISSUE_TYPES as $issueKey => $issueLabel)
+                                    <option value="{{ $issueKey }}" @selected(old('issue_type') === $issueKey)>{{ $issueLabel }}</option>
+                                @endforeach
+                            </select>
+                            @error('issue_type')<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
+                        </label>
+                        <label class="sm:col-span-2 text-sm font-medium text-slate-700">Details
+                            <textarea name="issue_remarks" rows="2" required minlength="5" maxlength="1000" class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Describe the problem">{{ old('issue_remarks') }}</textarea>
+                            @error('issue_remarks')<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
+                        </label>
+                        <div class="sm:col-span-2 flex justify-end">
+                            <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Send Report</button>
+                        </div>
+                    </form>
+                </details>
+            @endif
         @endif
 
         @if(auth()->check() && auth()->user()->isAdmin())
@@ -1279,11 +1365,25 @@
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">No Supply Office action is available before the Venue Custodian confirms.</div>
                             @elseif($adminEquipmentPending)
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                                    @if($request->equipment_status === 'rejected')
+                                        Equipment was declined by its custodian{{ $request->equipment_notes ? ': ' . $request->equipment_notes : '.' }}
+                                        <span class="mt-1 block font-normal">The request is still pending. Suggest a new schedule, or decline the request.</span>
+                                    @else
                                     Final approval is disabled until every assigned equipment custodian approves.
+                                    @endif
                                     @if ($request->getEquipmentItemsWithoutCustodian() !== [])
                                         <span class="mt-1 block">No custodian is assigned to: {{ implode(', ', $request->getEquipmentItemsWithoutCustodian()) }}. Assign one in Equipment management so it can be reviewed.</span>
                                     @endif
                                 </div>
+                                @if($request->equipment_status === 'rejected' && auth()->user()->isFinalApprover())
+                                    <form method="POST" action="{{ route('request.supply.decline', $request->id) }}" class="decline-form">
+                                        @csrf
+                                        <button type="button" onclick="handleDecline(event)"
+                                                class="w-full inline-flex items-center justify-center rounded-2xl bg-red-600 text-white px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-red-700">
+                                            Decline
+                                        </button>
+                                    </form>
+                                @endif
                             @elseif($adminAwaitingPayment)
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Confirmation is disabled until IGP informs the client of the payment and other requirements (For IGP Coordination).</div>
                             @elseif($adminAwaitingVerification)

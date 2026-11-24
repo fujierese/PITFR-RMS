@@ -258,6 +258,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/request/{facilityRequest}/custodian/verify', [RequestActionController::class, 'custodianVerify'])->name('request.custodian.verify');
     Route::post('/request/{facilityRequest}/custodian/reject', [RequestActionController::class, 'custodianReject'])->name('request.custodian.reject');
     Route::post('/request/{facilityRequest}/custodian/revision', [RequestActionController::class, 'custodianRequestRevision'])->name('request.custodian.revision');
+    Route::post('/request/{facilityRequest}/custodian/equipment-issue', [RequestActionController::class, 'custodianReportEquipmentIssue'])->name('request.custodian.equipment-issue');
     Route::post('/request/{facilityRequest}/change-request', [RequestActionController::class, 'submitChangeRequest'])->name('request.change.submit');
     Route::post('/request/{facilityRequest}/change-request/approve', [RequestActionController::class, 'approveChangeRequest'])->name('request.change.approve');
     Route::post('/request/{facilityRequest}/change-request/reject', [RequestActionController::class, 'rejectChangeRequest'])->name('request.change.reject');

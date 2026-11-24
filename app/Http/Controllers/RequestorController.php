@@ -2205,7 +2205,7 @@ class RequestorController extends Controller
             }
         }
         $currentCustodianEquipment = $currentUser && $currentUser->isCustodian()
-            ? $request->getAssignedEquipmentForCustodian((int) Auth::id())
+            ? $request->getAssignedEquipmentForCustodian((int) $currentUser->id)
             : [];
         $venueCalendarName = $currentUser?->isCustodianVenue() && $request->getVenueNames() !== []
             ? $request->getVenueNames()[0]

@@ -10,7 +10,9 @@ use App\Models\Venue;
 use App\Events\RequestCancelled;
 use App\Notifications\RequestStatusChanged;
 use App\Services\AvailabilityService;
+use App\Support\EquipmentCustodianDecision;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -194,9 +196,9 @@ class RequestActionController extends Controller
             return collect($facilityRequest->getVenueNames())->contains(fn (string $name) => $user->venues()->where('name', $name)->exists());
         }
 
-        return $facilityRequest->equipment_status === 'approved'
-            && $user->isCustodianEquipment()
-            && $facilityRequest->getAssignedEquipmentForCustodian($user->id) !== [];
+        // Equipment custodians do not decide change requests: approving one reopens the
+        // whole reservation (Additional Enhancements, part 1). The Supply Office does.
+        return false;
     }
 
     private function notifyChangeRequestParties(FacilityRequest $facilityRequest, string $status, string $reason, User $requestor): void
@@ -383,6 +385,9 @@ class RequestActionController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
         abort_unless($user && $user->isCustodian(), 403);
+        // Equipment custodians decide only about their equipment; asking for a revision
+        // reopens the whole reservation, so it is not theirs to do.
+        abort_if($user->isCustodianEquipment(), 403);
         $this->authorize('reject', $facilityRequest);
 
         $notes = $request->input('notes', 'Revision requested by custodian.');
@@ -438,6 +443,9 @@ class RequestActionController extends Controller
             && $user->isCustodianEquipment()
             && $facilityRequest->supply_office_review_status === 'confirmed'
             && $facilityRequest->getAssignedEquipmentForCustodian($user->id) !== [];
+        if (! $isVenueAction && $user->isCustodianEquipment()) {
+            return $this->declineAssignedEquipment($facilityRequest, $request, $user, $isEquipmentAction);
+        }
         if ($isVenueAction) {
             $this->authorize('rejectVenue', $facilityRequest);
         } elseif ($isEquipmentAction) {
@@ -713,6 +721,144 @@ class RequestActionController extends Controller
             Log::error('Decline request failed for request ' . $facilityRequest->id, ['exception' => $e]);
             return redirect()->back()->withErrors('Unable to decline the request at this time.');
         }
+    }
+
+    /**
+     * Additional Enhancements, part 1: an equipment custodian declines only the equipment
+     * assigned to them, with a reason. Their own review record becomes "declined"
+     * (stored as 'rejected' so the existing equipment summary keeps working); the
+     * reservation's status is never changed here. The Supply Office decides next.
+     */
+    private function declineAssignedEquipment(FacilityRequest $facilityRequest, Request $request, User $user, bool $reviewOpen)
+    {
+        abort_unless($facilityRequest->getAssignedEquipmentForCustodian($user->id) !== [], 403);
+        if (! $reviewOpen) {
+            return redirect()->back()->withErrors('Equipment review opens after the venue custodian and Supply Office confirm availability.');
+        }
+        $this->authorize('rejectEquipment', $facilityRequest);
+
+        $validated = $request->validate([
+            'decline_reason' => ['required', Rule::in(array_keys(EquipmentCustodianDecision::DECLINE_REASONS))],
+            'notes' => ['nullable', 'required_if:decline_reason,other', 'string', 'max:1000'],
+        ], [
+            'decline_reason.required' => 'Choose why the equipment cannot be provided.',
+            'decline_reason.in' => 'Choose one of the listed reasons.',
+            'notes.required_if' => 'Explain the reason in the remarks.',
+        ]);
+        $reason = EquipmentCustodianDecision::declineReasonLabel($validated['decline_reason']);
+        $remarks = trim((string) ($validated['notes'] ?? ''));
+        $summary = $reason . ($remarks !== '' ? '. Remarks: ' . $remarks : '');
+
+        DB::beginTransaction();
+
+        try {
+            $facilityRequest = FacilityRequest::whereKey($facilityRequest->id)->lockForUpdate()->firstOrFail();
+
+            if ($facilityRequest->status !== 'pending') {
+                DB::rollBack();
+                return redirect()->back()->with('info', 'This request is no longer waiting for equipment review.');
+            }
+            if ($facilityRequest->revisionHistories()->where('status', 'pending')->exists()) {
+                DB::rollBack();
+                return redirect()->back()->withErrors('A suggested schedule is awaiting responses. Custodian actions are paused until it is answered.');
+            }
+            if ($facilityRequest->getCustodianEquipmentStatus((int) $user->id) !== 'pending') {
+                DB::rollBack();
+                return redirect()->back()->with('info', 'Your equipment decision has already been recorded.');
+            }
+
+            $items = implode(', ', array_keys($facilityRequest->getAssignedEquipmentForCustodian($user->id)));
+            $statuses = $facilityRequest->equipment_custodian_statuses ?? [];
+            $statuses[$user->id] = 'rejected';
+            $facilityRequest->equipment_custodian_statuses = $statuses;
+            $facilityRequest->equipment_notes = $summary;
+            $facilityRequest->save();
+            $facilityRequest->recomputeEquipmentStatus();
+            $facilityRequest->addHistory(
+                'equipment_declined',
+                'Equipment declined by ' . $user->name . ($items !== '' ? ' (' . $items . ')' : '') . ': ' . $summary
+                    . ' The reservation was not changed; the Supply Office will decide how to proceed.',
+                $user->id
+            );
+
+            $this->notifyRequestorForStatusChange($facilityRequest, 'equipment_declined', $summary, null, [$this->equipmentActorLabel($facilityRequest, $user)]);
+            $this->notifySupplyOffice($facilityRequest, 'equipment_declined', $summary, $user->name);
+
+            DB::commit();
+
+            return redirect()->back()->with('success', 'Equipment declined. The reservation itself was not changed; the Supply Office will review it.');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Equipment decline failed for request ' . $facilityRequest->id, ['exception' => $e]);
+            return redirect()->back()->withErrors('Unable to decline the equipment at this time.');
+        }
+    }
+
+    /**
+     * Additional Enhancements, part 1: report a problem with assigned equipment on a
+     * request, before or after the reservation is confirmed. The report is recorded in
+     * the request's history and sent to the Supply Office; nothing else changes.
+     */
+    public function custodianReportEquipmentIssue($facilityRequest, Request $request)
+    {
+        $facilityRequest = $this->resolveFacilityRequest($facilityRequest);
+
+        /** @var User|null $user */
+        $user = Auth::user();
+        abort_unless($user && $user->isCustodianEquipment(), 403);
+        $assigned = $facilityRequest->getAssignedEquipmentForCustodian($user->id);
+        abort_if($assigned === [], 403);
+
+        $validated = $request->validate([
+            'issue_item' => ['required', 'string', Rule::in(array_map('strval', array_keys($assigned)))],
+            'issue_type' => ['required', Rule::in(array_keys(EquipmentCustodianDecision::ISSUE_TYPES))],
+            'issue_remarks' => ['required', 'string', 'min:5', 'max:1000'],
+        ], [
+            'issue_item.required' => 'Choose the equipment with the issue.',
+            'issue_item.in' => 'Choose equipment assigned to you in this request.',
+            'issue_type.required' => 'Choose the type of issue.',
+            'issue_remarks.required' => 'Describe the issue.',
+            'issue_remarks.min' => 'Describe the issue in a few words.',
+        ]);
+
+        if (! in_array($facilityRequest->status, ['pending', 'approved'], true)) {
+            return redirect()->back()->withErrors('Issues can be reported only on pending or confirmed reservations.');
+        }
+
+        $summary = EquipmentCustodianDecision::issueTypeLabel($validated['issue_type']) . ' – ' . $validated['issue_item']
+            . '. ' . trim($validated['issue_remarks']);
+
+        DB::transaction(function () use ($facilityRequest, $user, $summary): void {
+            $facilityRequest->addHistory(
+                'equipment_issue_reported',
+                'Equipment issue reported by ' . $user->name . ': ' . $summary
+                    . ' The reservation was not changed; the Supply Office will review it.',
+                $user->id
+            );
+            \App\Models\AuditLog::create([
+                'actor_id' => $user->id,
+                'action' => 'equipment_issue_reported',
+                'details' => 'Equipment issue on request ' . $facilityRequest->control_number . ' reported by ' . $user->name,
+                'new_values' => ['facility_request_id' => $facilityRequest->id, 'summary' => $summary],
+            ]);
+            $this->notifySupplyOffice($facilityRequest, 'equipment_issue_reported', $summary, $user->name);
+        });
+
+        return redirect()->back()->with('success', 'Equipment issue reported. The Supply Office has been notified; the reservation was not changed.');
+    }
+
+    private function notifySupplyOffice(FacilityRequest $facilityRequest, string $status, string $notes, string $actor): void
+    {
+        DB::afterCommit(function () use ($facilityRequest, $status, $notes, $actor): void {
+            try {
+                Notification::send(
+                    User::query()->withAnyRole(['admin', 'supply_office'])->get(),
+                    new RequestStatusChanged($facilityRequest, $status, $notes, $actor)
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Supply Office notification failed.', ['facility_request_id' => $facilityRequest->id, 'status' => $status, 'exception' => $e->getMessage()]);
+            }
+        });
     }
 
     private function resolveFacilityRequest($facilityRequest): FacilityRequest

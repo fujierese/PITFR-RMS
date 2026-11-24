@@ -42,6 +42,8 @@ class RequestStatusChanged extends Notification implements ShouldQueueAfterCommi
             'venue_availability_unavailable' => 'Venue unavailable',
             'venue_approved' => 'Venue approved',
             'equipment_approved' => 'Equipment approved',
+            'equipment_declined' => 'Equipment declined',
+            'equipment_issue_reported' => 'Equipment issue reported',
             'final_approved' => 'Final approved',
             'request_cancelled' => 'Request cancelled',
             'equipment_returned' => 'Equipment returned',
@@ -107,6 +109,8 @@ class RequestStatusChanged extends Notification implements ShouldQueueAfterCommi
             'request_cancelled' => 'Request Cancelled',
             'venue_approved' => 'Venue Approved',
             'equipment_approved' => 'Equipment Approved',
+            'equipment_declined' => 'Equipment Declined',
+            'equipment_issue_reported' => 'Equipment Issue Reported',
             'equipment_returned' => 'Equipment Returned',
             'change_requested' => 'Request Updated',
             'change_request_rejected' => 'Change Request Rejected',
@@ -151,6 +155,10 @@ class RequestStatusChanged extends Notification implements ShouldQueueAfterCommi
                 ? "Request {$controlNumber} was cancelled by {$this->actor}."
                 : "Request {$controlNumber} was cancelled.",
             'equipment_returned' => "Equipment return status was updated for request {$controlNumber}.",
+            'equipment_declined' => $recipientType === 'requestor'
+                ? 'An equipment custodian declined some of the equipment you requested' . ($this->notes !== '' ? ": {$this->notes}" : '.') . ' Your request is not rejected; the Supply Office will decide how to proceed.'
+                : "Equipment for request {$controlNumber} was declined" . ($this->actor ? " by {$this->actor}" : '') . ($this->notes !== '' ? ": {$this->notes}" : '.') . ' The reservation was not changed. Review the request.',
+            'equipment_issue_reported' => "An equipment issue was reported on request {$controlNumber}" . ($this->actor ? " by {$this->actor}" : '') . ($this->notes !== '' ? ": {$this->notes}" : '.') . ' The reservation was not changed.',
             'change_requested' => $this->actor
                 ? "A revision was requested by {$this->actor}."
                 : 'A request revision was requested.',
@@ -196,6 +204,9 @@ class RequestStatusChanged extends Notification implements ShouldQueueAfterCommi
         $outsiderMessage = $this->outsiderInquiryMessage($recipientType);
         if ($outsiderMessage !== null) {
             return $outsiderMessage;
+        }
+        if (in_array($this->status, ['equipment_declined', 'equipment_issue_reported'], true)) {
+            return $this->buildRoleAwareBody($notifiable);
         }
 
         if (in_array($this->status, ['venue_approved', 'equipment_approved'], true)) {

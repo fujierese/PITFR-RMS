@@ -266,6 +266,15 @@ class CustodianController extends Controller
             'missing_remarks' => 'nullable|array',
             'missing_remarks.*' => 'nullable|string|max:500',
         ]);
+        if ($custodianType === 'equipment' && $validated['action'] === 'reject') {
+            // Additional Enhancements, part 1: declining equipment needs a reason. It only
+            // records this custodian's decision; the reservation status is not changed.
+            $reason = $request->validate([
+                'decline_reason' => ['required', \Illuminate\Validation\Rule::in(array_keys(\App\Support\EquipmentCustodianDecision::DECLINE_REASONS))],
+            ], ['decline_reason.required' => 'Choose why the equipment cannot be provided.'])['decline_reason'];
+            $validated['notes'] = \App\Support\EquipmentCustodianDecision::declineReasonLabel($reason)
+                . (trim((string) ($validated['notes'] ?? '')) !== '' ? '. Remarks: ' . trim((string) $validated['notes']) : '');
+        }
 
         DB::beginTransaction();
 
