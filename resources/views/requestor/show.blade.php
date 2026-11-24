@@ -28,6 +28,13 @@
         'needs_reschedule' => 'Needs Reschedule',
         default => ucfirst(str_replace('_', ' ', (string) ($request->status ?? 'pending'))),
     };
+    if ($request->status === 'pending' && $request->venue_status === 'approved' && $request->supply_office_review_status === 'confirmed') {
+        $requestStatusLabel = match ($request->equipment_status) {
+            'approved' => 'Awaiting Final Approval',
+            'rejected' => 'Equipment Declined',
+            default => 'Equipment Review',
+        };
+    }
     $reservationLifecycleState = $request->getReservationLifecycleState();
     if (in_array($request->status, ['approved', 'completed'], true)) {
         $requestStatusLabel = $request->getReservationLifecycleLabel();
@@ -131,7 +138,7 @@
         && $currentUser->isCustodianEquipment()
         && $request->status === 'pending'
         && $request->supply_office_review_status === 'confirmed'
-        && $request->getCustodianEquipmentStatus((int) $currentUser->id) === 'pending'
+        && $request->effectiveCustodianEquipmentStatus((int) $currentUser->id) === 'pending'
         && $request->getAssignedEquipmentForCustodian((int) $currentUser->id) !== [];
     $supplyOfficeReviewStatus = $request->supply_office_review_status;
     $supplyOfficeReviewComplete = $supplyOfficeReviewStatus === 'confirmed'
@@ -164,6 +171,15 @@
         default => ['state' => 'pending', 'label' => 'Waiting for venue confirmation'],
     };
     $workflowStepNotes = ['venue' => $venueStage['label']];
+    $equipmentReviewers = collect($custodialEndorsements ?? [])->where('resource_type', 'Equipment custodian');
+    if ($equipmentReviewers->isNotEmpty() && $request->status !== 'cancelled') {
+        $reviewerNames = fn (string $state) => $equipmentReviewers->where('status', $state)->pluck('name')->unique()->implode(', ');
+        $workflowStepNotes['equipment'] = collect([
+            $reviewerNames('approved') !== '' ? 'Approved by ' . $reviewerNames('approved') : null,
+            $reviewerNames('rejected') !== '' ? 'Declined by ' . $reviewerNames('rejected') : null,
+            $request->equipment_status !== 'approved' && $reviewerNames('pending') !== '' ? 'Waiting for ' . $reviewerNames('pending') : null,
+        ])->filter()->implode(' · ');
+    }
     if ($supplyOfficeReviewStatus === 'unavailable') {
         $workflowStepNotes['supply_office'] = 'Awaiting Supply Office coordination';
     }
@@ -565,7 +581,7 @@
                             };
                             $stepNote = $workflowStepNotes[$step['key']] ?? null;
                         @endphp
-                        <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
+                        <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm" data-step="{{ $step['key'] }}" data-step-status="{{ $stepStatus }}">
                             <div class="mx-auto flex h-8 w-8 items-center justify-center rounded-full text-lg {{ $stepTone === 'emerald' ? 'bg-emerald-100 text-emerald-700' : ($stepTone === 'rose' ? 'bg-rose-100 text-rose-700' : ($stepTone === 'amber' ? 'bg-amber-100 text-amber-700' : ($stepTone === 'sky' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500'))) }}" aria-label="{{ $stepStatus }}">
                                 {{ $stepIcon }}
                             </div>

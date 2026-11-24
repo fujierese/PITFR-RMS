@@ -42,7 +42,7 @@
             $venueStatus === 'pending' && $equipmentStatus === 'pending' => 'Pending',
             $venueStatus === 'pending' => 'Pending',
             $equipmentStatus === 'pending' => 'Pending',
-            $venueStatus === 'approved' && $equipmentStatus === 'approved' => 'Pending: Supply Office',
+            $venueStatus === 'approved' && $equipmentStatus === 'approved' => 'Awaiting Final Approval',
             default => 'Pending',
         },
     };

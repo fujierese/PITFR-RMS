@@ -44,6 +44,7 @@ class ReservationHistoryController extends Controller
                 $equipmentNames = Equipment::query()
                     ->where('custodian_id', $user->id)
                     ->orWhereJsonContains('authorized_custodian_ids', (string) $user->id)
+                    ->orWhereJsonContains('authorized_custodian_ids', (int) $user->id)
                     ->pluck('name');
 
                 $query->where(function ($assignedRequests) use ($venueNames, $equipmentNames): void {

@@ -24,7 +24,7 @@
         <div>
             <h2 id="custodian-workflow-heading" class="text-sm font-semibold text-slate-950">Your review step</h2>
             @if($custodianType === 'equipment')
-                <p class="mt-1 text-sm leading-6 text-slate-700">After availability is confirmed, approve the items you can provide or reject with a reason. Record returns after the activity.</p>
+                <p class="mt-1 text-sm leading-6 text-slate-700">After availability is confirmed, endorse the equipment you can provide or decline it with a reason. Record returns after the activity.</p>
             @else
                 <p class="mt-1 text-sm leading-6 text-slate-700">Confirm whether the venue is free for the requested date and time. This is an availability check, not an approval.</p>
             @endif

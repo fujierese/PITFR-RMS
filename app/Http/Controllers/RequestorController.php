@@ -2186,7 +2186,7 @@ class RequestorController extends Controller
             ->concat($equipmentCustodians->map(fn (User $custodian): array => [
                 'name' => $custodian->name,
                 'resource_type' => 'Equipment custodian',
-                'status' => $request->getCustodianEquipmentStatus((int) $custodian->id),
+                'status' => $request->effectiveCustodianEquipmentStatus((int) $custodian->id),
             ]))
             ->values();
         /** @var \App\Models\User|null $currentUser */

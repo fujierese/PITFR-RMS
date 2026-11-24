@@ -27,7 +27,8 @@ class CustodianController extends Controller
         $assignedVenueNames = Venue::where('custodian_id', $user->id)->pluck('name')->all();
         $assignedEquipmentNames = Equipment::where(function ($query) use ($user): void {
             $query->where('custodian_id', $user->id)
-                ->orWhereJsonContains('authorized_custodian_ids', (string) $user->id);
+                ->orWhereJsonContains('authorized_custodian_ids', (string) $user->id)
+                ->orWhereJsonContains('authorized_custodian_ids', (int) $user->id);
         })->pluck('name')->all();
 
         $allRequests = $this->getRequestsForCustodian($custodianType, $user->id);
@@ -37,7 +38,7 @@ class CustodianController extends Controller
             $allRequests->each(function ($r) use ($user) {
                 $r->custodian_status = $r->status === 'cancelled'
                     ? 'cancelled'
-                    : $r->getCustodianEquipmentStatus($user->id);
+                    : $r->effectiveCustodianEquipmentStatus((int) $user->id);
             });
         } else {
             $allRequests->each(function ($r) {
@@ -606,7 +607,8 @@ class CustodianController extends Controller
         if ($type === 'equipment') {
             $equipmentNames = Equipment::where(function ($query) use ($custodianId) {
                 $query->where('custodian_id', $custodianId)
-                    ->orWhereJsonContains('authorized_custodian_ids', (string) $custodianId);
+                    ->orWhereJsonContains('authorized_custodian_ids', (string) $custodianId)
+                    ->orWhereJsonContains('authorized_custodian_ids', (int) $custodianId);
             })->pluck('name');
 
             if ($equipmentNames->isEmpty()) {

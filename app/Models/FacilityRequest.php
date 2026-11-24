@@ -2207,7 +2207,77 @@ class FacilityRequest extends Model
             return [];
         }
 
-        return $equipment->getAuthorizedCustodianIds();
+        return self::reviewingEquipmentCustodianIds($equipment->getAuthorizedCustodianIds());
+    }
+
+    /**
+     * Additional Enhancements, workflow progress: only active users who can act as
+     * equipment custodians count as reviewers. An item owned by someone who cannot
+     * review equipment (for example a venue custodian, or a deactivated account) used
+     * to wait for an approval that could never come, so Equipment Review stayed
+     * "pending" after the real custodian approved. Such an item is now treated like
+     * one with no custodian: covered by the venue when it comes with the venue,
+     * otherwise flagged for the Supply Office to assign a custodian.
+     *
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    public static function reviewingEquipmentCustodianIds(array $ids): array
+    {
+        static $canReview = [];
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $unknown = array_values(array_diff($ids, array_keys($canReview)));
+        if ($unknown !== []) {
+            foreach (\App\Models\User::query()->whereIn('id', $unknown)->get() as $user) {
+                $active = ! \Illuminate\Support\Facades\Schema::hasColumn('users', 'is_active') || $user->is_active === null || (bool) $user->is_active;
+                $canReview[(int) $user->id] = $active && ($user->isCustodianEquipment() || $user->hasRole('custodian'));
+            }
+            foreach ($unknown as $id) {
+                $canReview[$id] ??= false;
+            }
+        }
+        if (app()->runningUnitTests()) {
+            // Users change between tests; do not keep answers across them.
+            $result = array_values(array_filter($ids, fn (int $id): bool => $canReview[$id] ?? false));
+            $canReview = [];
+
+            return $result;
+        }
+
+        return array_values(array_filter($ids, fn (int $id): bool => $canReview[$id] ?? false));
+    }
+
+    /**
+     * The custodian's review as it stands for the request: their own decision, or
+     * "approved" when every item assigned to them was already approved by another
+     * authorized custodian of that item (alternates share the same equipment).
+     */
+    public function effectiveCustodianEquipmentStatus(int $custodianId): string
+    {
+        $own = $this->getCustodianEquipmentStatus($custodianId);
+        if ($own !== 'pending') {
+            return $own;
+        }
+
+        $assigned = array_keys($this->getAssignedEquipmentForCustodian($custodianId));
+        if ($assigned === []) {
+            return $own;
+        }
+        $statuses = $this->equipment_custodian_statuses ?? [];
+        foreach ($assigned as $itemName) {
+            $approvedByAnother = false;
+            foreach ($this->getAuthorizedCustodianIdsForEquipment((string) $itemName) as $otherId) {
+                if (($statuses[$otherId] ?? $statuses[(string) $otherId] ?? null) === 'approved') {
+                    $approvedByAnother = true;
+                    break;
+                }
+            }
+            if (! $approvedByAnother) {
+                return $own;
+            }
+        }
+
+        return 'approved';
     }
 
     public function getVenueIncludedEquipmentNames(): array
