@@ -475,6 +475,11 @@ class CalendarController extends Controller
 
         $this->authorize('approve', $facilityRequest);
         abort_unless($user->isAdmin() || in_array($type, ['venue', 'equipment'], true), 403);
+        if ($cutoff = \App\Support\ApprovalCutoff::reason($facilityRequest)) {
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'error' => $cutoff], 422)
+                : redirect()->back()->withErrors(['approval' => $cutoff]);
+        }
 
         if ($user->isAdmin()) {
             abort_unless($type === null, 403);

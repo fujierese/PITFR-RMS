@@ -193,15 +193,10 @@ class ProcessPendingReviewDeadlines extends Command
             }
 
             $locked->revisionHistories()->where('status', 'pending')->update(['status' => 'expired', 'responded_at' => now()]);
-            $locked->update([
-                'status' => 'cancelled',
-                'venue_status' => 'cancelled',
-                'equipment_status' => 'cancelled',
-                'cancellation_status' => 'confirmed',
-                'cancellation_reviewed_at' => now(),
-                'cancellation_notes' => 'Expired: the reservation start time passed before final approval.',
-            ]);
-            $locked->addHistory('cancelled', 'Expired automatically: the reservation start time passed before the request received final approval.');
+            // Additional Part 2: an "Expired" status of its own. Only the request status
+            // changes; venue and equipment review results stay as they were.
+            $locked->update(['status' => 'expired']);
+            $locked->addHistory('request_expired', 'Expired automatically: the reservation start time passed before the request received final approval. It can no longer be approved.');
 
             return true;
         });

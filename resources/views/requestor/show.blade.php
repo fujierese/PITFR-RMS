@@ -134,7 +134,14 @@
             ->map(fn ($name) => mb_strtolower(trim($name)))
             ->intersect($assignedVenueNames)
             ->isNotEmpty();
-    $canApproveAssignedEquipment = $currentUser
+    // Additional Part 2: approvals close when the reservation starts or the request expired.
+    $approvalCutoffReason = in_array($request->status, ['pending', 'needs_reschedule', 'expired'], true)
+        ? \App\Support\ApprovalCutoff::reason($request)
+        : null;
+    if ($approvalCutoffReason) {
+        $canConfirmVenueAvailability = false;
+    }
+    $canApproveAssignedEquipment = ! $approvalCutoffReason && $currentUser
         && $currentUser->isCustodianEquipment()
         && $request->status === 'pending'
         && $request->supply_office_review_status === 'confirmed'
@@ -198,7 +205,7 @@
     ];
 
     $currentWorkflowKey = match (true) {
-        $request->status === 'cancelled' => null,
+        in_array($request->status, ['cancelled', 'expired'], true) => null,
         in_array($request->status, ['approved', 'completed'], true) => 'lifecycle',
         $request->status === 'rejected' && $request->venue_status === 'rejected' => 'venue',
         $request->status === 'rejected' && $hasAdditionalEquipment && $request->equipment_status === 'rejected' => 'equipment',
@@ -210,6 +217,7 @@
     };
     $workflowStageLabel = match (true) {
         $request->status === 'cancelled' => 'Cancelled',
+        $request->status === 'expired' => 'Expired',
         $pendingRevision !== null => 'Suggested New Schedule — Waiting for Response',
         $request->venue_status === 'needs_reschedule' => $venueStage['label'] === 'Rescheduling declined' ? 'Rescheduling Declined — Choose Another Schedule' : 'Awaiting Supply Office Coordination',
         $request->status === 'needs_reschedule' && $request->supply_office_review_status === 'unavailable' => 'Awaiting Supply Office Coordination — New Schedule Needed',
@@ -223,6 +231,7 @@
     $pendingRevisionResponderNames = $pendingRevisionUsers->pluck('name')->implode(', ');
     $workflowNextAction = match (true) {
         $request->status === 'cancelled' => 'No further workflow action is required.',
+        $request->status === 'expired' => 'The request expired before it was approved. Submit a new request for another date.',
         $request->status === 'rejected' => 'The workflow has ended because this request was rejected.',
         in_array($request->status, ['approved', 'completed'], true) => 'The approval workflow is complete.',
         $pendingRevision && ! in_array($pendingRevisionRequesterResponse, ['accepted', 'not_required'], true) => 'The requestor needs to review the suggested schedule.',
@@ -559,7 +568,12 @@
             </div>
             @if($request->status === 'cancelled')
                 <p class="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">This request was cancelled, so the approval workflow has ended.</p>
+            @elseif($request->status === 'expired')
+                <p class="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" data-approval-cutoff>This request expired: its start time passed before it was approved. It can no longer be approved.</p>
             @else
+                @if($approvalCutoffReason)
+                    <p class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" role="status" data-approval-cutoff>{{ $approvalCutoffReason }}</p>
+                @endif
                 <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 {{ $hasAdditionalEquipment ? 'lg:grid-cols-6' : 'lg:grid-cols-5' }}">
                     @foreach($workflowSteps as $index => $step)
                         @php
@@ -1334,6 +1348,9 @@
                                         label="Check calendar"
                                     />
                                 @endforeach
+                                @if($approvalCutoffReason)
+                                <p class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">Availability can no longer be confirmed. {{ $approvalCutoffReason }}</p>
+                                @else
                                 <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" data-swal-confirm data-swal-title="Confirm venue availability?" data-swal-loading-text="Confirming availability..." class="sm:col-span-2">
                                     @csrf
                                     <input type="hidden" name="id" value="{{ $request->id }}">
@@ -1377,6 +1394,7 @@
                                         Confirm Availability
                                     </button>
                                 </form>
+                                @endif
                             @elseif($adminVenuePending)
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">No Supply Office action is available before the Venue Custodian confirms.</div>
                             @elseif($adminEquipmentPending)
@@ -1408,6 +1426,9 @@
                                     <a href="{{ route('supply-office.verifications') }}" class="font-semibold underline">Open Account Verification</a>
                                 </div>
                             @elseif($adminFinalReady && auth()->user()->isFinalApprover())
+                                @if($approvalCutoffReason)
+                                <p class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">Final approval is closed. {{ $approvalCutoffReason }}</p>
+                                @else
                                 <form method="POST" action="{{ route('request.supply.final-approval', $request->id) }}" class="approval-form">
                                     @csrf
                                     <button type="button" onclick="handleFinalApproval(event)"
@@ -1415,6 +1436,7 @@
                                         Final Approval
                                     </button>
                                 </form>
+                                @endif
                                 <form method="POST" action="{{ route('request.supply.decline', $request->id) }}" class="decline-form">
                                     @csrf
                                     <button type="button" onclick="handleDecline(event)"

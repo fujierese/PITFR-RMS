@@ -519,6 +519,9 @@ class FacilityRequestApiController extends Controller
         ])['type'];
 
         $this->authorize('approve' . ucfirst($approvalType), $facilityRequest);
+        if ($cutoff = \App\Support\ApprovalCutoff::reason($facilityRequest)) {
+            return response()->json(['success' => false, 'error' => $cutoff], 422);
+        }
 
         DB::beginTransaction();
 

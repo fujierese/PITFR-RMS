@@ -81,7 +81,7 @@ class FacilityRequest extends Model
                 $next = 'confirmed';
             } elseif ($request->isDirty('status') && $status === 'rejected') {
                 $next = 'rejected';
-            } elseif ($request->isDirty('status') && $status === 'cancelled') {
+            } elseif ($request->isDirty('status') && in_array($status, ['cancelled', 'expired'], true)) {
                 $next = 'cancelled';
             } elseif ($request->isDirty('supply_office_review_status') && $request->supply_office_review_status === 'confirmed'
                 && in_array($stage, ['endorsed', 'not_endorsed', 'custodian_review'], true)) {
@@ -174,7 +174,7 @@ class FacilityRequest extends Model
         return match (true) {
             in_array($this->status, ['approved', 'completed'], true) => 'confirmed',
             $this->status === 'rejected' => 'rejected',
-            $this->status === 'cancelled' => 'cancelled',
+            in_array($this->status, ['cancelled', 'expired'], true) => 'cancelled',
             $this->supply_office_review_status === 'confirmed' => 'approved',
             $this->venue_status === 'approved' => 'endorsed',
             in_array($this->venue_status, ['rejected', 'needs_reschedule'], true) => 'not_endorsed',
@@ -1085,6 +1085,7 @@ class FacilityRequest extends Model
             'completed' => 'Reservation Completed',
             'rejected' => 'Rejected',
             'cancelled' => 'Cancelled',
+            'expired' => 'Expired',
             'needs_reschedule' => 'Needs Reschedule',
             default => ucfirst(str_replace('_', ' ', (string) $this->status)),
         };

@@ -141,6 +141,11 @@ class SupplyOfficeController extends Controller
         ]);
 
         $user = Auth::user();
+        // Approval cutoff: availability cannot be confirmed once the reservation has started.
+        if ($validated['decision'] === 'available'
+            && ($cutoff = \App\Support\ApprovalCutoff::reason(FacilityRequest::findOrFail($validated['id'])))) {
+            return back()->withErrors(['approval' => $cutoff]);
+        }
 
         try {
             $facilityRequest = DB::transaction(function () use ($validated, $user, $request): FacilityRequest {
@@ -1236,6 +1241,10 @@ class SupplyOfficeController extends Controller
         ]);
 
         $requestForLocking = FacilityRequest::find($validated['id']);
+        if ($validated['action'] === 'approve' && $requestForLocking
+            && ($cutoff = \App\Support\ApprovalCutoff::reason($requestForLocking))) {
+            return back()->withErrors(['action' => $cutoff]);
+        }
         if (! $requestForLocking) {
             return redirect()->back()->withErrors(['id' => 'Request not found.']);
         }

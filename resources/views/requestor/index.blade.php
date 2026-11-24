@@ -185,6 +185,7 @@
                             <option value="rejected" {{ $statusFilter === 'rejected' ? 'selected' : '' }}>Rejected</option>
                             <option value="completed" {{ $statusFilter === 'completed' ? 'selected' : '' }}>Completed</option>
                             <option value="cancelled" {{ $statusFilter === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                            <option value="expired" {{ $statusFilter === 'expired' ? 'selected' : '' }}>Expired</option>
                             <option value="needs_reschedule" {{ $statusFilter === 'needs_reschedule' ? 'selected' : '' }}>Needs Reschedule</option>
                         </select>
                     </div>

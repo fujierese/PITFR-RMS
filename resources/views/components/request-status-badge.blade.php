@@ -33,6 +33,7 @@
 
     $statusLabel = match ($overallStatus) {
         'cancelled' => 'Cancelled',
+        'expired' => 'Expired',
         'approved', 'completed' => $request->getReservationLifecycleLabel(),
         'rejected' => 'Rejected',
         'needs_reschedule' => 'Needs Revision',
@@ -57,7 +58,7 @@
     $badgeStatus = match ($overallStatus) {
         'approved', 'completed' => $request->getReservationLifecycleState() === 'equipment_return_pending' ? 'pending' : 'approved',
         'rejected' => 'rejected',
-        'cancelled' => 'cancelled',
+        'cancelled', 'expired' => 'cancelled',
         default => 'pending',
     };
 @endphp

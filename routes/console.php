@@ -16,7 +16,8 @@ Artisan::command('facility-requests:backfill-relations', function () {
 })->purpose('Backfill request venue and equipment data into relational tables');
 
 Schedule::command(SendReservationReminderNotifications::class)->everyMinute();
-Schedule::command(ProcessPendingReviewDeadlines::class)->hourly()->withoutOverlapping();
+// Every 5 minutes so a request expires close to its start time (reminders stay once per stage).
+Schedule::command(ProcessPendingReviewDeadlines::class)->everyFiveMinutes()->withoutOverlapping();
 
 // REQ-05: delete kept uploads from failed submissions after 24 hours.
 Schedule::call(function (): void {

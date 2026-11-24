@@ -131,9 +131,11 @@ class ReviewDeadlinesTest extends TestCase
         $this->artisan('facility-requests:review-deadlines')->assertSuccessful();
 
         $request->refresh();
-        $this->assertSame('cancelled', $request->status);
+        // Additional Part 2: a status of its own; the review results are kept.
+        $this->assertSame('expired', $request->status);
+        $this->assertSame('approved', $request->equipment_status);
         $this->assertSame(3, $equipment->fresh()->quantity_available);
-        $this->assertDatabaseHas('request_histories', ['facility_request_id' => $request->id, 'action' => 'cancelled']);
+        $this->assertDatabaseHas('request_histories', ['facility_request_id' => $request->id, 'action' => 'request_expired']);
         Notification::assertSentTo($requester, RequestStatusChanged::class,
             fn (RequestStatusChanged $n): bool => $n->status === 'request_expired');
     }

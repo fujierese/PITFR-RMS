@@ -259,6 +259,10 @@ class CustodianController extends Controller
             'missing_remarks' => 'nullable|array',
             'missing_remarks.*' => 'nullable|string|max:500',
         ]);
+        if ($validated['action'] === 'approve'
+            && ($cutoff = \App\Support\ApprovalCutoff::reason(FacilityRequest::findOrFail($validated['id'])))) {
+            return back()->withErrors(['action' => $cutoff]);
+        }
         if ($custodianType === 'equipment' && $validated['action'] === 'reject') {
             // Additional Enhancements, part 1: declining equipment needs a reason. It only
             // records this custodian's decision; the reservation status is not changed.

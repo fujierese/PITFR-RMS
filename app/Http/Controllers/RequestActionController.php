@@ -240,6 +240,11 @@ class RequestActionController extends Controller
             $authorizedAction = null;
         }
 
+        // Approval cutoff: approvals must happen before the reservation starts.
+        if ($cutoff = \App\Support\ApprovalCutoff::reason($facilityRequest)) {
+            return redirect()->back()->withErrors(['approval' => $cutoff]);
+        }
+
         DB::beginTransaction();
 
         try {
@@ -532,6 +537,10 @@ class RequestActionController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
         abort_unless($user && $user->isFinalApprover(), 403);
+        // Approval cutoff: approvals must happen before the reservation starts.
+        if ($cutoff = \App\Support\ApprovalCutoff::reason($facilityRequest)) {
+            return redirect()->back()->withErrors(['approval' => $cutoff]);
+        }
 
         DB::beginTransaction();
 
