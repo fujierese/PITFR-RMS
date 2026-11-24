@@ -1830,6 +1830,10 @@
         </div>
     </div>
 
+    @if(\App\Services\ActivityProposals::enabled() && auth()->check())
+        @include('requestor.partials.activity-proposal')
+    @endif
+
     @php
         $administrativeDecisions = $request->histories()
             ->whereIn('action', ['reservation_affected', 'alternative_venue_assigned', 'reservation_rescheduled', 'final_rejected', 'revision_requested'])

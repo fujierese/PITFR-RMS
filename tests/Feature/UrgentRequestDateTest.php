@@ -51,6 +51,7 @@ class UrgentRequestDateTest extends TestCase
             'emergency_justification' => 'CHED evaluation moved to today.',
             'proposal_file' => UploadedFile::fake()->create('memo.pdf', 50, 'application/pdf'),
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 50, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ];
     }
 

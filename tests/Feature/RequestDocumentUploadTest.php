@@ -140,6 +140,8 @@ class RequestDocumentUploadTest extends TestCase
         $this->actingAs($this->externalUser);
 
         $response = $this->post(route('requestor.store'), [
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
             'department' => 'External Org',
             'name_of_activity' => 'Partnership Event',
             'expected_participants' => 30,
@@ -183,6 +185,8 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Tables'],
             'equipment_quantities' => ['Tables' => 5],
             'e_signature_file' => UploadedFile::fake()->create('signature.jpg', 100),
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ]);
 
         $response->assertSessionHasNoErrors();
@@ -212,6 +216,8 @@ class RequestDocumentUploadTest extends TestCase
         $this->actingAs($this->externalUser);
 
         $response = $this->post(route('requestor.store'), [
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
             'department' => 'External Org',
             'name_of_activity' => 'Partnership Event',
             'expected_participants' => 30,
@@ -354,6 +360,7 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Sound System'],
             'equipment_quantities' => ['Sound System' => 1],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ]);
 
@@ -385,6 +392,7 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Sound System'],
             'equipment_quantities' => ['Sound System' => 1],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100, 'image/png'),
         ];
 
@@ -450,6 +458,7 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Aircon'],
             'equipment_quantities' => ['Aircon' => 1],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ]);
 
@@ -487,6 +496,7 @@ class RequestDocumentUploadTest extends TestCase
                 'equipment' => ['Iwata Cooler Fans'],
                 'equipment_quantities' => ['Iwata Cooler Fans' => 1],
                 'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+                'proposal_submission_type' => 'final',
                 'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
             ]);
 
@@ -522,6 +532,7 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Sound System'],
             'equipment_quantities' => ['Sound System' => 1],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ])->assertRedirect()->assertSessionHasNoErrors();
 
@@ -550,6 +561,8 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Tables'],
             'equipment_quantities' => ['Tables' => 5],
             'igp_receipt_file' => UploadedFile::fake()->create('igp.pdf', 100),
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.jpg', 100),
         ]);
 
@@ -559,7 +572,7 @@ class RequestDocumentUploadTest extends TestCase
         $this->assertNotNull($request);
         $this->assertNotNull($request->igp_receipt_file);
         $this->assertNull($request->e_signature_file);
-        $this->assertNull($request->activity_proposal_file);
+        $this->assertNotNull($request->activity_proposal_file); // Additional Part 2: every request includes an Activity Proposal.
     }
 
     public function test_student_can_submit_venue_only_request_with_venue_provided_equipment(): void
@@ -583,6 +596,7 @@ class RequestDocumentUploadTest extends TestCase
                 ],
             ],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ]);
 
@@ -614,6 +628,7 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Tables'],
             'equipment_quantities' => ['Tables' => 5],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.jpg', 100),
         ]);
 
@@ -654,6 +669,7 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Tables'],
             'equipment_quantities' => ['Tables' => 5],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.jpg', 100),
         ];
 
@@ -709,6 +725,7 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Wireless Microphones'],
             'equipment_quantities' => ['Wireless Microphones' => 2],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ])->assertRedirect()->assertSessionHasNoErrors();
 
@@ -758,6 +775,7 @@ class RequestDocumentUploadTest extends TestCase
             'is_emergency' => true,
             'emergency_justification' => 'This request needs urgent review.',
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ]);
 
@@ -784,6 +802,7 @@ class RequestDocumentUploadTest extends TestCase
             'is_emergency' => true,
             'emergency_justification' => 'This request needs urgent review.',
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ])->assertSessionHasErrors([
             'is_emergency' => 'Urgent reservations must start at the current time or later.',
@@ -807,6 +826,7 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Sound System'],
             'equipment_quantities' => ['Sound System' => 1],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.exe', 100),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ]);
 
@@ -829,6 +849,7 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Sound System'],
             'equipment_quantities' => ['Sound System' => 1],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'text/plain'),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100, 'image/png'),
         ]);
 
@@ -853,6 +874,7 @@ class RequestDocumentUploadTest extends TestCase
             'equipment' => ['Sound System'],
             'equipment_quantities' => ['Sound System' => 1],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100),
         ]);
 

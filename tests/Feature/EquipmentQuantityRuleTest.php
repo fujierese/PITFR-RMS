@@ -62,6 +62,7 @@ class EquipmentQuantityRuleTest extends TestCase
             'venue_equipment' => ['Gymnasium' => $items],
             'venue_equipment_quantities' => ['Gymnasium' => $quantities],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ]);
     }
 

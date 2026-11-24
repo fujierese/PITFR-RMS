@@ -46,4 +46,7 @@ Schedule::command('queue:prune-failed', ['--hours' => 24 * 30])->daily();
 
 // REQ-18: report-only check that old request columns agree with venue, item and
 // schedule rows; logs a warning when they do not. Repair with requests:reconcile --fix.
+// Additional Part 2: Activity Proposal reminders (idempotent; once per reminder).
+Schedule::command('activity-proposals:reminders')->dailyAt('07:00')->withoutOverlapping()->name('activity-proposal-reminders');
+
 Schedule::command('requests:reconcile')->dailyAt('02:30')->withoutOverlapping()->name('request-data-check');

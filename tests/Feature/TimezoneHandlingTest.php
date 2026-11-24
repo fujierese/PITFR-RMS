@@ -103,6 +103,7 @@ class TimezoneHandlingTest extends TestCase
                 'reservation_duration' => 'specific_time',
             ]],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ])->assertSessionDoesntHaveErrors(['venue_schedules.Gymnasium.start_date']);
 
         $this->assertSame('2026-12-15', FacilityRequest::query()->sole()->start_date->toDateString());

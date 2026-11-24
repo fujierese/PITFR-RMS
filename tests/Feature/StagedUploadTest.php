@@ -54,6 +54,7 @@ class StagedUploadTest extends TestCase
             ->post(route('requestor.store'), $this->payload([
                 'name_of_activity' => '',
                 'activity_proposal_file' => $this->pdf('my-proposal.pdf'),
+                'proposal_submission_type' => 'final',
             ]))
             ->assertSessionHasErrors('name_of_activity');
 
@@ -70,6 +71,7 @@ class StagedUploadTest extends TestCase
         $this->actingAs($this->student)
             ->post(route('requestor.store'), $this->payload([
                 'kept_activity_proposal_file' => $kept['token'],
+                'proposal_submission_type' => 'final',
             ]))
             ->assertSessionHasNoErrors();
 
@@ -85,6 +87,7 @@ class StagedUploadTest extends TestCase
             ->post(route('requestor.store'), $this->payload([
                 'name_of_activity' => '',
                 'activity_proposal_file' => $this->pdf('my-proposal.pdf'),
+                'proposal_submission_type' => 'final',
             ]));
 
         $this->actingAs($this->student)

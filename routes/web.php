@@ -134,6 +134,7 @@ Route::middleware(['auth', 'role:admin,supply_office'])->prefix('supply-office')
     Route::put('/equipment/{equipment}', [SupplyOfficeController::class, 'updateEquipment'])->name('supply-office.equipment.update');
     Route::delete('/equipment/{equipment}', [SupplyOfficeController::class, 'destroyEquipment'])->name('supply-office.equipment.destroy');
     Route::get('/requests/pending', [SupplyOfficeController::class, 'pendingRequests'])->name('supply-office.requests.pending');
+    Route::get('/activity-proposals', [\App\Http\Controllers\ActivityProposalController::class, 'index'])->name('supply-office.activity-proposals');
     Route::post('/outsider-inquiries/{facilityRequest}/cancel-approval', [SupplyOfficeController::class, 'cancelOutsiderApproval'])->name('supply-office.outsider.cancel-approval');
     // D4: account verification review.
     Route::get('/verifications', [\App\Http\Controllers\AccountVerificationController::class, 'index'])->name('supply-office.verifications');
@@ -266,6 +267,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/request/{facilityRequest}/supply/final-approval', [RequestActionController::class, 'supplyFinalApproval'])->name('request.supply.final-approval');
     Route::post('/request/{facilityRequest}/supply/decline', [RequestActionController::class, 'supplyDecline'])->name('request.supply.decline');
     Route::post('/request/{facilityRequest}/supply/decision', [RequestActionController::class, 'supplyDecision'])->name('request.supply.decision');
+    // Additional Part 2: Activity Proposal versions, verification and deadlines.
+    Route::post('/request/{id}/activity-proposal', [\App\Http\Controllers\ActivityProposalController::class, 'upload'])->name('request.activity-proposal.upload');
+    Route::get('/request/{id}/activity-proposal/{version}', [\App\Http\Controllers\ActivityProposalController::class, 'file'])->whereNumber('version')->name('request.activity-proposal.file');
+    Route::post('/request/{id}/activity-proposal/review', [\App\Http\Controllers\ActivityProposalController::class, 'review'])->name('request.activity-proposal.review');
+    Route::post('/request/{id}/activity-proposal/deadline', [\App\Http\Controllers\ActivityProposalController::class, 'deadline'])->name('request.activity-proposal.deadline');
+    Route::post('/request/{id}/activity-proposal/follow-up', [\App\Http\Controllers\ActivityProposalController::class, 'followUp'])->name('request.activity-proposal.follow-up');
 });
 
 // Calendar

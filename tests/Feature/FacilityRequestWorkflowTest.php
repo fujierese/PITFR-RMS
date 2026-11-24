@@ -78,6 +78,7 @@ class FacilityRequestWorkflowTest extends TestCase
                 'emergency_justification' => 'Need immediate review',
                 'is_emergency' => true,
                 'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+                'proposal_submission_type' => 'final',
                 'e_signature_file' => UploadedFile::fake()->create('signature.png', 100, 'image/png'),
             ]);
 

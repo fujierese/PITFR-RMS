@@ -45,6 +45,7 @@ class UrgentRequestOptionalTest extends TestCase
             'venue' => ['Covered Court'],
             'venue_schedules' => ['Covered Court' => ['start_date' => $date, 'end_date' => $date, 'start_time' => '09:00', 'end_time' => '10:00', 'reservation_duration' => 'specific_time']],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 50, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ]);
     }
 

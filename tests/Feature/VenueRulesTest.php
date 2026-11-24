@@ -59,6 +59,8 @@ class VenueRulesTest extends TestCase
             'contact_number' => '09171112222',
             'contact_email' => 'rosa@example.test',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 50, 'image/png'),
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ]);
     }
 
@@ -73,6 +75,7 @@ class VenueRulesTest extends TestCase
             'venue' => ['Gymnasium'],
             'venue_schedules' => ['Gymnasium' => ['start_date' => $this->date, 'end_date' => $this->date, 'start_time' => '08:00', 'end_time' => '12:00', 'reservation_duration' => 'specific_time'] + $activity],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ]);
     }
 

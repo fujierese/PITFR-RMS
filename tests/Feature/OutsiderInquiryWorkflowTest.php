@@ -70,6 +70,8 @@ class OutsiderInquiryWorkflowTest extends TestCase
             'contact_email' => 'rosa@example.test',
             'additional_remarks' => 'We will bring our own sound system.',
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 50, 'image/png'),
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ], $overrides))->assertSessionHasNoErrors();
 
         return FacilityRequest::query()->where('requested_by_id', $this->outsider->id)->latest('id')->firstOrFail();
@@ -243,6 +245,7 @@ class OutsiderInquiryWorkflowTest extends TestCase
             'venue_schedules' => ['Covered Court' => ['start_date' => $this->date, 'end_date' => $this->date, 'start_time' => '08:00', 'end_time' => '10:00', 'reservation_duration' => 'specific_time']],
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 50, 'image/png'),
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 50, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ]);
 
         $request = FacilityRequest::query()->where('requested_by_id', $faculty->id)->first();

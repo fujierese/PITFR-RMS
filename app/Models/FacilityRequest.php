@@ -33,7 +33,7 @@ class FacilityRequest extends Model
         'equipment_returned_status', 'equipment_returned_by', 'equipment_returned_date', 'equipment_return_notes',
         'equipment_returned_items', 'equipment_return_damaged_quantity', 'equipment_return_missing_quantity',
         'equipment_return_damage_remarks', 'equipment_return_missing_remarks', 'priority', 'requested_priority', 'requested_is_emergency', 'is_emergency', 'emergency_justification', 'proposal_file',
-        'activity_proposal_file', 'igp_receipt_file', 'e_signature_file', 'document_metadata',
+        'activity_proposal_file', 'igp_receipt_file', 'e_signature_file', 'document_metadata', 'proposal_deadline',
         'venue_approval_signature_file', 'equipment_approval_signature_file', 'final_approval_signature_file',
         'final_approval_signature',
         'venue_participants', 'capacity_exceptions', 'capacity_exception_status',
@@ -145,6 +145,7 @@ class FacilityRequest extends Model
         'requested_is_emergency'       => 'boolean',
         'approval_signature_meta'      => 'array',
         'document_metadata'            => 'array',
+        'proposal_deadline'            => 'date',
     ];
 
     // ─── B: OUTSIDER INQUIRIES ───────────────────────────────────────────────
@@ -1508,6 +1509,12 @@ class FacilityRequest extends Model
      * pending and no one has reviewed it yet. A request without additional equipment has
      * its equipment step approved automatically, which used to block editing entirely.
      */
+    /** Additional Part 2: the Activity Proposal document status (see ActivityProposals). */
+    public function activityProposalDocumentStatus(): string
+    {
+        return app(\App\Services\ActivityProposals::class)->documentStatus($this);
+    }
+
     public function isEditableByRequestor(): bool
     {
         if ($this->status === 'needs_reschedule' || $this->venue_status === 'needs_reschedule' || $this->equipment_status === 'needs_reschedule') {

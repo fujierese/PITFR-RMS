@@ -1299,6 +1299,14 @@ class RequestorController extends Controller
         if ($request->boolean('is_emergency')) {
             $rules['proposal_file'] = ['required_without:activity_proposal_file', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'];
         }
+        // Additional Part 2: every new request includes an Activity Proposal, and the
+        // requestor says whether it is a Draft or the Final Copy (never guessed).
+        if (\App\Services\ActivityProposals::enabled()) {
+            if (! $editing) {
+                $rules['activity_proposal_file'] = 'required|file|mimes:pdf,jpeg,jpg,png|max:10240';
+            }
+            $rules['proposal_submission_type'] = ['required_with:activity_proposal_file', 'nullable', 'in:draft,final'];
+        }
         // QA-7: documents were checked when the request was submitted. When editing they
         // are kept as they are, and a new file only replaces one (an urgent request still
         // needs its supporting document, checked below).
@@ -1908,6 +1916,10 @@ class RequestorController extends Controller
                 $wasNeedsReschedule = $editing->status === 'needs_reschedule';
                 foreach (['proposal_file' => 'proposal_file', 'activity_proposal_file' => 'activity_proposal', 'igp_receipt_file' => 'igp_receipt'] as $column => $folder) {
                     $old = $editing->getOriginal($column);
+                    // Additional Part 2: proposal versions are kept, never deleted.
+                    if ($column === 'activity_proposal_file' && \App\Services\ActivityProposals::enabled()) {
+                        continue;
+                    }
                     if ($old && $requestAttributes[$column] !== $old) {
                         $replacedFiles[] = "documents/{$folder}/{$old}";
                     }
@@ -1922,10 +1934,16 @@ class RequestorController extends Controller
                     $fr->addHistory('needs_reschedule', 'Reservation rescheduled by requestor after Priority Override.', $user->getKey());
                 }
                 $fr->addHistory('requestor_edited', 'Request edited by ' . $user->name . ' and returned to pending verification.', $user->getKey());
+                if ($activityProposalFileName && \App\Services\ActivityProposals::enabled()) {
+                    app(\App\Services\ActivityProposals::class)->recordSubmission($fr, $activityProposalFileName, $request->input('proposal_submission_type', 'draft') === 'final' ? 'final' : 'draft', $user, $request->file('activity_proposal_file')?->getClientOriginalName());
+                }
             } else {
                 $fr = $this->createRequestRecord($requestAttributes);
                 $fr->syncRelationalItems($venueSchedules, $venueEquipment);
                 $fr->addHistory('submitted', 'Request submitted by ' . $user->name . '.', $user->getKey());
+                if ($activityProposalFileName && \App\Services\ActivityProposals::enabled()) {
+                    app(\App\Services\ActivityProposals::class)->recordSubmission($fr, $activityProposalFileName, $request->input('proposal_submission_type', 'draft') === 'final' ? 'final' : 'draft', $user, $request->file('activity_proposal_file')?->getClientOriginalName());
+                }
                 if ($isOutsiderInquiry) {
                     $fr->addHistory('outsider_inquiry_submitted', 'Reservation inquiry submitted by ' . $user->name . '. Waiting for IGP review.', $user->getKey());
                 }
@@ -1986,6 +2004,19 @@ class RequestorController extends Controller
                 User::query()->withAnyRole(['igp'])->where('is_active', true)->get(),
                 new \App\Notifications\RequestStatusChanged($fr, 'outsider_inquiry_submitted', '', $user->name)
             );
+        }
+
+        // Additional Part 2: default deadline = 3 working days before the activity, when
+        // that is still ahead; otherwise the Supply Office sets one.
+        if (\App\Services\ActivityProposals::enabled() && ! $fr->proposal_deadline) {
+            $proposals = app(\App\Services\ActivityProposals::class);
+            if ($suggested = $proposals->suggestedDeadline($fr)) {
+                try {
+                    $proposals->setDeadline($fr, $suggested->toDateString(), null, null, true);
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
         }
 
         $this->clearStagedUploads();

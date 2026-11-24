@@ -53,6 +53,7 @@ class DuplicateSubmitGuardTest extends TestCase
                 'reservation_duration' => 'specific_time',
             ]],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ] + $extra, fn ($value) => $value !== null));
     }
 

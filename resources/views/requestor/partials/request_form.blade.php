@@ -649,8 +649,8 @@
                     </div>
 
                     <div class="space-y-6">
-                        @if ($isStudent || $isFaculty)
-                            {{-- Activity Proposal for Student/Faculty --}}
+                        @if ($isStudent || $isFaculty || \App\Services\ActivityProposals::enabled())
+                            {{-- Activity Proposal (Additional Part 2: required for every request) --}}
                             <div>
                                 <label for="activity_proposal_file" class="mb-3 block text-sm font-semibold text-slate-700">
                                     Activity Proposal <span class="required-asterisk">*</span>
@@ -728,8 +728,28 @@
                                 @error('activity_proposal_file')
                                     <p class="mt-2 text-sm text-red-500">{{ $message }}</p>
                                 @enderror
+                                @if (\App\Services\ActivityProposals::enabled())
+                                    @php $submissionType = old('proposal_submission_type'); @endphp
+                                    <fieldset class="mt-4">
+                                        <legend class="text-sm font-semibold text-slate-700">Is this the final copy? @unless($editingRequest)<span class="required-asterisk">*</span>@endunless</legend>
+                                        <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                                            <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-sm has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50">
+                                                <input type="radio" name="proposal_submission_type" value="draft" class="mt-0.5 text-emerald-600" @checked($submissionType === 'draft') @unless($editingRequest) required @endunless>
+                                                <span><span class="block font-semibold text-slate-800">Draft / Preliminary Copy</span><span class="text-xs text-slate-500">Submit the final copy later, before the deadline.</span></span>
+                                            </label>
+                                            <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-sm has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50">
+                                                <input type="radio" name="proposal_submission_type" value="final" class="mt-0.5 text-emerald-600" @checked($submissionType === 'final')>
+                                                <span><span class="block font-semibold text-slate-800">Final Copy</span><span class="text-xs text-slate-500">Complete and ready for Supply Office verification.</span></span>
+                                            </label>
+                                        </div>
+                                        @error('proposal_submission_type')
+                                            <p class="mt-2 text-sm text-red-500">{{ $message }}</p>
+                                        @enderror
+                                    </fieldset>
+                                @endif
                             </div>
-                        @elseif ($isExternal)
+                        @endif
+                        @if ($isExternal)
                             {{-- IGP Receipt for External/Organization --}}
                             <div>
                                 <label for="igp_receipt_file" class="mb-3 block text-sm font-semibold text-slate-700">

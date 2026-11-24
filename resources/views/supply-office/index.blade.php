@@ -229,6 +229,11 @@
         </section>
     @endif
 
+    {{-- Additional Part 2: Activity Proposal monitoring. --}}
+    @if(\App\Services\ActivityProposals::enabled())
+        @include('supply-office.partials.proposal-monitor')
+    @endif
+
     <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/50">
         <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>

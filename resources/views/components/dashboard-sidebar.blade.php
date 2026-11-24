@@ -177,6 +177,16 @@
                         'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m-1 0V3m0 2h-2"/></svg>',
                     ];
                 }
+            // Additional Part 2: Activity Proposal monitoring.
+            if (\App\Services\ActivityProposals::enabled() && \Illuminate\Support\Facades\Route::has('supply-office.activity-proposals')) {
+                $navigation[] = [
+                    'key' => 'activity-proposals',
+                    'label' => 'Activity Proposals',
+                    'route' => route('supply-office.activity-proposals'),
+                    'route_name' => 'supply-office.activity-proposals',
+                    'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+                ];
+            }
             // D4: Supply Office reviews uploaded IDs.
             if (\App\Models\User::verificationEnabled()) {
                 $pendingVerifications = \App\Models\User::query()->where('verification_status', 'pending')->count();
@@ -511,6 +521,8 @@
         $activeKey = 'final-approved-activities';
     } elseif ($currentRoute === 'supply-office.users') {
         $activeKey = 'users';
+    } elseif ($currentRoute === 'supply-office.activity-proposals') {
+        $activeKey = 'activity-proposals';
     } elseif ($currentRoute === 'supply-office.verifications') {
         $activeKey = 'verifications';
     } elseif ($currentRoute === 'supply-office.audit-logs') {

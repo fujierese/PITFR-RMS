@@ -58,6 +58,7 @@ class EditRequestFormTest extends TestCase
     {
         $this->actingAs($this->requestor)->post(route('requestor.store'), $this->payload([
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ]))->assertSessionHasNoErrors();
 
         return FacilityRequest::query()->sole();
@@ -117,13 +118,14 @@ class EditRequestFormTest extends TestCase
         $request = $this->submitted();
         $oldFile = $request->activity_proposal_file;
 
-        $this->save($request, ['activity_proposal_file' => UploadedFile::fake()->create('proposal-v2.pdf', 100, 'application/pdf')])
+        $this->save($request, ['activity_proposal_file' => UploadedFile::fake()->create('proposal-v2.pdf', 100, 'application/pdf'), 'proposal_submission_type' => 'final'])
             ->assertSessionHasNoErrors();
 
         $fresh = $request->fresh();
         $this->assertNotSame($oldFile, $fresh->activity_proposal_file);
         $this->assertSame('proposal-v2.pdf', $fresh->document_metadata['activity_proposal']['original_name']);
-        $this->assertFalse(Storage::disk('local')->exists('documents/activity_proposal/' . $oldFile));
+        // Additional Part 2: earlier proposal versions are kept, never deleted.
+        $this->assertTrue(Storage::disk('local')->exists('documents/activity_proposal/' . $oldFile));
         $this->assertTrue(Storage::disk('local')->exists('documents/activity_proposal/' . $fresh->activity_proposal_file));
     }
 

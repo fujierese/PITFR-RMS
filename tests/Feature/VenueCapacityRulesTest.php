@@ -52,6 +52,8 @@ class VenueCapacityRulesTest extends TestCase
             'start_time' => '09:00', 'end_time' => '11:00',
             'venue' => $venues,
             'venue_schedules' => $schedules,
+            'activity_proposal_file' => \Illuminate\Http\UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ], $overrides);
     }
 

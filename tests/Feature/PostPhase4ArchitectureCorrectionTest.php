@@ -60,6 +60,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
                 'start_time' => '05:00',
                 'end_time' => '06:00',
                 'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+                'proposal_submission_type' => 'final',
             ]))
             ->assertSessionHasErrors('start_time');
 
@@ -79,6 +80,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
                 'start_time' => '05:01',
                 'end_time' => '06:00',
                 'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+                'proposal_submission_type' => 'final',
             ]))
             ->assertRedirect();
 
@@ -102,6 +104,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
             'request_context' => 'student_organization',
             'student_organization_id' => $organization->id,
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
         ]))->assertSessionHasErrors('student_organization_id');
 
         StudentOrganizationMember::create([
@@ -116,6 +119,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
             'request_context' => 'student_organization',
             'student_organization_id' => $organization->id,
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
         ]))->assertRedirect();
 
         $request = FacilityRequest::where('requested_by_id', $student->id)->firstOrFail();
@@ -141,6 +145,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
             'request_context' => 'student_organization',
             'student_organization_id' => $organization->id,
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
         ]))->assertSessionHasErrors('student_organization_id');
 
         $this->assertDatabaseCount('facility_requests', 0);
@@ -162,6 +167,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
             'request_context' => 'student_organization',
             'student_organization_id' => $organization->id,
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
         ]))->assertSessionHasErrors('student_organization_id');
     }
 
@@ -181,6 +187,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
             'request_context' => 'student_organization',
             'student_organization_id' => $organization->id,
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
         ]))->assertSessionHasErrors('student_organization_id');
     }
 
@@ -195,6 +202,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
         $this->actingAs($student)->post(route('requestor.store'), $this->requestPayload([
             'request_context' => 'personal',
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
         ]))->assertRedirect();
 
         $this->assertSame('student', $student->fresh()->requestor_type);
@@ -227,6 +235,8 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
         $this->actingAs($outsider)->post(route('requestor.store'), $this->requestPayload([
             'request_context' => 'outside_organization',
             'igp_receipt_file' => UploadedFile::fake()->create('receipt.pdf', 100),
+            'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ]))->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('facility_requests', [
@@ -247,6 +257,7 @@ class PostPhase4ArchitectureCorrectionTest extends TestCase
         $this->actingAs($faculty)->post(route('requestor.store'), $this->requestPayload([
             'request_context' => 'personal',
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100),
+            'proposal_submission_type' => 'final',
         ]))->assertRedirect();
 
         $this->assertSame('faculty', $faculty->fresh()->requestor_type);

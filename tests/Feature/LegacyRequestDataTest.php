@@ -175,6 +175,7 @@ class LegacyRequestDataTest extends TestCase
                 'CHIC' => ['start_date' => $other, 'end_date' => $other, 'start_time' => '08:00', 'end_time' => '17:00', 'reservation_duration' => 'whole_day'],
             ],
             'activity_proposal_file' => \Illuminate\Http\UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ])->assertSessionHasNoErrors();
 
         $request = FacilityRequest::where('name_of_activity', 'Two venues')->sole();

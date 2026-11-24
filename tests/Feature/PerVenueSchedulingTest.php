@@ -51,6 +51,7 @@ class PerVenueSchedulingTest extends TestCase
             ],
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100, 'image/png'),
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ]);
 
         $response->assertSessionHasNoErrors();
@@ -186,6 +187,7 @@ class PerVenueSchedulingTest extends TestCase
             ],
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100, 'image/png'),
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $request = FacilityRequest::query()
@@ -264,6 +266,7 @@ class PerVenueSchedulingTest extends TestCase
             ],
             'e_signature_file' => UploadedFile::fake()->create('signature.png', 100, 'image/png'),
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ])->assertRedirect()->assertSessionHasErrors('equipment');
 
         $this->assertDatabaseMissing('facility_requests', [
@@ -293,6 +296,7 @@ class PerVenueSchedulingTest extends TestCase
                 'Test Court' => ['start_date' => $date, 'end_date' => $date, 'start_time' => '08:00', 'end_time' => '10:00', 'reservation_duration' => 'specific_time'],
             ],
             'activity_proposal_file' => UploadedFile::fake()->create('proposal.pdf', 100, 'application/pdf'),
+            'proposal_submission_type' => 'final',
         ];
 
         // D2: a venue smaller than its participant count is blocked.
