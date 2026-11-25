@@ -13,7 +13,7 @@ class ActivityProposalVersion extends Model
 
     protected $fillable = [
         'facility_request_id', 'version_number', 'submission_type', 'file_name', 'original_name',
-        'uploaded_by_id', 'submitted_at', 'review_status', 'remarks', 'reviewed_by_id', 'reviewed_at', 'imported',
+        'uploaded_by_id', 'submitted_at', 'review_status', 'remarks', 'reviewed_by_id', 'reviewed_at', 'imported', 'deadline_at_submission',
     ];
 
     protected $casts = [

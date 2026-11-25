@@ -63,6 +63,12 @@
     };
 @endphp
 
+@php
+    $needsResolution = in_array((int) $request->id, \App\Services\SupplyOfficeDecisions::needsResolutionIds(), true);
+@endphp
+@if ($needsResolution)
+    <span class="mb-1 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-rose-200" data-needs-resolution>Needs Resolution</span>
+@endif
 @if ($showWorkflowStage && $overallStatus === 'pending')
     <div class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left shadow-sm" aria-label="Request review progress">
         <div class="flex items-start gap-2.5">

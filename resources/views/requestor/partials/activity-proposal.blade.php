@@ -97,8 +97,9 @@
                         <textarea name="remarks" rows="2" maxlength="2000" class="{{ $field }}">{{ old('remarks') }}</textarea>
                         @error('remarks')<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
                     </label>
-                    <label class="block text-sm font-medium text-slate-700">Correction deadline <span class="font-normal text-slate-500">(optional)</span>
-                        <input type="date" name="correction_deadline" min="{{ now()->toDateString() }}" class="{{ $field }}">
+                    <label class="block text-sm font-medium text-slate-700">Correction deadline <span class="font-normal text-slate-500">(required for corrections)</span>
+                        <input type="date" name="correction_deadline" min="{{ now()->toDateString() }}" value="{{ old('correction_deadline') }}" class="{{ $field }}">
+                        @error('correction_deadline')<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
                     </label>
                     <div class="flex flex-wrap gap-2">
                         <button type="submit" name="result" value="verified" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Mark Verified</button>
@@ -148,6 +149,7 @@
                             <p class="font-semibold text-slate-900">Version {{ $version->version_number }} · {{ $version->typeLabel() }} <span class="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{{ $version->reviewLabel() }}</span></p>
                             <p class="text-xs text-slate-500">
                                 {{ $version->submitted_at?->format('M j, Y g:i A') }} by {{ $version->uploadedBy?->name ?? 'Requestor' }}
+                                @if($version->deadline_at_submission) · deadline then {{ \Carbon\Carbon::parse($version->deadline_at_submission)->format('M j, Y') }} @endif
                                 @if($version->reviewed_at) · reviewed {{ $version->reviewed_at->format('M j, Y g:i A') }} by {{ $version->reviewedBy?->name }} @endif
                                 @if($version->imported) · uploaded before version tracking @endif
                             </p>

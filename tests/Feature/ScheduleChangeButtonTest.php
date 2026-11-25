@@ -11,10 +11,9 @@ use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
- * CHG-01: the Supply Office's schedule-change button shows only when something calls
- * for it (a conflict, an urgent request needing the slot, an unavailable schedule, or
- * a requestor's change request); the custodian's "Suggest a new schedule" only after
- * the calendar check finds a conflict.
+ * CHG-01 (revised by the follow-up fixes): the Supply Office's Reschedule and Assign
+ * Alternative Venue appear only for an actual conflict with an approved reservation;
+ * the custodian's "Suggest a new schedule" only after the calendar check finds a conflict.
  */
 class ScheduleChangeButtonTest extends TestCase
 {
@@ -67,43 +66,45 @@ class ScheduleChangeButtonTest extends TestCase
             ->assertDontSee('id="open-reschedule-form"', false);
     }
 
-    public function test_button_shows_when_the_request_conflicts(): void
+    /**
+     * Follow-up fixes: Reschedule / Assign Alternative Venue are offered only for an actual
+     * conflict with an approved reservation, and Approve is then not available.
+     */
+    public function test_a_pending_request_overlapping_an_approved_one_gets_resolution_actions_not_approve(): void
     {
+        $admin = User::factory()->create(['role' => 'admin', 'username' => config('pitfr.final_approver_username')]);
+        Venue::create(['name' => 'Mini Hall', 'capacity' => 100, 'custodian_id' => $this->custodian->id, 'is_active' => true]);
         $this->booking('FER-2026-611', 'approved');
-        $request = $this->booking('FER-2026-612', 'pending');
+        $request = $this->booking('FER-2026-612', 'pending', ['venue_status' => 'approved', 'supply_office_review_status' => 'confirmed']);
 
-        $this->actingAs($this->supply)->get(route('request.show', $request))
+        $this->actingAs($admin)->get(route('request.show', $request))
             ->assertOk()
-            ->assertSee('id="open-reschedule-form"', false)
-            ->assertSee('Schedule change available: The selected venue conflicts with an existing reservation.');
+            ->assertSee('data-approve-blocked', false)
+            ->assertDontSee('Approve Reservation')
+            ->assertSee('Assign Alternative Venue')
+            ->assertSee('Mini Hall')
+            ->assertSee('Decline Reservation')
+            ->assertDontSee('id="open-reschedule-form"', false);
     }
 
-    public function test_button_shows_on_an_approved_booking_an_urgent_request_needs(): void
+    public function test_no_schedule_actions_without_an_approved_conflict(): void
     {
+        $admin = User::factory()->create(['role' => 'admin', 'username' => config('pitfr.final_approver_username')]);
         $approved = $this->booking('FER-2026-621', 'approved');
-        $this->actingAs($this->supply)->get(route('request.show', $approved))->assertDontSee('id="open-reschedule-form"', false);
-
+        // A pending urgent request does not create a conflict until it is approved.
         $this->booking('FER-2026-622', 'pending', ['is_emergency' => true, 'priority' => 'institutional']);
-
-        $this->actingAs($this->supply)->get(route('request.show', $approved))
-            ->assertOk()
-            ->assertSee('id="open-reschedule-form"', false)
-            ->assertSee("Urgent request FER-2026-622 needs this booking's venue and time.");
-    }
-
-    public function test_button_shows_when_the_requestor_asked_for_a_change(): void
-    {
-        $approved = $this->booking('FER-2026-631', 'approved');
+        // A requestor's change request is not a conflict either.
         $approved->requestChangeRequests()->create([
             'requested_by_id' => $this->requestor->id,
             'reason' => 'Our guest speaker moved the date.',
             'status' => 'pending',
         ]);
 
-        $this->actingAs($this->supply)->get(route('request.show', $approved))
+        $this->actingAs($admin)->get(route('request.show', $approved))
             ->assertOk()
-            ->assertSee('id="open-reschedule-form"', false)
-            ->assertSee('Schedule change available: The requestor asked for a change.');
+            ->assertDontSee('id="open-reschedule-form"', false)
+            ->assertDontSee('Assign Alternative Venue')
+            ->assertDontSee('data-conflict-panel', false);
     }
 
     public function test_custodian_suggestion_waits_for_a_conflict(): void

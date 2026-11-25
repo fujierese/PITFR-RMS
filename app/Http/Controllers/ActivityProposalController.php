@@ -94,10 +94,12 @@ class ActivityProposalController extends Controller
         $validated = $request->validate([
             'result' => ['required', 'in:verified,requires_correction'],
             'remarks' => ['required_if:result,requires_correction', 'nullable', 'string', 'max:2000'],
-            'correction_deadline' => ['nullable', 'date', 'after_or_equal:today'],
+            // A correction comes with its own (new) deadline.
+            'correction_deadline' => ['required_if:result,requires_correction', 'nullable', 'date', 'after_or_equal:today'],
         ], [
             'remarks.required_if' => 'Write the correction instructions for the requestor.',
             'correction_deadline.after_or_equal' => 'The correction deadline cannot be in the past.',
+            'correction_deadline.required_if' => 'Set a deadline for the corrected copy.',
         ]);
 
         if ($validated['result'] === 'verified') {

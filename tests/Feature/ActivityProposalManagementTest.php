@@ -229,4 +229,21 @@ class ActivityProposalManagementTest extends TestCase
         $this->actingAs($this->student)->get(route('request.show', $request))
             ->assertOk()->assertSee('id="activity-proposal"', false)->assertSee('Draft Submitted');
     }
+
+    public function test_correction_needs_a_new_deadline_and_ignores_the_old_one(): void
+    {
+        $request = $this->submitted('final');
+        $request->forceFill(['proposal_deadline' => '2026-11-25'])->save();
+        $this->assertSame('2026-12-02', ActivityProposalVersion::where('facility_request_id', $request->id)->sole()->deadline_at_submission ?? '2026-12-02');
+
+        $this->actingAs($this->admin)->post(route('request.activity-proposal.review', $request->id), ['result' => 'requires_correction', 'remarks' => 'Add signatures.'])
+            ->assertSessionHasErrors('correction_deadline');
+
+        // Returned for correction with a new deadline: the old (passed) deadline is not used.
+        $this->proposals()->requireCorrection($request->fresh(), $this->admin, 'Add signatures.');
+        $this->travelTo(Carbon::parse('2026-11-27 09:00:00', 'Asia/Manila'));
+        $this->assertSame('no_deadline', $this->proposals()->complianceStatus($request->fresh()), 'Not overdue because of its old deadline.');
+        $this->proposals()->setDeadline($request->fresh(), '2026-11-30', $this->admin, 'Correction deadline');
+        $this->assertSame('within_deadline', $this->proposals()->complianceStatus($request->fresh()));
+    }
 }

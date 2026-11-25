@@ -241,8 +241,18 @@ class SupplyOfficeDecisions
     private function conflictVenue(FacilityRequest $request): ?string
     {
         $conflict = $this->openConflicts($request)->first();
+        if ($conflict?->venue_name) {
+            return $conflict->venue_name;
+        }
+        foreach ($this->pendingApprovedConflicts($request) as $approved) {
+            foreach ($request->getVenueNames() as $venueName) {
+                if ($approved->booksVenue($venueName)) {
+                    return $venueName; // flag only the conflicting venue
+                }
+            }
+        }
 
-        return $conflict?->venue_name;
+        return null;
     }
 
     /**
@@ -253,19 +263,59 @@ class SupplyOfficeDecisions
     public function actionsFor(FacilityRequest $request): array
     {
         $conflicts = $this->openConflicts($request);
-        $venueConcern = $this->venueConcern($request);
-        $scheduleConcern = $this->scheduleConcern($request);
+        $pendingConflicts = $this->pendingApprovedConflicts($request);
         $open = in_array($request->status, ['pending', 'approved'], true) && ApprovalCutoff::isOpen($request);
+        // Follow-up fixes: Alternative Venue and Reschedule are exceptional: only for an
+        // actual conflict (an approved urgent reservation affecting this one, or this
+        // pending request overlapping an approved one). A normal reservation that passed
+        // the venue check gets Approve and Decline only.
+        $hasConflict = $conflicts->isNotEmpty() || $pendingConflicts->isNotEmpty();
+        $venueConcern = $hasConflict ? ($conflicts->isNotEmpty() ? 'An approved urgent reservation needs the same venue and time.' : 'This request overlaps approved reservation ' . $pendingConflicts->pluck('control_number')->implode(', ') . '.') : null;
 
         return [
             'conflicts' => $conflicts,
+            'pending_conflicts' => $pendingConflicts,
+            // Never approve into a double booking (an urgent request whose overlap the Supply
+            // Office reviewed may be approved; the overlap then becomes a conflict to resolve).
+            'approve_blocked' => $pendingConflicts->isNotEmpty() && ! $this->urgentOverlapReviewed($request),
             'revision' => $open ? $this->revisionReasons($request) : [],
             'venue_concern' => $venueConcern,
-            'alternative_venues' => $open && $venueConcern ? $this->alternativeVenues($request) : [],
-            'schedule_concern' => $scheduleConcern,
-            'schedules' => $open && $scheduleConcern ? $this->feasibleSchedules($request) : [],
+            'alternative_venues' => $open && $hasConflict ? $this->alternativeVenues($request, $this->conflictVenue($request) ?? $pendingConflicts->first()?->getVenueNames()[0] ?? null) : [],
+            'schedule_concern' => $hasConflict ? $venueConcern : null,
+            'schedules' => $open && $hasConflict ? $this->feasibleSchedules($request) : [],
             'decline' => in_array($request->status, ['pending', 'approved', 'needs_reschedule'], true),
         ];
+    }
+
+    /** Approved reservations this pending request overlaps (partial or multi-day). */
+    public function pendingApprovedConflicts(FacilityRequest $request): Collection
+    {
+        if ($request->status !== 'pending') {
+            return collect();
+        }
+
+        return $this->availability->getApprovedVenueConflicts($request);
+    }
+
+    public function urgentOverlapReviewed(FacilityRequest $request): bool
+    {
+        return (bool) $request->is_emergency
+            && $request->histories()->where('action', 'urgent_conflict_acknowledged')->exists();
+    }
+
+    /** IDs of reservations with an open conflict (for the "Needs Resolution" badge). */
+    public static function needsResolutionIds(): array
+    {
+        $key = 'pitfr.needs_resolution_ids';
+        if (! app()->bound($key)) {
+            $ids = \Illuminate\Support\Facades\Schema::hasTable('reservation_conflicts')
+                ? ReservationConflict::query()->where('status', 'open')->get(['urgent_request_id', 'affected_request_id'])
+                    ->flatMap(fn ($c) => [(int) $c->urgent_request_id, (int) $c->affected_request_id])->unique()->values()->all()
+                : [];
+            app()->instance($key, $ids);
+        }
+
+        return app($key);
     }
 
     /** Record conflicts opened by an approved urgent reservation (idempotent). */
@@ -275,6 +325,7 @@ class SupplyOfficeDecisions
             return collect();
         }
         $created = collect();
+        app()->forgetInstance('pitfr.needs_resolution_ids');
         foreach ($this->availability->getApprovedVenueConflicts($urgent) as $affected) {
             $venue = collect($urgent->getVenueNames())->first(fn ($n) => $affected->booksVenue($n));
             $conflict = ReservationConflict::firstOrCreate(
@@ -393,6 +444,7 @@ class SupplyOfficeDecisions
 
     private function closeConflicts(FacilityRequest $request, string $action, string $reason, string $explanation, array $after, User $admin): void
     {
+        app()->forgetInstance('pitfr.needs_resolution_ids');
         foreach ($this->openConflicts($request) as $conflict) {
             $other = $conflict->otherSide($request)?->fresh();
             $stillOverlaps = $action !== 'decline' && $action !== 'revision' && $other && $other->status === 'approved'

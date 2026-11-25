@@ -93,6 +93,14 @@ class ActivityProposals
         if (! $request->proposal_deadline) {
             return 'no_deadline';
         }
+        // A document returned for correction is judged only against a deadline set at or
+        // after the correction request, never against its old deadline.
+        if ($documentStatus === 'requires_correction') {
+            $latestChange = ActivityProposalDeadlineChange::query()->where('facility_request_id', $request->id)->latest('id')->first();
+            if (! $latestChange || $latestChange->kind !== 'correction') {
+                return 'no_deadline';
+            }
+        }
         $now = ($now ?? Carbon::now())->copy()->setTimezone(config('app.timezone'));
 
         return $now->greaterThan(Carbon::parse($request->proposal_deadline->toDateString(), config('app.timezone'))->endOfDay())
@@ -203,6 +211,9 @@ class ActivityProposals
                 'uploaded_by_id' => $user->id,
                 'submitted_at' => now(),
                 'review_status' => 'pending',
+                'deadline_at_submission' => \Illuminate\Support\Facades\Schema::hasColumn('activity_proposal_versions', 'deadline_at_submission')
+                    ? FacilityRequest::query()->whereKey($request->id)->value('proposal_deadline')
+                    : null,
             ]);
             // A direct update: saving the model would rebuild its venue rows.
             FacilityRequest::query()->whereKey($request->id)->update(['activity_proposal_file' => $fileName]);
@@ -283,6 +294,10 @@ class ActivityProposals
                 throw ValidationException::withMessages(['reason' => 'Give a reason for changing the deadline.']);
             }
             $kind = $isDefault ? 'default' : ($previous === null ? 'assigned' : ($new->greaterThan($previous) ? 'extended' : 'modified'));
+            // A deadline set while the document waits for correction is its correction deadline.
+            if (! $isDefault && $this->documentStatus($request) === 'requires_correction') {
+                $kind = 'correction';
+            }
             $change = ActivityProposalDeadlineChange::create([
                 'facility_request_id' => $request->id,
                 'previous_deadline' => $previous?->toDateString(),
@@ -295,13 +310,14 @@ class ActivityProposals
             $request->setAttribute('proposal_deadline', $new->toDateString());
             $request->syncOriginalAttribute('proposal_deadline');
             $request->addHistory(
-                'proposal_deadline_' . ($kind === 'default' ? 'assigned' : $kind),
+                'proposal_deadline_' . (in_array($kind, ['default', 'correction'], true) ? 'assigned' : $kind),
                 'Activity proposal deadline ' . ($previous ? 'changed from ' . $previous->format('M j, Y') . ' to ' : 'set to ') . $new->format('M j, Y')
                     . ($admin ? ' by ' . $admin->name : ' (3 working days before the activity)') . ($reason ? '. Reason: ' . $reason : '.'),
                 $admin?->id
             );
             $notice = match ($kind) {
                 'extended' => 'deadline_extended',
+                'correction' => 'deadline_assigned',
                 'modified' => 'deadline_modified',
                 default => 'deadline_assigned',
             };
@@ -348,7 +364,8 @@ class ActivityProposals
         foreach ($requests as $request) {
             try {
                 $document = $this->documentStatus($request);
-                if (in_array($document, ['verified', 'for_verification'], true)) {
+                if (in_array($document, ['verified', 'for_verification'], true)
+                    || ($document === 'requires_correction' && $this->complianceStatus($request, $document, $now) === 'no_deadline')) {
                     continue;
                 }
                 $deadline = Carbon::parse($request->proposal_deadline->toDateString(), config('app.timezone'))->startOfDay();

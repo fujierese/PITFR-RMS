@@ -275,4 +275,16 @@ class UrgentConflictResolutionTest extends TestCase
 
         return [$normal->fresh(), $urgent->fresh()];
     }
+
+    public function test_affected_reservation_shows_needs_resolution_until_resolved(): void
+    {
+        [$normal] = $this->openConflict();
+        $this->actingAs($this->admin)->get(route('request.show', $normal))->assertSee('data-needs-resolution', false)->assertSee('Needs Resolution');
+        $this->assertSame('approved', $normal->fresh()->status, 'Status is kept; only the indicator is added.');
+
+        $this->actingAs($this->admin)->post(route('request.supply.decision', $normal), [
+            'decision' => 'alternative_venue', 'venue' => 'Mini Hall', 'reason' => 'Court needed', 'explanation' => 'Moved to Mini Hall at the same time.',
+        ])->assertSessionHasNoErrors();
+        $this->actingAs($this->admin)->get(route('request.show', $normal))->assertDontSee('data-needs-resolution', false);
+    }
 }

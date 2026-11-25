@@ -1437,6 +1437,10 @@
                                     Final approval is disabled until the requester's ID is verified.
                                     <a href="{{ route('supply-office.verifications') }}" class="font-semibold underline">Open Account Verification</a>
                                 </div>
+                            @elseif($adminFinalReady && auth()->user()->isFinalApprover() && ($supplyDecisions['approve_blocked'] ?? false))
+                                <div class="sm:col-span-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900" data-approve-blocked>
+                                    Approval is not available: this request overlaps approved reservation {{ $supplyDecisions['pending_conflicts']->pluck('control_number')->implode(', ') }}. Assign another venue, reschedule, or decline it.
+                                </div>
                             @elseif($adminFinalReady && auth()->user()->isFinalApprover())
                                 @if($approvalCutoffReason)
                                 <p class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">Final approval is closed. {{ $approvalCutoffReason }}</p>
@@ -1458,8 +1462,8 @@
                                 </div>
                             @endif
                             {{-- CHG-01: only when there is a conflict, an urgent request needs the slot, or the requestor asked. --}}
-                            @if(($request->status === 'pending' || $request->status === 'approved') && ($scheduleChangeReason ?? null)
-                                && ($supplyDecisions === null || ($supplyDecisions['conflicts']->isEmpty() && $supplyDecisions['schedules'] !== [])))
+                            {{-- Follow-up fixes: rescheduling is offered only for an actual conflict (see the decisions panel). --}}
+                            @if(false && ($scheduleChangeReason ?? null))
                                 <p class="sm:col-span-2 lg:col-span-3 text-xs font-medium text-amber-800">Schedule change available: {{ $scheduleChangeReason }}</p>
                                 <button type="button" id="open-reschedule-form" class="sm:col-span-2 lg:col-span-1 w-full inline-flex items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-5 py-3 text-sm font-semibold shadow-sm transition hover:bg-amber-100">
                                     Reschedule
@@ -1588,6 +1592,9 @@
             <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                 <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Overall Status</p>
                 <p class="mt-3 text-lg font-semibold text-slate-900">{{ $requestStatusLabel }}</p>
+                @if(in_array((int) $request->id, \App\Services\SupplyOfficeDecisions::needsResolutionIds(), true))
+                    <span class="mt-2 inline-flex rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-rose-200" data-needs-resolution>Needs Resolution</span>
+                @endif
             </div>
             <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                 <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Current Workflow Stage</p>
