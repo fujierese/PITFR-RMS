@@ -139,6 +139,7 @@ Route::middleware(['auth', 'role:admin,supply_office'])->prefix('supply-office')
     // D4: account verification review.
     Route::get('/verifications', [\App\Http\Controllers\AccountVerificationController::class, 'index'])->name('supply-office.verifications');
     Route::get('/verifications/{user}/id', [\App\Http\Controllers\AccountVerificationController::class, 'file'])->name('supply-office.verifications.file');
+    Route::get('/verifications/{user}/affiliation', [\App\Http\Controllers\AccountVerificationController::class, 'affiliationFile'])->name('supply-office.verifications.affiliation-file');
     Route::post('/verifications/{user}', [\App\Http\Controllers\AccountVerificationController::class, 'decide'])->name('supply-office.verifications.decide');
     Route::post('/requests/availability-review', [SupplyOfficeController::class, 'reviewAvailability'])->name('supply-office.requests.availability-review');
     Route::post('/requests/{facilityRequest}/cancellation-review', [SupplyOfficeController::class, 'reviewCancellation'])->name('supply-office.requests.cancellation-review');

@@ -175,36 +175,10 @@
                     </div>
 
                     @if($verificationEnabled ?? false)
-                        {{-- ID verification --}}
-                        <div id="verification_section" class="reg-section" data-institutional-domains="{{ implode(',', $institutionalDomains ?? []) }}">
-                            <p class="reg-section-title">Identity verification</p>
-                            <p id="verification_auto" class="hidden rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
-                                Your PIT email verifies your account automatically after you enter the code we send. No ID upload is needed.
-                            </p>
-                            <div id="verification_upload">
-                                <p id="verification_hint_member" class="hidden text-sm text-slate-600">Upload your PIT ID{{ !empty($institutionalDomains) ? ', or sign up with your @' . implode(' / @', $institutionalDomains) . ' email to be verified automatically' : '' }}.</p>
-                                <p id="verification_hint_outsider" class="text-sm text-slate-600">Upload a valid government ID.</p>
-                                <div class="mt-3 grid gap-4 sm:grid-cols-2">
-                                    <div>
-                                        <label for="verification_id_type" class="reg-label">ID type</label>
-                                        <select id="verification_id_type" name="verification_id_type" class="reg-input">
-                                            <option value="">Choose an ID</option>
-                                            @foreach($idTypes as $value => $label)
-                                                <option value="{{ $value }}" @selected(old('verification_id_type') === $value)>{{ $label }}</option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label for="verification_id" class="reg-label">ID photo or scan</label>
-                                        <input id="verification_id" type="file" name="verification_id" accept=".jpg,.jpeg,.png,.pdf" class="reg-input py-2 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-3 file:py-1 file:text-emerald-700">
-                                    </div>
-                                </div>
-                                <p class="reg-hint">JPG, PNG or PDF, up to 5 MB. You can also add it later in Account Settings.</p>
-                                <details class="mt-2 text-xs text-slate-600">
-                                    <summary class="cursor-pointer font-medium text-emerald-700">Why we ask for an ID</summary>
-                                    <p class="mt-2 leading-relaxed">Requests get final approval only after your ID is checked; until then, PIT members follow the same rules as guests. Upload the front side only. You may cover the ID number. The image is deleted after the Supply Office reviews it.</p>
-                                </details>
-                            </div>
+                        {{-- Identity and Affiliation Verification --}}
+                        <div id="verification_section" class="reg-section">
+                            <p class="reg-section-title">Identity and Affiliation Verification</p>
+                            @include('partials.verification-fields', ['prefix' => 'reg', 'selectedType' => old('requestor_type', 'outsider'), 'inputClass' => 'reg-input', 'labelClass' => 'reg-label', 'hintClass' => 'reg-hint'])
                         </div>
                     @endif
 
@@ -313,24 +287,13 @@
 
         (function () {
             var section = document.getElementById('verification_section');
-            if (!section) return;
-            var domains = (section.dataset.institutionalDomains || '').split(',').map(function (d) { return d.trim().toLowerCase(); }).filter(Boolean);
-            var email = document.getElementById('username');
+            if (!section || !window.pitfrVerificationFields) return;
+            var root = section.querySelector('[data-verification-fields]');
             function update() {
                 var checked = document.querySelector('[data-requestor-type]:checked');
-                var type = checked ? checked.value : 'outsider';
-                var domain = ((email && email.value) || '').toLowerCase().split('@')[1] || '';
-                var auto = type !== 'outsider' && domains.indexOf(domain) !== -1;
-                document.getElementById('verification_auto').classList.toggle('hidden', !auto);
-                document.getElementById('verification_upload').classList.toggle('hidden', auto);
-                document.getElementById('verification_hint_member').classList.toggle('hidden', type === 'outsider');
-                document.getElementById('verification_hint_outsider').classList.toggle('hidden', type !== 'outsider');
-                var idType = document.getElementById('verification_id_type');
-                if (type !== 'outsider' && !idType.value) { idType.value = 'pit_id'; idType.dataset.autoSelected = '1'; }
-                if (type === 'outsider' && idType.dataset.autoSelected === '1') { idType.value = ''; delete idType.dataset.autoSelected; }
+                window.pitfrVerificationFields(root, checked ? checked.value : 'outsider');
             }
             document.querySelectorAll('[data-requestor-type]').forEach(function (r) { r.addEventListener('change', update); });
-            if (email) email.addEventListener('input', update);
             update();
         })();
 

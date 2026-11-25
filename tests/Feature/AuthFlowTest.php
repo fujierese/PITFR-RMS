@@ -12,6 +12,7 @@ use Tests\TestCase;
 class AuthFlowTest extends TestCase
 {
     use RefreshDatabase;
+    use \Tests\Concerns\SubmitsVerificationDocuments;
 
     public function test_guest_and_login_layouts_adapt_to_compact_viewports(): void
     {

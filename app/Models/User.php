@@ -249,7 +249,11 @@ class User extends Authenticatable implements CanResetPassword
     ];
 
     public const VERIFICATION_ID_TYPES = [
-        'pit_id' => 'PIT ID (student, faculty or staff)',
+        // Identity and Affiliation Verification: the PIT ID matching the account type.
+        'pit_student_id' => 'PIT Student ID',
+        'pit_faculty_id' => 'PIT Faculty ID',
+        'pit_staff_id' => 'PIT Staff ID',
+        'pit_id' => 'PIT ID (student, faculty or staff)', // older submissions
         'philsys' => 'National ID (PhilSys)',
         'drivers_license' => "Driver's license",
         'passport' => 'Passport',
@@ -271,17 +275,6 @@ class User extends Authenticatable implements CanResetPassword
         return self::$verificationColumns ??= \Illuminate\Support\Facades\Schema::hasColumn('users', 'verification_status');
     }
 
-    public static function isInstitutionalEmail(string $email): bool
-    {
-        $domain = strtolower((string) substr(strrchr($email, '@') ?: '', 1));
-        $allowed = array_filter(array_map(
-            fn ($d) => strtolower(trim($d)),
-            explode(',', (string) config('pitfr.institutional_email_domains', ''))
-        ));
-
-        return $domain !== '' && in_array($domain, $allowed, true);
-    }
-
     public function isVerified(): bool
     {
         return ($this->verification_status ?? 'verified') === 'verified';
@@ -292,6 +285,7 @@ class User extends Authenticatable implements CanResetPassword
         return match ($this->verification_status ?? 'verified') {
             'verified' => 'Verified',
             'pending' => 'Pending review',
+            'documents_requested' => 'Additional documents requested',
             'rejected' => 'Rejected — please upload again',
             default => 'Unverified',
         };
@@ -300,6 +294,11 @@ class User extends Authenticatable implements CanResetPassword
     public function verificationIdTypeLabel(): ?string
     {
         return self::VERIFICATION_ID_TYPES[$this->verification_id_type] ?? null;
+    }
+
+    public function verificationAffiliationTypeLabel(): ?string
+    {
+        return \App\Support\AccountVerificationDocuments::AFFILIATION_TYPES[$this->verification_affiliation_type ?? ''] ?? null;
     }
 
     // Override default auth field

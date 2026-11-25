@@ -15,6 +15,7 @@ use Tests\TestCase;
 class PostPhase4ArchitectureCorrectionTest extends TestCase
 {
     use RefreshDatabase;
+    use \Tests\Concerns\SubmitsVerificationDocuments;
 
     protected function setUp(): void
     {

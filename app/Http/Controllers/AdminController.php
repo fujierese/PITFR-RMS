@@ -597,6 +597,16 @@ class AdminController extends Controller
             }
         }
 
+        // Identity and Affiliation Verification: a self-registered account becomes a Student,
+        // Faculty or Staff account only through the Supply Office document review.
+        if (User::verificationEnabled()
+            && $user->role === 'requestor'
+            && ! $user->isVerified()
+            && in_array($newRequestorType, ['student', 'faculty', 'staff'], true)
+            && $newRequestorType !== $user->requestor_type) {
+            return redirect()->route('admin.users')->with('error', 'This account is waiting for identity and affiliation verification. Approve it from Account Verification to change its category.');
+        }
+
         $previouslyCustodian = $user->isCustodian();
         $newlyCustodian = in_array($newRole, ['custodian', 'custodian-venue', 'custodian-equipment'], true)
             || collect($newAdditionalRoles)->contains(fn (string $role): bool => str_starts_with($role, 'custodian'));

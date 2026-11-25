@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use App\Models\College;
 use App\Models\Department;
 use App\Notifications\PasswordChangedNotification;
+use App\Support\AccountVerificationDocuments;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -91,7 +92,6 @@ class AuthController extends Controller
                 ->merge(\App\Models\StudentOrganization::query()->where('is_active', true)->orderBy('name')->pluck('name'))
                 ->filter()->unique()->values(),
             'idTypes' => User::VERIFICATION_ID_TYPES,
-            'institutionalDomains' => array_values(array_filter(array_map('trim', explode(',', (string) config('pitfr.institutional_email_domains', ''))))),
         ]);
     }
 
@@ -329,10 +329,8 @@ class AuthController extends Controller
                 'nullable', 'integer', 'exists:departments,id',
             ],
             'contact_number' => ['nullable', 'string', 'max:50'],
-            // D4: claimed category and proof of identity.
+            // D4: claimed category; its documents are validated below.
             'requestor_type' => ['nullable', 'string', 'max:30'],
-            'verification_id_type' => ['nullable', 'in:' . implode(',', array_keys(User::VERIFICATION_ID_TYPES))],
-            'verification_id' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
         ], [
             'username.unique' => 'Unable to complete registration with the provided details.',
             'school_id_number.regex' => 'Student ID must be in format: 23-0098-635 (2 digits - 4 digits - 3 digits)',
@@ -349,20 +347,16 @@ class AuthController extends Controller
         if ($privacyConsentEnabled && ! $request->boolean('privacy_accepted')) {
             return back()
                 ->withErrors(['privacy_accepted' => 'Please confirm that you have read the Privacy Notice.'])
-                ->withInput($request->except(['password', 'password_confirmation', 'verification_id']));
+                ->withInput($request->except(['password', 'password_confirmation', 'verification_id', 'verification_affiliation']));
         }
 
         // D4: the claimed category only applies once verified; anything unknown is an Outsider.
-        $claimedType = in_array($data['requestor_type'] ?? null, User::CLAIMABLE_REQUESTOR_TYPES, true)
-            ? $data['requestor_type']
-            : 'outsider';
+        $claimedType = AccountVerificationDocuments::normalizeType($data['requestor_type'] ?? null);
         $verificationEnabled = User::verificationEnabled();
-        $usesInstitutionalEmail = $claimedType !== 'outsider' && User::isInstitutionalEmail((string) $data['username']);
-        // The ID can also be uploaded later from Account Settings; it is required before final approval.
-        if ($verificationEnabled && $request->hasFile('verification_id') && empty($data['verification_id_type'])) {
-            return back()
-                ->withErrors(['verification_id_type' => 'Choose the type of ID you are uploading.'])
-                ->withInput($request->except(['password', 'password_confirmation', 'verification_id']));
+        // Identity and Affiliation Verification: the documents for the account type are required
+        // at sign-up. An email address (PIT or personal) never verifies an account by itself.
+        if ($verificationEnabled) {
+            $request->validate(AccountVerificationDocuments::rules($claimedType), AccountVerificationDocuments::messages());
         }
 
         $fullName = User::formatFullName(
@@ -393,14 +387,11 @@ class AuthController extends Controller
         // Get department name for storage
         $departmentName = $department ? $department->name : null;
 
-        $storedIdFile = null;
-        if ($verificationEnabled && ! $usesInstitutionalEmail && $request->hasFile('verification_id')) {
-            // Private disk only; deleted once the Supply Office reviews it.
-            $upload = $request->file('verification_id');
-            $storedIdFile = $upload->storeAs('verification-ids', Str::uuid() . '.' . strtolower($upload->getClientOriginalExtension()), 'local');
-        }
+        // Private disk only; deleted once the Supply Office reviews them.
+        $documents = $verificationEnabled ? AccountVerificationDocuments::storeFor($request, $claimedType) : ['columns' => [], 'files' => []];
 
-        $user = DB::transaction(function () use ($data, $fullName, $org, $departmentName, $googleProfile, $isGoogleRegistration, $verificationEnabled, $claimedType, $usesInstitutionalEmail, $storedIdFile, $privacyConsentEnabled): User {
+        try {
+        $user = DB::transaction(function () use ($data, $fullName, $org, $departmentName, $googleProfile, $isGoogleRegistration, $verificationEnabled, $claimedType, $documents, $privacyConsentEnabled): User {
             $user = User::create([
                 'username' => strtolower(trim($data['username'])),
                 'password' => Hash::make($data['password'] ?? bin2hex(random_bytes(24))),
@@ -426,18 +417,11 @@ class AuthController extends Controller
             }
 
             if ($verificationEnabled) {
-                // Outsider rules apply until the claimed category is verified.
-                $instantlyVerified = $usesInstitutionalEmail && $isGoogleRegistration;
-                $user->forceFill([
-                    'position' => $instantlyVerified ? User::defaultPositionFor($claimedType) : null,
-                    'requestor_type' => $instantlyVerified ? $claimedType : 'outsider',
-                    'claimed_requestor_type' => $claimedType,
-                    'verification_status' => $instantlyVerified ? 'verified' : ($storedIdFile ? 'pending' : 'unverified'),
-                    'verification_method' => $usesInstitutionalEmail ? 'institutional_email' : 'id_upload',
-                    'verification_id_type' => $usesInstitutionalEmail ? null : ($data['verification_id_type'] ?? null),
-                    'verification_id_file' => $storedIdFile,
-                    'verification_submitted_at' => $storedIdFile ? now() : null,
-                    'verified_at' => $instantlyVerified ? now() : null,
+                // Outsider rules apply until the Supply Office approves the account.
+                $user->forceFill($documents['columns'] + [
+                    'position' => null,
+                    'requestor_type' => 'outsider',
+                    'verified_at' => null,
                 ])->save();
             }
 
@@ -450,6 +434,10 @@ class AuthController extends Controller
 
             return $user;
         });
+        } catch (\Throwable $exception) {
+            AccountVerificationDocuments::deleteFiles($documents['files']);
+            throw $exception;
+        }
 
         if ($isGoogleRegistration) {
             $request->session()->forget(['google_registration_profile', 'google_registration_type']);
@@ -497,21 +485,8 @@ class AuthController extends Controller
             'otp_attempts' => 0,
         ])->save();
 
-        // D4: confirming a PIT email address verifies the claimed category.
-        if (User::verificationEnabled()
-            && $user->verification_method === 'institutional_email'
-            && $user->verification_status !== 'verified'
-            && in_array($user->claimed_requestor_type, ['student', 'faculty', 'staff'], true)
-            && User::isInstitutionalEmail((string) $user->username)) {
-            $user->forceFill([
-                'requestor_type' => $user->claimed_requestor_type,
-                'verification_status' => 'verified',
-                'verified_at' => now(),
-            ])->save();
-            $this->recordUserAudit(null, $user, 'user_verified', 'Verified through institutional email.', [], [
-                'requestor_type' => $user->requestor_type,
-            ]);
-        }
+        // Identity and Affiliation Verification: confirming the email address does not verify
+        // the account; only the Supply Office review of the documents does.
         $request->session()->forget('registration_user_id');
         Auth::login($user);
 

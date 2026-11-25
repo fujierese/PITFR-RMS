@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Password;
 class RegistrationFormTest extends TestCase
 {
     use RefreshDatabase;
+    use \Tests\Concerns\SubmitsVerificationDocuments;
 
     protected function setUp(): void
     {
@@ -39,7 +40,7 @@ class RegistrationFormTest extends TestCase
         $response->assertOk()
             ->assertSee('Create an account')
             ->assertSee('I am registering as')
-            ->assertSee('Identity verification')
+            ->assertSee('Identity and Affiliation Verification')
             // D7: office/organization is a separate display field with suggestions.
             ->assertSee('organization_suggestions', false)
             ->assertSee('Office of the President')
