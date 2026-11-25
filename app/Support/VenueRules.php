@@ -20,13 +20,33 @@ use Illuminate\Support\Facades\Schema;
  */
 final class VenueRules
 {
+    /** Activity categories (client list, Nov 2026). */
     public const ACTIVITY_TYPES = [
+        'institutional' => 'Institutional',
+        'student_organization' => 'Student Organization',
+        'sports_recreation' => 'Sports and Recreation',
+        'cultural_arts' => 'Cultural and Arts',
+        'community_outreach' => 'Community Outreach',
+        'other' => 'Other',
+    ];
+
+    /** What each category covers, shown with the choice. */
+    public const ACTIVITY_TYPE_HINTS = [
+        'institutional' => 'Official meetings, institutional programs',
+        'student_organization' => 'Organization activities, leadership training',
+        'sports_recreation' => 'Sports events, tournaments',
+        'cultural_arts' => 'Festivals, performances, cultural programs',
+        'community_outreach' => 'Extension activities, community programs',
+        'other' => 'Activities that don\'t fit the categories',
+    ];
+
+    /** Earlier activity types, kept so existing requests still show what was chosen. */
+    public const LEGACY_ACTIVITY_TYPES = [
         'prom' => 'Prom',
         'orientation' => 'Orientation',
         'seminar' => 'Seminar',
         'pickleball' => 'Pickleball',
         'badminton' => 'Badminton',
-        'other' => 'Other school activity',
     ];
 
     /** @var array<string, array{open_to_outsiders: bool, requires_activity_type: bool}> */
@@ -99,10 +119,10 @@ final class VenueRules
             return null;
         }
         if (! is_string($type) || ! array_key_exists($type, self::ACTIVITY_TYPES)) {
-            return "{$venueName}: choose the type of activity (" . implode(', ', array_slice(self::ACTIVITY_TYPES, 0, 5)) . ', or other school activity).';
+            return "{$venueName}: choose the type of activity (" . implode(', ', array_slice(self::ACTIVITY_TYPES, 0, 5)) . ', or Other).';
         }
         if ($type === 'other' && (! is_string($detail) || trim($detail) === '')) {
-            return "{$venueName}: describe the school activity.";
+            return "{$venueName}: describe the activity.";
         }
         if (is_string($detail) && mb_strlen($detail) > 200) {
             return "{$venueName}: keep the activity description to 200 characters.";
@@ -126,11 +146,12 @@ final class VenueRules
 
     public static function activityLabel(?string $type, ?string $detail): ?string
     {
-        if (! $type || ! isset(self::ACTIVITY_TYPES[$type])) {
+        $label = self::ACTIVITY_TYPES[$type ?? ''] ?? self::LEGACY_ACTIVITY_TYPES[$type ?? ''] ?? null;
+        if (! $type || $label === null) {
             return null;
         }
 
-        return $type === 'other' && $detail ? self::ACTIVITY_TYPES[$type] . ': ' . $detail : self::ACTIVITY_TYPES[$type];
+        return $type === 'other' && $detail ? $label . ': ' . $detail : $label;
     }
 
     /** Message when a request's requestor may not book one of its venues. */

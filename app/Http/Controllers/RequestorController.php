@@ -1302,7 +1302,8 @@ class RequestorController extends Controller
         // Additional Part 2: every new request includes an Activity Proposal, and the
         // requestor says whether it is a Draft or the Final Copy (never guessed).
         if (\App\Services\ActivityProposals::enabled()) {
-            if (! $editing) {
+            // Client decision: optional for outside requestors.
+            if (! $editing && ! $user->isOutsider()) {
                 $rules['activity_proposal_file'] = 'required|file|mimes:pdf,jpeg,jpg,png|max:10240';
             }
             $rules['proposal_submission_type'] = ['required_with:activity_proposal_file', 'nullable', 'in:draft,final'];
@@ -2008,7 +2009,9 @@ class RequestorController extends Controller
 
         // Additional Part 2: default deadline = 3 working days before the activity, when
         // that is still ahead; otherwise the Supply Office sets one.
-        if (\App\Services\ActivityProposals::enabled() && ! $fr->proposal_deadline) {
+        // Outside requestors without a proposal get no automatic deadline (it is optional for them).
+        if (\App\Services\ActivityProposals::enabled() && ! $fr->proposal_deadline
+            && (! $user->isOutsider() || $fr->activity_proposal_file)) {
             $proposals = app(\App\Services\ActivityProposals::class);
             if ($suggested = $proposals->suggestedDeadline($fr)) {
                 try {

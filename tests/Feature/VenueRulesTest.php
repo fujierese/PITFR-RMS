@@ -120,7 +120,7 @@ class VenueRulesTest extends TestCase
         $this->studentSubmit()->assertSessionHasErrors('venue_schedules.Gymnasium.activity_type');
         $this->studentSubmit(['activity_type' => 'concert'])->assertSessionHasErrors('venue_schedules.Gymnasium.activity_type');
         $this->studentSubmit(['activity_type' => 'other'])
-            ->assertSessionHasErrors(['venue_schedules.Gymnasium.activity_type' => 'Gymnasium: describe the school activity.']);
+            ->assertSessionHasErrors(['venue_schedules.Gymnasium.activity_type' => 'Gymnasium: describe the activity.']);
         $this->assertSame(0, FacilityRequest::count());
 
         $this->studentSubmit(['activity_type' => 'other', 'activity_type_detail' => 'Intramurals volleyball'])->assertSessionHasNoErrors();
@@ -128,7 +128,7 @@ class VenueRulesTest extends TestCase
         $schedule = $request->getVenueSchedule('Gymnasium');
         $this->assertSame('other', $schedule['activity_type']);
         $this->assertSame('Intramurals volleyball', $schedule['activity_type_detail']);
-        $this->assertStringContainsString('Activity: Other school activity: Intramurals volleyball', $request->getVenueScheduleSummaries()[0]['label']);
+        $this->assertStringContainsString('Activity: Other: Intramurals volleyball', $request->getVenueScheduleSummaries()[0]['label']);
 
         $supply = User::factory()->create(['role' => 'supply_office']);
         $this->actingAs($supply)->get(route('request.show', $request))->assertOk()->assertSee('Intramurals volleyball');
@@ -149,8 +149,8 @@ class VenueRulesTest extends TestCase
         ];
         $this->postJson('/api/facility-requests', $payload)->assertStatus(422)->assertJsonValidationErrors(['activity_type']);
 
-        $this->postJson('/api/facility-requests', $payload + ['activity_type' => 'prom'])->assertCreated();
-        $this->assertSame('prom', FacilityRequest::query()->sole()->getVenueSchedule('Gymnasium')['activity_type']);
+        $this->postJson('/api/facility-requests', $payload + ['activity_type' => 'sports_recreation'])->assertCreated();
+        $this->assertSame('sports_recreation', FacilityRequest::query()->sole()->getVenueSchedule('Gymnasium')['activity_type']);
     }
 
     public function test_a_schedule_change_cannot_move_an_outsider_into_the_gym(): void
@@ -229,7 +229,7 @@ class VenueRulesTest extends TestCase
 
     public function test_editing_a_gym_request_keeps_its_activity_type(): void
     {
-        $this->studentSubmit(['activity_type' => 'seminar'])->assertSessionHasNoErrors();
+        $this->studentSubmit(['activity_type' => 'institutional'])->assertSessionHasNoErrors();
         $request = FacilityRequest::query()->sole();
         $request->update(['venue_status' => 'pending', 'equipment_status' => 'pending', 'status' => 'pending']);
 
@@ -246,6 +246,6 @@ class VenueRulesTest extends TestCase
 
         $fresh = FacilityRequest::find($request->id);
         $this->assertSame('Sports Fest (renamed)', $fresh->name_of_activity);
-        $this->assertSame('seminar', $fresh->getVenueSchedule('Gymnasium')['activity_type']);
+        $this->assertSame('institutional', $fresh->getVenueSchedule('Gymnasium')['activity_type']);
     }
 }

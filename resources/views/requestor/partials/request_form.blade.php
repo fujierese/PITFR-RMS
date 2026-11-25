@@ -398,14 +398,14 @@
                                         @if (in_array($v, $venueActivityRequired ?? [], true))
                                             {{-- REQ-19: this venue asks for the type of school activity. --}}
                                             <div class="mt-3" data-venue-activity>
-                                                <label for="venue_activity_{{ $loop->index }}" class="text-xs font-semibold text-slate-600">Type of school activity <span class="required-asterisk">*</span></label>
+                                                <label for="venue_activity_{{ $loop->index }}" class="text-xs font-semibold text-slate-600">Type of activity <span class="required-asterisk">*</span></label>
                                                 <select id="venue_activity_{{ $loop->index }}" name="venue_schedules[{{ $v }}][activity_type]" {{ $isVenueSelected ? 'required' : '' }} data-venue-activity-type class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
                                                     <option value="">Choose the activity</option>
                                                     @foreach (\App\Support\VenueRules::ACTIVITY_TYPES as $activityKey => $activityLabel)
-                                                        <option value="{{ $activityKey }}" @selected(($venueScheduleOld['activity_type'] ?? '') === $activityKey)>{{ $activityLabel }}</option>
+                                                        <option value="{{ $activityKey }}" @selected(($venueScheduleOld['activity_type'] ?? '') === $activityKey)>{{ $activityLabel }} — {{ \App\Support\VenueRules::ACTIVITY_TYPE_HINTS[$activityKey] ?? '' }}</option>
                                                     @endforeach
                                                 </select>
-                                                <input type="text" name="venue_schedules[{{ $v }}][activity_type_detail]" maxlength="200" value="{{ $venueScheduleOld['activity_type_detail'] ?? '' }}" placeholder="Describe the school activity" aria-label="Describe the school activity" data-venue-activity-detail class="{{ ($venueScheduleOld['activity_type'] ?? '') === 'other' ? '' : 'hidden' }} mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
+                                                <input type="text" name="venue_schedules[{{ $v }}][activity_type_detail]" maxlength="200" value="{{ $venueScheduleOld['activity_type_detail'] ?? '' }}" placeholder="Describe the activity" aria-label="Describe the activity" data-venue-activity-detail class="{{ ($venueScheduleOld['activity_type'] ?? '') === 'other' ? '' : 'hidden' }} mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
                                                 @error('venue_schedules.' . $v . '.activity_type')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                                             </div>
                                         @endif
@@ -653,7 +653,12 @@
                             {{-- Activity Proposal (Additional Part 2: required for every request) --}}
                             <div>
                                 <label for="activity_proposal_file" class="mb-3 block text-sm font-semibold text-slate-700">
-                                    Activity Proposal <span class="required-asterisk">*</span>
+                                    Activity Proposal
+                                    @if ($isExternal && ! $isStudent && ! $isFaculty)
+                                        <span class="text-xs font-normal text-slate-500">(optional)</span>
+                                    @else
+                                        <span class="required-asterisk">*</span>
+                                    @endif
                                 </label>
                                 <p class="mb-3 text-xs text-slate-500">Describe the activity, its objectives and how the venue and equipment will be used.</p>
                                 <div data-upload-box class="rounded-[32px] border-2 border-dashed border-slate-300 bg-slate-50 px-8 pb-8 pt-8 transition duration-200 hover:border-emerald-400">
@@ -731,10 +736,10 @@
                                 @if (\App\Services\ActivityProposals::enabled())
                                     @php $submissionType = old('proposal_submission_type'); @endphp
                                     <fieldset class="mt-4">
-                                        <legend class="text-sm font-semibold text-slate-700">Is this the final copy? @unless($editingRequest)<span class="required-asterisk">*</span>@endunless</legend>
+                                        <legend class="text-sm font-semibold text-slate-700">Is this the final copy? @unless($editingRequest || ($isExternal && ! $isStudent && ! $isFaculty))<span class="required-asterisk">*</span>@endunless</legend>
                                         <div class="mt-2 grid gap-2 sm:grid-cols-2">
                                             <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-sm has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50">
-                                                <input type="radio" name="proposal_submission_type" value="draft" class="mt-0.5 text-emerald-600" @checked($submissionType === 'draft') @unless($editingRequest) required @endunless>
+                                                <input type="radio" name="proposal_submission_type" value="draft" class="mt-0.5 text-emerald-600" @checked($submissionType === 'draft') @unless($editingRequest || ($isExternal && ! $isStudent && ! $isFaculty)) required @endunless>
                                                 <span><span class="block font-semibold text-slate-800">Draft / Preliminary Copy</span><span class="text-xs text-slate-500">Submit the final copy later, before the deadline.</span></span>
                                             </label>
                                             <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-sm has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50">

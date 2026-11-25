@@ -92,9 +92,17 @@ class ActivityProposalManagementTest extends TestCase
     {
         $this->submit(['activity_proposal_file' => null])->assertSessionHasErrors('activity_proposal_file');
         $this->submit(['proposal_submission_type' => null])->assertSessionHasErrors('proposal_submission_type');
-        $outsider = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'outsider', 'office_or_organization' => 'Partner Org']);
-        $this->submit(['activity_proposal_file' => null, 'requested_by_position' => 'Guest'], $outsider)->assertSessionHasErrors('activity_proposal_file');
         $this->assertSame(0, FacilityRequest::count());
+
+        // Outside requestors may submit without one (client decision); no deadline is set then.
+        $outsider = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'outsider', 'office_or_organization' => 'Partner Org']);
+        $this->submit(['activity_proposal_file' => null, 'proposal_submission_type' => null, 'requested_by_position' => 'Guest', 'venue' => 'Covered Court'], $outsider)
+            ->assertSessionDoesntHaveErrors(['activity_proposal_file', 'proposal_submission_type']);
+        $outsiderRequest = FacilityRequest::where('requested_by_id', $outsider->id)->first();
+        if ($outsiderRequest) {
+            $this->assertNull($outsiderRequest->proposal_deadline);
+            $this->assertSame('not_submitted', $this->proposals()->documentStatus($outsiderRequest));
+        }
     }
 
     public function test_a_draft_cannot_be_verified(): void

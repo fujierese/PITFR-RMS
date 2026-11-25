@@ -198,7 +198,7 @@ class LegacyRequestDataTest extends TestCase
             'department' => 'IT', 'request_context' => 'personal', 'name_of_activity' => 'Changed', 'purpose' => 'Changed', 'expected_participants' => 10,
             'venue' => ['Gymnasium', 'CHIC'],
             'venue_schedules' => [
-                'Gymnasium' => ['start_date' => $this->date, 'end_date' => $this->date, 'start_time' => '09:00', 'end_time' => '11:00', 'reservation_duration' => 'specific_time', 'activity_type' => 'seminar'],
+                'Gymnasium' => ['start_date' => $this->date, 'end_date' => $this->date, 'start_time' => '09:00', 'end_time' => '11:00', 'reservation_duration' => 'specific_time', 'activity_type' => 'institutional'],
                 'CHIC' => ['start_date' => $later, 'end_date' => $later, 'start_time' => '13:00', 'end_time' => '15:00', 'reservation_duration' => 'specific_time'],
             ],
         ])->assertSessionHasNoErrors()->assertRedirect(route('request.show', $request));

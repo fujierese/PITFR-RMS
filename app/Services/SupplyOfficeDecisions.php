@@ -154,10 +154,11 @@ class SupplyOfficeDecisions
         $ranges = $request->getVenueScheduleRanges($replaceVenue);
         $taken = array_map(fn ($n) => mb_strtolower(trim($n)), $names);
         $participants = (int) $request->participantsForVenue($replaceVenue) ?: (int) $request->expected_participants;
-        $urgentIds = $this->openConflicts($request)->flatMap(fn (ReservationConflict $c) => [$c->urgent_request_id, $c->affected_request_id])->unique()->all();
+        $knownActivity = $request->getVenueSchedule($replaceVenue)['activity_type'] ?? null;
+        $knownActivity = isset(VenueRules::ACTIVITY_TYPES[$knownActivity ?? '']) ? $knownActivity : null;
 
         return Venue::query()->where('is_active', true)->orderBy('name')->get()
-            ->filter(function (Venue $venue) use ($taken, $participants, $ranges, $request, $urgentIds): bool {
+            ->filter(function (Venue $venue) use ($taken, $participants, $ranges, $request, $knownActivity): bool {
                 if (in_array(mb_strtolower(trim($venue->name)), $taken, true)) {
                     return false;
                 }
@@ -167,8 +168,8 @@ class SupplyOfficeDecisions
                 if (VenueRules::closedVenuesFor($request->requester, [$venue->name]) !== []) {
                     return false;
                 }
-                if (VenueRules::requiresActivityType($venue->name)) {
-                    return false; // needs the requestor's activity type; not assigned administratively
+                if (VenueRules::requiresActivityType($venue->name) && $knownActivity === null) {
+                    return false; // needs an activity type the request does not have
                 }
                 foreach ($ranges as $range) {
                     if ($this->availability->checkVenueTimeRangeForReview($venue->name, $range['start'], $range['end'], $request->id) !== null) {
