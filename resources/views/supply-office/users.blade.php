@@ -13,23 +13,15 @@
         </a>
     </div>
 
-    <form method="GET" action="{{ route('admin.users') }}" class="mb-6 flex flex-col gap-3 sm:flex-row">
-        <input type="search" name="search" value="{{ old('search', $searchQuery ?? '') }}" placeholder="Search name, email, role, college, department, or office" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
-        <select name="account_type" aria-label="Filter users by account type" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100">
-            <option value="">All account types</option>
-            <option value="student" @selected(($accountTypeFilter ?? '') === 'student')>Student</option>
-            <option value="faculty" @selected(($accountTypeFilter ?? '') === 'faculty')>Faculty</option>
-            <option value="staff" @selected(($accountTypeFilter ?? '') === 'staff')>Staff</option>
-            <option value="outsider" @selected(($accountTypeFilter ?? '') === 'outsider')>Outsider</option>
-            <option value="igp" @selected(($accountTypeFilter ?? '') === 'igp')>IGP</option>
-            <option value="custodian_venue" @selected(($accountTypeFilter ?? '') === 'custodian_venue')>Venue Custodian</option>
-            <option value="custodian_equipment" @selected(($accountTypeFilter ?? '') === 'custodian_equipment')>Equipment Custodian</option>
-        </select>
-        <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Search</button>
-        @if(!empty($searchQuery) || !empty($accountTypeFilter))
-            <a href="{{ route('admin.users') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Clear</a>
-        @endif
-    </form>
+    <x-search-filter-bar
+        class="mb-6"
+        :action="route('admin.users')"
+        :search="old('search', $searchQuery ?? '')"
+        placeholder="Search name, email, role, college, department, or office"
+        :filters="[
+            ['type' => 'select', 'name' => 'account_type', 'label' => 'Account type', 'value' => $accountTypeFilter ?? '', 'options' => ['' => 'All account types', 'student' => 'Student', 'faculty' => 'Faculty', 'staff' => 'Staff', 'outsider' => 'Outsider', 'igp' => 'IGP', 'custodian_venue' => 'Venue Custodian', 'custodian_equipment' => 'Equipment Custodian']],
+        ]"
+    />
 
     @if($showAddUser)
         <div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/65 p-3 backdrop-blur-sm sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="create-user-title" data-create-user-modal>

@@ -29,48 +29,18 @@
             </div>
 
             <!-- Filters -->
-            <form method="GET" class="mb-6 bg-gray-50 p-4 rounded-lg">
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
-                        <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Action, detail, or user..." class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <label for="audit-user-filter" class="block text-sm font-medium text-gray-700 mb-1">User</label>
-                        <select id="audit-user-filter" name="user_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">All Users</option>
-                            @foreach($users as $filterUser)
-                                <option value="{{ $filterUser->id }}" @selected((string) ($filters['user_id'] ?? '') === (string) $filterUser->id)>{{ $filterUser->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label for="audit-action-filter" class="block text-sm font-medium text-gray-700 mb-1">Action</label>
-                        <select id="audit-action-filter" name="action" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">All Actions</option>
-                            @foreach($actions as $action)
-                                <option value="{{ $action }}" @selected(($filters['action'] ?? '') === $action)>{{ ucfirst(str_replace('_', ' ', $action)) }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label for="audit-date-from" class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
-                        <input id="audit-date-from" type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <label for="audit-date-to" class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
-                        <input id="audit-date-to" type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                </div>
-                <div class="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <button type="submit" class="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 sm:w-auto">
-                        Apply Filters
-                    </button>
-                    <a href="{{ route('supply-office.audit-logs') }}" class="flex w-full items-center justify-center rounded-md bg-gray-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-600 sm:w-auto">
-                        Clear Filters
-                    </a>
-                </div>
-            </form>
+            <x-search-filter-bar
+                class="mb-6"
+                :action="url()->current()"
+                :search="$filters['search'] ?? ''"
+                placeholder="Action, detail, or user..."
+                :filters="[
+                    ['type' => 'select', 'name' => 'user_id', 'label' => 'User', 'value' => (string) ($filters['user_id'] ?? ''), 'options' => ['' => 'All Users'] + collect($users)->mapWithKeys(fn ($u) => [(string) $u->id => $u->name])->all()],
+                    ['type' => 'select', 'name' => 'action', 'label' => 'Action', 'value' => $filters['action'] ?? '', 'options' => ['' => 'All Actions'] + collect($actions)->mapWithKeys(fn ($a) => [$a => ucfirst(str_replace('_', ' ', $a))])->all()],
+                    ['type' => 'date', 'name' => 'date_from', 'label' => 'Date from', 'value' => $filters['date_from'] ?? ''],
+                    ['type' => 'date', 'name' => 'date_to', 'label' => 'Date to', 'value' => $filters['date_to'] ?? ''],
+                ]"
+            />
 
             <!-- Audit Logs Table -->
             <div class="mb-3 flex flex-wrap items-center justify-between gap-2">

@@ -10,48 +10,19 @@
         <p class="mt-2 max-w-3xl text-sm text-slate-300">Completed reservations appear here after they end and any borrowed equipment is returned.</p>
     </header>
 
-    <form method="GET" action="{{ route('history.index') }}" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <div class="sm:col-span-2 lg:col-span-2">
-                <label class="sr-only" for="history-search">Search past reservations</label>
-                <input id="history-search" name="search" value="{{ request('search') }}" type="search" placeholder="Search control number, activity, or venue" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100">
-            </div>
-            <div>
-                <label class="sr-only" for="history-year">Filter by year</label>
-                <select id="history-year" name="year" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-700 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100">
-                    <option value="">All years</option>
-                    @foreach($years as $year)
-                        <option value="{{ $year }}" @selected((string) request('year') === (string) $year)>{{ $year }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div>
-                <label class="sr-only" for="history-venue">Filter by venue</label>
-                <select id="history-venue" name="venue" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-700 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100">
-                    <option value="">All venues</option>
-                    @foreach($venues as $venue)
-                        <option value="{{ $venue }}" @selected(mb_strtolower((string) request('venue')) === mb_strtolower($venue))>{{ $venue }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div>
-                <label class="sr-only" for="history-sort">Sort reservations</label>
-                <select id="history-sort" name="sort" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-700 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100">
-                    <option value="newest" @selected(request('sort', 'newest') !== 'oldest')>Newest first</option>
-                    <option value="oldest" @selected(request('sort') === 'oldest')>Oldest first</option>
-                </select>
-            </div>
-        </div>
-        <div class="mt-3 flex flex-wrap items-center gap-3">
-            <button class="rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2" type="submit">Apply filters</button>
-            @if(request()->hasAny(['search', 'year', 'venue', 'sort']))
-                <a class="text-sm font-semibold text-slate-600 underline decoration-slate-300 underline-offset-4 hover:text-slate-900" href="{{ route('history.index') }}">Clear filters</a>
-            @endif
-            <p class="ml-auto text-sm text-slate-500" aria-live="polite">
-                {{ $reservations->total() }} {{ \Illuminate\Support\Str::plural('reservation', $reservations->total()) }} found
-            </p>
-        </div>
-    </form>
+    <x-search-filter-bar
+        :action="route('history.index')"
+        :search="(string) request('search')"
+        placeholder="Search control number, activity, or venue"
+        :filters="[
+            ['type' => 'select', 'name' => 'year', 'label' => 'Year', 'value' => (string) request('year'), 'options' => ['' => 'All years'] + collect($years)->mapWithKeys(fn ($y) => [$y => $y])->all()],
+            ['type' => 'select', 'name' => 'venue', 'label' => 'Venue', 'value' => (string) request('venue'), 'options' => ['' => 'All venues'] + collect($venues)->mapWithKeys(fn ($v) => [$v => $v])->all()],
+            ['type' => 'select', 'name' => 'sort', 'label' => 'Sort', 'value' => request('sort', 'newest'), 'default' => 'newest', 'options' => ['newest' => 'Newest first', 'oldest' => 'Oldest first']],
+        ]"
+    />
+    <p class="-mt-2 text-right text-sm text-slate-500" aria-live="polite">
+        {{ $reservations->total() }} {{ \Illuminate\Support\Str::plural('reservation', $reservations->total()) }} found
+    </p>
 
     <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div class="divide-y divide-slate-100">

@@ -5,11 +5,7 @@
 <div class="mx-auto max-w-7xl space-y-6">
     <x-page-header eyebrow="IGP" title="Outsider Reservation Inquiries" description="Review new inquiries, forward them to the venue custodian, and coordinate requirements after the Supply Office approves. The Supply Office makes every approval decision; payment is handled outside PITFR." accent="emerald" />
 
-    <form method="GET" action="{{ route('igp.index') }}" class="flex flex-col gap-2 sm:flex-row" role="search">
-        <label for="igp-search" class="sr-only">Search inquiries</label>
-        <input id="igp-search" type="search" name="search" value="{{ $search ?? '' }}" maxlength="200" placeholder="Search control number, activity, client, organization, venue or date" class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100">
-        <button type="submit" class="shrink-0 rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Search</button>
-    </form>
+    <x-search-filter-bar :action="route('igp.index')" :search="$search ?? ''" placeholder="Search control number, activity, client, organization, venue or date" />
     @if(($search ?? '') !== '')
         <p class="text-sm text-slate-600" aria-live="polite">Showing inquiries matching “{{ $search }}”. <a href="{{ route('igp.index') }}" class="font-semibold text-emerald-700 hover:underline">Show all</a></p>
     @endif

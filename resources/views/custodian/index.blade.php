@@ -33,53 +33,20 @@
 </section>
 
 <div class="rounded-3xl bg-white shadow-xl ring-1 ring-slate-200/50 overflow-hidden">
-    <form method="GET" action="{{ route('custodian.index') }}" class="mt-6 rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm sm:p-5 md:mt-8 mx-6 mb-6">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div class="flex min-w-0 flex-1 gap-3">
-                <label class="min-w-0 flex-1">
-                <span class="sr-only">Search requests</span>
-                <input type="search" name="search" value="{{ $search }}" placeholder="Search requests" class="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                </label>
-                <button type="submit" class="inline-flex shrink-0 items-center justify-center rounded-full bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">Search</button>
-            </div>
-            <div class="flex flex-wrap items-center gap-3">
-                <details class="relative" {{ ($venueFilter || $dateFrom || $dateTo || $sort !== 'oldest') ? 'open' : '' }}>
-                    <summary class="cursor-pointer list-none rounded-full border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Advanced Filters</summary>
-                    <div class="absolute right-0 z-10 mt-3 w-[min(720px,calc(100vw-2rem))] rounded-[24px] border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
-                        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                            <div>
-                                <label for="custodian-venue" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Venue</label>
-                                <select id="custodian-venue" name="venue" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                                    <option value="">All</option>
-                                    @foreach($requestVenueOptions as $venueOption)
-                                        <option value="{{ $venueOption }}" @selected($venueFilter === $venueOption)>{{ $venueOption }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div>
-                                <label for="custodian-sort" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Sort</label>
-                                <select id="custodian-sort" name="sort" class="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Cpath d=%22M5 7.5l5 5 5-5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                                    <option value="oldest" @selected($sort === 'oldest')>Earliest reservation first</option>
-                                    <option value="latest" @selected($sort === 'latest')>Latest reservation first</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="custodian-date-from" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Date from</label>
-                                <input id="custodian-date-from" type="date" name="date_from" value="{{ $dateFrom }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Crect x=%222%22 y=%223%22 width=%2216%22 height=%2214%22 rx=%222%22/%3E%3Cpath d=%22M2 7h16M6 2v4M14 2v4%22 stroke-linecap=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                            </div>
-                            <div>
-                                <label for="custodian-date-to" class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Date to</label>
-                                <input id="custodian-date-to" type="date" name="date_to" value="{{ $dateTo }}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22 stroke=%22%2364758b%22 stroke-width=%221.5%22%3E%3Crect x=%222%22 y=%223%22 width=%2216%22 height=%2214%22 rx=%222%22/%3E%3Cpath d=%22M2 7h16M6 2v4M14 2v4%22 stroke-linecap=%22round%22/%3E%3C/svg%3E')] bg-[length:16px_16px] bg-[position:right_0.9rem_center] bg-no-repeat px-4 py-3 pr-10 text-sm text-slate-700 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                            </div>
-                        </div>
-                        <button type="submit" class="mt-4 inline-flex items-center justify-center rounded-full bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">Apply Filters</button>
-                    </div>
-                </details>
-                <a href="{{ route('custodian.index', ['filter' => $filter]) }}" class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">Clear</a>
-            </div>
-        </div>
-        <input type="hidden" name="filter" value="{{ $filter }}">
-    </form>
+    <x-search-filter-bar
+        class="mt-6 mx-6 mb-6"
+        :action="route('custodian.index')"
+        :search="$search"
+        placeholder="Search requests"
+        :hidden="['filter' => $filter]"
+        :filters="[
+            ['type' => 'select', 'name' => 'venue', 'label' => 'Venue', 'value' => $venueFilter, 'options' => ['' => 'All'] + collect($requestVenueOptions)->mapWithKeys(fn ($v) => [$v => $v])->all()],
+            ['type' => 'select', 'name' => 'sort', 'label' => 'Sort', 'value' => $sort, 'default' => 'oldest', 'options' => ['oldest' => 'Earliest reservation first', 'latest' => 'Latest reservation first']],
+            ['type' => 'date', 'name' => 'date_from', 'label' => 'Date from', 'value' => $dateFrom],
+            ['type' => 'date', 'name' => 'date_to', 'label' => 'Date to', 'value' => $dateTo],
+        ]"
+        :clear-url="route('custodian.index', ['filter' => $filter])"
+    />
 
     <div class="overflow-x-auto">
         <table class="min-w-[1050px] w-full text-left text-sm text-slate-600">

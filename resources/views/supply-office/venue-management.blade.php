@@ -17,10 +17,7 @@
                 <h2 class="text-xl font-semibold text-slate-900">Venues</h2>
                 <p class="mt-1 text-sm text-slate-500">Manage venue details and custodial assignments.</p>
             </div>
-            <form method="GET" action="{{ route('supply-office.venues.index') }}" class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <input type="search" name="search" value="{{ $search }}" placeholder="Search venues or custodians" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm sm:w-56">
-                <button type="submit" class="w-full rounded-xl bg-slate-700 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto">Search</button>
-            </form>
+            <x-search-filter-bar class="w-full" :action="route('supply-office.venues.index')" :search="$search" placeholder="Search venues or custodians" />
         </div>
 
         <form method="POST" action="{{ route('supply-office.venues.store') }}" class="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4">

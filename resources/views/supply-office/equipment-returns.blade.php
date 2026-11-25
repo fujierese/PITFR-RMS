@@ -15,20 +15,19 @@
     </div>
 
     <div class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/50">
-        <form method="GET" action="{{ route('supply-office.requests.returns') }}" class="mb-6 grid gap-3 md:grid-cols-4">
-            <input type="search" name="search" value="{{ $searchQuery }}" placeholder="Search request number, activity, organization, venue, equipment..." class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <input type="text" name="department" value="{{ $departmentFilter }}" placeholder="Department" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <input type="text" name="venue" value="{{ $venueFilter }}" placeholder="Venue" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <select name="priority" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                <option value="">All priorities</option>
-                <option value="regular" {{ $priorityFilter === 'regular' ? 'selected' : '' }}>Regular</option>
-                <option value="institutional" {{ $priorityFilter === 'institutional' ? 'selected' : '' }}>Institutional</option>
-            </select>
-            <input type="date" name="date_from" value="{{ $dateFrom }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <input type="date" name="date_to" value="{{ $dateTo }}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-            <button type="submit" class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Advanced Filters</button>
-            <a href="{{ route('supply-office.requests.returns') }}" class="rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-100">Clear</a>
-        </form>
+        <x-search-filter-bar
+            class="mb-6"
+            :action="route('supply-office.requests.returns')"
+            :search="$searchQuery"
+            placeholder="Search request number, activity, organization, venue, equipment..."
+            :filters="[
+                ['type' => 'text', 'name' => 'department', 'label' => 'Department', 'value' => $departmentFilter, 'placeholder' => 'Department'],
+                ['type' => 'text', 'name' => 'venue', 'label' => 'Venue', 'value' => $venueFilter, 'placeholder' => 'Venue'],
+                ['type' => 'select', 'name' => 'priority', 'label' => 'Priority', 'value' => $priorityFilter ?? '', 'options' => ['' => 'All priorities', 'regular' => 'Regular', 'institutional' => 'Institutional']],
+                ['type' => 'date', 'name' => 'date_from', 'label' => 'Date from', 'value' => $dateFrom],
+                ['type' => 'date', 'name' => 'date_to', 'label' => 'Date to', 'value' => $dateTo],
+            ]"
+        />
 
         <div class="grid gap-4 lg:grid-cols-2">
             @php($sections = [

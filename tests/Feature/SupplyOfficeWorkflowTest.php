@@ -906,10 +906,9 @@ class SupplyOfficeWorkflowTest extends TestCase
         $this->actingAs($admin)
             ->get(route('supply-office.index'))
             ->assertOk()
-            ->assertSee('id="advanced-filter-toggle"', false)
-            ->assertSee('aria-controls="advanced-request-filters"', false)
-            ->assertSee('id="advanced-request-filters"', false)
-            ->assertSee(' hidden ', false)
+            ->assertSee('data-sfb-toggle', false)
+            ->assertSee('aria-expanded="false"', false)
+            ->assertSee('data-sfb-panel', false)
             ->assertSee('name="department"', false)
             ->assertSee('name="venue"', false)
             ->assertSee('name="date_from"', false)
@@ -926,7 +925,7 @@ class SupplyOfficeWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee($matchingRequest->control_number)
             ->assertDontSee('TEST-SUPPLY-FILTER-NO-MATCH')
-        ->assertSee('id="advanced-request-filters"', false)
+            ->assertSee('data-sfb-panel', false)
             ->assertSee('aria-expanded="true"', false);
     }
 
