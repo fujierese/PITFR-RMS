@@ -23,6 +23,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Notification emails go out right after the response (see App\Queue\AfterResponseQueue).
+        \Illuminate\Support\Facades\Queue::extend('after_response', fn () => new \App\Queue\AfterResponseConnector());
+
         // One password policy for registration, resets and every settings page.
         Password::defaults(fn () => Password::min(12)->letters()->mixedCase()->numbers()->symbols());
 

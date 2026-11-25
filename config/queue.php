@@ -77,6 +77,12 @@ return [
             'driver' => 'deferred',
         ],
 
+        // Notification emails: sent right after the response; failures retry on 'fallback'.
+        'after_response' => [
+            'driver' => 'after_response',
+            'fallback' => env('MAIL_RETRY_QUEUE_CONNECTION', 'database'),
+        ],
+
         'background' => [
             'driver' => 'background',
         ],

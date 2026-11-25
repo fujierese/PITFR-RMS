@@ -7,9 +7,9 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class PasswordChangedNotification extends Notification
+class PasswordChangedNotification extends Notification implements \Illuminate\Contracts\Queue\ShouldQueueAfterCommit
 {
-    use Queueable;
+    use Queueable, \App\Notifications\Concerns\QueuesMailAfterCommit;
     use UsesNotificationPreferences;
 
     public function via(object $notifiable): array

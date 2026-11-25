@@ -38,7 +38,7 @@ Schedule::call(fn () => \App\Support\MailQueue::recordHeartbeat())
     ->name('queue-worker-heartbeat');
 Schedule::command('queue:work', [
     '--queue' => 'default',
-    '--sleep' => 3,
+    '--sleep' => 1, // only retries of failed emails use the queue now
     '--tries' => 3,
     '--max-time' => 55,
 ])->everyMinute()->withoutOverlapping(2)->runInBackground()->name('queue-worker');

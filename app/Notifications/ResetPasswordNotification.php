@@ -6,9 +6,9 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ResetPasswordNotification extends Notification
+class ResetPasswordNotification extends Notification implements \Illuminate\Contracts\Queue\ShouldQueueAfterCommit
 {
-    use Queueable;
+    use Queueable, \App\Notifications\Concerns\QueuesMailAfterCommit;
 
     public function __construct(#[\SensitiveParameter] public string $token)
     {

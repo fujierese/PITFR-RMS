@@ -18,10 +18,10 @@ trait QueuesMailAfterCommit
     /** Retries for a mail send that fails (SMTP timeouts, provider throttling). */
     public int $tries = 3;
 
-    /** Seconds to wait before each retry. */
+    /** Seconds to wait before each retry (short: the first send already failed). */
     public function backoff(): array
     {
-        return [60, 300];
+        return [10, 30];
     }
 
     public function viaConnections(): array

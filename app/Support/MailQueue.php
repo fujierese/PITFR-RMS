@@ -27,6 +27,13 @@ class MailQueue
 
     public static function connection(): string
     {
+        // Default: send right after the response (seconds, no worker). Set
+        // MAIL_DELIVERY=queue to use the worker queue instead (needs a worker running
+        // with a short sleep).
+        if (config('pitfr.mail_delivery', 'after_response') !== 'queue') {
+            return 'after_response';
+        }
+
         $default = (string) config('queue.default', 'sync');
 
         if ($default === 'sync' || ! self::workerIsRunning() || ! self::queueTablesExist()) {

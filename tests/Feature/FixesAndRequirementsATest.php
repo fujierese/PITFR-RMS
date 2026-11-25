@@ -97,6 +97,10 @@ class FixesAndRequirementsATest extends TestCase
     {
         config(['queue.default' => 'database']);
         $notification = new RequestStatusChanged(\App\Models\FacilityRequest::factory()->create(), 'approved');
+        // Default now: sent right after the response, no worker needed.
+        $this->assertSame('after_response', $notification->viaConnections()['mail']);
+        // Optional worker mode (MAIL_DELIVERY=queue) keeps the earlier behaviour.
+        config(['pitfr.mail_delivery' => 'queue']);
 
         Cache::forget(MailQueue::HEARTBEAT_KEY);
         $this->assertSame('sync', $notification->viaConnections()['mail'], 'No worker: send immediately.');
