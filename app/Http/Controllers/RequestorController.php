@@ -1470,21 +1470,8 @@ class RequestorController extends Controller
         }
         // Position must come from the authenticated user account only, not from user input.
         // If a custom profile value is stored, normalize it to a supported request position and keep the custom text as the "Other" detail.
-        $positionOptions = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
         $profilePosition = trim((string) ($user->position ?? ''));
-        $trustedPosition = $profilePosition !== '' && in_array($profilePosition, $positionOptions, true)
-            ? $profilePosition
-            : (
-                $profilePosition !== ''
-                    ? 'Other'
-                    : match ($user->requestor_type) {
-                        'student' => 'Student Organization',
-                        'faculty' => 'Faculty',
-                        'staff' => 'Staff',
-                        'outsider' => 'External Partner',
-                        default => 'Requestor',
-                    }
-            );
+        $trustedPosition = $user->requestPosition();
         $validated['requested_by_position'] = $trustedPosition;
         if ($trustedPosition === 'Other' && $profilePosition !== '') {
             $validated['requested_by_position_other'] = $profilePosition;

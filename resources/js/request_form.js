@@ -1,5 +1,71 @@
 // REQ-05: a file kept from a failed submission counts as uploaded.
-window.pitfrHasFile = window.pitfrHasFile || ((input) => Boolean(input?.files?.length || input?.dataset?.kept === '1'));
+window.pitfrHasFile = window.pitfrHasFile || ((input) => Boolean(input?.files?.length || input?.dataset?.kept === '1'));
+/**
+ * "All required fields are completed": one rule for the checklist and for submit.
+ * It reads only what the requestor can fill in (or what the account must provide),
+ * counts conditional fields only while they are visible and active (per selected
+ * venue: participants, capacity-exception reason, activity type, schedule), and
+ * trims text. The requestor's position comes from the account on the server, so it
+ * is not required here (new accounts may not have one yet).
+ *
+ * @returns {{complete: boolean, missing: HTMLElement|null, message: string}}
+ */
+window.pitfrRequiredFieldsState = window.pitfrRequiredFieldsState || function (form) {
+    const filled = (field) => {
+        if (!field) return false;
+        if (field.type === 'radio' || field.type === 'checkbox') return field.checked;
+        if (field.type === 'file') return Boolean(field.files?.length || field.dataset?.kept === '1');
+        if (field.type === 'number') {
+            const value = String(field.value ?? '').trim();
+            return value !== '' && Number(value) > 0;
+        }
+        return String(field.value ?? '').trim() !== '';
+    };
+    const active = (field) => field && !field.disabled
+        && (field.type === 'hidden' || field.offsetParent !== null || field.getClientRects().length > 0);
+    const result = (missing, message) => ({ complete: !missing, missing: missing || null, message: message || '' });
+
+    const requestorType = form.dataset.requestorType || '';
+    // Values that come from the account: name the profile field instead of failing silently.
+    const profileFields = requestorType === 'outsider'
+        ? [['organization_name', 'Your account has no organization. Add it in Settings.']]
+        : [['college_id', 'Choose your college (or add it in Settings).'], ['department_id', 'Choose your department (or add it in Settings).']];
+    for (const [name, message] of profileFields) {
+        const field = form.querySelector(`[name="${name}"]`);
+        if (field && !filled(field)) return result(field, message);
+    }
+
+    for (const name of ['name_of_activity', 'purpose', 'expected_participants']) {
+        const field = form.querySelector(`[name="${name}"]`);
+        if (field && !filled(field)) return result(field, 'Complete the required fields marked with *.');
+    }
+    const positionSelect = form.querySelector('select[name="requested_by_position"]');
+    const otherPosition = form.querySelector('[name="requested_by_position_other"]');
+    if (positionSelect && active(positionSelect) && !filled(positionSelect)) return result(positionSelect, 'Choose your position.');
+    if (positionSelect?.value === 'Other' && otherPosition && active(otherPosition) && !filled(otherPosition)) return result(otherPosition, 'Describe your position.');
+
+    const selectedCards = Array.from(form.querySelectorAll('[data-venue-option]')).filter((card) => card.querySelector('[name="venue[]"]')?.checked);
+    if (selectedCards.length === 0) return result(form.querySelector('[name="venue[]"]'), 'Choose at least one venue.');
+    for (const card of selectedCards) {
+        const venue = card.dataset.venueName || 'the venue';
+        const group = card.querySelector('[data-venue-schedule]');
+        const scheduleInputs = group ? Array.from(group.querySelectorAll('.venue-schedule-input')) : [];
+        const missingSchedule = scheduleInputs.find((field) => active(field) && !filled(field));
+        if (missingSchedule) return result(missingSchedule, `Complete the reservation schedule for ${venue}.`);
+        if (group && !group.querySelector('input[type="radio"]:checked')) return result(group.querySelector('input[type="radio"]'), `Choose Specific time or Whole day for ${venue}.`);
+        const missingInCard = Array.from(card.querySelectorAll('input[required], select[required], textarea[required]'))
+            .find((field) => field.name !== 'venue[]' && active(field) && !filled(field));
+        if (missingInCard) {
+            const message = missingInCard.matches('[data-capacity-exception-reason]')
+                ? `Give the reason for the capacity exception at ${venue}.`
+                : `Complete the required details for ${venue}.`;
+            return result(missingInCard, message);
+        }
+    }
+
+    return result(null, '');
+};
+
 const initializeReservationDurationToggles = function () {
     let previousDuration = document.querySelector('input[name="reservation_duration"]:checked')?.value || null;
 
@@ -256,28 +322,7 @@ const initializeRequestForm = function () {
         const otherPositionInput = form.querySelector('[name="requested_by_position_other"]');
 
         if (checklistId === 'checklist-required-fields') {
-            const requiredFields = [
-                requestorType === 'outsider' ? form.querySelector('[name="organization_name"]') : form.querySelector('[name="college_id"]'),
-                requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
-                form.querySelector('[name="name_of_activity"]'),
-                form.querySelector('[name="purpose"]'),
-                form.querySelector('[name="expected_participants"]'),
-                form.querySelector('[name="requested_by_position"]'),
-                positionSelect?.value === 'Other' ? otherPositionInput : null,
-            ];
-
-            const missingField = requiredFields.find(function (field) {
-                return !isChecklistFieldComplete(field);
-            }) || null;
-            if (missingField) return missingField;
-
-            const selectedGroup = Array.from(form.querySelectorAll('[data-venue-schedule]')).find(function (group) {
-                return group.closest('[data-venue-option]')?.querySelector('[name="venue[]"]')?.checked;
-            });
-            if (!selectedGroup) return form.querySelector('[name="venue[]"]');
-            return Array.from(selectedGroup.querySelectorAll('.venue-schedule-input')).find(function (field) {
-                return !isChecklistFieldComplete(field);
-            }) || selectedGroup.querySelector('input[type="radio"]:checked');
+            return window.pitfrRequiredFieldsState(form).missing;
         }
 
         if (checklistId === 'checklist-venue-availability') {
@@ -398,7 +443,13 @@ const initializeRequestForm = function () {
             return Array.from(group.querySelectorAll('.venue-schedule-input')).every(isChecklistFieldComplete)
                 && Boolean(group.querySelector('input[type="radio"]:checked'));
         });
-        const allRequiredComplete = requiredFields.every(isChecklistFieldComplete) && schedulesComplete;
+        const requiredState = window.pitfrRequiredFieldsState(form);
+        const allRequiredComplete = requiredState.complete;
+        const requiredHint = document.getElementById('checklist-required-hint');
+        if (requiredHint) {
+            requiredHint.textContent = requiredState.complete ? '' : requiredState.message;
+            requiredHint.classList.toggle('hidden', requiredState.complete || !requiredState.message);
+        }
         const hasEquipmentSelection = form.querySelectorAll('.equipment-row .equipment-checkbox:checked').length > 0;
         const hasAvailableEquipmentSelected = Array.from(form.querySelectorAll('.equipment-row')).filter(function (row) {
             return row.querySelector('.equipment-checkbox')?.checked;

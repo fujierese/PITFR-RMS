@@ -313,6 +313,35 @@ class User extends Authenticatable implements CanResetPassword
         return $this->username;
     }
 
+    /** Request positions the form and the server accept. */
+    public const REQUEST_POSITIONS = ['Student', 'Faculty', 'Staff', 'Instructor', 'Professor', 'Department Chair', 'Coordinator', 'Office Staff', 'External Partner', 'Student Organization', 'Other'];
+
+    /**
+     * The position used on a request: the account's own position, or a default for
+     * the requestor type when the account has none (accounts from the public sign-up
+     * have no position). The request form and the server both use this.
+     */
+    public function requestPosition(): string
+    {
+        $profile = trim((string) ($this->position ?? ''));
+        if ($profile !== '') {
+            return in_array($profile, self::REQUEST_POSITIONS, true) ? $profile : 'Other';
+        }
+
+        return self::defaultPositionFor($this->requestor_type);
+    }
+
+    public static function defaultPositionFor(?string $requestorType): string
+    {
+        return match ($requestorType) {
+            'student' => 'Student Organization',
+            'faculty' => 'Faculty',
+            'staff' => 'Staff',
+            'outsider' => 'External Partner',
+            default => 'Requestor',
+        };
+    }
+
     public function routeNotificationForMail(): string
     {
         return $this->username;

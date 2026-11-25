@@ -429,6 +429,7 @@ class AuthController extends Controller
                 // Outsider rules apply until the claimed category is verified.
                 $instantlyVerified = $usesInstitutionalEmail && $isGoogleRegistration;
                 $user->forceFill([
+                    'position' => $instantlyVerified ? User::defaultPositionFor($claimedType) : null,
                     'requestor_type' => $instantlyVerified ? $claimedType : 'outsider',
                     'claimed_requestor_type' => $claimedType,
                     'verification_status' => $instantlyVerified ? 'verified' : ($storedIdFile ? 'pending' : 'unverified'),

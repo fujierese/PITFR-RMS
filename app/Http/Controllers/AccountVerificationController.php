@@ -84,6 +84,8 @@ class AccountVerificationController extends Controller
                 // The Supply Office may correct the category (e.g. a student ID uploaded as "faculty").
                 $type = $data['requestor_type'] ?? $locked->claimed_requestor_type ?? $locked->requestor_type;
                 $locked->forceFill([
+                    // Verified accounts get a position for their requests (sign-up does not ask for one).
+                    'position' => trim((string) $locked->position) !== '' ? $locked->position : User::defaultPositionFor($type),
                     'requestor_type' => $type,
                     'verification_status' => 'verified',
                     'verification_note' => null,

@@ -353,7 +353,10 @@
                                             <div class="mt-2 hidden" data-capacity-exception-fields>
                                                 <label for="capacity_exception_{{ $loop->index }}" class="text-xs font-semibold text-slate-600">Reason for the exception</label>
                                                 <textarea id="capacity_exception_{{ $loop->index }}" name="capacity_exceptions[{{ $v }}]" rows="2" maxlength="500" data-capacity-exception-reason class="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm text-slate-800" placeholder="e.g. Only part of the group is inside at one time">{{ old('capacity_exceptions', [])[$v] ?? '' }}</textarea>
-                                                <p class="mt-1 text-xs text-amber-700">The Supply Office must approve this exception.</p>
+                                                <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
+                                                    <p class="text-xs text-amber-700">The Supply Office must approve this exception. Set the schedule below.</p>
+                                                    <button type="button" class="text-xs font-semibold text-slate-600 underline" data-capacity-exception-cancel>Cancel exception</button>
+                                                </div>
                                             </div>
                                         </div>
                                         @error('venue_participants.' . $v)<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
@@ -579,8 +582,9 @@
                         </div>
                         <div>
                             <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Position</p>
-                            <input type="text" value="{{ $currentUser?->position ?? 'Position not provided' }}" readonly class="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 cursor-not-allowed">
-                            <input type="hidden" name="requested_by_position" value="{{ $currentUser?->position ?: ($isExternal ? 'External Partner' : '') }}">
+                            <input type="text" value="{{ $currentUser?->position ?: ($currentUser?->requestPosition() ?? 'Position not provided') }}" readonly class="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 cursor-not-allowed">
+                            {{-- Same rule as the server (User::requestPosition): new accounts have no position yet. --}}
+                            <input type="hidden" name="requested_by_position" value="{{ $currentUser?->requestPosition() ?? ($isExternal ? 'External Partner' : '') }}">
                         </div>
                     </div>
                 </section>
@@ -849,6 +853,7 @@
                             <input id="checklist-required-fields" type="checkbox" disabled class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600">
                             <button type="button" data-checklist-target="checklist-required-fields" class="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
                                 All required fields are completed
+                                <span id="checklist-required-hint" class="mt-0.5 block hidden text-xs font-normal text-amber-700" aria-live="polite"></span>
                             </button>
                         </div>
                         <div class="flex items-start gap-3">
@@ -1082,14 +1087,23 @@
                 const count = Number(participantsInput.value || total);
                 const overCapacity = Number.isFinite(capacity) && capacity > 0 && Number.isInteger(count) && count > capacity;
                 const hasReason = (reason?.value || '').trim() !== '';
+                // The exception is open once requested (or when a reason was kept after an error).
+                const exceptionOpen = overCapacity && (card.dataset.exceptionOpen === '1' || hasReason);
 
-                card.classList.toggle('opacity-60', overCapacity && !hasReason);
+                card.classList.toggle('opacity-60', overCapacity && !exceptionOpen);
                 block?.classList.toggle('hidden', !overCapacity);
                 exception?.classList.toggle('hidden', !overCapacity);
+                card.querySelector('[data-capacity-exception-fields]')?.classList.toggle('hidden', !exceptionOpen);
+                card.querySelector('[data-capacity-exception-toggle]')?.classList.toggle('hidden', exceptionOpen);
+                if (reason) reason.required = exceptionOpen && checkbox.checked;
                 if (block && overCapacity) {
                     block.textContent = `Capacity ${capacity} — below the ${count} participants at this venue. Lower the number if your group is split across venues, or choose another venue.`;
                 }
-                const blocked = overCapacity && !hasReason;
+                if (!overCapacity && card.dataset.exceptionOpen === '1') {
+                    delete card.dataset.exceptionOpen; // fits again: no exception needed
+                    if (reason) { reason.value = ''; reason.required = false; }
+                }
+                const blocked = overCapacity && !exceptionOpen;
                 checkbox.disabled = blocked;
                 if (blocked && checkbox.checked) {
                     checkbox.checked = false;
@@ -1106,12 +1120,41 @@
                 update();
             });
             if (participantsInput?.value) participantsInput.dataset.userEdited = '1';
-            card.querySelector('[data-capacity-exception-toggle]')?.addEventListener('click', () => {
-                card.querySelector('[data-capacity-exception-fields]')?.classList.remove('hidden');
-                card.querySelector('[data-capacity-exception-reason]')?.focus();
-            });
+            const checkbox = card.querySelector('input[name="venue[]"]');
             const reason = card.querySelector('[data-capacity-exception-reason]');
-            if (reason?.value.trim()) card.querySelector('[data-capacity-exception-fields]')?.classList.remove('hidden');
+            const clearException = () => {
+                delete card.dataset.exceptionOpen;
+                if (reason) { reason.value = ''; reason.required = false; }
+                card.querySelectorAll('[data-venue-schedule] .venue-schedule-input').forEach((input) => { input.value = ''; });
+            };
+            // Requesting the exception selects the venue: its reason and schedule appear in this card,
+            // and the same availability check as any selected venue runs (on the change event).
+            card.querySelector('[data-capacity-exception-toggle]')?.addEventListener('click', () => {
+                card.dataset.exceptionOpen = '1';
+                update();
+                if (checkbox && !checkbox.checked) {
+                    checkbox.disabled = false;
+                    checkbox.checked = true;
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                update();
+                reason?.focus();
+            });
+            card.querySelector('[data-capacity-exception-cancel]')?.addEventListener('click', () => {
+                clearException();
+                if (checkbox?.checked) {
+                    checkbox.checked = false;
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                update();
+            });
+            checkbox?.addEventListener('change', () => {
+                if (!checkbox.checked && card.dataset.exceptionOpen === '1') {
+                    clearException();
+                    update();
+                }
+            });
+            if (reason?.value.trim()) card.dataset.exceptionOpen = '1';
             reason?.addEventListener('input', update);
         });
         update();
@@ -1852,24 +1895,9 @@
             const otherPositionInput = form.querySelector('[name="requested_by_position_other"]');
 
             if (checklistId === 'checklist-required-fields') {
-                const requiredFields = [
-                    requestorType === 'outsider' ? form.querySelector('[name="organization_name"]') : form.querySelector('[name="college_id"]'),
-                    requestorType === 'outsider' ? null : form.querySelector('[name="department_id"]'),
-                    form.querySelector('[name="name_of_activity"]'),
-                    form.querySelector('[name="purpose"]'),
-                    form.querySelector('[name="expected_participants"]'),
-                    form.querySelector('[name="requested_by_position"]'),
-                    positionSelect?.value === 'Other' ? otherPositionInput : null,
-                ];
-
-                const missingField = requiredFields.find((field) => !isChecklistFieldComplete(field));
-                if (missingField) return missingField;
-                const selectedGroup = [...venueScheduleGroups].find((group) => {
-                    return group.closest('[data-venue-option]')?.querySelector('input[name="venue[]"]')?.checked;
-                });
-                if (!selectedGroup) return form.querySelector('[name="venue[]"]');
-                return [...selectedGroup.querySelectorAll('.venue-schedule-input')].find((field) => !field.value)
-                    || selectedGroup.querySelector('input[type="radio"]:checked');
+                return window.pitfrRequiredFieldsState
+                    ? window.pitfrRequiredFieldsState(form).missing
+                    : form.querySelector('[name="name_of_activity"]');
             }
 
             if (checklistId === 'checklist-venue-availability') {
@@ -1948,7 +1976,10 @@
                 return [...group.querySelectorAll('.venue-schedule-input')].every(isChecklistFieldComplete)
                     && Boolean(group.querySelector('input[type="radio"]:checked'));
             });
-            const allRequiredComplete = requiredFields.every(isChecklistFieldComplete) && schedulesComplete;
+            // One rule with request_form.js (window.pitfrRequiredFieldsState).
+            const allRequiredComplete = window.pitfrRequiredFieldsState
+                ? window.pitfrRequiredFieldsState(form).complete
+                : requiredFields.every(isChecklistFieldComplete) && schedulesComplete;
             const selectedVenue = form.querySelector('[name="venue[]"]:checked');
             const hasEquipmentSelection = form.querySelectorAll('.equipment-row .equipment-checkbox:checked').length > 0;
             const hasAvailableEquipmentSelected = [...form.querySelectorAll('.equipment-row')].filter((row) => {
