@@ -638,6 +638,19 @@ class CalendarController extends Controller
                 }
 
                 $availability->lockResourcesForFacilityRequests($lockedRequest);
+                if ($isVenueCustodianReview) {
+                    // Follow-up fixes: the custodian's own venue only; waiting requests are a warning.
+                    $result = $availability->checkVenueForCustodian($lockedRequest, $venueName);
+
+                    return response()->json([
+                        'available' => $result['conflict'] === null,
+                        'conflict' => $result['conflict'] !== null,
+                        'warning' => $result['warning'],
+                        'message' => $result['conflict'] !== null
+                            ? 'Conflict: ' . $result['conflict']
+                            : 'No conflict found.' . ($result['warning'] ? ' ' . $result['warning'] : ''),
+                    ]);
+                }
                 $conflict = $availability->checkFacilityRequestForReview($lockedRequest);
 
                 return response()->json([

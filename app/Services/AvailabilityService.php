@@ -255,6 +255,63 @@ class AvailabilityService
         return null;
     }
 
+    /**
+     * Follow-up fixes: the venue custodian's check for ONE of their venues. Approved
+     * bookings, maintenance/closures and holidays overlapping the requested schedule
+     * (partial and multi-day overlaps) are conflicts; a request still waiting for review
+     * is only a warning. The request itself is ignored.
+     *
+     * @return array{conflict: ?string, warning: ?string}
+     */
+    public function checkVenueForCustodian(FacilityRequest $facilityRequest, string $venueName): array
+    {
+        $canonicalVenueName = collect($facilityRequest->getVenueNames())
+            ->first(fn (string $name): bool => mb_strtolower(trim($name)) === mb_strtolower(trim($venueName)));
+        if ($canonicalVenueName === null) {
+            return ['conflict' => 'The selected venue is not part of this request.', 'warning' => null];
+        }
+        $venue = \App\Models\Venue::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($canonicalVenueName)])->first();
+        if ($venue && ! $venue->is_active) {
+            return ['conflict' => $canonicalVenueName . ' is no longer active.', 'warning' => null];
+        }
+
+        $ranges = $facilityRequest->getVenueScheduleRanges($canonicalVenueName);
+        foreach ($ranges as $range) {
+            $availability = $this->checkVenueAvailability($canonicalVenueName, $range['start'], $range['end'], $facilityRequest->id);
+            if (! $availability['available']) {
+                $when = $range['start']->format('M j, Y g:i A') . '–' . $range['end']->format($range['start']->isSameDay($range['end']) ? 'g:i A' : 'M j, Y g:i A');
+
+                return ['conflict' => trim(($availability['message'] ?? 'The venue is not available.')) . ' (' . $when . ')', 'warning' => null];
+            }
+        }
+
+        // Waiting requests only warn, but the warning names them (reference and schedule).
+        $tentative = [];
+        FacilityRequest::query()
+            ->where('status', 'pending')
+            ->whereKeyNot($facilityRequest->id)
+            ->where(fn ($query) => $query->matchesVenue($canonicalVenueName))
+            ->with(['requestVenues', 'reservationSchedule'])
+            ->get()
+            ->each(function (FacilityRequest $other) use ($canonicalVenueName, $ranges, &$tentative): void {
+                foreach ($other->getVenueScheduleRanges($canonicalVenueName) as $otherRange) {
+                    foreach ($ranges as $range) {
+                        if ($otherRange['start']->lt($range['end']) && $otherRange['end']->gt($range['start'])) {
+                            $tentative[] = ($other->control_number ?: ('#' . $other->id)) . ' ('
+                                . $otherRange['start']->format('M j, Y g:i A') . '–'
+                                . $otherRange['end']->format($otherRange['start']->isSameDay($otherRange['end']) ? 'g:i A' : 'M j, Y g:i A') . ')';
+
+                            return;
+                        }
+                    }
+                }
+            });
+
+        return ['conflict' => null, 'warning' => $tentative !== []
+            ? 'Another request is waiting for review for this time: ' . implode(', ', array_slice($tentative, 0, 3)) . (count($tentative) > 3 ? ' and ' . (count($tentative) - 3) . ' more' : '') . '. It does not block confirmation.'
+            : null];
+    }
+
     public function checkVenueScheduleForReview(FacilityRequest $facilityRequest, string $venueName): ?string
     {
         $canonicalVenueName = collect($facilityRequest->getVenueNames())

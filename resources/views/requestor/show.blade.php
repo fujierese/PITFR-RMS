@@ -1002,10 +1002,13 @@
         @endif
 
         @if(auth()->check() && auth()->user()->isCustodian())
-            @if(auth()->user()->isCustodianVenue() && $request->status !== 'cancelled')
-                @php
-                    $availabilityGroup = 'custodian-venue-' . $request->id;
-                @endphp
+            @php
+                $availabilityGroup = 'custodian-venue-' . $request->id;
+                // Follow-up fixes: one card for the venue check (intro merged into it).
+                $venueCheckCard = auth()->user()->isCustodianVenue() && $request->status !== 'cancelled' && ! $pendingRevision
+                    && ! $hasEndorsed && ($canConfirmVenueAvailability || $canVenueCustodianReschedule);
+            @endphp
+            @if(auth()->user()->isCustodianVenue() && $request->status !== 'cancelled' && ! $venueCheckCard)
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3">
                     <div>
                         <p class="text-sm text-slate-600">Check each venue's schedule, then confirm it or suggest a new schedule.</p>
@@ -1068,6 +1071,37 @@
                                 Your Review Is Needed
                             </span>
                         </div>
+                        @if($venueCheckCard ?? false)
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4" data-venue-check-card>
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Requested venue and schedule</p>
+                                <ul class="mt-2 space-y-1 text-sm text-slate-800">
+                                    @foreach($request->getVenueScheduleSummaries() as $summary)
+                                        @if($assignedVenueNames->contains(mb_strtolower(trim($summary['venue']))))
+                                            <li><span class="font-semibold">{{ $summary['venue'] }}</span> · {{ $summary['label'] }}</li>
+                                        @endif
+                                    @endforeach
+                                </ul>
+                                <div class="mt-3 flex flex-wrap gap-2">
+                                    @foreach($request->getVenueNames() as $venueName)
+                                        @if($assignedVenueNames->contains(mb_strtolower(trim($venueName))))
+                                            @php $venueSchedule = $request->getVenueSchedule($venueName); @endphp
+                                            <x-venue-calendar-button
+                                                :venue="$venueName"
+                                                :date="$venueSchedule['start_date'] ?? now()->toDateString()"
+                                                :end-date="$venueSchedule['end_date'] ?? now()->toDateString()"
+                                                :start-time="$venueSchedule['start_time'] ?? null"
+                                                :end-time="$venueSchedule['end_time'] ?? null"
+                                                :facility-request="$request"
+                                                :availability-check-url="route('calendar.request-availability-check', $request)"
+                                                :availability-group="$availabilityGroup"
+                                                label="Check venue calendar"
+                                            />
+                                        @endif
+                                    @endforeach
+                                </div>
+                                <p data-availability-summary="{{ $availabilityGroup }}" class="mt-2 hidden text-xs font-medium text-slate-600" aria-live="polite"></p>
+                            </div>
+                        @endif
 
                         <div class="flex flex-col gap-3 sm:flex-row">
                             @if($canConfirmVenueAvailability || $canApproveAssignedEquipment)
@@ -1123,6 +1157,15 @@
                                         document.querySelectorAll('[aria-controls="equipment-decline-form"]').forEach((b) => b.setAttribute('aria-expanded', open ? 'true' : 'false'));
                                         if (open) form.querySelector('select')?.focus();
                                     });
+                                });
+                            </script>
+                        @endif
+
+                        @if($canVenueCustodianReschedule && $canConfirmVenueAvailability)
+                            <button type="button" data-availability-confirm="{{ $availabilityGroup }}" data-suggest-instead class="hidden self-start text-xs font-semibold text-amber-800 underline">Suggest a different schedule instead</button>
+                            <script>
+                                document.querySelector('[data-suggest-instead]')?.addEventListener('click', () => {
+                                    document.getElementById('open-venue-reschedule-form')?.click();
                                 });
                             </script>
                         @endif
@@ -1226,7 +1269,20 @@
                                     @if(auth()->user()->isCustodianEquipment() && $request->supply_office_review_status !== 'confirmed' && $request->status === 'pending')
                                         Waiting for venue availability confirmation and Supply Office confirmation. Equipment approval is not open yet.
                                     @else
-                                        Your custody decision has already been recorded.
+                                        @php
+                                            $myDecision = $request->histories()->where('user_id', auth()->user()->id)
+                                                ->whereIn('action', ['custodian_endorsed', 'venue_availability_unavailable', 'equipment_declined'])->latest('occurred_at')->first();
+                                            $mySuggestion = auth()->user()->isCustodianVenue()
+                                                ? $request->revisionHistories()->where('revised_by_id', auth()->user()->id)->latest()->first()
+                                                : null;
+                                        @endphp
+                                        @if($mySuggestion && (! $myDecision || $mySuggestion->created_at->greaterThan(\Carbon\Carbon::parse($myDecision->occurred_at))))
+                                            New schedule suggested by {{ auth()->user()->name }} on {{ $mySuggestion->created_at->format('M j, Y g:i A') }}.
+                                        @elseif($myDecision)
+                                            {{ $myDecision->action === 'custodian_endorsed' ? (auth()->user()->isCustodianVenue() ? 'Schedule confirmed' : 'Equipment endorsed') : 'Decision recorded' }} by {{ auth()->user()->name }} on {{ \Carbon\Carbon::parse($myDecision->occurred_at)->format('M j, Y g:i A') }}.
+                                        @else
+                                            Your custody decision has already been recorded.
+                                        @endif
                                     @endif
                                 </p>
                             </div>

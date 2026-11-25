@@ -296,9 +296,24 @@ class RequestActionController extends Controller
                 return redirect()->back()->withErrors($inactiveMessage);
             }
 
-            $conflictMessage = $isVenueConfirmation
-                ? $this->availabilityService->checkFacilityRequestForReview($facilityRequest)
-                : $this->checkHybridResources($facilityRequest);
+            // Follow-up fixes: the venue custodian confirms their own venue(s); approved
+            // bookings and closures block, a request still waiting for review does not.
+            // Re-checked here, under lock, so a conflict that appeared meanwhile is caught.
+            $conflictMessage = null;
+            if ($isVenueConfirmation) {
+                foreach ($facilityRequest->getVenueNames() as $venueName) {
+                    if (! $user->venues()->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($venueName))])->exists()) {
+                        continue;
+                    }
+                    $check = $this->availabilityService->checkVenueForCustodian($facilityRequest, $venueName);
+                    if ($check['conflict'] !== null) {
+                        $conflictMessage = 'A conflict appeared since you checked: ' . $check['conflict'] . ' Suggest a new schedule instead.';
+                        break;
+                    }
+                }
+            } else {
+                $conflictMessage = $this->checkHybridResources($facilityRequest);
+            }
             if ($conflictMessage) {
                 if ($isVenueConfirmation && $facilityRequest->is_emergency) {
                     $approvedConflicts = $this->availabilityService->getApprovedVenueConflicts($facilityRequest);
