@@ -1415,10 +1415,15 @@
                                         label="Check calendar"
                                     />
                                 @endforeach
+                                {{-- Unified workflow: Confirm / Suggest appear only after the calendar check. --}}
+                                <p data-availability-summary="admin-supply-availability-{{ $request->id }}" class="sm:col-span-2 hidden text-xs font-medium text-slate-600" aria-live="polite"></p>
                                 @if($approvalCutoffReason)
                                 <p class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">Availability can no longer be confirmed. {{ $approvalCutoffReason }}</p>
                                 @else
-                                <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" data-swal-confirm data-swal-title="Confirm venue availability?" data-swal-loading-text="Confirming availability..." class="sm:col-span-2">
+                                <button type="button" data-availability-conflict-action="admin-supply-availability-{{ $request->id }}" data-open-supply-suggestion class="sm:col-span-2 hidden w-full items-center justify-center rounded-2xl bg-amber-600 px-5 py-3 text-sm font-semibold text-white hover:bg-amber-700">
+                                    Suggest a New Schedule
+                                </button>
+                                <form method="POST" action="{{ route('supply-office.requests.availability-review') }}" data-availability-confirm="admin-supply-availability-{{ $request->id }}" data-swal-confirm data-swal-title="Confirm venue availability?" data-swal-loading-text="Confirming availability..." class="hidden sm:col-span-2">
                                     @csrf
                                     <input type="hidden" name="id" value="{{ $request->id }}">
                                     <input type="hidden" name="decision" value="available">
@@ -1464,7 +1469,7 @@
                                                 <input type="checkbox" name="capacity_exception_approved" value="1" required class="rounded border-amber-400">
                                                 Approve the capacity exception
                                             </label>
-                                            <p class="mt-1 text-xs">To refuse it, mark the request unavailable so the requestor chooses another venue.</p>
+                                            <p class="mt-1 text-xs">To refuse it, suggest a new schedule so the requestor can choose another venue.</p>
                                         </div>
                                     @endif
                                     <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 text-white px-5 py-3 text-sm font-semibold hover:bg-emerald-700">
@@ -1478,7 +1483,7 @@
                                 <div class="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
                                     @if($request->equipment_status === 'rejected')
                                         Equipment was declined by its custodian{{ $request->equipment_notes ? ': ' . $request->equipment_notes : '.' }}
-                                        <span class="mt-1 block font-normal">The request is still pending. Suggest a new schedule, or decline the request.</span>
+                                        <span class="mt-1 block font-normal">The request is still pending. Suggest a new schedule or request a revision.</span>
                                     @else
                                     Final approval is disabled until every assigned equipment custodian approves.
                                     @endif
@@ -1495,7 +1500,7 @@
                                 </div>
                             @elseif($adminFinalReady && auth()->user()->isFinalApprover() && ($supplyDecisions['approve_blocked'] ?? false))
                                 <div class="sm:col-span-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900" data-approve-blocked>
-                                    Approval is not available: this request overlaps approved reservation {{ $supplyDecisions['pending_conflicts']->pluck('control_number')->implode(', ') }}. Assign another venue, reschedule, or decline it.
+                                    Approval is not available: this request overlaps approved reservation {{ $supplyDecisions['pending_conflicts']->pluck('control_number')->implode(', ') }}. Suggest a new schedule or assign another venue.
                                 </div>
                             @elseif($adminFinalReady && auth()->user()->isFinalApprover())
                                 @if($approvalCutoffReason)
@@ -2057,6 +2062,11 @@
     });
 
     const rescheduleForm = document.getElementById('reschedule-form');
+    // Unified workflow: the availability card's "Suggest a New Schedule" opens the same form.
+    document.querySelectorAll('[data-open-supply-suggestion]').forEach((button) => button.addEventListener('click', () => {
+        rescheduleForm?.classList.remove('hidden');
+        rescheduleForm?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
     const openRescheduleButton = document.getElementById('open-reschedule-form');
     const cancelRescheduleButton = document.getElementById('cancel-reschedule-form');
     const rescheduleFeedback = document.getElementById('reschedule-feedback');

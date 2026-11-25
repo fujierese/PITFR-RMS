@@ -79,14 +79,14 @@ class UrgentConflictResolutionTest extends TestCase
         ]);
     }
 
-    public function test_normal_reservation_without_conflict_offers_only_approve_and_decline(): void
+    public function test_normal_reservation_without_conflict_offers_only_approve(): void
     {
         $request = $this->makeRequest($this->normalRequester, 'FER-NORM-2');
 
         $this->actingAs($this->admin)->get(route('request.show', $request))
             ->assertOk()
             ->assertSee('Approve Reservation')
-            ->assertSee('Decline Reservation')
+            ->assertDontSee('Decline Reservation') // Unified workflow: no Decline.
             ->assertDontSee('Assign Alternative Venue')
             ->assertDontSee('Request Revision')
             ->assertDontSee('id="open-reschedule-form"', false)
@@ -153,7 +153,7 @@ class UrgentConflictResolutionTest extends TestCase
             ->assertSee('data-conflict-panel', false)
             ->assertSee('Assign Alternative Venue')
             ->assertSee('Mini Hall')
-            ->assertSee('Decline Reservation');
+            ->assertDontSee('Decline Reservation'); // Unified workflow: no Decline in urgent resolution.
     }
 
     public function test_supply_office_assigns_an_alternative_venue_to_the_affected_booking(): void
@@ -232,20 +232,18 @@ class UrgentConflictResolutionTest extends TestCase
         $this->assertSame([], app(SupplyOfficeDecisions::class)->actionsFor($request)['schedules']);
     }
 
-    public function test_decline_needs_a_reason_and_an_explanation(): void
+    public function test_decline_is_refused_on_the_server(): void
     {
+        // Unified workflow: there is no Decline action, also not through a direct request.
         $request = $this->makeRequest($this->normalRequester, 'FER-NORM-3');
-
-        $this->actingAs($this->admin)->post(route('request.supply.decline', $request), [])
-            ->assertSessionHasErrors(['decline_reason', 'notes']);
-        $this->assertSame('pending', $request->fresh()->status);
 
         $this->actingAs($this->admin)->post(route('request.supply.decline', $request), [
             'decline_reason' => 'policy', 'notes' => 'Overnight use of the court is not allowed.',
-        ])->assertSessionHasNoErrors();
-        $this->assertSame('rejected', $request->fresh()->status);
-        $this->actingAs($this->normalRequester)->get(route('request.show', $request))
-            ->assertSee('Overnight use of the court is not allowed.');
+        ])->assertSessionHasErrors('decision');
+        $this->actingAs($this->admin)->post(route('request.supply.decision', $request), [
+            'decision' => 'decline', 'reason' => 'Policy', 'explanation' => 'Overnight use of the court is not allowed.',
+        ])->assertSessionHasErrors();
+        $this->assertSame('pending', $request->fresh()->status);
     }
 
     public function test_request_revision_appears_only_when_something_needs_correcting(): void

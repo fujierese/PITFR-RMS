@@ -287,74 +287,35 @@ class AvailabilityService
 
         // Waiting requests only warn, but the warning names them (reference and schedule).
         $tentative = [];
-        FacilityRequest::query()
-            ->where('status', 'pending')
-            ->whereKeyNot($facilityRequest->id)
-            ->where(fn ($query) => $query->matchesVenue($canonicalVenueName))
-            ->with(['requestVenues', 'reservationSchedule'])
-            ->get()
-            ->each(function (FacilityRequest $other) use ($canonicalVenueName, $ranges, &$tentative): void {
-                foreach ($other->getVenueScheduleRanges($canonicalVenueName) as $otherRange) {
-                    foreach ($ranges as $range) {
-                        if ($otherRange['start']->lt($range['end']) && $otherRange['end']->gt($range['start'])) {
-                            $tentative[] = ($other->control_number ?: ('#' . $other->id)) . ' ('
-                                . $otherRange['start']->format('M j, Y g:i A') . '–'
-                                . $otherRange['end']->format($otherRange['start']->isSameDay($otherRange['end']) ? 'g:i A' : 'M j, Y g:i A') . ')';
+        foreach ($ranges as $range) {
+            foreach ($this->pendingOverlaps($canonicalVenueName, $range['start'], $range['end'], $facilityRequest->id) as $overlap) {
+                $tentative[$overlap['control_number']] ??= $overlap;
+            }
+        }
 
-                            return;
-                        }
-                    }
-                }
-            });
+        return ['conflict' => null, 'warning' => self::describePendingOverlaps(array_values($tentative))];
+    }
 
-        return ['conflict' => null, 'warning' => $tentative !== []
-            ? 'Another request is waiting for review for this time: ' . implode(', ', array_slice($tentative, 0, 3)) . (count($tentative) > 3 ? ' and ' . (count($tentative) - 3) . ' more' : '') . '. It does not block confirmation.'
-            : null];
+    /**
+     * Unified workflow: tentative-overlap warnings for every venue of a request, or null.
+     */
+    public function pendingOverlapWarningForRequest(FacilityRequest $facilityRequest): ?string
+    {
+        $warnings = [];
+        foreach ($facilityRequest->getVenueNames() as $venueName) {
+            $warning = $this->checkVenueForCustodian($facilityRequest, $venueName)['warning'];
+            if ($warning !== null) {
+                $warnings[] = $venueName . ': ' . $warning;
+            }
+        }
+
+        return $warnings === [] ? null : implode(' ', $warnings);
     }
 
     public function checkVenueScheduleForReview(FacilityRequest $facilityRequest, string $venueName): ?string
     {
-        $canonicalVenueName = collect($facilityRequest->getVenueNames())
-            ->first(fn (string $name): bool => mb_strtolower(trim($name)) === mb_strtolower(trim($venueName)));
-
-        if ($canonicalVenueName === null) {
-            return 'The selected venue is not part of this request.';
-        }
-
-        $ranges = $facilityRequest->getVenueScheduleRanges($canonicalVenueName);
-        foreach ($ranges as $range) {
-            $availability = $this->checkVenueAvailability(
-                $canonicalVenueName,
-                $range['start'],
-                $range['end'],
-                $facilityRequest->id
-            );
-            if (! $availability['available']) {
-                return $availability['message'] ?? 'The selected venue schedule is unavailable.';
-            }
-        }
-
-        $pendingConflict = FacilityRequest::query()
-            ->where('status', 'pending')
-            ->whereKeyNot($facilityRequest->id)
-            ->where(fn ($query) => $query->matchesVenue($canonicalVenueName))
-            ->with(['requestVenues', 'reservationSchedule'])
-            ->get()
-            ->contains(function (FacilityRequest $otherRequest) use ($canonicalVenueName, $ranges): bool {
-                foreach ($otherRequest->getVenueScheduleRanges($canonicalVenueName) as $otherRange) {
-                    foreach ($ranges as $range) {
-                        if ($otherRange['start']->lt($range['end']) && $otherRange['end']->gt($range['start'])) {
-                            return true;
-                        }
-                    }
-                }
-
-                return false;
-            });
-
-        return $pendingConflict
-            ? 'Another request for this venue and time is still awaiting review. Resolve that request before confirming availability.'
-            : null;
+        // Unified workflow: same rules as the venue custodian's check (actual conflicts only).
+        return $this->checkVenueForCustodian($facilityRequest, $venueName)['conflict'];
     }
 
     public function checkRevisionVenueAvailability(FacilityRequest $facilityRequest, RevisionHistory $revision, string $venueName): ?string
@@ -386,25 +347,68 @@ class AvailabilityService
         Carbon $requestedEnd,
         ?int $excludeRequestId = null,
     ): ?string {
+        // Unified workflow: only an approved reservation, maintenance/closure or holiday is an
+        // actual conflict. Requests still pending (or only availability-confirmed) are tentative
+        // overlaps: see pendingOverlapWarning(); they never block one another.
         $availability = $this->checkVenueAvailability($venueName, $requestedStart, $requestedEnd, $excludeRequestId);
-        if (! $availability['available']) {
-            return $availability['message'] ?? 'The proposed venue schedule is unavailable.';
-        }
-        $requestedRanges = FacilityRequest::dailyRanges($requestedStart, $requestedEnd);
 
-        $pendingConflict = FacilityRequest::query()
+        return $availability['available'] ? null : ($availability['message'] ?? 'The proposed venue schedule is unavailable.');
+    }
+
+    /**
+     * Unified workflow: pending requests overlapping a venue and time (tentative overlaps).
+     *
+     * @return list<array{control_number: string, label: string}>
+     */
+    public function pendingOverlaps(string $venueName, Carbon $requestedStart, Carbon $requestedEnd, ?int $excludeRequestId = null): array
+    {
+        $requestedRanges = FacilityRequest::dailyRanges($requestedStart, $requestedEnd);
+        $overlaps = [];
+
+        FacilityRequest::query()
             ->where('status', 'pending')
             ->when($excludeRequestId !== null, fn ($query) => $query->whereKeyNot($excludeRequestId))
             ->where(fn ($query) => $query->matchesVenue($venueName))
             ->with(['requestVenues', 'reservationSchedule'])
             ->get()
-            ->contains(fn (FacilityRequest $otherRequest): bool => collect($requestedRanges)->contains(
-                fn (array $range): bool => $otherRequest->overlapsVenueScheduleRange($venueName, $range['start'], $range['end'])
-            ));
+            ->each(function (FacilityRequest $other) use ($venueName, $requestedRanges, &$overlaps): void {
+                foreach ($other->getVenueScheduleRanges($venueName) as $otherRange) {
+                    foreach ($requestedRanges as $range) {
+                        if ($otherRange['start']->lt($range['end']) && $otherRange['end']->gt($range['start'])) {
+                            $overlaps[] = [
+                                'control_number' => $other->control_number ?: ('#' . $other->id),
+                                'label' => $otherRange['start']->format('M j, Y g:i A') . '–'
+                                    . $otherRange['end']->format($otherRange['start']->isSameDay($otherRange['end']) ? 'g:i A' : 'M j, Y g:i A'),
+                            ];
 
-        return $pendingConflict
-            ? 'Another request for this venue and time is still awaiting review. Resolve that request before confirming availability.'
-            : null;
+                            return;
+                        }
+                    }
+                }
+            });
+
+        return $overlaps;
+    }
+
+    /** The warning for tentative overlaps (reference number and schedule), or null. */
+    public function pendingOverlapWarning(string $venueName, Carbon $requestedStart, Carbon $requestedEnd, ?int $excludeRequestId = null): ?string
+    {
+        $overlaps = $this->pendingOverlaps($venueName, $requestedStart, $requestedEnd, $excludeRequestId);
+
+        return self::describePendingOverlaps($overlaps);
+    }
+
+    /** @param list<array{control_number: string, label: string}> $overlaps */
+    public static function describePendingOverlaps(array $overlaps): ?string
+    {
+        if ($overlaps === []) {
+            return null;
+        }
+        $named = array_map(fn (array $o): string => $o['control_number'] . ' (' . $o['label'] . ')', array_slice($overlaps, 0, 3));
+
+        return 'Another request is waiting for review for this time: ' . implode(', ', $named)
+            . (count($overlaps) > 3 ? ' and ' . (count($overlaps) - 3) . ' more' : '')
+            . '. It does not block confirmation.';
     }
 
     public function checkRevisionAvailabilityForCustodian(

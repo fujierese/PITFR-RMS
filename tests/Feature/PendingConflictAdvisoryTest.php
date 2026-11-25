@@ -63,7 +63,8 @@ class PendingConflictAdvisoryTest extends TestCase
             ->assertJsonPath('venues.0.status', 'pending_conflict')
             ->assertJsonPath('venues.0.status_label', 'Pending schedule conflict')
             ->assertJsonPath('venues.0.can_submit', true)
-            ->assertJsonPath('venues.0.pending_notice', 'Another request for the same venue and time is waiting for review. You can still submit; the Supply Office will confirm only one of them.');
+            // Unified workflow: the tentative overlap is named (reference and time) and does not block.
+            ->assertJsonPath('venues.0.pending_notice', fn ($notice) => str_starts_with((string) $notice, 'Tentative overlap: another request is waiting for review for this time ('));
     }
 
     public function test_free_slot_has_no_notice_and_approved_overlap_blocks(): void

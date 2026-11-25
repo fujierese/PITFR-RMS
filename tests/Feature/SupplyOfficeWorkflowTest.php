@@ -313,7 +313,7 @@ class SupplyOfficeWorkflowTest extends TestCase
             ->assertJsonPath('available', true);
     }
 
-    public function test_pending_venue_schedule_conflict_blocks_confirmation_and_is_returned_by_calendar_check(): void
+    public function test_pending_venue_overlap_only_warns_and_does_not_block_confirmation(): void
     {
         $request = $this->makeRequest([
             'supply_office_review_status' => 'pending',
@@ -332,9 +332,10 @@ class SupplyOfficeWorkflowTest extends TestCase
         $this->actingAs($staff)
             ->postJson(route('calendar.request-availability-check', $request), ['venue' => 'Gymnasium'])
             ->assertOk()
-            ->assertJsonPath('available', false)
-            ->assertJsonPath('message', 'Another request for this venue and time is still awaiting review. Resolve that request before confirming availability.');
+            ->assertJsonPath('available', true)
+            ->assertJsonPath('warning', fn ($w) => str_contains((string) $w, 'TEST-PENDING-VENUE-CONFLICT'));
 
+        // Unified workflow: pending requests never block one another's confirmation.
         $this->actingAs($staff)
             ->from(route('supply-office.index'))
             ->post(route('supply-office.requests.availability-review'), [
@@ -342,9 +343,10 @@ class SupplyOfficeWorkflowTest extends TestCase
                 'decision' => 'available',
             ])
             ->assertRedirect(route('supply-office.index'))
-            ->assertSessionHasErrors('decision');
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('warning', fn ($w) => str_contains((string) $w, 'TEST-PENDING-VENUE-CONFLICT'));
 
-        $this->assertSame('pending', $request->fresh()->supply_office_review_status);
+        $this->assertSame('confirmed', $request->fresh()->supply_office_review_status);
     }
 
     public function test_requestors_cannot_run_staff_availability_checks(): void
@@ -698,7 +700,8 @@ class SupplyOfficeWorkflowTest extends TestCase
         $revision = $request->revisionHistories()->where('status', 'pending')->firstOrFail();
         $this->assertSame('09:00', $revision->old_start_time);
         $this->assertSame('10:00', $revision->new_start_time);
-        $this->assertTrue($revision->conflict_detected);
+        // Unified workflow: the other request is only pending, so it is not a conflict.
+        $this->assertFalse($revision->conflict_detected);
         $this->assertFalse($revision->override_conflict);
         $this->assertSame('09:00', $request->fresh()->start_time);
     }
@@ -741,7 +744,7 @@ class SupplyOfficeWorkflowTest extends TestCase
         $this->assertSame('confirmed', $urgentRequest->fresh()->supply_office_review_status);
     }
 
-    public function test_urgent_document_confirmation_is_not_required_when_availability_is_unavailable(): void
+    public function test_mark_unavailable_is_no_longer_accepted(): void
     {
         $urgentRequest = $this->makeRequest([
             'is_emergency' => true,
@@ -758,11 +761,11 @@ class SupplyOfficeWorkflowTest extends TestCase
                 'notes' => 'The requested venue is unavailable.',
             ])
             ->assertRedirect(route('supply-office.index'))
-            ->assertSessionHasNoErrors();
+            ->assertSessionHasErrors('decision');
 
-        $this->assertSame('needs_reschedule', $urgentRequest->fresh()->status);
-        $this->assertSame('unavailable', $urgentRequest->fresh()->supply_office_review_status);
-        $this->assertSame('pending', $urgentRequest->fresh()->urgent_document_status);
+        // Unified workflow: Mark Unavailable was removed; Suggest a New Schedule is used instead.
+        $this->assertSame('pending', $urgentRequest->fresh()->status);
+        $this->assertSame('pending', $urgentRequest->fresh()->supply_office_review_status);
     }
 
     public function test_schedule_proposal_has_explicit_confirmation_and_success_feedback(): void

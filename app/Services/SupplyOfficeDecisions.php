@@ -24,7 +24,8 @@ use Illuminate\Support\Facades\Notification;
  * - Request Revision: the requestor has something to correct.
  * - Assign Alternative Venue: a real venue concern exists AND a suitable free venue exists.
  * - Reschedule: a real scheduling concern exists AND a free schedule exists.
- * - Decline Reservation: always possible, with a reason and a written explanation.
+ * - Decline: removed (unified workflow). Conflicts are handled by Request Revision,
+ *   Suggest a New Schedule, or the urgent resolution actions.
  *
  * Urgent conflicts: an approved urgent reservation that overlaps another reservation
  * opens a ReservationConflict. Nothing is changed automatically; the Supply Office
@@ -268,7 +269,7 @@ class SupplyOfficeDecisions
         // Follow-up fixes: Alternative Venue and Reschedule are exceptional: only for an
         // actual conflict (an approved urgent reservation affecting this one, or this
         // pending request overlapping an approved one). A normal reservation that passed
-        // the venue check gets Approve and Decline only.
+        // the venue check gets Approve (and Request Revision when something must be corrected).
         $hasConflict = $conflicts->isNotEmpty() || $pendingConflicts->isNotEmpty();
         $venueConcern = $hasConflict ? ($conflicts->isNotEmpty() ? 'An approved urgent reservation needs the same venue and time.' : 'This request overlaps approved reservation ' . $pendingConflicts->pluck('control_number')->implode(', ') . '.') : null;
 
@@ -283,7 +284,8 @@ class SupplyOfficeDecisions
             'alternative_venues' => $open && $hasConflict ? $this->alternativeVenues($request, $this->conflictVenue($request) ?? $pendingConflicts->first()?->getVenueNames()[0] ?? null) : [],
             'schedule_concern' => $hasConflict ? $venueConcern : null,
             'schedules' => $open && $hasConflict ? $this->feasibleSchedules($request) : [],
-            'decline' => in_array($request->status, ['pending', 'approved', 'needs_reschedule'], true),
+            // Unified workflow: Decline is not offered (normal path or urgent resolution).
+            'decline' => false,
         ];
     }
 
@@ -398,9 +400,7 @@ class SupplyOfficeDecisions
                 $summary = 'Schedule moved to ' . Carbon::parse($date)->format('M j, Y') . ' (same times).';
                 $history = 'reservation_rescheduled';
             } elseif ($action === 'decline') {
-                $request->update(['status' => 'rejected', 'approved_by_id' => null, 'approved_by' => null, 'approved_date' => null]);
-                $summary = 'Reservation declined.';
-                $history = 'final_rejected';
+                throw \Illuminate\Validation\ValidationException::withMessages(['decision' => 'Decline is not part of the reservation workflow. Use Request Revision or Suggest a New Schedule.']);
             } elseif ($action === 'revision') {
                 $request->update(['status' => 'needs_reschedule']);
                 $summary = 'Revision requested from the requestor.';

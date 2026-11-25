@@ -651,11 +651,17 @@ class CalendarController extends Controller
                             : 'No conflict found.' . ($result['warning'] ? ' ' . $result['warning'] : ''),
                     ]);
                 }
+                // Unified workflow: actual conflicts block; pending requests are named as a warning.
                 $conflict = $availability->checkFacilityRequestForReview($lockedRequest);
+                $warning = $conflict === null ? $availability->pendingOverlapWarningForRequest($lockedRequest) : null;
 
                 return response()->json([
                     'available' => $conflict === null,
-                    'message' => $conflict ?? 'No approved booking, pending request, maintenance block, or holiday conflicts with the requested schedules or equipment.',
+                    'conflict' => $conflict !== null,
+                    'warning' => $warning,
+                    'message' => $conflict !== null
+                        ? 'Conflict: ' . $conflict
+                        : 'No conflict found.' . ($warning ? ' ' . $warning : ''),
                 ]);
             });
         } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception) {

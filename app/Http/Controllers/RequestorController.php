@@ -1945,6 +1945,14 @@ class RequestorController extends Controller
                 }
             }
             DB::commit();
+            try {
+                $overlapWarning = $this->availabilityService->pendingOverlapWarningForRequest($fr->fresh(['requestVenues', 'reservationSchedule']));
+                if ($overlapWarning !== null) {
+                    $capacityWarning = trim(($capacityWarning ? $capacityWarning . ' ' : '') . 'Tentative overlap — ' . $overlapWarning . ' Your request stays pending; it is not a confirmed booking.');
+                }
+            } catch (\Throwable $overlapException) {
+                report($overlapException);
+            }
         } catch (\Throwable $exception) {
             DB::rollBack();
             $discardUploadedDocuments();
@@ -2586,8 +2594,14 @@ class RequestorController extends Controller
             // REQ-10: a clash with a request still under review is only a warning here;
             // the Supply Office is blocked from confirming both.
             $pendingNotice = null;
-            if ($availability['available'] && $this->availabilityService->checkVenueTimeRangeForReview($venueName, $range['start'], $range['end']) !== null) {
-                $pendingNotice = 'Another request for the same venue and time is waiting for review. You can still submit; the Supply Office will confirm only one of them.';
+            if ($availability['available']) {
+                $overlaps = $this->availabilityService->pendingOverlaps($venueName, $range['start'], $range['end'], $request->integer('exclude_request_id') ?: null);
+                if ($overlaps !== []) {
+                    // Unified workflow: a tentative overlap, not a conflict; it does not block submission.
+                    $pendingNotice = 'Tentative overlap: another request is waiting for review for this time ('
+                        . collect($overlaps)->take(3)->map(fn (array $o): string => $o['control_number'] . ', ' . $o['label'])->implode('; ')
+                        . '). You can still submit; it is not a confirmed booking.';
+                }
             }
             // QA-5: one status per venue, used the same way everywhere on the form.
             $status = ! $availability['available'] ? 'unavailable' : ($pendingNotice !== null ? 'pending_conflict' : 'available');

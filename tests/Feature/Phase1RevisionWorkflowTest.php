@@ -526,7 +526,7 @@ class Phase1RevisionWorkflowTest extends TestCase
         $this->assertSame('16:00', $request->getVenueScheduleRange('Test Venue')['end']->format('H:i'));
     }
 
-    public function test_custodian_cannot_accept_proposed_schedule_with_pending_venue_conflict(): void
+    public function test_custodian_can_accept_proposed_schedule_with_only_a_pending_overlap(): void
     {
         $requester = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
         $admin = User::factory()->create(['role' => 'admin']);
@@ -589,10 +589,11 @@ class Phase1RevisionWorkflowTest extends TestCase
             ->from(route('request.show', $request))
             ->post(route('request.revision.respond', [$request, $revision]), ['response' => 'accept'])
             ->assertRedirect(route('request.show', $request))
-            ->assertSessionHasErrors('revision');
+            ->assertSessionHasNoErrors();
 
-        $this->assertSame('pending', $revision->fresh()->responses[(string) $custodian->id]);
-        $this->assertSame('12:00', $request->fresh()->end_time);
+        // Unified workflow: another pending request is a tentative overlap only; it does not
+        // stop the custodian from accepting the proposed schedule.
+        $this->assertSame('accepted', $revision->fresh()->responses[(string) $custodian->id]);
     }
 
     public function test_requestor_can_decline_proposal_without_changing_current_schedule(): void

@@ -83,7 +83,7 @@ class ScheduleChangeButtonTest extends TestCase
             ->assertDontSee('Approve Reservation')
             ->assertSee('Assign Alternative Venue')
             ->assertSee('Mini Hall')
-            ->assertSee('Decline Reservation')
+            ->assertDontSee('Decline Reservation') // Unified workflow: no Decline.
             ->assertDontSee('id="open-reschedule-form"', false);
     }
 

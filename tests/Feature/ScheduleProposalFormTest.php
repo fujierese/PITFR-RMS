@@ -126,7 +126,7 @@ class ScheduleProposalFormTest extends TestCase
             ->assertSessionHasErrors(['venue.0' => 'One of the chosen venues is not available for booking.']);
     }
 
-    public function test_each_conflicting_venue_is_named_and_requestor_sees_each_result_with_calendar(): void
+    public function test_a_suggestion_colliding_with_an_approved_booking_is_refused_and_names_the_venue(): void
     {
         $date = now()->addDays(6)->toDateString();
         $other = User::factory()->create(['role' => 'requestor']);
@@ -146,19 +146,25 @@ class ScheduleProposalFormTest extends TestCase
         $this->actingAs($this->gymCustodian)
             ->from(route('request.show', $this->request))
             ->post(route('custodian.requests.revise'), $this->proposal(['venue' => ['Gymnasium', 'Covered Court']]))
+            ->assertSessionHasErrors('conflict');
+
+        // Unified workflow: a suggestion may not collide with an approved booking. Only the
+        // conflicting venue is named.
+        $message = session('errors')->first('conflict');
+        $this->assertStringContainsString('Covered Court:', $message);
+        $this->assertStringNotContainsString('Gymnasium:', $message);
+        $this->assertSame(0, $this->request->revisionHistories()->count());
+
+        // Without the conflicting venue the suggestion goes through and the requestor sees it.
+        $this->actingAs($this->gymCustodian)
+            ->from(route('request.show', $this->request))
+            ->post(route('custodian.requests.revise'), $this->proposal(['venue' => ['Gymnasium']]))
             ->assertSessionHasNoErrors();
-
-        $revision = $this->request->revisionHistories()->where('status', 'pending')->firstOrFail();
-        $this->assertTrue((bool) $revision->conflict_detected);
-        $this->assertStringContainsString('Covered Court:', $revision->conflict_details);
-        $this->assertStringNotContainsString('Gymnasium:', $revision->conflict_details);
-
         $this->actingAs($this->request->requester ?? User::findOrFail($this->request->requested_by_id))
             ->get(route('request.show', $this->request))
             ->assertOk()
             ->assertSee('Availability of each proposed venue')
             ->assertSee('Available')
-            ->assertSee('Not available')
             ->assertSee('Check suggested schedule')
             ->assertSee('1:00 PM');
     }

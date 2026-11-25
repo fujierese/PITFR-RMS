@@ -132,15 +132,19 @@ class SupplyOfficeController extends Controller
 
         $validated = $request->validate([
             'id' => ['required', 'integer', 'exists:facility_requests,id'],
-            'decision' => ['required', 'in:available,unavailable'],
-            'notes' => ['required_if:decision,unavailable', 'nullable', 'string', 'max:1000'],
+            // Unified workflow: "Mark Unavailable" was removed. A conflict is handled with
+            // Suggest a New Schedule (supply-office.requests.revise).
+            'decision' => ['required', 'in:available'],
+            'notes' => ['nullable', 'string', 'max:1000'],
             // B: optional deadline for an approved outsider inquiry to meet its requirements.
             'outsider_hold_until' => ['nullable', 'date', 'after_or_equal:today'],
         ], [
             'outsider_hold_until.after_or_equal' => 'The requirements deadline cannot be in the past.',
+            'decision.in' => 'Mark Unavailable is no longer used. If the venue cannot be used, suggest a new schedule instead.',
         ]);
 
         $user = Auth::user();
+        $tentativeWarning = null;
         // Approval cutoff: availability cannot be confirmed once the reservation has started.
         if ($validated['decision'] === 'available'
             && ($cutoff = \App\Support\ApprovalCutoff::reason(FacilityRequest::findOrFail($validated['id'])))) {
@@ -148,7 +152,7 @@ class SupplyOfficeController extends Controller
         }
 
         try {
-            $facilityRequest = DB::transaction(function () use ($validated, $user, $request): FacilityRequest {
+            $facilityRequest = DB::transaction(function () use ($validated, $user, $request, &$tentativeWarning): FacilityRequest {
                 $facilityRequest = FacilityRequest::whereKey($validated['id'])->lockForUpdate()->firstOrFail();
                 if ($facilityRequest->status !== 'pending'
                     || $facilityRequest->supply_office_review_status !== 'pending'
@@ -217,8 +221,8 @@ class SupplyOfficeController extends Controller
                         $request->validate(
                             ['capacity_exception_approved' => ['required', 'accepted']],
                             [
-                                'capacity_exception_approved.required' => 'Approve the capacity exception, or mark the request unavailable so the requestor chooses another venue.',
-                                'capacity_exception_approved.accepted' => 'Approve the capacity exception, or mark the request unavailable so the requestor chooses another venue.',
+                                'capacity_exception_approved.required' => 'Approve the capacity exception, or suggest a new schedule so the requestor can choose another venue.',
+                                'capacity_exception_approved.accepted' => 'Approve the capacity exception, or suggest a new schedule so the requestor can choose another venue.',
                             ]
                         );
                         $facilityRequest->capacity_exception_status = 'approved';
@@ -240,11 +244,14 @@ class SupplyOfficeController extends Controller
                     $facilityRequest->supply_office_reviewed_at = now();
                     $facilityRequest->save();
                     $confirmedAt = now()->format('F j, Y \a\t g:i A');
+                    // Tentative overlaps never block the confirmation; they are recorded and shown.
+                    $tentativeWarning = $availability->pendingOverlapWarningForRequest($facilityRequest);
                     $facilityRequest->addHistory(
                         'availability_confirmed',
                         'Availability confirmed by ' . $user->name . ', Supply Office Staff' . "\n"
                             . $confirmedAt . "\n"
-                            . 'Validation: No approved booking or active scheduling conflict found'
+                            . 'Validation: No approved booking or maintenance/closure conflicts with the requested schedule'
+                            . ($tentativeWarning ? "\nTentative overlap (not a conflict): " . $tentativeWarning : '')
                             . ($facilityRequest->is_emergency ? "\nUrgent supporting document validated." : '')
                             . ($approvedCapacityException ? "\nCapacity exception approved for: " . implode(', ', array_keys((array) $facilityRequest->capacity_exceptions)) . '.' : ''),
                         $user->getKey()
@@ -253,26 +260,7 @@ class SupplyOfficeController extends Controller
                     return $facilityRequest;
                 }
 
-                $notes = trim((string) $validated['notes']);
-                if ($facilityRequest->hasPendingCapacityException()) {
-                    $facilityRequest->capacity_exception_status = 'rejected';
-                    $facilityRequest->capacity_exception_reviewed_by_id = $user->getKey();
-                    $facilityRequest->capacity_exception_reviewed_at = now();
-                }
-                $facilityRequest->supply_office_review_status = 'unavailable';
-                $facilityRequest->supply_office_review_notes = $notes;
-                $facilityRequest->supply_office_reviewed_by_id = $user->getKey();
-                $facilityRequest->supply_office_reviewed_at = now();
-                $facilityRequest->status = 'needs_reschedule';
-                $facilityRequest->notes = $notes;
-                $facilityRequest->save();
-                $facilityRequest->addHistory(
-                    'availability_unavailable',
-                    'Availability reviewed by ' . $user->name . ' from the Supply Office. The request was returned for an available alternative: ' . $notes,
-                    $user->getKey()
-                );
-
-                return $facilityRequest;
+                abort(422, 'Unsupported availability decision.');
             });
         } catch (\Illuminate\Validation\ValidationException $exception) {
             throw $exception;
@@ -318,25 +306,10 @@ class SupplyOfficeController extends Controller
             } else {
                 $message = 'Supply Office availability confirmed. No equipment approval is needed; the request will proceed to final approval after any remaining requirements are complete.';
             }
-        } else {
-            $facilityRequest->requester?->notify(new RequestStatusChanged(
-                $facilityRequest,
-                'needs_revision',
-                $facilityRequest->supply_office_review_notes,
-                null,
-                null,
-                [],
-                $user->name . ' - Supply Office'
-            ));
-            $this->notifyAffectedCustodiansOfScheduleChange(
-                $facilityRequest,
-                'needs_revision',
-                $facilityRequest->supply_office_review_notes
-            );
-            $message = 'The request was marked unavailable and returned for rescheduling.';
         }
 
-        return redirect()->route('supply-office.index')->with('success', $message);
+        return redirect()->route('supply-office.index')->with('success', $message)
+            ->with('warning', $tentativeWarning);
     }
 
     /**
@@ -960,14 +933,23 @@ class SupplyOfficeController extends Controller
             $conflictDetected = true;
             $conflictDetails = implode('; ', $parts);
 
-            // Pending requests are still proposals; the venue custodian rechecks availability
-            // after the requestor responds. Approved reservations require an explicit override.
-            if ($facilityRequest->status === 'approved' && !($validated['override_conflict'] ?? false)) {
+            // Unified workflow: a suggestion may not collide with an approved booking or a
+            // maintenance/closure. Only an approved reservation's existing, explicit override
+            // (memorandum transfer by the Supply Office) can continue.
+            if ($facilityRequest->status !== 'approved' || ! ($validated['override_conflict'] ?? false)) {
                 return $this->revisionFailure(
                     $request,
-                    "Scheduling conflict detected: $conflictDetails. Provide an override reason to proceed.",
+                    "The suggested schedule conflicts with: $conflictDetails. Choose another date, time or venue."
+                        . ($facilityRequest->status === 'approved' ? ' Provide an override reason to proceed.' : ''),
                     'conflict'
                 );
+            }
+        }
+        $suggestionWarnings = [];
+        foreach ($validated['venue'] as $venueName) {
+            $warning = $availabilityService->pendingOverlapWarning($venueName, $range['start'], $range['end'], $facilityRequest->id);
+            if ($warning !== null) {
+                $suggestionWarnings[] = $venueName . ': ' . $warning;
             }
         }
 
@@ -1037,7 +1019,8 @@ class SupplyOfficeController extends Controller
                 ? redirect()->route('request.show', $facilityRequest)
                 : redirect()->route('supply-office.index');
 
-            return $successRedirect->with('success', 'Suggested new schedule sent to the requestor and affected custodians.');
+            return $successRedirect->with('success', 'Suggested new schedule sent to the requestor and affected custodians.')
+                ->with('warning', $suggestionWarnings !== [] ? implode(' ', $suggestionWarnings) : null);
         } catch (\RuntimeException $e) {
             if (str_contains($e->getMessage(), 'already waiting')) {
                 if ($request->expectsJson()) {

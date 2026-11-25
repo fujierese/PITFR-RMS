@@ -95,7 +95,7 @@ class Phase2AvailabilityPolicyTest extends TestCase
         $this->assertNull($conflict);
     }
 
-    public function test_multiday_whole_day_request_still_conflicts_with_overlapping_pending_reservation(): void
+    public function test_multiday_whole_day_request_only_warns_about_an_overlapping_pending_reservation(): void
     {
         [$requestor, $venue] = $this->resourceSetup('Overlapping Whole Day Venue');
         $this->request($requestor, $venue, 'pending', '16:00', '18:00');
@@ -110,11 +110,11 @@ class Phase2AvailabilityPolicyTest extends TestCase
             reservationDuration: 'whole_day',
         );
 
-        $conflict = app(AvailabilityService::class)->checkVenueScheduleForReview($wholeDayRequest, $venue->name);
-
-        $this->assertSame(
-            'Another request for this venue and time is still awaiting review. Resolve that request before confirming availability.',
-            $conflict,
+        // Unified workflow: a pending overlap is tentative (a warning), not an actual conflict.
+        $this->assertNull(app(AvailabilityService::class)->checkVenueScheduleForReview($wholeDayRequest, $venue->name));
+        $this->assertStringStartsWith(
+            'Another request is waiting for review for this time:',
+            (string) app(AvailabilityService::class)->checkVenueForCustodian($wholeDayRequest, $venue->name)['warning'],
         );
     }
 

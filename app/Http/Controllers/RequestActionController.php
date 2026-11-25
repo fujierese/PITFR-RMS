@@ -717,6 +717,11 @@ class RequestActionController extends Controller
         $user = Auth::user();
         abort_unless($user && $user->isFinalApprover(), 403);
 
+        // Unified workflow: there is no Decline action on the normal path or in urgent
+        // conflict resolution (enforced here, not only by hiding the button).
+        return redirect()->route('request.show', $facilityRequest->id)
+            ->withErrors(['decision' => 'Decline is not part of the reservation workflow. Use Request Revision or Suggest a New Schedule.']);
+
         // Additional Part 2: declining is a final administrative decision; it needs a
         // reason and a written explanation, shown in full on the request page.
         $validated = $request->validate([
