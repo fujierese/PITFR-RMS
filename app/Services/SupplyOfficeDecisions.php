@@ -372,6 +372,9 @@ class SupplyOfficeDecisions
             ]);
 
             $this->closeConflicts($request, $action, $reason, $explanation, $after, $admin);
+            if (in_array($action, ['alternative_venue', 'reschedule', 'decline'], true)) {
+                app(EquipmentCustodianRouting::class)->notify($request, $action === 'decline' ? 'cancelled' : ($action === 'reschedule' ? 'rescheduled' : 'updated'));
+            }
 
             $kind = match ($action) {
                 'alternative_venue' => 'alternative_venue_assigned',

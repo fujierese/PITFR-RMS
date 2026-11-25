@@ -432,6 +432,7 @@ class RequestorController extends Controller
                 "Requestor accepted the suggested new schedule. {$lockedRevision->getSummary()}",
                 $user->id
             );
+            app(\App\Services\EquipmentCustodianRouting::class)->notify($lockedRequest, 'rescheduled');
             if ($wasApproved) {
                 $lockedRequest->addHistory(
                     'reapproval_required',
@@ -1918,6 +1919,9 @@ class RequestorController extends Controller
                 $fr->syncRelationalItems($venueSchedules, $venueEquipment);
                 $fr->unsetRelation('requestVenues');
                 $fr->unsetRelation('requestEquipment');
+                if ($fr->providedEquipmentNeedsReview()) {
+                    $fr->recomputeEquipmentStatus();
+                }
                 if ($wasNeedsReschedule) {
                     $fr->addHistory('needs_reschedule', 'Reservation rescheduled by requestor after Priority Override.', $user->getKey());
                 }
@@ -1928,6 +1932,10 @@ class RequestorController extends Controller
             } else {
                 $fr = $this->createRequestRecord($requestAttributes);
                 $fr->syncRelationalItems($venueSchedules, $venueEquipment);
+                // Provided-with-venue items with a custodian need that custodian's review.
+                if ($fr->providedEquipmentNeedsReview()) {
+                    $fr->recomputeEquipmentStatus();
+                }
                 $fr->addHistory('submitted', 'Request submitted by ' . $user->name . '.', $user->getKey());
                 if ($activityProposalFileName && \App\Services\ActivityProposals::enabled()) {
                     app(\App\Services\ActivityProposals::class)->recordSubmission($fr, $activityProposalFileName, $request->input('proposal_submission_type', 'draft') === 'final' ? 'final' : 'draft', $user, $request->file('activity_proposal_file')?->getClientOriginalName());
@@ -1968,6 +1976,7 @@ class RequestorController extends Controller
             }
             $this->clearStagedUploads();
             $this->notifyCustodiansOfEdit($fr, $user);
+            app(\App\Services\EquipmentCustodianRouting::class)->notify($fr, 'updated');
 
             return redirect()->route('request.show', $fr)
                 ->with('success', 'Your changes were saved. The request is back in review.')
@@ -1986,6 +1995,9 @@ class RequestorController extends Controller
 
         // Custodians are notified only after the Supply Office's initial availability review.
         \App\Events\RequestCreated::dispatch($fr->id, $fr->control_number, $user->name, $fr->requested_by_id, []);
+        // Follow-up fixes: equipment custodians (including for items provided with the
+        // venue) are told at once which of their equipment the reservation includes.
+        app(\App\Services\EquipmentCustodianRouting::class)->notify($fr, 'submitted');
 
         if ($isOutsiderInquiry) {
             \Illuminate\Support\Facades\Notification::send(

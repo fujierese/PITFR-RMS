@@ -72,6 +72,7 @@ class RequestActionController extends Controller
             $lockedRequest->addHistory('cancelled', 'Pending request cancelled by ' . $user->name, $user->id);
         });
         $this->notifyCancellationParties($facilityRequest->fresh(), 'request_cancelled', 'Pending request cancelled by ' . $user->name . '.', false);
+        app(\App\Services\EquipmentCustodianRouting::class)->notify($facilityRequest, 'cancelled');
 
         return redirect()->route('requestor.index')->with('success', 'Request cancelled successfully.');
     }

@@ -497,9 +497,11 @@
                                             $itemQuantity = $oldVenueEquipmentQuantities[$venueName][$itemName] ?? '';
                                         @endphp
                                         @if($isVenueRequired)
-                                            <div class="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4" data-included-equipment="{{ $itemName }}">
-                                                <span class="text-sm font-medium text-slate-700">{{ $itemName }}</span>
-                                                <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Included with venue</span>
+                                            @php $providedQuantity = \App\Services\VenueEquipmentPolicy::providedEquipment($venueName)[$itemName] ?? 1; @endphp
+                                            {{-- Follow-up fixes: provided with the venue; read-only, not taken from inventory. --}}
+                                            <div class="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4" data-included-equipment="{{ $itemName }}" data-provided-venue="{{ $venueName }}" data-provided-quantity="{{ $providedQuantity }}">
+                                                <span class="text-sm font-medium text-slate-700">{{ $itemName }} <span class="text-xs font-normal text-slate-500">× {{ $providedQuantity }}</span></span>
+                                                <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Provided with venue</span>
                                             </div>
                                         @elseif($isVisible)
                                             <div class="equipment-row flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between {{ $itemAvailable > 0 ? 'hover:border-purple-400 hover:bg-purple-50/70' : 'border-red-100 bg-red-50/70 opacity-70' }} {{ $isSelected ? 'border-emerald-300 bg-emerald-50/60' : '' }}" data-available="{{ $itemAvailable }}" data-total="{{ $itemQty }}" data-name="{{ $itemName }}" data-venue="{{ $venueName }}" data-index="{{ $itemIndex }}">
@@ -1569,13 +1571,33 @@
                 return `${venue}: ${name} × ${qty}`;
             });
 
+            // Follow-up fixes: equipment provided with each selected venue is listed too,
+            // labelled, as its own line (a manual request for the same item stays separate).
+            const selectedVenueNames = [...form.querySelectorAll('input[name="venue[]"]:checked')].map((input) => input.value);
+            const providedLines = [];
+            const seenProvided = new Set();
+            form.querySelectorAll('[data-provided-venue]').forEach((row) => {
+                const venue = row.dataset.providedVenue;
+                const key = `${venue}|${row.dataset.includedEquipment}`;
+                if (!selectedVenueNames.includes(venue) || seenProvided.has(key)) return;
+                seenProvided.add(key);
+                providedLines.push({ text: `${venue}: ${row.dataset.includedEquipment} × ${row.dataset.providedQuantity || 1}`, provided: true });
+            });
+            const summaryLines = selectedEquipment.map((text) => ({ text, provided: false })).concat(providedLines);
+
             if (summaryDetails.equipment) {
-                if (selectedEquipment.length) {
+                if (summaryLines.length) {
                     // REQ-15: names are inserted as text, never as HTML.
-                    summaryDetails.equipment.replaceChildren(...selectedEquipment.map((item) => {
+                    summaryDetails.equipment.replaceChildren(...summaryLines.map((line) => {
                         const li = document.createElement('li');
                         li.className = 'text-sm text-slate-700';
-                        li.textContent = item;
+                        li.textContent = line.text;
+                        if (line.provided) {
+                            const badge = document.createElement('span');
+                            badge.className = 'ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700';
+                            badge.textContent = 'Provided with venue';
+                            li.appendChild(badge);
+                        }
                         return li;
                     }));
                 } else {

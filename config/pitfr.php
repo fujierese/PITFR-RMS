@@ -17,6 +17,10 @@ return [
         'reminder_working_days_before' => [3, 1],
         'overdue_repeat_working_days' => (int) env('PITFR_PROPOSAL_OVERDUE_REPEAT_DAYS', 3),
     ],
+    // Follow-up fixes: how many of each item a venue provides ("Provided with venue").
+    'venue_provided_equipment_quantities' => [
+        'Balay Alumni' => ['Chairs' => 50],
+    ],
     // How notification emails are delivered: after_response (default, within seconds) or queue.
     'mail_delivery' => env('MAIL_DELIVERY', 'after_response'),
     'contact' => [

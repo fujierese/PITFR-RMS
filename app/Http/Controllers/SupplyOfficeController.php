@@ -427,6 +427,7 @@ class SupplyOfficeController extends Controller
                 ]);
                 $detail = 'Approved reservation cancellation confirmed by ' . $actor->name . '.';
                 $action = 'cancelled';
+                app(\App\Services\EquipmentCustodianRouting::class)->notify($lockedRequest, 'cancelled');
             } else {
                 $notes = trim((string) ($validated['notes'] ?? ''));
                 if ($notes === '') {

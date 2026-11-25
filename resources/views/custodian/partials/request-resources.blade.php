@@ -3,6 +3,7 @@
         ->sortBy(fn (array $schedule) => $requestItem->getVenueScheduleRange($schedule['venue'])['start']->timestamp)
         ->values();
     $venueEquipment = $requestItem->getVenueEquipmentAllocations();
+    $providedByVenue = $requestItem->getProvidedEquipmentByVenue();
     $normalizedAssignedVenues = collect($assignedVenueNames)->map(fn ($name) => mb_strtolower(trim($name)));
     $normalizedAssignedEquipment = collect($assignedEquipmentNames)->map(fn ($name) => mb_strtolower(trim($name)));
 @endphp
@@ -43,8 +44,11 @@
                     $venueItems = collect($venueItems)
                         ->filter(fn ($quantity, $name) => $custodianType !== 'equipment'
                             || $normalizedAssignedEquipment->contains(mb_strtolower(trim((string) $name))));
+                    $providedItems = collect($providedByVenue[$venueName] ?? [])
+                        ->filter(fn ($quantity, $name) => $custodianType !== 'equipment'
+                            || $normalizedAssignedEquipment->contains(mb_strtolower(trim((string) $name))));
                 @endphp
-                @if($venueItems->isNotEmpty())
+                @if($venueItems->isNotEmpty() || $providedItems->isNotEmpty())
                     @php
                         $renderedEquipment = true;
                     @endphp
@@ -54,6 +58,12 @@
                             @foreach($venueItems as $equipmentName => $quantity)
                                 <li class="rounded-md bg-white px-2 py-1 text-xs text-slate-700 ring-1 ring-slate-200">
                                     {{ $equipmentName }} <span class="font-semibold text-slate-500">× {{ $quantity }}</span>
+                                </li>
+                            @endforeach
+                            @foreach($providedItems as $equipmentName => $quantity)
+                                <li class="rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-900 ring-1 ring-emerald-200" data-provided-item>
+                                    {{ $equipmentName }} <span class="font-semibold text-emerald-700">× {{ $quantity }}</span>
+                                    <span class="ml-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Provided with venue</span>
                                 </li>
                             @endforeach
                         </ul>

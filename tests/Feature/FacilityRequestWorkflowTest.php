@@ -328,7 +328,7 @@ class FacilityRequestWorkflowTest extends TestCase
             ->assertSee('1 additional');
 
         $html = $response->getContent();
-        $equipmentStart = strrpos(substr($html, 0, strpos($html, 'Included with venue')), 'Equipment');
+        $equipmentStart = strrpos(substr($html, 0, strpos($html, 'Provided with venue')), 'Equipment');
         $proposalStart = strpos($html, 'Proposal', $equipmentStart);
         $equipmentSection = substr($html, $equipmentStart, $proposalStart - $equipmentStart);
 

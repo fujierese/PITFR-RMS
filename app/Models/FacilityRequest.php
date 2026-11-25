@@ -330,7 +330,94 @@ class FacilityRequest extends Model
 
     public function requestEquipment()
     {
-        return $this->hasMany(RequestEquipment::class);
+        $relation = $this->hasMany(RequestEquipment::class);
+
+        // Follow-up fixes: "Provided with venue" rows are not requested equipment; they are
+        // never counted against inventory or checked for stock (see providedEquipment()).
+        return self::providedEquipmentEnabled()
+            ? $relation->where('request_equipment.provided_with_venue', false)
+            : $relation;
+    }
+
+    /** Follow-up fixes: equipment that comes with the reserved venues. */
+    public function providedEquipment()
+    {
+        return $this->hasMany(RequestEquipment::class)->where('request_equipment.provided_with_venue', true);
+    }
+
+    public static function providedEquipmentEnabled(): bool
+    {
+        // Checked once per application instance (per request; per test), as schema
+        // checks on every relation call are slow.
+        $key = 'pitfr.provided_equipment_enabled';
+        if (! app()->bound($key)) {
+            app()->instance($key, Schema::hasTable('request_equipment') && Schema::hasColumn('request_equipment', 'provided_with_venue'));
+        }
+
+        return (bool) app($key);
+    }
+
+    /**
+     * Provided-with-venue items by venue: [venue => [item => quantity]].
+     *
+     * @return array<string, array<string, int>>
+     */
+    public function getProvidedEquipmentByVenue(): array
+    {
+        if (! self::providedEquipmentEnabled()) {
+            return [];
+        }
+        $this->loadMissing(['providedEquipment.requestVenue.venue', 'providedEquipment.equipment']);
+        $result = [];
+        foreach ($this->getRelation('providedEquipment') as $row) {
+            $venue = $row->requestVenue?->resolvedName() ?: 'Venue';
+            $result[$venue][$row->resolvedName()] = (int) $row->quantity;
+        }
+
+        return $result;
+    }
+
+    /** @return array<string, int> item => quantity, all venues together */
+    public function getProvidedEquipmentQuantities(): array
+    {
+        $totals = [];
+        foreach ($this->getProvidedEquipmentByVenue() as $items) {
+            foreach ($items as $name => $quantity) {
+                $totals[$name] = ($totals[$name] ?? 0) + $quantity;
+            }
+        }
+
+        return $totals;
+    }
+
+    /** Recreate the provided rows from the reserved venues (no duplicates, safe to repeat). */
+    public function syncProvidedEquipment(): void
+    {
+        if (! self::providedEquipmentEnabled() || ! $this->getKey()) {
+            return;
+        }
+        DB::table('request_equipment')->where('facility_request_id', $this->getKey())->where('provided_with_venue', true)->delete();
+        $venues = DB::table('request_venues')->where('facility_request_id', $this->getKey())->get(['id', 'name']);
+        $now = now();
+        $rows = [];
+        foreach ($venues as $venue) {
+            foreach (\App\Services\VenueEquipmentPolicy::providedEquipment((string) $venue->name) as $name => $quantity) {
+                $rows[] = [
+                    'facility_request_id' => $this->getKey(),
+                    'request_venue_id' => $venue->id,
+                    'equipment_id' => Equipment::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->value('id'),
+                    'name' => $name,
+                    'quantity' => $quantity,
+                    'provided_with_venue' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+        }
+        if ($rows !== []) {
+            DB::table('request_equipment')->insert($rows);
+        }
+        $this->unsetRelation('providedEquipment');
     }
 
     public function requestChangeRequests()
@@ -945,6 +1032,9 @@ class FacilityRequest extends Model
                 $legacyQuery->whereJsonContains('equipment', $equipmentName)
                     ->orWhere('equipment', 'LIKE', '%' . $equipmentName . '%');
             });
+            if (self::providedEquipmentEnabled()) {
+                $resourceQuery->orWhereHas('providedEquipment', fn (Builder $provided) => $provided->whereRaw('LOWER(name) = ?', [strtolower($equipmentName)]));
+            }
         });
     }
 
@@ -1122,6 +1212,12 @@ class FacilityRequest extends Model
     }
 
     public function syncRelationalItems(?array $venueSchedules = null, ?array $venueEquipment = null): void
+    {
+        $this->syncRelationalItemsWithoutProvided($venueSchedules, $venueEquipment);
+        $this->syncProvidedEquipment();
+    }
+
+    private function syncRelationalItemsWithoutProvided(?array $venueSchedules = null, ?array $venueEquipment = null): void
     {
         if ($venueEquipment === null && Schema::hasTable('request_equipment') && Schema::hasColumn('request_equipment', 'request_venue_id')) {
             $venueEquipment = $this->getVenueEquipmentAllocations();
@@ -2320,7 +2416,8 @@ class FacilityRequest extends Model
     // ─── GET ALL CUSTODIAN IDs ASSIGNED TO EQUIPMENT IN THIS REQUEST ──────────
     public function getAssignedEquipmentCustodianIds(): array
     {
-        $quantities = $this->resolvedQuantities();
+        // Follow-up fixes: provided-with-venue items are routed to their custodians too.
+        $quantities = $this->resolvedQuantities() + $this->getProvidedEquipmentQuantities();
 
         if (empty($quantities)) return [];
 
@@ -2336,7 +2433,9 @@ class FacilityRequest extends Model
     // ─── GET EQUIPMENT ASSIGNED TO A SPECIFIC CUSTODIAN IN THIS REQUEST ───────
     public function getAssignedEquipmentForCustodian(int|string $custodianId): array
     {
-        $quantities = $this->resolvedQuantities();
+        // Requested items keep their own quantity; a provided-with-venue item of the same
+        // name is not added twice (one review covers both).
+        $quantities = $this->resolvedQuantities() + $this->getProvidedEquipmentQuantities();
 
         if (empty($quantities)) return [];
 
@@ -2393,9 +2492,40 @@ class FacilityRequest extends Model
         ));
     }
 
+    /** Provided-with-venue items whose custodian must review them. */
+    public function providedEquipmentNeedsReview(): bool
+    {
+        foreach (array_keys($this->getProvidedEquipmentQuantities()) as $name) {
+            if ($this->getAuthorizedCustodianIdsForEquipment($name) !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Provided items for one custodian (for their view and notices).
+     *
+     * @return array<string, array<string, int>> venue => [item => quantity]
+     */
+    public function getProvidedEquipmentForCustodian(int $custodianId): array
+    {
+        $result = [];
+        foreach ($this->getProvidedEquipmentByVenue() as $venue => $items) {
+            foreach ($items as $name => $quantity) {
+                if (in_array($custodianId, $this->getAuthorizedCustodianIdsForEquipment($name), true)) {
+                    $result[$venue][$name] = $quantity;
+                }
+            }
+        }
+
+        return $result;
+    }
+
     public function recomputeEquipmentStatus(): void
     {
-        $itemNames = $this->getEquipmentItems();
+        $itemNames = array_values(array_unique(array_merge($this->getEquipmentItems(), array_keys($this->getProvidedEquipmentQuantities()))));
         $statuses = $this->equipment_custodian_statuses ?? [];
 
         if (empty($itemNames)) {

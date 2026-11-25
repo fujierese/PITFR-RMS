@@ -36,6 +36,23 @@ class VenueEquipmentPolicy
      * @param string $venueName
      * @return array
      */
+    /**
+     * Follow-up fixes: equipment provided with a venue and how many it provides
+     * (config pitfr.venue_provided_equipment_quantities; 1 when not configured).
+     *
+     * @return array<string, int>
+     */
+    public static function providedEquipment(string $venueName): array
+    {
+        $configured = (array) (config('pitfr.venue_provided_equipment_quantities', [])[self::normalizeVenueName($venueName)] ?? []);
+        $items = [];
+        foreach (self::getDefaultEquipment($venueName) as $name) {
+            $items[$name] = max(1, (int) ($configured[$name] ?? 1));
+        }
+
+        return $items;
+    }
+
     public static function getIncompatibleEquipment(string $venueName): array
     {
         $normalizedVenue = self::normalizeVenueName($venueName);

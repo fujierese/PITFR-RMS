@@ -74,7 +74,7 @@
     if ($additionalEquipmentAllocations !== []) {
         $additionalEquipmentItems = array_keys($additionalEquipmentQuantities);
     }
-    $hasAdditionalEquipment = $additionalEquipmentItems !== [];
+    $hasAdditionalEquipment = $additionalEquipmentItems !== [] || $request->providedEquipmentNeedsReview();
     $returnOutstandingQuantities = $request->getEquipmentReturnOutstandingQuantities();
     $returnFormItems = [];
     if ($currentUser && $currentUser->isCustodianEquipment()) {
@@ -280,11 +280,15 @@
         ];
     }
     $venueScheduleSummaries = $request->getVenueScheduleSummaries();
-    $venueIncludedEquipment = [];
-    foreach ($venueNames as $venueName) {
-        $defaultEquipment = \App\Services\VenueEquipmentPolicy::getDefaultEquipment($venueName);
-        if ($defaultEquipment !== []) {
-            $venueIncludedEquipment[$venueName] = $defaultEquipment;
+    // Follow-up fixes: the stored "Provided with venue" rows (venue => [item => quantity]),
+    // or the venue's list for requests saved before they were stored.
+    $venueIncludedEquipment = $request->getProvidedEquipmentByVenue();
+    if ($venueIncludedEquipment === []) {
+        foreach ($venueNames as $venueName) {
+            $defaultEquipment = \App\Services\VenueEquipmentPolicy::providedEquipment($venueName);
+            if ($defaultEquipment !== []) {
+                $venueIncludedEquipment[$venueName] = $defaultEquipment;
+            }
         }
     }
     $equipmentQuantities = $request->getEquipmentQuantities();
@@ -1693,18 +1697,18 @@
                     @if(!empty($venueIncludedEquipment))
                         <div>
                             <div class="mb-3 flex flex-wrap items-center gap-2">
-                                <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Included with venue</span>
-                                <p class="text-xs text-slate-500">Provided by the selected venue; not a separate request.</p>
+                                <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Provided with venue</span>
+                                <p class="text-xs text-slate-500">Comes with the venue; not taken from the equipment inventory. Its custodian is informed.</p>
                             </div>
                             <div class="grid gap-3 md:grid-cols-2">
                                 @foreach($venueIncludedEquipment as $venueName => $venueEquipment)
                                     <div class="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
                                         <p class="mb-3 text-xs font-semibold text-slate-600">{{ $venueName }}</p>
                                         <div class="flex flex-wrap gap-2">
-                                            @foreach($venueEquipment as $equipmentName)
-                                                <span class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
+                                            @foreach($venueEquipment as $equipmentName => $providedQuantity)
+                                                <span class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200" data-provided-item>
                                                     <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                                                    {{ $equipmentName }}
+                                                    {{ $equipmentName }} × {{ $providedQuantity }}
                                                 </span>
                                             @endforeach
                                         </div>

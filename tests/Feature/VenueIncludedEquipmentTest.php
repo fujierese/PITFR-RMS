@@ -85,7 +85,7 @@ class VenueIncludedEquipmentTest extends TestCase
         $this->actingAs($this->requestor)
             ->get(route('request.show', $request))
             ->assertOk()
-            ->assertSee('Included with venue')
+            ->assertSee('Provided with venue')
             ->assertSee('Additional requested')
             ->assertSee('Qty 2');
     }
@@ -129,6 +129,6 @@ class VenueIncludedEquipmentTest extends TestCase
             ->get(route('requestor.index', ['tab' => 'create']))
             ->assertOk()
             ->assertSee('data-included-equipment="Sound System"', false)
-            ->assertSee('Included with venue');
+            ->assertSee('Provided with venue');
     }
 }
