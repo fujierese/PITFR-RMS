@@ -44,7 +44,7 @@
                     <p class="text-sm font-semibold text-slate-700">Palompon Institute of Technology</p>
                 </div>
                 <h1 class="text-2xl font-bold text-slate-900">Create an account</h1>
-                <p class="mt-1 text-sm text-slate-600">For PIT students, faculty, staff and guests. Fields marked <span class="reg-required">*</span> are required.</p>
+                <p class="mt-1 text-sm text-slate-600">For PIT students, faculty, staff and outsiders. Fields marked <span class="reg-required">*</span> are required.</p>
 
                 @if($errors->any())
                     <div class="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{{ $errors->first() }}</div>
@@ -97,7 +97,7 @@
                                 'student' => ['Student', 'PIT student'],
                                 'faculty' => ['Faculty', 'Teaching staff'],
                                 'staff' => ['Staff', 'Non-teaching staff'],
-                                'outsider' => ['Guest', 'Not from PIT'],
+                                'outsider' => ['Outsider', 'Not from PIT'],
                             ];
                         @endphp
                         {{-- Account type --}}

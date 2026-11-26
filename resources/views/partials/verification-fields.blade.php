@@ -87,7 +87,7 @@
     <p class="{{ $hintClass }}">JPG, PNG or PDF, up to 5 MB each. Documents must be officially issued or authenticated by the appropriate PIT office. An old PIT ID alone is not accepted as proof of current affiliation.</p>
     <details class="text-xs text-slate-600">
         <summary class="cursor-pointer font-medium text-emerald-700">How your documents are handled</summary>
-        <p class="mt-2 leading-relaxed">The Supply Office reviews your identity and affiliation documents together and approves the account once. Until then, guest rules apply to your requests. You may cover ID numbers. The files are kept privately and deleted after the review; only the result is kept.</p>
+        <p class="mt-2 leading-relaxed">The Supply Office reviews your identity and affiliation documents together and approves the account once. Until then, outsider rules apply to your requests. You may cover ID numbers. The files are kept privately and deleted after the review; only the result is kept.</p>
     </details>
 </div>
 

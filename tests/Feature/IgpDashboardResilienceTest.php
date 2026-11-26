@@ -81,4 +81,24 @@ class IgpDashboardResilienceTest extends TestCase
 
         $this->actingAs($igp)->get(route('igp.index'))->assertOk()->assertSee('Company Anniversary');
     }
+
+    public function test_igp_logs_in_and_lands_on_a_working_dashboard(): void
+    {
+        // Part 3: the complete IGP login -> dashboard redirect.
+        $igp = User::factory()->create([
+            'role' => 'igp',
+            'username' => 'igp' . uniqid() . '@test.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password123'),
+            'email_verified_at' => now(),
+        ]);
+
+        $response = $this->post(route('login'), ['email' => $igp->username, 'password' => 'password123']);
+        $response->assertRedirect(route('igp.index'));
+        $this->assertAuthenticatedAs($igp);
+        $this->get(route('igp.index'))->assertOk()->assertSee('Outsider Reservation Inquiries');
+
+        // Other roles are unaffected and still cannot open it.
+        $requestor = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);
+        $this->actingAs($requestor)->get(route('igp.index'))->assertForbidden();
+    }
 }

@@ -1136,4 +1136,16 @@ class RegistrationFormTest extends TestCase
 
         return ['college_id' => $department->college_id, 'department_id' => $department->id];
     }
+
+    public function test_registration_page_says_outsider_instead_of_guest(): void
+    {
+        // Part 3: label change only; the account type value stays "outsider".
+        $this->get(route('register'))->assertOk()
+            ->assertSee('For PIT students, faculty, staff and outsiders.')
+            ->assertSee('value="outsider"', false)
+            ->assertSee('Not from PIT')
+            ->assertDontSee('staff and guests')
+            ->assertDontSee('>Guest<', false)
+            ->assertDontSee('guest rules apply');
+    }
 }
