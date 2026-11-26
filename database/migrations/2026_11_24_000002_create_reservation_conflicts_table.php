@@ -11,9 +11,25 @@ use Illuminate\Support\Facades\Schema;
  */
 return new class extends Migration
 {
+    // MySQL allows index names up to 64 characters; Laravel's generated name for the
+    // unique pair was 69, which failed on the live server after the table was created.
+    private const UNIQUE_PAIR = 'res_conflicts_pair_unique';
+    private const STATUS_INDEX = 'res_conflicts_status_affected_index';
+
     public function up(): void
     {
         if (Schema::hasTable('reservation_conflicts')) {
+            // Finish a table left half-created by the failed first run.
+            Schema::table('reservation_conflicts', function (Blueprint $table): void {
+                if (! Schema::hasIndex('reservation_conflicts', self::UNIQUE_PAIR)) {
+                    $table->unique(['urgent_request_id', 'affected_request_id'], self::UNIQUE_PAIR);
+                }
+                if (! Schema::hasIndex('reservation_conflicts', self::STATUS_INDEX)
+                    && ! Schema::hasIndex('reservation_conflicts', 'reservation_conflicts_status_affected_request_id_index')) {
+                    $table->index(['status', 'affected_request_id'], self::STATUS_INDEX);
+                }
+            });
+
             return;
         }
 
@@ -35,8 +51,8 @@ return new class extends Migration
             $table->timestamp('resolved_at')->nullable();
             $table->timestamps();
 
-            $table->unique(['urgent_request_id', 'affected_request_id']);
-            $table->index(['status', 'affected_request_id']);
+            $table->unique(['urgent_request_id', 'affected_request_id'], self::UNIQUE_PAIR);
+            $table->index(['status', 'affected_request_id'], self::STATUS_INDEX);
         });
     }
 

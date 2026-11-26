@@ -32,7 +32,8 @@ return new class extends Migration
                 $table->boolean('imported')->default(false);
                 $table->timestamps();
 
-                $table->unique(['facility_request_id', 'version_number']);
+                // Short explicit name: the generated one (68 characters) exceeds MySQL's 64.
+                $table->unique(['facility_request_id', 'version_number'], 'apv_request_version_unique');
             });
         }
 
