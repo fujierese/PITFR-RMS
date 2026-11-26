@@ -246,4 +246,44 @@ class ActivityProposalManagementTest extends TestCase
         $this->proposals()->setDeadline($request->fresh(), '2026-11-30', $this->admin, 'Correction deadline');
         $this->assertSame('within_deadline', $this->proposals()->complianceStatus($request->fresh()));
     }
+
+    public function test_working_days_skip_holidays_from_the_calendar(): void
+    {
+        // Part 1: the default deadline is 3 working days before the activity (Mon Dec 7):
+        // normally Wed Dec 2; with a holiday on Thu Dec 3 it moves to Tue Dec 1.
+        \App\Models\Holiday::create(['holiday_date' => '2026-12-03', 'name' => 'Test holiday', 'type' => 'public']);
+        app()->forgetInstance('pitfr.proposal_holiday_dates');
+
+        $request = $this->submitted('draft');
+
+        $this->assertSame('2026-12-01', $request->fresh()->proposal_deadline->toDateString());
+        $this->assertFalse(ActivityProposals::isWorkingDay(Carbon::parse('2026-12-03')));
+    }
+
+    public function test_deadline_changes_and_follow_ups_are_in_the_audit_log(): void
+    {
+        $request = $this->submitted('draft');
+
+        $this->actingAs($this->admin)->post(route('request.activity-proposal.deadline', $request->id), [
+            'deadline' => '2026-12-04', 'reason' => 'Requestor asked for more time.',
+        ])->assertSessionHasNoErrors();
+        $this->actingAs($this->admin)->post(route('request.activity-proposal.follow-up', $request->id), [
+            'remarks' => 'Called the requestor about the final copy.',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('audit_logs', ['actor_id' => $this->admin->id, 'action' => 'activity_proposal_deadline_extended']);
+        $this->assertDatabaseHas('audit_logs', ['actor_id' => $this->admin->id, 'action' => 'activity_proposal_followup']);
+    }
+
+    public function test_the_monitoring_list_links_to_the_latest_file(): void
+    {
+        $request = $this->submitted('final');
+        $version = ActivityProposalVersion::where('facility_request_id', $request->id)->sole();
+
+        $this->actingAs($this->admin)->get(route('supply-office.activity-proposals', ['filter' => 'for_verification']))
+            ->assertOk()
+            ->assertSee($request->control_number)
+            ->assertSee(route('request.activity-proposal.file', [$request->id, $version->id]), false)
+            ->assertSee('Download v1');
+    }
 }

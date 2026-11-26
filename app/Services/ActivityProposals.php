@@ -126,12 +126,38 @@ class ActivityProposals
 
     // ── Working days ─────────────────────────────────────────────────────────
 
+    /** Part 1: a working day is a weekday that is not in the app's holiday calendar. */
+    public static function isWorkingDay(Carbon $date): bool
+    {
+        return ! $date->isWeekend() && ! in_array($date->toDateString(), self::holidayDates(), true);
+    }
+
+    /** @return list<string> Y-m-d dates from the Holidays calendar (cached per request). */
+    public static function holidayDates(): array
+    {
+        $key = 'pitfr.proposal_holiday_dates';
+        if (! app()->bound($key)) {
+            $dates = [];
+            try {
+                if (Schema::hasTable('holidays')) {
+                    $dates = \App\Models\Holiday::query()->pluck('holiday_date')
+                        ->map(fn ($d) => Carbon::parse($d)->toDateString())->unique()->values()->all();
+                }
+            } catch (\Throwable $e) {
+                $dates = [];
+            }
+            app()->instance($key, $dates);
+        }
+
+        return app($key);
+    }
+
     public static function subtractWorkingDays(Carbon $date, int $days): Carbon
     {
         $result = $date->copy()->startOfDay();
         while ($days > 0) {
             $result->subDay();
-            if (! $result->isWeekend()) {
+            if (self::isWorkingDay($result)) {
                 $days--;
             }
         }
@@ -144,7 +170,7 @@ class ActivityProposals
         $result = $date->copy()->startOfDay();
         while ($days > 0) {
             $result->addDay();
-            if (! $result->isWeekend()) {
+            if (self::isWorkingDay($result)) {
                 $days--;
             }
         }
@@ -161,7 +187,7 @@ class ActivityProposals
         [$a, $b] = $sign === 1 ? [$from, $to] : [$to, $from];
         $count = 0;
         for ($d = $a->copy(); $d->lessThan($b); $d->addDay()) {
-            if (! $d->copy()->addDay()->isWeekend()) {
+            if (self::isWorkingDay($d->copy()->addDay())) {
                 $count++;
             }
         }
@@ -321,6 +347,16 @@ class ActivityProposals
                 'modified' => 'deadline_modified',
                 default => 'deadline_assigned',
             };
+            if ($admin) {
+                // Part 1: every deadline change by the Supply Office is logged.
+                \App\Models\AuditLog::create([
+                    'actor_id' => $admin->id,
+                    'action' => 'activity_proposal_deadline_' . $kind,
+                    'details' => $request->control_number . ': deadline ' . ($previous ? $previous->toDateString() . ' → ' : '') . $new->toDateString() . ($reason ? ' (' . $reason . ')' : ''),
+                    'old_values' => ['deadline' => $previous?->toDateString()],
+                    'new_values' => ['deadline' => $new->toDateString(), 'kind' => $kind, 'reason' => $reason],
+                ]);
+            }
             DB::afterCommit(fn () => $this->notifyRequestor($request, $notice, $notice . ':' . $change->id));
 
             return $change;
@@ -331,6 +367,13 @@ class ActivityProposals
     public function recordFollowUp(FacilityRequest $request, User $admin, string $remarks): void
     {
         $request->addHistory('proposal_followup', 'Supply Office follow-up by ' . $admin->name . ': ' . trim($remarks), $admin->id);
+        \App\Models\AuditLog::create([
+            'actor_id' => $admin->id,
+            'action' => 'activity_proposal_followup',
+            'details' => $request->control_number . ': ' . trim($remarks),
+            'old_values' => [],
+            'new_values' => ['remarks' => trim($remarks)],
+        ]);
     }
 
     // ── Reminders ────────────────────────────────────────────────────────────
@@ -348,8 +391,8 @@ class ActivityProposals
         }
         $now = ($now ?? Carbon::now())->copy()->setTimezone(config('app.timezone'));
         $today = $now->copy()->startOfDay();
-        if ($today->isWeekend()) {
-            return 0; // reminders follow working days
+        if (! self::isWorkingDay($today)) {
+            return 0; // reminders follow working days (weekends and holidays skipped)
         }
         $before = array_map('intval', (array) config('pitfr.activity_proposal.reminder_working_days_before', [3, 1]));
         $repeat = max(1, (int) config('pitfr.activity_proposal.overdue_repeat_working_days', 3));

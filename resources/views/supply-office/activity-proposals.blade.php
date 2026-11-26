@@ -64,7 +64,10 @@
                             <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $row['compliance'] === 'overdue' ? 'bg-rose-100 text-rose-800' : ($row['compliance'] === 'within_deadline' ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600') }}">{{ $row['compliance_label'] }}</span></td>
                             <td class="px-4 py-3 text-slate-700 whitespace-nowrap">{{ $req->proposal_deadline?->format('M j, Y') ?? '—' }}</td>
                             <td class="px-4 py-3 text-slate-700 whitespace-nowrap">{{ $latest?->submitted_at?->format('M j, Y') ?? '—' }}</td>
-                            <td class="px-4 py-3 text-right">
+                            <td class="px-4 py-3 text-right whitespace-nowrap">
+                                @if($latest)
+                                    <a href="{{ route('request.activity-proposal.file', [$req->id, $latest->id]) }}" target="_blank" rel="noopener" class="mr-2 text-xs font-semibold text-slate-700 underline hover:text-slate-900">Download v{{ $latest->version_number }}</a>
+                                @endif
                                 <a href="{{ route('request.show', $req->id) }}#activity-proposal" class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">Review</a>
                             </td>
                         </tr>
