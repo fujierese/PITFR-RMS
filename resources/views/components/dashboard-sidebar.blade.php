@@ -369,16 +369,31 @@
         }
 
         if ($user->isIgp()) {
-            $navigation[] = [
-                'section' => 'IGP',
-                'type' => 'section-header',
+            // Part 4: IGP > Reservation Management (four sections, same counts as the dashboard).
+            $igpCounts = \App\Support\IgpInquiries::counts();
+            $igpIcons = [
+                'new' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>',
+                'approved' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+                'ongoing' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>',
+                'closed' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>',
             ];
             $navigation[] = [
-                'key' => 'igp-dashboard',
-                'label' => 'Outsider Inquiries',
-                'route' => route('igp.index'),
-                'route_name' => 'igp.index',
-                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-2 0h14l1 12H4L5 9zm5 4h4"/></svg>',
+                'section' => 'Reservation Management',
+                'type' => 'section-header',
+            ];
+            foreach (\App\Support\IgpInquiries::SECTIONS as $igpKey => $igpSection) {
+                $navigation[] = [
+                    'key' => 'igp-' . $igpKey,
+                    'label' => $igpSection['label'],
+                    'route' => route('igp.index', ['section' => $igpKey]),
+                    'route_name' => 'igp.index',
+                    'icon' => $igpIcons[$igpKey],
+                    'badge' => $igpKey !== 'closed' && ($igpCounts[$igpKey] ?? 0) > 0 ? $igpCounts[$igpKey] : null,
+                ];
+            }
+            $navigation[] = [
+                'section' => 'Other',
+                'type' => 'section-header',
             ];
             $navigation[] = [
                 'key' => 'calendar',
@@ -386,6 +401,13 @@
                 'route' => route('calendar.index'),
                 'route_name' => 'calendar.index',
                 'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+            ];
+            $navigation[] = [
+                'key' => 'history',
+                'label' => 'Reservation History',
+                'route' => route('history.index'),
+                'route_name' => 'history.index',
+                'icon' => '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
             ];
             $navigation[] = [
                 'section' => 'Notifications',
@@ -502,7 +524,9 @@
     } elseif ($currentRoute === 'supply-office.index') {
         $activeKey = 'dashboard';
     } elseif ($currentRoute === 'igp.index') {
-        $activeKey = 'igp-dashboard';
+        $activeKey = array_key_exists((string) request()->query('section'), \App\Support\IgpInquiries::SECTIONS)
+            ? 'igp-' . request()->query('section')
+            : 'igp-dashboard';
     } elseif ($currentRoute === 'history.index') {
         $activeKey = 'history';
     } elseif ($currentRoute === 'supply-office.venues.index') {
@@ -611,7 +635,7 @@
                         <span>{{ $item['label'] }}</span>
                         @if($item['key'] === 'notifications' && $notificationCount > 0)
                             <span class="ml-auto rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white" data-unread-badge>{{ $notificationCount }}</span>
-                        @elseif($item['key'] === 'verifications' && !empty($item['badge']))
+                        @elseif((($item['key'] ?? '') === 'verifications' || str_starts_with((string) ($item['key'] ?? ''), 'igp-')) && !empty($item['badge']))
                             <span class="ml-auto rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white">{{ $item['badge'] }}</span>
                         @endif
                     </a>

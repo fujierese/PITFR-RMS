@@ -95,7 +95,7 @@ class IgpDashboardResilienceTest extends TestCase
         $response = $this->post(route('login'), ['email' => $igp->username, 'password' => 'password123']);
         $response->assertRedirect(route('igp.index'));
         $this->assertAuthenticatedAs($igp);
-        $this->get(route('igp.index'))->assertOk()->assertSee('Outsider Reservation Inquiries');
+        $this->get(route('igp.index'))->assertOk()->assertSee('Reservation Management');
 
         // Other roles are unaffected and still cannot open it.
         $requestor = User::factory()->create(['role' => 'requestor', 'requestor_type' => 'student']);

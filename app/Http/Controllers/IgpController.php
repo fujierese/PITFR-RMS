@@ -26,65 +26,23 @@ class IgpController extends Controller
      */
     public function index(Request $request)
     {
-        // Every outsider request, including ones created before the inquiry workflow.
-        $outsiderRequests = FacilityRequest::query()
-            ->with(['requester', 'reservationSchedule', 'requestVenues'])
-            ->upcomingReservation() // reservations that already took place are in Reservation History
-            ->where(function ($query): void {
-                // IGP 500 fix: the live database may not have the outsider_stage column yet
-                // (its migration has not run there); outsider requesters are listed either way.
-                if (\Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'outsider_stage')) {
-                    $query->whereNotNull('outsider_stage');
-                }
-                $query->orWhereHas('requester', fn ($requester) => $requester->where('requestor_type', 'outsider'));
-            })
-            ->where(function ($query): void {
-                // Finished requests stay listed for 60 days.
-                $query->whereNotIn('status', ['approved', 'completed', 'rejected', 'cancelled'])
-                    ->orWhere('updated_at', '>=', now()->subDays(60));
-            })
-            ->orderBy('start_date')
-            ->get();
+        // Part 4: four Reservation Management sections (see App\Support\IgpInquiries).
+        $requests = \App\Support\IgpInquiries::all();
         // Additional Enhancements, search: the same rule, limited to outsider requests IGP handles.
         $search = trim((string) $request->query('search', ''));
         if ($search !== '') {
-            $outsiderRequests = $outsiderRequests
+            $requests = $requests
                 ->filter(fn (FacilityRequest $item): bool => \App\Support\RequestSearch::matches($item, $search))
                 ->values();
         }
-        $inStages = fn (array $stages) => $outsiderRequests
-            ->filter(fn (FacilityRequest $item): bool => in_array($item->inferredOutsiderStage(), $stages, true))
-            ->values();
+        $groups = \App\Support\IgpInquiries::grouped($requests);
+        $counts = \App\Support\IgpInquiries::counts($search === '' ? $groups : null);
+        $section = (string) $request->query('section', '');
+        if (! array_key_exists($section, \App\Support\IgpInquiries::SECTIONS)) {
+            $section = '';
+        }
 
-        $sections = [
-            'review' => [
-                'title' => 'New inquiries to review',
-                'hint' => 'Check the details, then forward the inquiry to the venue custodian.',
-                'requests' => $inStages(['submitted', 'igp_review'])->sortBy('created_at')->values(),
-            ],
-            'coordinate' => [
-                'title' => 'Approved: inform the client of requirements',
-                'hint' => 'The Supply Office approved these. Tell the client the payment and other institutional requirements.',
-                'requests' => $inStages(['approved']),
-            ],
-            'coordinating' => [
-                'title' => 'For IGP coordination',
-                'hint' => 'Waiting for the client to complete the requirements. Report back once they have, so the Supply Office can confirm.',
-                'requests' => $inStages(['igp_coordination']),
-            ],
-            'in_review' => [
-                'title' => 'With the venue custodian or Supply Office',
-                'hint' => 'No action needed from IGP right now.',
-                'requests' => $inStages(['custodian_review', 'endorsed', 'not_endorsed']),
-            ],
-            'decided' => [
-                'title' => 'Final decisions (last 60 days)',
-                'hint' => 'Confirmed, rejected or cancelled by the Supply Office.',
-                'requests' => $inStages(['confirmed', 'rejected', 'cancelled'])->sortByDesc('updated_at')->take(50)->values(),
-            ],
-        ];
-
-        return view('igp.index', compact('sections', 'search'));
+        return view('igp.index', compact('groups', 'counts', 'section', 'search'));
     }
 
     /** B.2: forward a reviewed inquiry to the designated venue custodian. */

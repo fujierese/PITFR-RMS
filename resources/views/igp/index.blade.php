@@ -2,62 +2,59 @@
 @section('title', 'IGP Dashboard')
 
 @section('content')
+@php
+    use App\Support\IgpInquiries;
+    $sections = IgpInquiries::SECTIONS;
+    $visible = $section !== '' ? [$section => $sections[$section]] : $sections;
+    $actionLabel = ['new' => 'Review and forward', 'approved' => 'Inform outsider', 'ongoing' => 'Coordinate'];
+@endphp
 <div class="mx-auto max-w-7xl space-y-6">
-    <x-page-header eyebrow="IGP" title="Outsider Reservation Inquiries" description="Review new inquiries, forward them to the venue custodian, and coordinate requirements after the Supply Office approves. The Supply Office makes every approval decision; payment is handled outside PITFR." accent="emerald" />
+    <x-page-header eyebrow="IGP" title="Reservation Management" description="Review outsider inquiries, forward them to the venue custodian, and coordinate institutional requirements after the Supply Office approves. The Supply Office makes every reservation decision; payment is arranged outside PITFR." />
 
-    <x-search-filter-bar :action="route('igp.index')" :search="$search ?? ''" placeholder="Search control number, activity, client, organization, venue or date" />
+    <x-search-filter-bar :action="route('igp.index')" :search="$search ?? ''" :hidden="$section !== '' ? ['section' => $section] : []" placeholder="Search control number, activity, client, organization, venue or date" />
     @if(($search ?? '') !== '')
-        <p class="text-sm text-slate-600" aria-live="polite">Showing inquiries matching “{{ $search }}”. <a href="{{ route('igp.index') }}" class="font-semibold text-emerald-700 hover:underline">Show all</a></p>
+        <p class="text-sm text-slate-600" aria-live="polite">Showing inquiries matching “{{ $search }}”. <a href="{{ route('igp.index', $section !== '' ? ['section' => $section] : []) }}" class="font-semibold text-emerald-700 hover:underline">Show all</a></p>
     @endif
 
-    <nav aria-label="Inquiry sections" class="flex flex-wrap gap-2">
-        @foreach($sections as $key => $section)
-            <a href="#igp-{{ $key }}" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-sky-300 hover:text-sky-800">
-                {{ $section['title'] }}
-                <span class="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">{{ $section['requests']->count() }}</span>
+    {{-- Part 4: the four sections, matching the sidebar. --}}
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-igp-cards>
+        @foreach($sections as $key => $info)
+            <a href="{{ route('igp.index', ['section' => $key]) }}" @if($section === $key) aria-current="page" @endif
+               class="rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md {{ $section === $key ? 'border-sky-400 bg-sky-50' : 'border-slate-200 bg-white' }}" data-igp-card="{{ $key }}">
+                <p class="text-sm font-semibold text-slate-700">{{ $info['label'] }}</p>
+                <p class="mt-1 text-3xl font-bold text-slate-900">{{ $counts[$key] ?? 0 }}</p>
+                <p class="mt-1 text-xs text-slate-500">{{ $key === 'closed' ? 'in the last 60 days' : 'need IGP action' }}</p>
             </a>
         @endforeach
-    </nav>
+    </div>
+    @if($section !== '')
+        <a href="{{ route('igp.index') }}" class="inline-block text-sm font-semibold text-sky-700 hover:underline">Show all sections</a>
+    @endif
 
-    @foreach($sections as $key => $section)
-        <section id="igp-{{ $key }}" aria-labelledby="igp-{{ $key }}-heading" class="scroll-mt-24 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+    @foreach($visible as $key => $info)
+        @php $items = $groups[$key]; @endphp
+        <section id="igp-{{ $key }}" aria-labelledby="igp-{{ $key }}-heading" class="scroll-mt-24 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6" data-igp-section="{{ $key }}">
             <div class="border-b border-slate-200 pb-3">
-                <h2 id="igp-{{ $key }}-heading" class="text-lg font-semibold text-slate-900">{{ $section['title'] }}</h2>
-                <p class="mt-1 text-sm text-slate-500">{{ $section['hint'] }}</p>
+                <h2 id="igp-{{ $key }}-heading" class="text-lg font-semibold text-slate-900">{{ $info['label'] }}</h2>
+                <p class="mt-1 text-sm text-slate-500">{{ $info['hint'] }}</p>
             </div>
 
-            @forelse($section['requests'] as $inquiry)
-                <article class="flex flex-col gap-3 border-b border-slate-100 py-4 last:border-0 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="min-w-0">
-                        <p class="font-semibold text-slate-900">
-                            {{ $inquiry->control_number }} · {{ $inquiry->name_of_activity }}
-                        </p>
-                        <p class="mt-0.5 text-sm text-slate-600">
-                            {{ $inquiry->organization_name ?: ($inquiry->requester?->office_or_organization ?: 'Individual') }}
-                            · {{ $inquiry->contact_person ?: ($inquiry->requester?->name ?? 'Unknown client') }}
-                            @if($inquiry->contact_number) · {{ $inquiry->contact_number }} @endif
-                        </p>
-                        <div class="mt-1 space-y-0.5 text-sm text-slate-600">
-                            @forelse($inquiry->getVenueScheduleSummaries() as $schedule)
-                                <p>{{ $schedule['venue'] }} · {{ $schedule['label'] }}</p>
-                            @empty
-                                <p>No venue schedule listed</p>
-                            @endforelse
-                        </div>
-                        @if($inquiry->outsider_hold_until && $inquiry->hasActiveOutsiderHold())
-                            <p class="mt-1 text-xs font-medium text-amber-800">Schedule held until {{ $inquiry->outsider_hold_until->format('M j, Y') }}</p>
-                        @endif
-                    </div>
-                    <div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-                        <span class="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800">{{ \App\Models\FacilityRequest::OUTSIDER_STAGES[$inquiry->inferredOutsiderStage()] ?? 'Outsider request' }}</span>
-                        <a href="{{ route('request.show', $inquiry->id) }}" class="rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800">
-                            {{ in_array($key, ['review', 'coordinate', 'coordinating'], true) ? 'Open and act' : 'View details' }}
-                        </a>
-                    </div>
-                </article>
+            @forelse($items as $inquiry)
+                @include('igp.partials.inquiry-row', ['inquiry' => $inquiry, 'button' => IgpInquiries::needsIgp($inquiry) ? ($actionLabel[$key] ?? 'View details') : 'View details'])
             @empty
                 <p class="py-4 text-sm text-slate-500">{{ ($search ?? '') !== '' ? 'No inquiries here match your search.' : 'Nothing here right now.' }}</p>
             @endforelse
+
+            @if($key === 'new' && $groups['in_review']->isNotEmpty())
+                {{-- Forwarded inquiries: visible for progress only, no IGP action and not counted. --}}
+                <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4" data-igp-in-review>
+                    <h3 class="text-sm font-semibold text-slate-800">Forwarded for review ({{ $groups['in_review']->count() }})</h3>
+                    <p class="mt-0.5 text-xs text-slate-500">With the venue custodian or the Supply Office. No action is needed from IGP; you are notified when the Supply Office decides.</p>
+                    @foreach($groups['in_review'] as $inquiry)
+                        @include('igp.partials.inquiry-row', ['inquiry' => $inquiry, 'button' => 'View progress'])
+                    @endforeach
+                </div>
+            @endif
         </section>
     @endforeach
 </div>

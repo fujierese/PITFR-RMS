@@ -72,7 +72,7 @@ class IgpWorkflowTest extends TestCase
         $this->actingAs($igp)->get(route('igp.index'))
             ->assertOk()
             ->assertSee($reservation->control_number)
-            ->assertSee('Approved: inform the client of requirements')
+            ->assertSee('Approved Requests') // Part 4 section name
             ->assertSee('Notifications')
             ->assertSee('Account Settings')
             ->assertSee('Logout')
