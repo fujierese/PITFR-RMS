@@ -31,8 +31,12 @@ class IgpController extends Controller
             ->with(['requester', 'reservationSchedule', 'requestVenues'])
             ->upcomingReservation() // reservations that already took place are in Reservation History
             ->where(function ($query): void {
-                $query->whereNotNull('outsider_stage')
-                    ->orWhereHas('requester', fn ($requester) => $requester->where('requestor_type', 'outsider'));
+                // IGP 500 fix: the live database may not have the outsider_stage column yet
+                // (its migration has not run there); outsider requesters are listed either way.
+                if (\Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'outsider_stage')) {
+                    $query->whereNotNull('outsider_stage');
+                }
+                $query->orWhereHas('requester', fn ($requester) => $requester->where('requestor_type', 'outsider'));
             })
             ->where(function ($query): void {
                 // Finished requests stay listed for 60 days.

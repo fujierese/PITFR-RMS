@@ -25,6 +25,18 @@ class AfterResponseQueue extends SyncQueue
         parent::__construct($dispatchAfterCommit);
     }
 
+    /**
+     * Report jobs under the "deferred" connection name. Laravel re-runs the pending
+     * after-response callbacks whenever a job on any other connection finishes; because a
+     * callback is only removed after it returns, that re-ran the emails still waiting
+     * (the same email was sent several times and GoDaddy answered "421 too many
+     * messages"). Laravel skips that re-run for the "deferred" connection.
+     */
+    public function setConnectionName($name)
+    {
+        return parent::setConnectionName('deferred');
+    }
+
     public function push($job, $data = '', $queue = null)
     {
         $send = function () use ($job, $data, $queue): void {
