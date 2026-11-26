@@ -38,6 +38,8 @@ class FacilityRequest extends Model
         'final_approval_signature',
         'venue_participants', 'capacity_exceptions', 'capacity_exception_status',
         'capacity_exception_reviewed_by_id', 'capacity_exception_reviewed_at',
+        // Part 2: per-venue custodian verification and capacity exception decisions.
+        'venue_verifications', 'capacity_exception_decisions',
         // B: outsider reservation inquiries.
         'outsider_stage', 'contact_person', 'contact_number', 'contact_email', 'additional_remarks',
         'igp_review_notes', 'igp_forwarded_by_id', 'igp_forwarded_at',
@@ -67,6 +69,16 @@ class FacilityRequest extends Model
 
     protected static function booted(): void
     {
+        // Part 2: a request sent back to venue verification (new venue, schedule or edit)
+        // needs fresh confirmations from the venue custodians.
+        static::saving(function (self $request): void {
+            if ($request->isDirty('venue_status') && $request->venue_status === 'pending'
+                && $request->getOriginal('venue_status') !== null && $request->getOriginal('venue_status') !== 'pending'
+                && self::venueVerificationEnabled()) {
+                $request->venue_verifications = null;
+            }
+        });
+
         // B: keep the outsider stage in step with the shared workflow fields, so the
         // custodian, Supply Office, rejection and cancellation paths need no changes.
         static::saving(function (self $request): void {
@@ -124,6 +136,8 @@ class FacilityRequest extends Model
         'venue_participants'           => 'array',
         'capacity_exceptions'          => 'array',
         'capacity_exception_reviewed_at' => 'datetime',
+        'venue_verifications'          => 'array',
+        'capacity_exception_decisions' => 'array',
         'approved_date'                => 'datetime',
         'supply_office_reviewed_at'    => 'datetime',
         'cancellation_requested_at'    => 'datetime',
@@ -529,10 +543,143 @@ class FacilityRequest extends Model
         return self::$capacityRuleColumns ??= \Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'capacity_exception_status');
     }
 
-    /** True while a capacity exception is waiting for the Supply Office. */
+    /** True while a capacity exception is waiting for the Venue Custodian's decision. */
     public function hasPendingCapacityException(): bool
     {
         return ($this->capacity_exception_status ?? null) === 'pending' && ! empty($this->capacity_exceptions);
+    }
+
+    // ── Part 2: per-venue verification and capacity exception decisions ──────
+
+    public static function venueVerificationEnabled(): bool
+    {
+        $key = 'pitfr.venue_verification_columns';
+        if (! app()->bound($key)) {
+            app()->instance($key, \Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'venue_verifications'));
+        }
+
+        return app($key);
+    }
+
+    /** What a venue confirmation applies to: that venue's schedule and participant count. */
+    public function venueFingerprint(string $venueName): string
+    {
+        $schedule = $this->getVenueSchedule($venueName);
+
+        return md5(json_encode([
+            mb_strtolower(trim($venueName)),
+            $schedule['start_date'] ?? $this->start_date?->toDateString(),
+            $schedule['end_date'] ?? $this->end_date?->toDateString(),
+            substr((string) ($schedule['start_time'] ?? $this->start_time), 0, 5),
+            substr((string) ($schedule['end_time'] ?? $this->end_time), 0, 5),
+            $this->participantsForVenue($venueName),
+        ]));
+    }
+
+    /** The custodian's confirmation of one venue, if it still applies to the current details. */
+    public function venueConfirmation(string $venueName): ?array
+    {
+        foreach ((array) ($this->venue_verifications ?? []) as $name => $record) {
+            if (mb_strtolower(trim((string) $name)) === mb_strtolower(trim($venueName))
+                && ($record['fingerprint'] ?? null) === $this->venueFingerprint($venueName)) {
+                return $record;
+            }
+        }
+
+        return null;
+    }
+
+    /** Venues of this request that have a custodian and still need that custodian's confirmation. */
+    public function venuesAwaitingConfirmation(): array
+    {
+        $withCustodian = Venue::query()->whereIn('name', $this->getVenueNames())->whereNotNull('custodian_id')->pluck('name')
+            ->map(fn ($name) => mb_strtolower(trim((string) $name)))->all();
+
+        return array_values(array_filter(
+            $this->getVenueNames(),
+            fn (string $name): bool => in_array(mb_strtolower(trim($name)), $withCustodian, true) && $this->venueConfirmation($name) === null
+        ));
+    }
+
+    public function recordVenueConfirmation(array $venueNames, User $custodian): void
+    {
+        $records = (array) ($this->venue_verifications ?? []);
+        foreach ($venueNames as $venueName) {
+            $records[$venueName] = [
+                'status' => 'confirmed',
+                'by' => $custodian->id,
+                'by_name' => $custodian->name,
+                'at' => now()->toIso8601String(),
+                'fingerprint' => $this->venueFingerprint($venueName),
+            ];
+        }
+        $this->venue_verifications = $records;
+    }
+
+    public static function capacityDecisionsEnabled(): bool
+    {
+        $key = 'pitfr.capacity_decision_columns';
+        if (! app()->bound($key)) {
+            app()->instance($key, \Illuminate\Support\Facades\Schema::hasColumn('facility_requests', 'capacity_exception_decisions'));
+        }
+
+        return app($key);
+    }
+
+    /** Venues of this request with a capacity exception (venue => requestor's reason). */
+    public function capacityExceptionVenues(): array
+    {
+        $current = array_map(fn ($n) => mb_strtolower(trim($n)), $this->getVenueNames());
+
+        return array_filter(
+            (array) ($this->capacity_exceptions ?? []),
+            fn ($reason, $venue) => in_array(mb_strtolower(trim((string) $venue)), $current, true),
+            ARRAY_FILTER_USE_BOTH
+        );
+    }
+
+    public function capacityDecision(string $venueName): ?array
+    {
+        foreach ((array) ($this->capacity_exception_decisions ?? []) as $name => $decision) {
+            if (mb_strtolower(trim((string) $name)) === mb_strtolower(trim($venueName))) {
+                return $decision;
+            }
+        }
+
+        return null;
+    }
+
+    /** Capacity exceptions still waiting for the Venue Custodian. */
+    public function undecidedCapacityVenues(): array
+    {
+        return array_values(array_filter(
+            array_keys($this->capacityExceptionVenues()),
+            fn ($venue) => $this->capacityDecision((string) $venue) === null
+        ));
+    }
+
+    /** Resolved: no exception, or every exception approved by its Venue Custodian. */
+    public function capacityExceptionResolved(): bool
+    {
+        if (! self::capacityRulesEnabled() || $this->capacityExceptionVenues() === []) {
+            return true;
+        }
+
+        return ($this->capacity_exception_status ?? null) === 'approved';
+    }
+
+    public function recomputeCapacityExceptionStatus(): void
+    {
+        $venues = array_keys($this->capacityExceptionVenues());
+        if ($venues === []) {
+            $this->capacity_exception_status = null;
+
+            return;
+        }
+        $decisions = array_map(fn ($v) => $this->capacityDecision((string) $v)['decision'] ?? null, $venues);
+        $this->capacity_exception_status = in_array('not_approved', $decisions, true)
+            ? 'rejected'
+            : (in_array(null, $decisions, true) ? 'pending' : 'approved');
     }
 
     /** Participants booked for one venue; falls back to the request total. */

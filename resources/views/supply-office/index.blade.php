@@ -145,16 +145,9 @@
                                     @enderror
                                 </div>
                             @endif
-                            @if($availabilityRequest->hasPendingCapacityException())
-                                <div>
-                                    <label class="flex items-center gap-2 text-xs font-medium text-amber-800" title="{{ collect((array) $availabilityRequest->capacity_exceptions)->map(fn ($reason, $venue) => $venue . ': ' . $reason)->implode(' | ') }}">
-                                        <input type="checkbox" name="capacity_exception_approved" value="1" required class="rounded border-amber-400 text-amber-600">
-                                        Capacity exception approved ({{ implode(', ', array_keys((array) $availabilityRequest->capacity_exceptions)) }})
-                                    </label>
-                                    @error('capacity_exception_approved')
-                                        <p class="mt-1 max-w-64 text-xs font-medium text-red-700">{{ $message }}</p>
-                                    @enderror
-                                </div>
+                            @if($availabilityRequest->capacityExceptionVenues() !== [] && ! $availabilityRequest->capacityExceptionResolved())
+                                {{-- Part 2: the venue custodian decides capacity exceptions. --}}
+                                <p class="max-w-64 text-xs font-medium text-amber-800">Capacity exception ({{ implode(', ', array_keys($availabilityRequest->capacityExceptionVenues())) }}) is waiting for the venue custodian.</p>
                             @endif
                             <button type="submit" class="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800">Confirm Availability & Send to Equipment Custodians</button>
                         </form>

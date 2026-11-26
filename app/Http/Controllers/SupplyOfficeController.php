@@ -215,21 +215,15 @@ class SupplyOfficeController extends Controller
                         $facilityRequest->urgent_document_status = 'validated';
                     }
 
-                    // D2: a venue below its participant count needs an explicit, recorded approval.
-                    $approvedCapacityException = false;
-                    if ($facilityRequest->hasPendingCapacityException()) {
-                        $request->validate(
-                            ['capacity_exception_approved' => ['required', 'accepted']],
-                            [
-                                'capacity_exception_approved.required' => 'Approve the capacity exception, or suggest a new schedule so the requestor can choose another venue.',
-                                'capacity_exception_approved.accepted' => 'Approve the capacity exception, or suggest a new schedule so the requestor can choose another venue.',
-                            ]
-                        );
-                        $facilityRequest->capacity_exception_status = 'approved';
-                        $facilityRequest->capacity_exception_reviewed_by_id = $user->getKey();
-                        $facilityRequest->capacity_exception_reviewed_at = now();
-                        $approvedCapacityException = true;
+                    // Part 2: capacity exceptions are decided by the Venue Custodian only; the
+                    // Supply Office cannot confirm availability while one is unresolved.
+                    if (! $facilityRequest->capacityExceptionResolved()) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'decision' => 'The venue custodian has not approved the capacity exception for '
+                                . implode(', ', array_keys($facilityRequest->capacityExceptionVenues())) . ' yet.',
+                        ]);
                     }
+                    $approvedCapacityException = false;
 
                     $facilityRequest->supply_office_review_status = 'confirmed';
                     if ($facilityRequest->isOutsiderInquiry()) {

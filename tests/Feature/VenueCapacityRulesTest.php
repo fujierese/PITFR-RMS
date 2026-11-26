@@ -89,8 +89,10 @@ class VenueCapacityRulesTest extends TestCase
             ->assertSessionHasErrors('venue_participants.Gymnasium');
     }
 
-    public function test_capacity_exception_needs_supply_office_approval_at_availability_review(): void
+    public function test_capacity_exception_is_decided_by_the_venue_custodian_not_the_supply_office(): void
     {
+        // Part 2: only the assigned Venue Custodian decides; the Supply Office cannot
+        // approve it or confirm availability while it is unresolved.
         $this->actingAs($this->requester)
             ->post(route('requestor.store'), $this->payload(['Covered Court'], [
                 'capacity_exceptions' => ['Covered Court' => 'Only 40 people are inside at any one time.'],
@@ -105,21 +107,28 @@ class VenueCapacityRulesTest extends TestCase
         $supply = User::factory()->create(['role' => 'supply_office']);
 
         $this->actingAs($supply)
-            ->post(route('supply-office.requests.availability-review'), ['id' => $request->id, 'decision' => 'available'])
-            ->assertSessionHasErrors('capacity_exception_approved');
-        $this->assertSame('pending', $request->fresh()->supply_office_review_status);
-
-        $this->actingAs($supply)
             ->post(route('supply-office.requests.availability-review'), [
                 'id' => $request->id, 'decision' => 'available', 'capacity_exception_approved' => '1',
             ])
-            ->assertSessionHasNoErrors();
+            ->assertSessionHasErrors('decision');
+        $this->assertSame('pending', $request->fresh()->supply_office_review_status);
+        $this->assertSame('pending', $request->fresh()->capacity_exception_status);
 
+        $custodian = User::findOrFail(\App\Models\Venue::where('name', 'Covered Court')->value('custodian_id'));
+        $request->update(['venue_status' => 'pending']);
+        $this->actingAs($custodian)
+            ->post(route('request.capacity-exception.decide', $request->id), ['venue' => 'Covered Court', 'decision' => 'approved'])
+            ->assertSessionHasNoErrors();
         $request->refresh();
-        $this->assertSame('confirmed', $request->supply_office_review_status);
         $this->assertSame('approved', $request->capacity_exception_status);
-        $this->assertSame($supply->id, (int) $request->capacity_exception_reviewed_by_id);
+        $this->assertSame($custodian->id, (int) $request->capacity_exception_reviewed_by_id);
         $this->assertNotNull($request->capacity_exception_reviewed_at);
+
+        $request->update(['venue_status' => 'approved']);
+        $this->actingAs($supply)
+            ->post(route('supply-office.requests.availability-review'), ['id' => $request->id, 'decision' => 'available'])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('confirmed', $request->fresh()->supply_office_review_status);
     }
 
     public function test_create_page_shows_per_venue_participants_and_exception_option(): void

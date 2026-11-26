@@ -270,6 +270,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/request/{facilityRequest}/supply/decision', [RequestActionController::class, 'supplyDecision'])->name('request.supply.decision');
     // Additional Part 2: Activity Proposal versions, verification and deadlines.
     Route::post('/request/{id}/activity-proposal', [\App\Http\Controllers\ActivityProposalController::class, 'upload'])->name('request.activity-proposal.upload');
+    // Part 2: capacity exceptions (Venue Custodian decides; requestor accepts a suggested venue).
+    Route::post('/request/{id}/capacity-exception', [\App\Http\Controllers\CapacityExceptionController::class, 'decide'])->name('request.capacity-exception.decide');
+    Route::post('/request/{id}/capacity-exception/accept', [\App\Http\Controllers\CapacityExceptionController::class, 'accept'])->name('request.capacity-exception.accept');
     Route::get('/request/{id}/activity-proposal/{version}', [\App\Http\Controllers\ActivityProposalController::class, 'file'])->whereNumber('version')->name('request.activity-proposal.file');
     Route::post('/request/{id}/activity-proposal/review', [\App\Http\Controllers\ActivityProposalController::class, 'review'])->name('request.activity-proposal.review');
     Route::post('/request/{id}/activity-proposal/deadline', [\App\Http\Controllers\ActivityProposalController::class, 'deadline'])->name('request.activity-proposal.deadline');

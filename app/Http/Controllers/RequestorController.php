@@ -1644,7 +1644,7 @@ class RequestorController extends Controller
                     fn ($name, $reason) => "{$name} ({$venueParticipants[$name]} participants): {$reason}",
                     array_keys($capacityExceptions),
                     $capacityExceptions,
-                )) . '. The Supply Office must approve it.';
+                )) . '. The venue custodian will decide whether the venue can hold it.';
             }
         } elseif (!empty($venue)) {
             // ✅ CHECK VENUE CAPACITY
@@ -1854,6 +1854,10 @@ class RequestorController extends Controller
                 'capacity_exceptions'       => $capacityExceptions ?: null,
                 'capacity_exception_status' => $capacityExceptions !== [] ? 'pending' : null,
             ];
+            if (FacilityRequest::capacityDecisionsEnabled()) {
+                // Part 2: the venue custodian decides each exception again on the new details.
+                $requestAttributes['capacity_exception_decisions'] = null;
+            }
         }
 
         $knownEquipmentNames = Equipment::query()
@@ -2245,6 +2249,11 @@ class RequestorController extends Controller
 
             if ($awaitingVenueConfirmation && $currentUser->isCustodianVenue()) {
                 $hasEndorsed = $request->venue_status === 'approved';
+                // Part 2: this custodian's own venues are all confirmed (others may still be waiting).
+                if (! $hasEndorsed && FacilityRequest::venueVerificationEnabled()) {
+                    $own = collect($request->getVenueNames())->filter(fn ($name) => $currentUser->venues()->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($name))])->exists());
+                    $hasEndorsed = $own->isNotEmpty() && $own->every(fn ($name) => $request->venueConfirmation($name) !== null);
+                }
             } elseif ($awaitingEquipmentReview) {
                 $hasEndorsed = $request->getCustodianEquipmentStatus((int) $currentUser->id) === 'approved';
             } else {

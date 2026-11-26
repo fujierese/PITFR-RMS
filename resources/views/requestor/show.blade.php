@@ -1001,6 +1001,10 @@
             </div>
         @endif
 
+        @if(\App\Services\CapacityExceptions::enabled() && auth()->check())
+            @include('requestor.partials.capacity-exception')
+        @endif
+
         @if(auth()->check() && auth()->user()->isCustodian())
             @php
                 $availabilityGroup = 'custodian-venue-' . $request->id;
@@ -1077,10 +1081,11 @@
                                 <ul class="mt-2 space-y-1 text-sm text-slate-800">
                                     @foreach($request->getVenueScheduleSummaries() as $summary)
                                         @if($assignedVenueNames->contains(mb_strtolower(trim($summary['venue']))))
-                                            <li><span class="font-semibold">{{ $summary['venue'] }}</span> · {{ $summary['label'] }}</li>
+                                            <li><span class="font-semibold">{{ $summary['venue'] }}</span> · {{ $summary['label'] }} · {{ $request->participantsForVenue($summary['venue']) }} participants</li>
                                         @endif
                                     @endforeach
                                 </ul>
+                                <p class="mt-1 text-xs text-slate-600" data-venue-check-requestor>Requestor: {{ $request->requester?->name ?? $request->requested_by ?? '—' }}</p>
                                 <div class="mt-3 flex flex-wrap gap-2">
                                     @foreach($request->getVenueNames() as $venueName)
                                         @if($assignedVenueNames->contains(mb_strtolower(trim($venueName))))
@@ -1457,20 +1462,12 @@
                                             Capacity not set for: {{ implode(', ', $request->venuesWithoutCapacity()) }}. Check that it fits {{ $request->expected_participants }} participants before confirming.
                                         </p>
                                     @endif
-                                    @if($request->hasPendingCapacityException())
-                                        <div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                                            <p class="font-semibold">Capacity exception requested</p>
-                                            <ul class="mt-1 list-disc pl-5">
-                                                @foreach((array) $request->capacity_exceptions as $exceptionVenue => $exceptionReason)
-                                                    <li>{{ $exceptionVenue }}: {{ $request->participantsForVenue($exceptionVenue) }} participants (capacity {{ \App\Models\Venue::where('name', $exceptionVenue)->value('capacity') ?? '—' }}). Reason: {{ $exceptionReason }}</li>
-                                                @endforeach
-                                            </ul>
-                                            <label class="mt-2 flex items-center gap-2 font-medium">
-                                                <input type="checkbox" name="capacity_exception_approved" value="1" required class="rounded border-amber-400">
-                                                Approve the capacity exception
-                                            </label>
-                                            <p class="mt-1 text-xs">To refuse it, suggest a new schedule so the requestor can choose another venue.</p>
-                                        </div>
+                                    @if($request->capacityExceptionVenues() !== [])
+                                        {{-- Part 2: decided by the venue custodian; the Supply Office cannot approve it. --}}
+                                        <p class="mb-3 rounded-xl border {{ $request->capacityExceptionResolved() ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900' }} p-3 text-sm" data-capacity-status>
+                                            Capacity exception ({{ implode(', ', array_keys($request->capacityExceptionVenues())) }}):
+                                            {{ $request->capacityExceptionResolved() ? 'approved by the venue custodian.' : 'waiting for the venue custodian. Availability cannot be confirmed until it is approved.' }}
+                                        </p>
                                     @endif
                                     <button type="submit" class="w-full inline-flex items-center justify-center rounded-2xl bg-emerald-600 text-white px-5 py-3 text-sm font-semibold hover:bg-emerald-700">
                                         Confirm Availability

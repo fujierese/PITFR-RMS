@@ -335,6 +335,26 @@ class RequestActionController extends Controller
                 DB::rollBack();
                 return redirect()->back()->with('info', 'Your endorsement has already been recorded.');
             }
+            // Part 2: the custodian's own venues in this request.
+            $ownVenues = $isVenueConfirmation
+                ? array_values(array_filter($facilityRequest->getVenueNames(), fn ($name) => $user->venues()->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($name))])->exists()))
+                : [];
+            if ($isVenueConfirmation && \App\Models\FacilityRequest::venueVerificationEnabled()
+                && $ownVenues !== [] && collect($ownVenues)->every(fn ($name) => $facilityRequest->venueConfirmation($name) !== null)) {
+                DB::rollBack();
+                return redirect()->back()->with('info', 'Your venue confirmation has already been recorded.');
+            }
+            // Part 2: a capacity exception is decided by the custodian before the venue is confirmed.
+            if ($isVenueConfirmation && \App\Services\CapacityExceptions::enabled()) {
+                $openCapacity = array_values(array_filter($ownVenues, function ($name) use ($facilityRequest) {
+                    $exception = collect($facilityRequest->capacityExceptionVenues())->keys()->first(fn ($v) => mb_strtolower(trim((string) $v)) === mb_strtolower(trim($name)));
+                    return $exception !== null && ($facilityRequest->capacityDecision((string) $exception)['decision'] ?? null) !== 'approved';
+                }));
+                if ($openCapacity !== []) {
+                    DB::rollBack();
+                    return redirect()->back()->withErrors(['capacity' => 'Decide the capacity exception for ' . implode(', ', $openCapacity) . ' first.']);
+                }
+            }
             if ($isEquipmentApproval && $facilityRequest->getCustodianEquipmentStatus((int) $user->id) === 'approved') {
                 DB::rollBack();
                 return redirect()->back()->with('info', 'Your endorsement has already been recorded.');
@@ -350,10 +370,19 @@ class RequestActionController extends Controller
                 return redirect()->back()->with('info', 'This equipment requirement is already satisfied by an authorized custodian.');
             }
 
+            $waitingForOtherVenues = [];
             if ($isVenueConfirmation) {
-                $facilityRequest->venue_status = 'approved';
+                // Part 2: each venue is confirmed by its own custodian; the venue step is
+                // complete once every venue with a custodian is confirmed.
+                if (\App\Models\FacilityRequest::venueVerificationEnabled()) {
+                    $facilityRequest->recordVenueConfirmation($ownVenues !== [] ? $ownVenues : $facilityRequest->getVenueNames(), $user);
+                    $waitingForOtherVenues = $facilityRequest->venuesAwaitingConfirmation();
+                }
+                if ($waitingForOtherVenues === []) {
+                    $facilityRequest->venue_status = 'approved';
+                }
                 $facilityRequest->recordApprovalSignature('venue', $user);
-                $venueNames = $facilityRequest->getVenueNames();
+                $venueNames = $ownVenues !== [] ? $ownVenues : $facilityRequest->getVenueNames();
                 $venueLabel = $venueNames !== [] ? implode(', ', $venueNames) : 'Venue';
                 $startDate = $facilityRequest->start_date
                     ? \Carbon\Carbon::parse($facilityRequest->start_date)->format('M j, Y')
@@ -389,7 +418,9 @@ class RequestActionController extends Controller
             return redirect()->back()->with(
                 'success',
                 $isVenueConfirmation
-                    ? 'Venue availability confirmed. The request is now waiting for Supply Office confirmation.'
+                    ? ($waitingForOtherVenues !== []
+                        ? 'Your venue is confirmed. Waiting for the custodian of: ' . implode(', ', $waitingForOtherVenues) . '.'
+                        : 'Venue availability confirmed. The request is now waiting for Supply Office confirmation.')
                     : 'Assigned equipment approval recorded.'
             );
         } catch (\Throwable $e) {
@@ -612,6 +643,15 @@ class RequestActionController extends Controller
                     return response()->json(['message' => 'Initial Supply Office availability review is incomplete.'], 409);
                 }
                 return redirect()->back()->withErrors('Initial Supply Office availability review must be confirmed before final approval.');
+            }
+
+            if (! $facilityRequest->capacityExceptionResolved()) {
+                DB::rollBack();
+                $message = 'The capacity exception has not been approved by the venue custodian.';
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => $message], 409);
+                }
+                return redirect()->back()->withErrors($message);
             }
 
             if ($facilityRequest->isOutsiderInquiry() && $facilityRequest->outsider_stage !== 'igp_coordination') {
